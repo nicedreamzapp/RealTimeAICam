@@ -4,15 +4,8 @@ import SwiftUI
 
 @MainActor
 struct ContentView: View {
-    enum Mode: String, RawRepresentable {
-        case home
-        case englishOCR
-        case spanishToEnglishOCR
-        case objectDetection
-    }
-
-    @SceneStorage("appMode") private var storedMode: Mode = .home
-    @State private var mode: Mode = .home
+    @SceneStorage("appMode") private var storedMode: AppMode = .home
+    @State private var mode: AppMode = .home
     @StateObject private var viewModel = CameraViewModel()
     @State private var orientation = UIDevice.current.orientation
     @StateObject private var ocrViewModel = LiveOCRViewModel()
@@ -81,13 +74,13 @@ struct ContentView: View {
 
             contentForMode
 
-            if showSettings, mode == .englishOCR || mode == .spanishToEnglishOCR {
+            if showSettings, mode == .ocrEnglish || mode == .ocrSpanish {
                 SettingsOverlayView(viewModel: viewModel, isPresented: $showSettings, mode: mode)
                     .onAppear {
                         ocrViewModel.stopSession()
                     }
                     .onDisappear {
-                        if mode == .englishOCR || mode == .spanishToEnglishOCR {
+                        if mode == .ocrEnglish || mode == .ocrSpanish {
                             ocrViewModel.startSession()
                         }
                     }
@@ -132,10 +125,10 @@ struct ContentView: View {
         case .home:
             homeView
 
-        case .englishOCR:
+        case .ocrEnglish:
             ocrView(mode: .english)
 
-        case .spanishToEnglishOCR:
+        case .ocrSpanish:
             ocrView(mode: .spanishToEnglish)
 
         case .objectDetection:
@@ -196,7 +189,7 @@ struct ContentView: View {
                     ocrViewModel.stopSession()
                 }
                 .onDisappear {
-                    if mode == .englishOCR || mode == .spanishToEnglishOCR {
+                    if mode == .ocrEnglish || mode == .ocrSpanish {
                         ocrViewModel.startSession()
                     }
                 }
@@ -307,18 +300,7 @@ struct ContentView: View {
     private func switchToMode(_ newMode: AppMode) {
         // Ensure newMode is the AppMode enum expected by ResourceManager.switchToMode()
         resourceManager.switchToMode(newMode)
-
-        // Convert AppMode to ContentView.Mode
-        switch newMode {
-        case .home:
-            mode = .home
-        case .objectDetection:
-            mode = .objectDetection
-        case .ocrEnglish:
-            mode = .englishOCR
-        case .ocrSpanish:
-            mode = .spanishToEnglishOCR
-        }
+        mode = newMode
     }
 }
 

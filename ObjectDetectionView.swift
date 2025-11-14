@@ -4,7 +4,7 @@ import SwiftUI
 
 struct ObjectDetectionView: View {
     @ObservedObject var viewModel: CameraViewModel
-    @Binding var mode: ContentView.Mode
+    @Binding var mode: AppMode
     @Binding var showSettings: Bool
     @StateObject private var lidar = LiDARManager.shared
     @State private var showConfidenceSlider = false
@@ -271,7 +271,6 @@ struct ObjectDetectionView: View {
         }
         .onAppear {
             LiDARManager.shared.recheckSupport()
-            print("📡 LiDAR Debug - isSupported: \(LiDARManager.shared.isSupported), cameraPosition: \(viewModel.cameraPosition)")
             viewModel.reinitialize()
             viewModel.startSession()
             AVCaptureDevice.requestAccess(for: .video) { granted in
@@ -516,10 +515,8 @@ struct ObjectDetectionView: View {
                     viewModel.setLiDAR(enabled: newState)
                     if newState {
                         viewModel.showLiDARNotification("LiDAR distance enabled")
-                        print("✅ LiDAR turned ON")
                     } else {
                         viewModel.showLiDARNotification("LiDAR distance disabled")
-                        print("❌ LiDAR turned OFF")
                     }
                 }
             )

@@ -3,7 +3,7 @@ import SwiftUI
 struct SettingsOverlayView: View {
     @ObservedObject var viewModel: CameraViewModel
     @Binding var isPresented: Bool
-    let mode: ContentView.Mode
+    let mode: AppMode
     let onAppear: (() -> Void)? = nil
     let onDisappear: (() -> Void)? = nil
     let onDismiss: (() -> Void)? = nil
@@ -93,7 +93,7 @@ struct SettingsOverlayView: View {
                             }
                         }
 
-                        if mode == .englishOCR || mode == .spanishToEnglishOCR {
+                        if mode == .ocrEnglish || mode == .ocrSpanish {
                             VStack(alignment: .leading, spacing: 12) {
                                 HStack {
                                     Image(systemName: "doc.on.clipboard")

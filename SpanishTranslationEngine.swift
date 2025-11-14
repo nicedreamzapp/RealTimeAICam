@@ -1,3 +1,4 @@
+import Compression
 import Foundation
 
 // MARK: - JSON Models (All shared types in one place)
@@ -56,6 +57,93 @@ private struct AnyDecodable: Decodable {
     }
 }
 
+// MARK: - Gzip Decompression Extension
+
+private enum DecompressionError: Error {
+    case initFailed, processFailed, emptyData, decompressionFailed
+
+    var localizedDescription: String {
+        switch self {
+        case .initFailed: "Failed to initialize decompression stream"
+        case .processFailed: "Decompression processing failed"
+        case .emptyData: "Cannot decompress empty data"
+        case .decompressionFailed: "Gzip decompression failed"
+        }
+    }
+}
+
+private extension Data {
+    func decompressedGzip() throws -> Data {
+        // Check for gzip magic numbers 0x1F 0x8B
+        guard count >= 18 else { throw DecompressionError.emptyData }
+        let magic: UInt16 = prefix(2).withUnsafeBytes { $0.load(as: UInt16.self) }
+        guard magic == 0x8B1F else { throw DecompressionError.decompressionFailed }
+
+        // Parse standard GZIP header (10 bytes)
+        var pos = 10
+        let flg = self[3]
+        if (flg & 0x04) != 0 { // FEXTRA
+            let xlen = Int(self[pos]) | Int(self[pos + 1]) << 8
+            pos += 2 + xlen
+        }
+        if (flg & 0x08) != 0 { // FNAME
+            while self[pos] != 0 {
+                pos += 1
+            }
+            pos += 1
+        }
+        if (flg & 0x10) != 0 { // FCOMMENT
+            while self[pos] != 0 {
+                pos += 1
+            }
+            pos += 1
+        }
+        if (flg & 0x02) != 0 { // FHCRC
+            pos += 2
+        }
+        // Now pos points to start of deflate stream; footer is last 8 bytes
+        let deflateData = self[pos ..< (count - 8)]
+
+        var output = Data()
+        let bufferSize = 64 * 1024
+        let dstBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+        defer { dstBuffer.deallocate() }
+
+        try deflateData.withContiguousStorageIfAvailable { srcPtr in
+            guard let base = srcPtr.baseAddress else { throw DecompressionError.processFailed }
+            let streamSize = MemoryLayout<compression_stream>.size
+            let streamPtr = UnsafeMutableRawPointer.allocate(byteCount: streamSize, alignment: MemoryLayout<compression_stream>.alignment)
+            defer { streamPtr.deallocate() }
+            memset(streamPtr, 0, streamSize)
+            let stream = streamPtr.bindMemory(to: compression_stream.self, capacity: 1)
+            guard compression_stream_init(stream, COMPRESSION_STREAM_DECODE, COMPRESSION_ZLIB) != COMPRESSION_STATUS_ERROR else {
+                throw DecompressionError.initFailed
+            }
+            defer { compression_stream_destroy(stream) }
+            stream.pointee.src_ptr = base
+            stream.pointee.src_size = srcPtr.count
+            while true {
+                stream.pointee.dst_ptr = dstBuffer
+                stream.pointee.dst_size = bufferSize
+                let status = compression_stream_process(stream, 0)
+                let count = bufferSize - stream.pointee.dst_size
+                if count > 0 {
+                    output.append(dstBuffer, count: count)
+                }
+                switch status {
+                case COMPRESSION_STATUS_OK:
+                    continue
+                case COMPRESSION_STATUS_END:
+                    return
+                default:
+                    throw DecompressionError.processFailed
+                }
+            }
+        }
+        return output
+    }
+}
+
 // MARK: - Aho-Corasick-lite phrase matcher
 
 final class PhraseMatcher {
@@ -73,8 +161,9 @@ final class PhraseMatcher {
 
     private static func normalize(_ s: String) -> String {
         s.lowercased()
-            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+         .folding(options: .diacriticInsensitive, locale: .current)
+         .replacingOccurrences(of: #"\\s+"#, with: " ", options: .regularExpression)
+         .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     func match(tokens: [String]) -> [(String, String?)] {
@@ -112,11 +201,30 @@ struct TranslationResult {
     let unknownTokens: [String]
 }
 
-// MARK: - Static Spanish Processor
+// MARK: - FixedSpanishEngine (Your exact class name with working logic)
 
 @MainActor
-final class SpanishTranslationProcessor {
-    static let shared = SpanishTranslationProcessor()
+final class FixedSpanishEngine {
+    // Helper to collect phrases from multiple rule buckets
+    private func collectRulePhrases(_ dicts: [String: Any]) -> [String: String] {
+        var out: [String: String] = [:]
+        for (_, v) in dicts {
+            if let d = v as? [String: String] {
+                for (k, v2) in d {
+                    out[k] = v2
+                }
+            } else if let arr = v as? [[String: String]] {
+                for row in arr {
+                    if let k = row["src"], let v2 = row["tgt"] {
+                        out[k] = v2
+                    }
+                }
+            }
+        }
+        return out
+    }
+    
+    static let shared = FixedSpanishEngine()
 
     // Core stores
     private var dict: [String: String] = [:] // surface (lowercased) → translation
@@ -144,9 +252,33 @@ final class SpanishTranslationProcessor {
 
     private init() { Task { await loadSpanishData() } }
 
-    // MARK: - Public Translation Methods (Using your exact method names!)
+    // MARK: - Public Translation Methods (Your LiveOCRViewModel expects these exact names!)
 
-    func interpretSpanishWithContext(_ text: String) -> String {
+    func translate(_ text: String) -> String {
+        print("\n📄 TRANSLATING: '\(text)'")
+
+        guard isLoaded else {
+            print("   ⚠️ Engine not loaded")
+            return text
+        }
+
+        guard !text.isEmpty else {
+            print("   ⚠️ Empty text")
+            return text
+        }
+
+        let result = interpretSpanishWithContext(text)
+        print("   🎯 RESULT: '\(result)'")
+        return result
+    }
+
+    func isReady() -> Bool {
+        isLoaded
+    }
+
+    // MARK: - Core Translation Logic (Your exact working methods!)
+
+    private func interpretSpanishWithContext(_ text: String) -> String {
         guard isLoaded else { return text }
         let cacheKey = normalizeKey(text)
         if let cached = cache[cacheKey] {
@@ -164,8 +296,8 @@ final class SpanishTranslationProcessor {
             outPieces.append(translated)
         }
         let result = outPieces.joined(separator: " ")
-            .replacingOccurrences(of: #"(\s+)"#, with: " ", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: #"(\s+)"#, with: " ", options: NSString.CompareOptions.regularExpression)
+            .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
 
         cache[cacheKey] = result
         return result
@@ -190,8 +322,8 @@ final class SpanishTranslationProcessor {
             translated += got
         }
         let result = outPieces.joined(separator: " ")
-            .replacingOccurrences(of: #"(\s+)"#, with: " ", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: #"(\s+)"#, with: " ", options: NSString.CompareOptions.regularExpression)
+            .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
         let conf = total > 0 ? Double(translated) / Double(total) : 1.0
         return .init(text: result, confidence: conf, unknownTokens: Array(Set(unknowns)))
     }
@@ -199,7 +331,7 @@ final class SpanishTranslationProcessor {
     // MARK: - Core Translation Methods (Your exact working logic!)
 
     private func translateBatch(_ text: String, domain: TextDomain) -> String {
-        let tokens = tokenize(text.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression))
+        let tokens = tokenize(text.replacingOccurrences(of: #"\s+"#, with: " ", options: NSString.CompareOptions.regularExpression))
         let phraseApplied = phraseMatcher?.match(tokens: tokens.map { $0.lowercased() }) ?? tokens.map { ($0.lowercased(), nil) }
 
         var englishPieces: [String] = []
@@ -256,7 +388,7 @@ final class SpanishTranslationProcessor {
     }
 
     private func translateBatchTelemetry(_ text: String, domain: TextDomain) -> (String, [String], Int, Int) {
-        let tokens = tokenize(text.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression))
+        let tokens = tokenize(text.replacingOccurrences(of: #"\s+"#, with: " ", options: NSString.CompareOptions.regularExpression))
         let phraseApplied = phraseMatcher?.match(tokens: tokens.map { $0.lowercased() }) ?? tokens.map { ($0.lowercased(), nil) }
 
         var englishPieces: [String] = []
@@ -349,7 +481,7 @@ final class SpanishTranslationProcessor {
         sentences.append(String(s[last...]))
         sentences = sentences.map {
             $0.replacingOccurrences(of: "<<DOT>>", with: ".")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
         }.filter { !$0.isEmpty }
         return sentences
     }
@@ -371,8 +503,8 @@ final class SpanishTranslationProcessor {
 
     private func normalizeKey(_ text: String) -> String {
         text.lowercased()
-            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: NSString.CompareOptions.regularExpression)
+            .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
     }
 
     // MARK: - Tokenizer & Finalizer (Your exact working methods)
@@ -394,11 +526,11 @@ final class SpanishTranslationProcessor {
 
     private func finalize(_ s: String) -> String {
         var out = s
-        out = out.replacingOccurrences(of: #"\s+([,\.!\?:;)\]\}])"#, with: "$1", options: .regularExpression)
-        out = out.replacingOccurrences(of: #"([,\.!\?:;])([^\s\)\]\}])"#, with: "$1 $2", options: .regularExpression)
-        out = out.replacingOccurrences(of: #"([\(\[\{])\s+"#, with: "$1", options: .regularExpression)
-        out = out.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        out = out.replacingOccurrences(of: #"\s+([,\.!\?:;)\]\}])"#, with: "$1", options: NSString.CompareOptions.regularExpression)
+        out = out.replacingOccurrences(of: #"([,\.!\?:;])([^\s\)\]\}])"#, with: "$1 $2", options: NSString.CompareOptions.regularExpression)
+        out = out.replacingOccurrences(of: #"([\(\[\{])\s+"#, with: "$1", options: NSString.CompareOptions.regularExpression)
+        out = out.replacingOccurrences(of: #"\s+"#, with: " ", options: NSString.CompareOptions.regularExpression)
+            .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
         // Capitalize sentence starts
         let sentenceEnd = CharacterSet(charactersIn: ".!?")
         var chars = Array(out)
@@ -419,30 +551,64 @@ final class SpanishTranslationProcessor {
         return String(chars)
     }
 
-    // MARK: - Data Loading (Your exact JSON loading logic)
+    // MARK: - Data Loading with Gzip Support (Updated method)
 
     private func loadSpanishData() async {
         // Load & decode JSON on main actor, then parse off main actor, then assign on main actor
         let (master, _) = await MainActor.run { () -> (ESMaster?, URL?) in
             guard let url = locateJSON(),
-                  let data = try? Data(contentsOf: url, options: .mappedIfSafe)
+                  let compressedData = try? Data(contentsOf: url, options: .mappedIfSafe)
             else {
-                print("⚠ Could not find/load es_final_with_rules*.json")
+                print("⚠️ Could not find/load es_final_with_rules*.json.gz")
                 return (nil, nil)
             }
+
+            print("📊 Loaded file size: \(compressedData.count) bytes from: \(url.lastPathComponent)")
+
             do {
+                // Check if file extension suggests it needs decompression
+                let needsDecompression = url.pathExtension.lowercased() == "gz" ||
+                    url.lastPathComponent.lowercased().contains(".gz")
+
+                let data: Data
+                if needsDecompression {
+                    print("🔄 Attempting to decompress gzip data...")
+                    data = try compressedData.decompressedGzip()
+                    print("✅ Decompressed from \(compressedData.count) to \(data.count) bytes")
+                } else {
+                    print("📄 Using data as uncompressed JSON")
+                    data = compressedData
+                }
+
                 let decoder = JSONDecoder()
                 let master = try decoder.decode(ESMaster.self, from: data)
+                print("✅ Successfully decoded JSON structure")
                 return (master, url)
+
+            } catch let error as DecompressionError {
+                print("⚠️ Gzip decompression error: \(error.localizedDescription)")
+
+                // Fallback: try to use the data as uncompressed JSON
+                print("🔄 Trying to parse as uncompressed JSON...")
+                do {
+                    let decoder = JSONDecoder()
+                    let master = try decoder.decode(ESMaster.self, from: compressedData)
+                    print("✅ Successfully parsed as uncompressed JSON")
+                    return (master, url)
+                } catch {
+                    print("❌ Failed to parse as uncompressed JSON: \(error)")
+                    return (nil, nil)
+                }
+
             } catch {
-                print("⚠ JSON decode error:", error)
+                print("⚠️ JSON decode error: \(error)")
                 return (nil, nil)
             }
         }
 
         guard let master else { return }
 
-        // Process off-main actor
+        // Process off-main actor (rest of the method remains the same)
         var newDict: [String: String] = [:]
         if let d = master.dictionary {
             var m: [String: String] = [:]
@@ -476,8 +642,8 @@ final class SpanishTranslationProcessor {
             if let rp = rulesBag["reflexive_passives"]?.value as? [String: String] {
                 reflexives = rp.reduce(into: [:]) { acc, kv in
                     let k = kv.key.lowercased()
-                        .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
-                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                        .replacingOccurrences(of: #"\s+"#, with: " ", options: NSString.CompareOptions.regularExpression)
+                        .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
                     acc[k] = kv.value
                 }
             }
@@ -510,11 +676,18 @@ final class SpanishTranslationProcessor {
             }
         }
 
-        // Phrase matcher incl. multiword dict keys
-        var phraseSource = phrases
-        for k in newDict.keys where k.contains(" ") {
-            phraseSource[k] = newDict[k]
+        // Phrase matcher: RULES FIRST, then fill gaps from multiword dictionary entries.
+        var phraseSource: [String: String] = [:]
+        if let rulesBag = master.rules {
+            // 1) Pull phrases from multiple rules buckets (phrases/commonPhrases/idioms/menuPhrases/verbalExpressions)
+            let allRulePhrases = collectRulePhrases(rulesBag.mapValues { $0.value })
+            phraseSource.merge(allRulePhrases) { current, _ in current } // keep existing (rules) on conflict
         }
+        // 2) Add multi-word dictionary keys ONLY if not already provided by rules
+        for (k, v) in newDict where k.contains(" ") {
+            if phraseSource[k] == nil { phraseSource[k] = v }
+        }
+        // 3) Build matcher (longest phrases prioritized internally)
         let matcher = phraseSource.isEmpty ? nil : PhraseMatcher(phrases: phraseSource)
 
         // Compile built-ins
@@ -544,18 +717,40 @@ final class SpanishTranslationProcessor {
     }
 
     private func locateJSON() -> URL? {
+        // Updated to look for .gz files first, then fallback to .json
         let candidates = [
+            ("es_final_with_rules_CLEANED", "json.gz"),
+            ("es_final_with_rules_ENRICHED", "json.gz"),
+            ("es_final_with_rules_CLEAN", "json.gz"),
+            ("es_final_with_rules", "json.gz"),
             ("es_final_with_rules_CLEANED", "json"),
             ("es_final_with_rules_ENRICHED", "json"),
             ("es_final_with_rules_CLEAN", "json"),
             ("es_final_with_rules", "json"),
         ]
+
         for (name, ext) in candidates {
-            if let url = Bundle.main.url(forResource: name, withExtension: ext) { return url }
+            if let url = Bundle.main.url(forResource: name, withExtension: ext) {
+                print("📁 Found data file: \(name).\(ext)")
+                return url
+            }
         }
+
+        // Check document directory for custom files
         let doc = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        let customGz = doc?.appendingPathComponent("es_final_with_rules.json.gz")
+        if let u = customGz, FileManager.default.fileExists(atPath: u.path) {
+            print("📁 Found custom gzip file: es_final_with_rules.json.gz")
+            return u
+        }
+
         let custom = doc?.appendingPathComponent("es_final_with_rules.json")
-        if let u = custom, FileManager.default.fileExists(atPath: u.path) { return u }
+        if let u = custom, FileManager.default.fileExists(atPath: u.path) {
+            print("📁 Found custom json file: es_final_with_rules.json")
+            return u
+        }
+
+        print("❌ No translation data file found")
         return nil
     }
 
@@ -671,3 +866,4 @@ final class SpanishTranslationProcessor {
         return Packs(priceUnits: priceUnits, alInf: alInf, preps: preps, menuLex: menuLex, narrative: narrative, dialogue: dialogue)
     }
 }
+

@@ -1106,7 +1106,7 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
     // MARK: - New LiDAR Notification Method
 
     /// Shows a LiDAR notification message for 2 seconds.
-    public func showLiDARNotification(_ message: String) {
+    func showLiDARNotification(_ message: String) {
         DispatchQueue.main.async {
             self.lidarNotificationMessage = message
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
@@ -1114,22 +1114,22 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
             }
         }
     }
-    
+
     // MARK: - New Public Methods for UI interactions
-    
-    public func handleToggleCameraZoom() {
+
+    func handleToggleCameraZoom() {
         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
         impactFeedback.impactOccurred()
         toggleCameraZoom()
     }
-    
-    public func handleFlipCamera() {
+
+    func handleFlipCamera() {
         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
         impactFeedback.impactOccurred()
         flipCamera()
     }
-    
-    public func handleToggleSpeech() {
+
+    func handleToggleSpeech() {
         isSpeechEnabled.toggle()
         if isSpeechEnabled {
             announceSpeechEnabled()
@@ -1220,4 +1220,3 @@ extension CameraViewModel {
         }
     }
 }
-

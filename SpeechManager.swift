@@ -314,6 +314,115 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
         isProcessingQueue = false
         announcementQueue.removeAll()
     }
+
+    // MARK: - New Method: Speak with Pauses Based on Punctuation
+
+    /// Speaks the given text by splitting it into segments based on punctuation marks,
+    /// queuing each segment as a separate utterance with pauses after each segment depending on punctuation.
+    /// - Parameter text: The input string to be spoken with pauses.
+    func speakWithPauses(_ text: String) {
+        // Stop current speech if any
+        if speechSynthesizer.isSpeaking {
+            speechSynthesizer.stopSpeaking(at: .immediate)
+        }
+
+        // Clear any existing queue or processing state
+        announcementQueue.removeAll()
+        isProcessingQueue = false
+
+        // Split input text into segments preserving punctuation marks as separate tokens
+        // We'll use a regex that captures punctuation marks as separate segments
+        // Punctuation marks to split on: . ! ? , ;
+        // Use regex to split and keep delimiters
+        let pattern = #"([^.!?,;]+[.!?,;]?)"#
+        let regex = try? NSRegularExpression(pattern: pattern, options: [])
+
+        var segmentsWithPunctuation: [String] = []
+        if let regex {
+            let nsText = text as NSString
+            let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: nsText.length))
+            for match in matches {
+                let segment = nsText.substring(with: match.range).trimmingCharacters(in: .whitespacesAndNewlines)
+                if !segment.isEmpty {
+                    segmentsWithPunctuation.append(segment)
+                }
+            }
+        } else {
+            // Fallback: just use the whole text
+            segmentsWithPunctuation = [text]
+        }
+
+        // Prepare queue of utterances with pause times based on punctuation
+        var utterancesWithPause: [(utterance: AVSpeechUtterance, pause: TimeInterval)] = []
+
+        for segment in segmentsWithPunctuation {
+            // Determine last character punctuation
+            let lastChar = segment.last
+
+            // Determine pause duration
+            let pauseDuration: TimeInterval = switch lastChar {
+            case ".", "!", "?":
+                0.7
+            case ",", ";":
+                0.3
+            default:
+                0.1
+            }
+
+            // Create utterance
+            let utterance = AVSpeechUtterance(string: segment)
+            if let chosenVoice = AVSpeechSynthesisVoice(identifier: selectedVoiceIdentifier) {
+                utterance.voice = chosenVoice
+            } else {
+                utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+            }
+            utterance.rate = 0.5
+            utterance.pitchMultiplier = 1.0
+            utterance.volume = 0.9
+
+            utterancesWithPause.append((utterance, pauseDuration))
+        }
+
+        // Use a queue to speak each segment consecutively with proper pause
+        // Use delegate methods to know when an utterance finished,
+        // so we will manage a separate queue for this method (to not conflict with the main announcementQueue).
+        speakUtterancesWithPauses(utterancesWithPause)
+    }
+
+    // MARK: - Private helper for speakWithPauses
+
+    private var speakWithPausesQueue: [(utterance: AVSpeechUtterance, pause: TimeInterval)] = []
+    private var isSpeakingWithPauses = false
+
+    private func speakUtterancesWithPauses(_ utterancesWithPause: [(utterance: AVSpeechUtterance, pause: TimeInterval)]) {
+        // If currently speaking with pauses, stop first
+        if isSpeakingWithPauses {
+            speechSynthesizer.stopSpeaking(at: .immediate)
+        }
+
+        speakWithPausesQueue = utterancesWithPause
+        isSpeakingWithPauses = true
+
+        speakNextWithPause()
+    }
+
+    private func speakNextWithPause() {
+        guard !speakWithPausesQueue.isEmpty else {
+            isSpeakingWithPauses = false
+            return
+        }
+
+        let next = speakWithPausesQueue.removeFirst()
+        speechSynthesizer.speak(next.utterance)
+
+        // Schedule timer to wait pause after utterance finishes speaking
+        // We rely on delegate to notify finish, so pause timer will be scheduled there.
+        // But we keep pause duration here to use when finished.
+        currentPauseDuration = next.pause
+    }
+
+    // Store current pause duration after utterance finish
+    private var currentPauseDuration: TimeInterval = 0
 }
 
 // MARK: - AVSpeechSynthesizerDelegate
@@ -327,9 +436,22 @@ extension SpeechManager: AVSpeechSynthesizerDelegate {
 
     func speechSynthesizer(_: AVSpeechSynthesizer, didFinish _: AVSpeechUtterance) {
         DispatchQueue.main.async { [weak self] in
-            self?.isSpeaking = false
+            guard let self else { return }
+
+            // If currently speaking with pauses mode
+            if isSpeakingWithPauses {
+                isSpeaking = false
+                // After the pause duration, speak next segment if any
+                DispatchQueue.main.asyncAfter(deadline: .now() + currentPauseDuration) {
+                    self.speakNextWithPause()
+                }
+                return
+            }
+
+            // Normal speech queue processing
+            isSpeaking = false
             DispatchQueue.main.asyncAfter(deadline: .now() + Constants.interObjectDelay) {
-                self?.processNextInQueue()
+                self.processNextInQueue()
             }
         }
     }
@@ -339,6 +461,10 @@ extension SpeechManager: AVSpeechSynthesizerDelegate {
             self?.isSpeaking = false
             self?.isProcessingQueue = false
             self?.announcementQueue.removeAll()
+
+            // Also cancel speakWithPauses if active
+            self?.isSpeakingWithPauses = false
+            self?.speakWithPausesQueue.removeAll()
         }
     }
 }

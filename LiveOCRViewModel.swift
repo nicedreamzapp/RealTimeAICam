@@ -26,7 +26,7 @@ class ZoomCameraManager: NSObject, ObservableObject {
     func setPinchGestureStartZoom() { initialZoomFactor = captureDevice?.videoZoomFactor ?? 1.0 }
 }
 
-// MARK: - Live OCR View Model (Massively Simplified!)
+// MARK: - Live OCR View Model (Updated for SimpleSpanishEngine)
 
 final class LiveOCRViewModel: NSObject, ObservableObject {
     // MARK: - Properties
@@ -40,6 +40,7 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
     @Published var isPinching: Bool = false
     @Published var isFrozen: Bool = false
     @Published var torchLevel: Float = 0.0
+    @Published var isTranslatorLoading: Bool = false
 
     weak var cameraPreviewRef: CameraPreviewView?
     weak var cameraPreviewView: CameraPreviewView?
@@ -66,9 +67,7 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
         super.init()
         setupTextRecognition()
         speechSynthesizer.delegate = self
-        Task { @MainActor in
-            _ = SpanishTranslationProcessor.shared // trigger JSON load
-        }
+        // Removed engine preloading here as per instructions
     }
 
     private func setupTextRecognition() {
@@ -150,30 +149,39 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
         }
     }
 
-    // MARK: - On-Demand Translation (Now uses the extracted processor!)
+    // MARK: - On-Demand Translation (Updated for SimpleSpanishEngine)
 
     func translateSpanishText(completion: @escaping (Bool) -> Void) {
         guard !recognizedText.isEmpty else { completion(false); return }
-        // NEW: freeze so OCR won't overwrite while we review/copy
-        isFrozen = true
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self else { DispatchQueue.main.async { completion(false) }; return }
-            Task { @MainActor in
-                let translated = SpanishTranslationProcessor.shared.interpretSpanishWithContext(self.recognizedText)
-                DispatchQueue.main.async {
-                    self.translatedText = translated
-                    self.isTranslated = true
-                    completion(true)
+
+        Task {
+            let engineIsReady = await MainActor.run { FixedSpanishEngine.shared.isReady() }
+            if !engineIsReady {
+                await MainActor.run { self.isTranslatorLoading = true }
+                // Wait for the engine to load by polling
+                while await !(MainActor.run { FixedSpanishEngine.shared.isReady() }) {
+                    try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s
                 }
+                await MainActor.run { self.isTranslatorLoading = false }
+            }
+
+            await MainActor.run { self.isFrozen = true }
+            let textToTranslate = self.recognizedText // capture to avoid actor crossing
+
+            let translation = await MainActor.run { FixedSpanishEngine.shared.translate(textToTranslate) }
+            await MainActor.run {
+                self.translatedText = translation
+                self.isTranslated = true
+                completion(true)
             }
         }
     }
 
-    func translateSpanishTextWithConfidence(completion: @escaping (TranslationResult?) -> Void) {
+    func translateSpanishTextWithConfidence(completion: @escaping (String?) -> Void) {
         guard !recognizedText.isEmpty else { completion(nil); return }
         DispatchQueue.global(qos: .userInitiated).async {
             Task { @MainActor in
-                let result = SpanishTranslationProcessor.shared.interpretSpanishWithConfidence(self.recognizedText)
+                let result = FixedSpanishEngine.shared.translate(self.recognizedText)
                 DispatchQueue.main.async { completion(result) }
             }
         }

@@ -105,7 +105,12 @@ final class YOLOv8Processor: ObservableObject, @unchecked Sendable {
 
         let config = MLModelConfiguration()
         if #available(iOS 16.0, *) {
-            config.computeUnits = .cpuAndNeuralEngine
+            // Workaround: On iOS 17.3, avoid Neural Engine due to known bug
+            if #available(iOS 17.3, *), !ProcessInfo.processInfo.isOperatingSystemAtLeast(OperatingSystemVersion(majorVersion: 17, minorVersion: 4, patchVersion: 0)) {
+                config.computeUnits = .cpuAndGPU
+            } else {
+                config.computeUnits = .cpuAndNeuralEngine
+            }
         } else {
             config.computeUnits = .all
         }

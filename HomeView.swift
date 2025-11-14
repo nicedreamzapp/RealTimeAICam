@@ -4,7 +4,7 @@ import SwiftUI
 struct HomeView: View {
     @ObservedObject var viewModel: CameraViewModel
     @Binding var animationState: ContentView.AnimationState
-    @Binding var mode: ContentView.Mode
+    @Binding var mode: AppMode
     @State private var showInstructions = false
 
     @StateObject var buttonDebouncer: ButtonPressDebouncer
@@ -16,38 +16,46 @@ struct HomeView: View {
     let speechSynthesizer: AVSpeechSynthesizer
 
     var body: some View {
-        ZStack {
+        // Use iPhone 14 Pro Max (390pt) as baseline
+        let screenWidth = UIScreen.main.bounds.width
+        let scale = min(screenWidth / 390, 1.0)
+
+        return ZStack {
             splashBackground
 
             VStack {
                 Spacer(minLength: 80)
                 VStack(spacing: 12) {
                     HeadingView(animateIn: animationState.heading)
-                    Spacer(minLength: 30)
+                    Spacer()
                     GeometryReader { _ in
                         VStack(spacing: 18) {
-                            englishOCRButton
-                            spanishOCRButton
-                            objectDetectionButton
+                            englishOCRButton(scale: scale, screenWidth: screenWidth)
+                            spanishOCRButton(scale: scale, screenWidth: screenWidth)
+                            objectDetectionButton(scale: scale, screenWidth: screenWidth)
                         }
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        // GeometryReader used for vertical spacing only
                     }
                     .frame(height: 220)
-                    Spacer(minLength: 25)
+                    Spacer()
                     voicePicker
-                    Spacer(minLength: 40)
+                    Spacer(minLength: 25)
                 }
                 .padding(.horizontal)
                 Spacer(minLength: 50)
             }
-
+        }
+        .overlay(alignment: .topTrailing) {
             infoButton
+                .padding(.top, 8)
+                .padding(.trailing, 16)
         }
         .sheet(isPresented: $showInstructions) {
             AppInstructionsView(selectedVoiceIdentifier: viewModel.selectedVoiceIdentifier)
                 .onAppear {
                     if buttonDebouncer.canPress() {
                         viewModel.pauseCameraAndProcessing()
-                        print("Instructions opened with voice: \(viewModel.selectedVoiceIdentifier)")
                     }
                 }
                 .onDisappear {
@@ -84,27 +92,47 @@ struct HomeView: View {
         }
     }
 
-    private var englishOCRButton: some View {
+    private func englishOCRButton(scale: CGFloat, screenWidth: CGFloat) -> some View {
         Button(action: {
             guard buttonDebouncer.canPress() else { return }
             onEnglishOCR()
         }) {
-            HStack(spacing: 4) {
-                Text("📖").font(.system(size: 34))
-                OutlinedText(text: "Eng Text2Speech", fontSize: 20)
-                ShadedEmoji(emoji: "🗣️", size: 29)
+            HStack(spacing: 4 * scale) {
+                Text("📖").font(.system(size: 34 * scale))
+                OutlinedText(text: "Eng Text2Speech", fontSize: 20 * scale)
+                ShadedEmoji(emoji: "🗣️", size: 29 * scale)
             }
-            .padding(.vertical, 16)
+            .padding(.vertical, 16 * scale)
         }
-        .frame(maxWidth: .infinity, alignment: .center)
-        .padding(.horizontal, 20)
+        // Adaptive width with maxWidth capped at 340 * scale or screen width minus 36
+        .frame(maxWidth: min(340 * scale, screenWidth - 36), alignment: .center)
+        .padding(.horizontal, 8 * scale)
         .background(
-            Capsule().fill(Color.blue.opacity(0.20))
-                .overlay(Capsule().stroke(Color.black, lineWidth: 1.1))
+            ZStack {
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.white.opacity(0.23), Color.blue.opacity(0.50)]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                Capsule()
+                    .fill(Color.white.opacity(0.13))
+                    .frame(height: 24 * scale)
+                    .offset(y: -18 * scale)
+                Capsule().stroke(Color.white.opacity(0.80), lineWidth: 4.8 * scale)
+                Capsule().stroke(Color.blue, lineWidth: 2.4 * scale)
+                Capsule()
+                    .fill(Color.black.opacity(0.12))
+                    .blur(radius: 7 * scale)
+                    .offset(y: 16 * scale)
+            }
         )
+        .shadow(color: Color.black.opacity(0.38), radius: 15 * scale, y: 5 * scale)
         .clipShape(Capsule())
         .opacity(animationState.button1 ? 1 : 0)
-        .shadow(color: Color.blue.opacity(0.50), radius: 12)
+        .shadow(color: Color.blue.opacity(0.50), radius: 12 * scale)
         .scaleEffect(animationState.button1 ? 1 : 0.7)
         .animation(.easeOut(duration: 0.3), value: animationState.button1)
         .accessibilityLabel("English Text to Speech")
@@ -112,30 +140,50 @@ struct HomeView: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    private var spanishOCRButton: some View {
+    private func spanishOCRButton(scale: CGFloat, screenWidth: CGFloat) -> some View {
         Button(action: {
             guard buttonDebouncer.canPress() else { return }
             onSpanishOCR()
         }) {
-            HStack(spacing: 2) {
-                Text("🇲🇽").font(.system(size: 31))
-                OutlinedText(text: "Span", fontSize: 18)
-                Text("🇺🇸").font(.system(size: 31))
-                OutlinedText(text: "Eng", fontSize: 18)
-                Text("🌎").font(.system(size: 31))
-                OutlinedText(text: "Translate", fontSize: 18)
+            HStack(spacing: 2 * scale) {
+                Text("🇲🇽").font(.system(size: 31 * scale))
+                OutlinedText(text: "Span", fontSize: 18 * scale)
+                Text("🇺🇸").font(.system(size: 31 * scale))
+                OutlinedText(text: "Eng", fontSize: 18 * scale)
+                Text("🌎").font(.system(size: 31 * scale))
+                OutlinedText(text: "Translate", fontSize: 18 * scale)
             }
-            .padding(.vertical, 16)
+            .padding(.vertical, 16 * scale)
         }
-        .frame(maxWidth: .infinity, alignment: .center)
-        .padding(.horizontal, 20)
+        // Adaptive width with maxWidth capped at 340 * scale or screen width minus 36
+        .frame(maxWidth: min(340 * scale, screenWidth - 36), alignment: .center)
+        .padding(.horizontal, 8 * scale)
         .background(
-            Capsule().fill(Color.green.opacity(0.20))
-                .overlay(Capsule().stroke(Color.black, lineWidth: 1.1))
+            ZStack {
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.white.opacity(0.23), Color.green.opacity(0.50)]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                Capsule()
+                    .fill(Color.white.opacity(0.13))
+                    .frame(height: 24 * scale)
+                    .offset(y: -18 * scale)
+                Capsule().stroke(Color.white.opacity(0.80), lineWidth: 4.8 * scale)
+                Capsule().stroke(Color.green, lineWidth: 2.4 * scale)
+                Capsule()
+                    .fill(Color.black.opacity(0.12))
+                    .blur(radius: 7 * scale)
+                    .offset(y: 16 * scale)
+            }
         )
+        .shadow(color: Color.black.opacity(0.38), radius: 15 * scale, y: 5 * scale)
         .clipShape(Capsule())
         .opacity(animationState.button2 ? 1 : 0)
-        .shadow(color: Color.green.opacity(0.50), radius: 12)
+        .shadow(color: Color.green.opacity(0.50), radius: 12 * scale)
         .scaleEffect(animationState.button2 ? 1 : 0.7)
         .animation(.easeOut(duration: 0.3), value: animationState.button2)
         .accessibilityLabel("Spanish to English Translator")
@@ -143,26 +191,46 @@ struct HomeView: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    private var objectDetectionButton: some View {
+    private func objectDetectionButton(scale: CGFloat, screenWidth: CGFloat) -> some View {
         Button(action: {
             guard buttonDebouncer.canPress() else { return }
             onObjectDetection()
         }) {
-            HStack(spacing: 4) {
-                Text("🐶").font(.system(size: 35))
-                OutlinedText(text: "Object Detection", fontSize: 20)
+            HStack(spacing: 4 * scale) {
+                Text("🐶").font(.system(size: 35 * scale))
+                OutlinedText(text: "Object Detection", fontSize: 20 * scale)
             }
-            .padding(.vertical, 16)
+            .padding(.vertical, 16 * scale)
         }
-        .frame(maxWidth: .infinity, alignment: .center)
-        .padding(.horizontal, 20)
+        // Adaptive width with maxWidth capped at 340 * scale or screen width minus 36
+        .frame(maxWidth: min(340 * scale, screenWidth - 36), alignment: .center)
+        .padding(.horizontal, 8 * scale)
         .background(
-            Capsule().fill(Color.orange.opacity(0.20))
-                .overlay(Capsule().stroke(Color.black, lineWidth: 1.1))
+            ZStack {
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.white.opacity(0.23), Color.orange.opacity(0.50)]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                Capsule()
+                    .fill(Color.white.opacity(0.13))
+                    .frame(height: 24 * scale)
+                    .offset(y: -18 * scale)
+                Capsule().stroke(Color.white.opacity(0.80), lineWidth: 4.8 * scale)
+                Capsule().stroke(Color.orange, lineWidth: 2.4 * scale)
+                Capsule()
+                    .fill(Color.black.opacity(0.12))
+                    .blur(radius: 7 * scale)
+                    .offset(y: 16 * scale)
+            }
         )
+        .shadow(color: Color.black.opacity(0.38), radius: 15 * scale, y: 5 * scale)
         .clipShape(Capsule())
         .opacity(animationState.button3 ? 1 : 0)
-        .shadow(color: Color.orange.opacity(0.50), radius: 12)
+        .shadow(color: Color.orange.opacity(0.50), radius: 12 * scale)
         .scaleEffect(animationState.button3 ? 1 : 0.7)
         .animation(.easeOut(duration: 0.3), value: animationState.button3)
         .accessibilityLabel("Object Detection")
@@ -196,12 +264,30 @@ struct HomeView: View {
             .padding(.vertical, 6)
             .padding(.horizontal, 18)
         }
-        .background(ButtonStyles.glassBackground()
-            .opacity(0.20))
+        .background(
+            ZStack {
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.white.opacity(0.23), Color.black.opacity(0.50)]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                Capsule()
+                    .fill(Color.white.opacity(0.13))
+                    .frame(height: 24)
+                    .offset(y: -18)
+                Capsule().stroke(Color.white.opacity(0.80), lineWidth: 4.8)
+                Capsule().stroke(Color.black, lineWidth: 2.4)
+                Capsule()
+                    .fill(Color.black.opacity(0.12))
+                    .blur(radius: 7)
+                    .offset(y: 16)
+            }
+        )
+        .shadow(color: Color.black.opacity(0.38), radius: 12, y: 5)
         .clipShape(Capsule())
-        .overlay(Capsule().stroke(Color.black, lineWidth: 1.1))
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-        .padding()
     }
 
     // MARK: - Helper Methods

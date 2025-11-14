@@ -44,6 +44,7 @@
 		99D3023C2E3CF34A00CAF01A /* SpeechManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99D3023B2E3CF34700CAF01A /* SpeechManager.swift */; };
 		99D77E892E4359E8005583DC /* AppInstructionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99D77E882E4359E8005583DC /* AppInstructionsView.swift */; };
 		99D7E6A72E47639F007BBFB7 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 99D7E6A42E4761E9007BBFB7 /* PrivacyInfo.xcprivacy */; };
+		99EE6CEF2E67071800A2F3F3 /* es_final_with_rules.json.gz in Resources */ = {isa = PBXBuildFile; fileRef = 99EE6CEE2E67071800A2F3F3 /* es_final_with_rules.json.gz */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -104,6 +105,7 @@
 		99D3023B2E3CF34700CAF01A /* SpeechManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechManager.swift; sourceTree = "<group>"; };
 		99D77E882E4359E8005583DC /* AppInstructionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppInstructionsView.swift; sourceTree = "<group>"; };
 		99D7E6A42E4761E9007BBFB7 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; explicitFileType = "text.plist.app-privacy"; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		99EE6CEE2E67071800A2F3F3 /* es_final_with_rules.json.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; path = es_final_with_rules.json.gz; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -216,6 +218,7 @@
 				996AFA332E4D7D6C009D4FAE /* ButtonPressDebouncer.swift */,
 				993E64242E4DC654000B362C /* MemoryManager.swift */,
 				9968DE142E532EBF00629ECE /* DebouncedButton.swift */,
+				99EE6CEE2E67071800A2F3F3 /* es_final_with_rules.json.gz */,
 			);
 			sourceTree = "<group>";
 		};
@@ -350,6 +353,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				99EE6CEF2E67071800A2F3F3 /* es_final_with_rules.json.gz in Resources */,
 				99D7E6A72E47639F007BBFB7 /* PrivacyInfo.xcprivacy in Resources */,
 				990EECF12E489EBD00B7CD8C /* LICENSE in Resources */,
 				996B92FF2E3894BF00AE22AA /* class_names.txt in Resources */,
@@ -568,7 +572,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 13;
 				DEVELOPMENT_TEAM = B9RA6QH559;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = NO;
@@ -585,7 +589,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.6;
+				MARKETING_VERSION = 1.0.10;
 				MTL_OPTIMIZATION_LEVEL = "-Osize";
 				PRODUCT_BUNDLE_IDENTIFIER = "B9RA6QH559.project-601";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -605,7 +609,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 13;
 				DEVELOPMENT_TEAM = B9RA6QH559;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = NO;
@@ -622,7 +626,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.6;
+				MARKETING_VERSION = 1.0.10;
 				MTL_OPTIMIZATION_LEVEL = "-Osize";
 				PRODUCT_BUNDLE_IDENTIFIER = "B9RA6QH559.project-601";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -641,7 +645,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = B9RA6QH559;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
@@ -663,7 +667,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = B9RA6QH559;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
@@ -684,7 +688,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = B9RA6QH559;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
@@ -704,7 +708,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = B9RA6QH559;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;

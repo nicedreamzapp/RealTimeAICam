@@ -21,31 +21,23 @@ final class InstructionsSpeaker: NSObject, ObservableObject, AVSpeechSynthesizer
         utterance.rate = rate
         utterance.volume = 1.0
 
-        // Debug logging
-        print("InstructionsSpeaker.play() - voiceId parameter: \(voiceId ?? "nil")")
-
         // Try to use the provided voice ID first
         if let voiceId, !voiceId.isEmpty {
             if let voice = AVSpeechSynthesisVoice(identifier: voiceId) {
                 utterance.voice = voice
-                print("InstructionsSpeaker: Using selected voice: \(voice.name) (\(voiceId))")
             } else {
-                print("InstructionsSpeaker: Failed to create voice with ID: \(voiceId)")
                 // Try to find a matching voice by partial ID match
                 let allVoices = AVSpeechSynthesisVoice.speechVoices()
                 if let matchingVoice = allVoices.first(where: { $0.identifier == voiceId }) {
                     utterance.voice = matchingVoice
-                    print("InstructionsSpeaker: Found matching voice: \(matchingVoice.name)")
                 } else {
                     // Fallback to default English voice
                     utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
-                    print("InstructionsSpeaker: Using fallback voice")
                 }
             }
         } else {
             // No voice ID provided, use default
             utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
-            print("InstructionsSpeaker: Using default voice (no ID provided)")
         }
 
         // Activate audio (mix with others so it doesn't kill other audio)
@@ -118,7 +110,6 @@ struct AppInstructionsView: View {
                         if speaker.isSpeaking {
                             speaker.stop()
                         } else {
-                            print("About to play with voice ID: \(selectedVoiceIdentifier)")
                             speaker.play(script: audioScript(liDARAvailable: supportsLiDAR), voiceId: selectedVoiceIdentifier.isEmpty ? nil : selectedVoiceIdentifier)
                         }
                     } label: {

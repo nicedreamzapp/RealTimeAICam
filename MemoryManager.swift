@@ -39,7 +39,6 @@ final class MemoryManager: ObservableObject {
 
     /// Emergency cleanup for caches and memory pressure. Posts notifications for all listeners to reduce usage.
     @objc private func handleMemoryWarning() {
-        print("🚨 MemoryManager: System memory warning received. Broadcasting cleanup notifications.")
         autoreleasepool {
             URLCache.shared.removeAllCachedResponses()
             // Small allocation trick to trigger further GC.

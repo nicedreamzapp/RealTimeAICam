@@ -192,7 +192,7 @@ struct TranslationActionsPopup: View {
 }
 
 struct LiveOCRView: View {
-    @Binding var mode: ContentView.Mode
+    @Binding var mode: AppMode
     @StateObject private var viewModel = LiveOCRViewModel()
     let ocrMode: OCRMode
     let selectedVoiceIdentifier: String
@@ -227,12 +227,27 @@ struct LiveOCRView: View {
         }
     }
 
+    // Computed properties for button layout
+    private func buttonLayoutMetrics(screenWidth: CGFloat, geometry: GeometryProxy) -> (buttonSize: CGFloat, spacing: CGFloat, padding: CGFloat) {
+        let safeHorizontal = max(geometry.safeAreaInsets.leading + geometry.safeAreaInsets.trailing, 0)
+        let isVerySmallScreen = screenWidth <= 375
+        let buttonSize: CGFloat = isVerySmallScreen ? 40 : 44
+        let horizontalPadding: CGFloat = isVerySmallScreen ? 24 : 20
+        let totalHorizontalPadding = safeHorizontal + (horizontalPadding * 2)
+        let availableButtonSpace = screenWidth - totalHorizontalPadding
+        let buttonCount: CGFloat = 6
+        let totalButtonWidth = buttonCount * buttonSize
+        let remainingSpace = availableButtonSpace - totalButtonWidth
+        let idealSpacing = remainingSpace / (buttonCount - 1)
+        let finalSpacing = idealSpacing >= 12 ? min(20, idealSpacing) : max(6, idealSpacing)
+
+        return (buttonSize: buttonSize, spacing: finalSpacing, padding: horizontalPadding)
+    }
+
     var body: some View {
         GeometryReader { geometry in
             let screenWidth = geometry.size.width
-            let isVerySmallScreen = screenWidth <= 375
-            let buttonSize: CGFloat = isVerySmallScreen ? 48 : 56
-            let horizontalPadding: CGFloat = isVerySmallScreen ? 16 : 20
+            let metrics = buttonLayoutMetrics(screenWidth: screenWidth, geometry: geometry)
 
             ZStack {
                 // Full-screen camera preview
@@ -273,10 +288,10 @@ struct LiveOCRView: View {
                     .ignoresSafeArea()
                 }
 
-                // Top bar - FIXED VERSION
+                // Top bar
                 VStack {
                     HStack {
-                        // Back button with debouncer usage and updated style
+                        // Back button (left side)
                         Button(action: {
                             if buttonDebouncer.canPress() {
                                 let impactFeedback = UIImpactFeedbackGenerator(style: .light)
@@ -304,23 +319,25 @@ struct LiveOCRView: View {
                                     .opacity(0.85)
                             )
                         }
-                        .padding(.leading, max(geometry.safeAreaInsets.leading + 16, isVerySmallScreen ? 8 : 20))
+                        .fixedSize()
 
                         Spacer()
 
-                        // Mode indicator - FIXED with proper safe area handling
+                        // Mode indicator (right side)
                         Text(ocrMode == .english ? "English" : "Span → Eng")
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 8)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
                             .background(
-                                Capsule()
-                                    .fill(.ultraThinMaterial.opacity(0.9))
+                                RoundedRectangle(cornerRadius: 20)
+                                    .fill(.ultraThinMaterial)
+                                    .opacity(0.85)
                             )
-                            .padding(.trailing, max(geometry.safeAreaInsets.trailing + 16, isVerySmallScreen ? 8 : 20))
+                            .fixedSize()
                     }
-                    .padding(.top, geometry.safeAreaInsets.top + 10)
+                    .padding(.horizontal, max(geometry.safeAreaInsets.leading, geometry.safeAreaInsets.trailing) + 20)
+                    .padding(.top, geometry.safeAreaInsets.top + 15)
 
                     Spacer()
                 }
@@ -341,9 +358,8 @@ struct LiveOCRView: View {
                                     .foregroundColor(.white.opacity(0.9))
                                 Spacer()
                                 if isTranslating {
-                                    ProgressView()
+                                    AnimatedLoader(size: 22)
                                         .scaleEffect(0.8)
-                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                 }
                             }
 
@@ -371,9 +387,9 @@ struct LiveOCRView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
 
-                    // Bottom action buttons - fixed layout as per instructions
-                    HStack {
-                        // Settings button with debouncer
+                    // Bottom action buttons - using extracted metrics
+                    HStack(spacing: metrics.spacing) {
+                        // Settings button
                         Button(action: {
                             if buttonDebouncer.canPress() {
                                 withAnimation(.spring(response: 0.3)) {
@@ -383,16 +399,18 @@ struct LiveOCRView: View {
                         }) {
                             Image(systemName: "gearshape.fill")
                                 .font(.system(size: 22))
-                                .frame(width: buttonSize, height: buttonSize)
+                                .foregroundStyle(.white)
+                                .symbolRenderingMode(.palette)
+                                .frame(width: metrics.buttonSize, height: metrics.buttonSize)
                                 .background(
                                     Circle()
-                                        .fill(.ultraThinMaterial.opacity(0.95))
+                                        .fill(.ultraThinMaterial.opacity(0.15))
+                                        .background(Circle().fill(Color.black.opacity(0.25)))
                                 )
-                                .foregroundStyle(.white)
+                                .contentShape(Circle())
                         }
-                        Spacer(minLength: 0)
 
-                        // Torch button with overlay for presets and debouncer
+                        // Torch button with overlay for presets
                         ZStack {
                             Button(action: {
                                 if buttonDebouncer.canPress() {
@@ -406,58 +424,22 @@ struct LiveOCRView: View {
                             }) {
                                 Image(systemName: viewModel.torchLevel > 0 ? "flashlight.on.fill" : "flashlight.off.fill")
                                     .font(.system(size: 22))
-                                    .frame(width: buttonSize, height: buttonSize)
+                                    .foregroundStyle(viewModel.torchLevel > 0 ? .yellow : .white)
+                                    .symbolRenderingMode(.palette)
+                                    .frame(width: metrics.buttonSize, height: metrics.buttonSize)
                                     .background(
                                         Circle()
-                                            .fill(.ultraThinMaterial.opacity(0.95))
+                                            .fill(.ultraThinMaterial.opacity(0.15))
+                                            .background(Circle().fill(Color.black.opacity(0.25)))
                                     )
-                                    .foregroundStyle(viewModel.torchLevel > 0 ? Color.yellow : Color.white)
+                                    .contentShape(Circle())
                             }
                             .overlay(
-                                Group {
-                                    if showTorchPresets {
-                                        VStack(spacing: 8) {
-                                            ForEach([100, 75, 50, 25], id: \.self) { percentage in
-                                                Button(action: {
-                                                    let level = Float(percentage) / 100.0
-                                                    viewModel.handleToggleTorch(level: level)
-                                                    showTorchPresets = false
-                                                }) {
-                                                    Text("\(percentage)%")
-                                                        .font(.system(size: 14, weight: .medium))
-                                                        .foregroundColor(.white)
-                                                        .frame(width: 60, height: 36)
-                                                        .background(
-                                                            RoundedRectangle(cornerRadius: 8)
-                                                                .fill(Int(viewModel.torchLevel * 100) == percentage ? Color.yellow.opacity(0.4) : Color.white.opacity(0.2))
-                                                        )
-                                                        .overlay(
-                                                            RoundedRectangle(cornerRadius: 8)
-                                                                .stroke(Int(viewModel.torchLevel * 100) == percentage ? Color.yellow : Color.white.opacity(0.3), lineWidth: 1)
-                                                        )
-                                                }
-                                            }
-                                        }
-                                        .padding(.vertical, 8)
-                                        .padding(.horizontal, 4)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .fill(.ultraThinMaterial.opacity(0.8))
-                                                .overlay(
-                                                    RoundedRectangle(cornerRadius: 12)
-                                                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                                                )
-                                        )
-                                        .offset(y: -90)
-                                        .transition(.scale(scale: 0.95).combined(with: .opacity))
-                                    }
-                                },
-                                alignment: .top
+                                torchPresetOverlay
                             )
                         }
-                        Spacer(minLength: 0)
 
-                        // Wide Screen Toggle button with debouncer
+                        // Wide Screen Toggle button
                         Button(action: {
                             if buttonDebouncer.canPress() {
                                 viewModel.handleToggleCameraZoom()
@@ -465,124 +447,24 @@ struct LiveOCRView: View {
                         }) {
                             Image(systemName: "rectangle.3.offgrid")
                                 .font(.system(size: 22))
-                                .frame(width: buttonSize, height: buttonSize)
+                                .foregroundStyle(viewModel.isUltraWide ? .cyan : .white)
+                                .symbolRenderingMode(.palette)
+                                .frame(width: metrics.buttonSize, height: metrics.buttonSize)
                                 .background(
                                     Circle()
-                                        .fill(.ultraThinMaterial.opacity(0.95))
+                                        .fill(.ultraThinMaterial.opacity(0.15))
+                                        .background(Circle().fill(Color.black.opacity(0.25)))
                                 )
-                                .foregroundStyle(viewModel.isUltraWide ? Color.cyan : Color.white)
+                                .contentShape(Circle())
                         }
-                        Spacer(minLength: 0)
 
-                        // Flip Camera button with debouncer
-                        Button(action: {
-                            if buttonDebouncer.canPress() {
-                                viewModel.handleFlipCamera()
-                            }
-                        }) {
-                            Image(systemName: "camera.rotate")
-                                .font(.system(size: 22))
-                                .frame(width: buttonSize, height: buttonSize)
-                                .background(
-                                    Circle()
-                                        .fill(.ultraThinMaterial.opacity(0.95))
-                                )
-                                .foregroundStyle(.white)
-                        }
-                        Spacer(minLength: 0)
+                        // Translate or Copy button
+                        translateOrCopyButton(buttonSize: metrics.buttonSize)
 
-                        // Translate or Copy button (always present) with debouncer
-                        Group {
-                            if ocrMode == .spanishToEnglish, !viewModel.isTranslated {
-                                Button(action: {
-                                    if buttonDebouncer.canPress() {
-                                        isTranslating = true
-                                        viewModel.translateSpanishText { success in
-                                            isTranslating = false
-                                            if success {
-                                                let feedback = UINotificationFeedbackGenerator()
-                                                feedback.notificationOccurred(.success)
-                                            }
-                                        }
-                                    }
-                                }) {
-                                    Image(systemName: "character.book.closed.fill")
-                                        .font(.system(size: 22))
-                                        .frame(width: buttonSize, height: buttonSize)
-                                        .background(
-                                            Circle()
-                                                .fill(.ultraThinMaterial.opacity(0.95))
-                                        )
-                                        .foregroundStyle(.white)
-                                }
-                                .disabled(isTranslating)
-                                .opacity(isTranslating ? 0.6 : 1)
-                            } else {
-                                Button(action: {
-                                    if buttonDebouncer.canPress() {
-                                        let textToCopy = ocrMode == .english ? viewModel.recognizedText : viewModel.translatedText
-                                        viewModel.copyText(textToCopy)
+                        // Speak button
+                        speakButton(buttonSize: metrics.buttonSize)
 
-                                        let feedback = UINotificationFeedbackGenerator()
-                                        feedback.notificationOccurred(.success)
-                                    }
-                                }) {
-                                    Image(systemName: "doc.on.doc.fill")
-                                        .font(.system(size: 22))
-                                        .frame(width: buttonSize, height: buttonSize)
-                                        .background(
-                                            Circle()
-                                                .fill(.ultraThinMaterial.opacity(0.95))
-                                        )
-                                        .foregroundStyle(.white)
-                                }
-                            }
-                        }
-                        Spacer(minLength: 0)
-
-                        // Speak button with debouncer
-                        Button(action: {
-                            if buttonDebouncer.canPress() {
-                                if isSpeaking {
-                                    viewModel.stopSpeaking()
-                                    isSpeaking = false
-                                } else {
-                                    // For Spanish mode, translate first if needed
-                                    if ocrMode == .spanishToEnglish, !viewModel.isTranslated {
-                                        isTranslating = true
-                                        viewModel.translateSpanishText { success in
-                                            isTranslating = false
-                                            if success {
-                                                viewModel.speak(text: viewModel.translatedText, voiceIdentifier: selectedVoiceIdentifier) {
-                                                    isSpeaking = false
-                                                }
-                                                isSpeaking = true
-                                            }
-                                        }
-                                    } else {
-                                        let textToSpeak = ocrMode == .english ? viewModel.recognizedText : viewModel.translatedText
-                                        viewModel.speak(text: textToSpeak, voiceIdentifier: selectedVoiceIdentifier) {
-                                            isSpeaking = false
-                                        }
-                                        isSpeaking = true
-                                    }
-                                }
-                            }
-                        }) {
-                            Image(systemName: "person.wave.2.fill")
-                                .font(.system(size: 22))
-                                .frame(width: buttonSize, height: buttonSize)
-                                .background(
-                                    Circle()
-                                        .fill(isSpeaking ? Color.green : Color.gray.opacity(0.5))
-                                )
-                                .foregroundStyle(.white)
-                        }
-                        .scaleEffect(isSpeaking ? 1.1 : 1.0)
-                        .animation(.easeInOut(duration: 0.2), value: isSpeaking)
-                        Spacer(minLength: 0)
-
-                        // Reset (Clear) button with debouncer
+                        // Reset (Clear) button
                         Button(action: {
                             if buttonDebouncer.canPress() {
                                 withAnimation(.spring(response: 0.3)) {
@@ -595,17 +477,20 @@ struct LiveOCRView: View {
                         }) {
                             Image(systemName: "arrow.clockwise")
                                 .font(.system(size: 22))
-                                .frame(width: buttonSize, height: buttonSize)
+                                .foregroundStyle(.white)
+                                .symbolRenderingMode(.palette)
+                                .frame(width: metrics.buttonSize, height: metrics.buttonSize)
                                 .background(
                                     Circle()
-                                        .fill(.ultraThinMaterial.opacity(0.95))
+                                        .fill(.ultraThinMaterial.opacity(0.15))
+                                        .background(Circle().fill(Color.black.opacity(0.25)))
                                 )
-                                .foregroundStyle(.white)
+                                .contentShape(Circle())
                         }
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.horizontal, horizontalPadding + max(geometry.safeAreaInsets.leading, geometry.safeAreaInsets.trailing))
-                    .padding(.bottom, 30)
+                    .padding(.horizontal, metrics.padding + max(geometry.safeAreaInsets.leading, geometry.safeAreaInsets.trailing))
+                    .padding(.bottom, 32)
                 }
 
                 // Translation popup (Spanish mode only)
@@ -636,7 +521,7 @@ struct LiveOCRView: View {
                     SettingsOverlayView(
                         viewModel: CameraViewModel(),
                         isPresented: $showSettings,
-                        mode: ocrMode == .english ? .englishOCR : .spanishToEnglishOCR
+                        mode: ocrMode == .english ? .ocrEnglish : .ocrSpanish
                     )
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
                 }
@@ -644,17 +529,168 @@ struct LiveOCRView: View {
         }
         .onAppear {
             viewModel.startSession()
-            // Sync torchLevel to 0 initially
-            // torchLevel is now managed by viewModel
         }
         .onDisappear {
             viewModel.stopSession()
             viewModel.clearText()
             viewModel.resetTranslation()
             isSpeaking = false
-            // Turn off torch when leaving the view (matches user intent)
             viewModel.handleToggleTorch(level: 0)
         }
         .preferredColorScheme(.dark)
+        .onChange(of: viewModel.torchLevel) { newLevel in
+            cameraPreviewRef?.setTorchLevel(newLevel)
+        }
+    }
+
+    // Helper views to break up complex expressions
+    @ViewBuilder
+    private var torchPresetOverlay: some View {
+        Group {
+            if showTorchPresets {
+                VStack(spacing: 8) {
+                    ForEach([100, 75, 50, 25], id: \.self) { percentage in
+                        Button(action: {
+                            let level = Float(percentage) / 100.0
+                            viewModel.handleToggleTorch(level: level)
+                            showTorchPresets = false
+                        }) {
+                            Text("\(percentage)%")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.white)
+                                .frame(width: 60, height: 36)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(Int(viewModel.torchLevel * 100) == percentage ? Color.yellow.opacity(0.4) : Color.white.opacity(0.2))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Int(viewModel.torchLevel * 100) == percentage ? Color.yellow : Color.white.opacity(0.3), lineWidth: 1)
+                                )
+                        }
+                    }
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 4)
+                .background(.ultraThinMaterial.opacity(0.8))
+                .offset(y: -90)
+                .transition(.scale(scale: 0.95).combined(with: .opacity))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func translateOrCopyButton(buttonSize: CGFloat) -> some View {
+        Group {
+            if ocrMode == .spanishToEnglish, !viewModel.isTranslated {
+                Button(action: {
+                    if buttonDebouncer.canPress() {
+                        isTranslating = true
+                        viewModel.translateSpanishText { success in
+                            isTranslating = false
+                            if success {
+                                let feedback = UINotificationFeedbackGenerator()
+                                feedback.notificationOccurred(.success)
+                            }
+                        }
+                    }
+                }) {
+                    Image(systemName: "character.book.closed.fill")
+                        .font(.system(size: 22))
+                        .foregroundStyle(.white)
+                        .symbolRenderingMode(.palette)
+                        .frame(width: buttonSize, height: buttonSize)
+                        .background(
+                            Circle()
+                                .fill(.ultraThinMaterial.opacity(0.15))
+                                .background(Circle().fill(Color.black.opacity(0.25)))
+                        )
+                        .contentShape(Circle())
+                }
+                .disabled(isTranslating)
+                .opacity(isTranslating ? 0.6 : 1)
+            } else {
+                Button(action: {
+                    if buttonDebouncer.canPress() {
+                        if ocrMode == .spanishToEnglish, !viewModel.isTranslated {
+                            isTranslating = true
+                            viewModel.translateSpanishText { success in
+                                isTranslating = false
+                                if success {
+                                    viewModel.copyText(viewModel.translatedText)
+                                    let feedback = UINotificationFeedbackGenerator()
+                                    feedback.notificationOccurred(.success)
+                                }
+                            }
+                        } else {
+                            let textToCopy = ocrMode == .english ? viewModel.recognizedText : viewModel.translatedText
+                            viewModel.copyText(textToCopy)
+                            let feedback = UINotificationFeedbackGenerator()
+                            feedback.notificationOccurred(.success)
+                        }
+                    }
+                }) {
+                    Image(systemName: "doc.on.doc.fill")
+                        .font(.system(size: 22))
+                        .foregroundStyle(.white)
+                        .symbolRenderingMode(.palette)
+                        .frame(width: buttonSize, height: buttonSize)
+                        .background(
+                            Circle()
+                                .fill(.ultraThinMaterial.opacity(0.15))
+                                .background(Circle().fill(Color.black.opacity(0.25)))
+                        )
+                        .contentShape(Circle())
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func speakButton(buttonSize: CGFloat) -> some View {
+        Button(action: {
+            if buttonDebouncer.canPress() {
+                if isSpeaking {
+                    viewModel.stopSpeaking()
+                    isSpeaking = false
+                } else {
+                    if ocrMode == .spanishToEnglish, !viewModel.isTranslated {
+                        isTranslating = true
+                        viewModel.translateSpanishText { success in
+                            isTranslating = false
+                            if success {
+                                viewModel.speak(text: viewModel.translatedText, voiceIdentifier: selectedVoiceIdentifier) {
+                                    isSpeaking = false
+                                }
+                                isSpeaking = true
+                            }
+                        }
+                    } else {
+                        let textToSpeak = ocrMode == .english ? viewModel.recognizedText : viewModel.translatedText
+                        viewModel.speak(text: textToSpeak, voiceIdentifier: selectedVoiceIdentifier) {
+                            isSpeaking = false
+                        }
+                        isSpeaking = true
+                    }
+                }
+            }
+        }) {
+            Image(systemName: "person.wave.2.fill")
+                .font(.system(size: 22))
+                .foregroundStyle(.white)
+                .symbolRenderingMode(.palette)
+                .frame(width: buttonSize, height: buttonSize)
+                .background(
+                    Circle()
+                        .fill(isSpeaking ? Color.green.opacity(0.3) : Color.black.opacity(0.25))
+                        .overlay(
+                            Circle()
+                                .fill(.ultraThinMaterial.opacity(0.15))
+                        )
+                )
+                .contentShape(Circle())
+        }
+        .scaleEffect(isSpeaking ? 1.1 : 1.0)
+        .animation(.easeInOut(duration: 0.2), value: isSpeaking)
     }
 }

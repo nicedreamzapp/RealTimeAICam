@@ -112,11 +112,56 @@ struct HeadingView: View {
             let scaleFactor = min(geometry.size.width / 390, 1.0)
             let titleSize: CGFloat = 52 * scaleFactor
             let subtitleSize: CGFloat = 44 * scaleFactor
+
             ZStack {
+                // Soft blue glow behind main capsule
                 Capsule()
-                    .fill(Color.white.opacity(0.20))
-                    .overlay(Capsule().stroke(Color.black, lineWidth: 1.1))
-                    .shadow(color: Color.blue.opacity(0.10), radius: 10 * scaleFactor)
+                    .fill(Color.blue.opacity(0.35))
+                    .blur(radius: 18)
+                    .scaleEffect(1.12)
+                    .zIndex(0)
+
+                // Static LinearGradient fill for main pill (no shimmer)
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.82), Color.blue.opacity(0.55), Color.white.opacity(0.82)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .zIndex(1)
+
+                // Top gloss
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.white.opacity(0.62), Color.clear]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .blur(radius: 1.9 * scaleFactor)
+                    .padding(.top, 3 * scaleFactor)
+                    .zIndex(2)
+                // Outer blue stroke
+                Capsule()
+                    .stroke(Color(red: 0.20, green: 0.43, blue: 0.82).opacity(0.42), lineWidth: 4.2 * scaleFactor)
+                    .zIndex(3)
+                // Inner dark border for shadow/definition
+                Capsule()
+                    .stroke(Color.black.opacity(0.16), lineWidth: 1.9 * scaleFactor)
+                    .padding(1.9 * scaleFactor)
+                    .zIndex(4)
+
+                // Inner glow
+                Capsule()
+                    .fill(Color.white.opacity(0.18))
+                    .blur(radius: 5.5 * scaleFactor)
+                    .padding(8 * scaleFactor)
+                    .zIndex(6)
+
+                // Text with offset and opacity animation removed
                 VStack(spacing: -8 * scaleFactor) {
                     OutlinedText(
                         text: "RealTime",
@@ -133,14 +178,16 @@ struct HeadingView: View {
                         fillColor: Color(red: 0.81, green: 0.93, blue: 1.0)
                     )
                 }
+                .offset(y: 0)
+                .opacity(1)
                 .padding(.horizontal, 25 * scaleFactor)
                 .padding(.vertical, 14 * scaleFactor)
+                .zIndex(10)
             }
             .frame(width: geometry.size.width * 0.92, height: 120)
             .position(x: geometry.size.width / 2, y: 60)
-            .opacity(animateIn ? 1 : 0)
-            .scaleEffect(animateIn ? 1 : 0.88)
-            .animation(.interpolatingSpring(stiffness: 200, damping: 14).delay(animateIn ? 0.05 : 0), value: animateIn)
+            .opacity(1)
+            .scaleEffect(x: 1, y: 1, anchor: .center)
         }
         .frame(height: 120)
     }
@@ -223,20 +270,17 @@ struct AnimatedVoicePicker: View {
         }) {
             let voice = selectedVoice
             let defaultVoice = premiumEnglishVoices.first ?? AVSpeechSynthesisVoice(language: "en-US")!
+            let voiceToUse = voice ?? defaultVoice
+            let tag = qualityTag(for: voiceToUse)
+            let cleanedName = (voice?.name ?? "Select Voice")
+                .replacingOccurrences(of: " (Enhanced)", with: "")
+                .replacingOccurrences(of: " (Premium)", with: "")
             HStack(spacing: 6) {
-                Text(genderEmoji(for: voice ?? defaultVoice))
+                Text(genderEmoji(for: voiceToUse))
                     .font(.system(size: 28))
-                Text(voice?.name ?? "Select Voice")
+                Text(cleanedName + (voice != nil && !tag.isEmpty ? " \(tag)" : ""))
                     .font(.system(size: 20, weight: .bold, design: .default))
                     .foregroundColor(.white)
-                if let v = voice {
-                    let tag = qualityTag(for: v)
-                    if !tag.isEmpty {
-                        Text(tag)
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.white.opacity(0.8))
-                    }
-                }
                 Image(systemName: showVoiceGrid ? "chevron.down" : "chevron.up")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.white)
@@ -271,15 +315,16 @@ struct AnimatedVoicePicker: View {
                                     showVoiceGrid = false
                                 }
                             }) {
+                                let tag = qualityTag(for: voice)
+                                let cleanedName = voice.name
+                                    .replacingOccurrences(of: " (Enhanced)", with: "")
+                                    .replacingOccurrences(of: " (Premium)", with: "")
                                 VStack(spacing: 4) {
                                     Text(genderEmoji(for: voice))
                                         .font(.system(size: 20))
-                                    Text(voice.name)
+                                    Text(cleanedName + (tag.isEmpty ? "" : " \(tag)"))
                                         .font(.system(size: 11, weight: .medium))
                                         .foregroundColor(.white)
-                                    Text(qualityTag(for: voice))
-                                        .font(.system(size: 9))
-                                        .foregroundColor(.white.opacity(0.7))
                                 }
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 6)
@@ -310,5 +355,87 @@ struct AnimatedVoicePicker: View {
         )
         .accessibilityLabel("Voice Selection")
         .accessibilityHint("Choose your preferred voice for speech feedback")
+    }
+}
+
+import SwiftUI
+
+struct AnimatedLoader: View {
+    let size: CGFloat
+    let lineWidth: CGFloat
+    let colors: [Color]
+    /// Should animate fade and scale in? Defaults to true.
+    let fadeIn: Bool
+
+    @State private var rotate = false
+    @State private var trimEnd: CGFloat = 0.7
+    @State private var trimStart: CGFloat = 0.0
+    @State private var animate = false
+
+    init(
+        size: CGFloat = 36,
+        lineWidth: CGFloat = 6,
+        colors: [Color] = [Color.purple, Color.blue, Color.cyan, Color.purple],
+        fadeIn: Bool = true
+    ) {
+        self.size = size
+        self.lineWidth = lineWidth
+        self.colors = colors
+        self.fadeIn = fadeIn
+    }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(Color.white.opacity(0.18), lineWidth: lineWidth)
+                .frame(width: size, height: size)
+            ArcLoaderShape(trimStart: trimStart, trimEnd: trimEnd)
+                .stroke(
+                    AngularGradient(
+                        gradient: Gradient(colors: colors),
+                        center: .center,
+                        startAngle: .degrees(0),
+                        endAngle: .degrees(360)
+                    ),
+                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+                )
+                .frame(width: size, height: size)
+                .rotationEffect(.degrees(rotate ? 360 : 0))
+                .animation(.linear(duration: 1.1).repeatForever(autoreverses: false), value: rotate)
+                .animation(.easeInOut(duration: 0.95).repeatForever(autoreverses: true), value: trimEnd)
+        }
+        .opacity(1)
+        .scaleEffect(1)
+        .onAppear {
+            rotate = true
+            withAnimation(.easeInOut(duration: 0.95).repeatForever(autoreverses: true)) {
+                trimEnd = 0.96
+                trimStart = 0.08
+            }
+        }
+    }
+}
+
+struct ArcLoaderShape: Shape {
+    var trimStart: CGFloat
+    var trimEnd: CGFloat
+    var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { AnimatablePair(trimStart, trimEnd) }
+        set {
+            trimStart = newValue.first
+            trimEnd = newValue.second
+        }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.addArc(
+            center: CGPoint(x: rect.midX, y: rect.midY),
+            radius: rect.width / 2,
+            startAngle: .degrees(Double(360) * trimStart - 90),
+            endAngle: .degrees(Double(360) * trimEnd - 90),
+            clockwise: false
+        )
+        return path
     }
 }
