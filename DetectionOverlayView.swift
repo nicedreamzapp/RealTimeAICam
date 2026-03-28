@@ -36,7 +36,7 @@ struct DetectionOverlayView: View {
                 // Clean up LiDAR histories if LiDAR is active
                 let _ = cleanupHistoriesIfNeeded()
 
-                // Draw all bounding boxes
+                // Draw all bounding boxes with smooth animations
                 ForEach(detectedObjects) { object in
                     let displayRect = calculateDisplayRect(
                         for: object.rect,
@@ -45,7 +45,7 @@ struct DetectionOverlayView: View {
                         isPortrait: isPortrait
                     )
 
-                    // Draw bounding box
+                    // Draw bounding box with animation
                     RoundedRectangle(cornerRadius: 12)
                         .fill(objectColors[object.id.uuidString]?.opacity(0.15) ?? Color.blue.opacity(0.15))
                         .overlay(
@@ -54,10 +54,11 @@ struct DetectionOverlayView: View {
                         )
                         .frame(width: displayRect.width, height: displayRect.height)
                         .position(x: displayRect.midX, y: displayRect.midY)
+                        .animation(.interpolatingSpring(stiffness: 150, damping: 18), value: displayRect)
                         .allowsHitTesting(false)
                 }
 
-                // Draw labels
+                // Draw labels with animations
                 ForEach(arrangeLabels(objects: detectedObjects, in: geometry.size)) { labelPosition in
                     Text(labelPosition.label)
                         .font(.system(size: 14, weight: .bold, design: .rounded))
@@ -71,10 +72,13 @@ struct DetectionOverlayView: View {
                         .shadow(color: .black.opacity(0.3), radius: 2, x: 1, y: 1)
                         .rotationEffect(getLabelRotation())
                         .position(x: labelPosition.x, y: labelPosition.y)
+                        .animation(.interpolatingSpring(stiffness: 120, damping: 15), value: labelPosition.x)
+                        .animation(.interpolatingSpring(stiffness: 120, damping: 15), value: labelPosition.y)
                         .allowsHitTesting(false)
                 }
             }
             .allowsHitTesting(false)
+            .animation(.easeInOut(duration: 0.15), value: detectedObjects.count)
         }
     }
 
@@ -87,7 +91,7 @@ struct DetectionOverlayView: View {
     }
 
     struct LabelPosition: Identifiable {
-        let id = UUID()
+        let id: String  // stable detection ID for smooth animation
         let label: String
         let className: String
         let objectId: String
@@ -148,6 +152,7 @@ struct DetectionOverlayView: View {
 
                 if !overlaps {
                     positions.append(LabelPosition(
+                        id: object.id.uuidString,
                         label: label,
                         className: object.className,
                         objectId: object.id.uuidString,
@@ -170,6 +175,7 @@ struct DetectionOverlayView: View {
                 let finalY = max(labelHeight / 2, min(size.height - labelHeight / 2, displayRect.midY + offsetY))
 
                 positions.append(LabelPosition(
+                    id: object.id.uuidString,
                     label: label,
                     className: object.className,
                     objectId: object.id.uuidString,

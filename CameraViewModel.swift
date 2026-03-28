@@ -190,6 +190,8 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
 
     private var frameCounter = 0
     private var isProcessing = false
+    private var latestPixelBuffer: CVPixelBuffer?
+    private var latestIsPortrait: Bool = true
 
     private static let sessionQueue = DispatchQueue(label: Constants.sessionQueue)
     private let videoQueue = DispatchQueue(label: Constants.videoQueue, qos: .userInitiated)
@@ -752,6 +754,7 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
     // MARK: - Session Management
 
     func clearDetections() {
+        ObjectTracker.shared.reset()
         DispatchQueue.main.async { [weak self] in
             self?.detections = []
         }
@@ -794,11 +797,9 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
     func captureOutput(_: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from _: AVCaptureConnection) {
         autoreleasepool {
             frameCounter += 1
-            // updateFPS() is removed here to measure detection completions only
 
             guard frameCounter % processEveryNFrames == 0 else { return }
 
-            guard !isProcessing else { return }
             guard session.isRunning else {
                 DispatchQueue.main.async { self.detections = [] }
                 return
@@ -808,45 +809,63 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
             }
 
             ocrDelegate?.cameraViewModel(self, didOutputPixelBuffer: pixelBuffer)
-            guard let yoloProcessor else {
-                return
-            }
 
-            enableMemoryPressureRelief()
-            isProcessing = true
+            // Always store the latest frame so inference has no idle gap
+            latestPixelBuffer = pixelBuffer
+            latestIsPortrait = currentOrientation.isPortrait
 
-            yoloProcessor.predictWithThermalLimits(
-                image: pixelBuffer,
-                isPortrait: currentOrientation.isPortrait,
-                filterMode: filterMode,
-                confidenceThreshold: confidenceThreshold
-            ) { (results: [YOLODetection]) in
-                DispatchQueue.main.async {
+            guard !isProcessing else { return }
+
+            processLatestFrame()
+        }
+    }
+
+    private func processLatestFrame() {
+        guard let pixelBuffer = latestPixelBuffer else { return }
+        guard let yoloProcessor else { return }
+
+        latestPixelBuffer = nil
+        let portrait = latestIsPortrait
+
+        enableMemoryPressureRelief()
+        isProcessing = true
+
+        yoloProcessor.predictWithThermalLimits(
+            image: pixelBuffer,
+            isPortrait: portrait,
+            filterMode: filterMode,
+            confidenceThreshold: confidenceThreshold
+        ) { (results: [YOLODetection]) in
+            DispatchQueue.main.async {
+                let smoothedResults = ObjectTracker.shared.update(with: results)
+                self.detections = smoothedResults
+
+                if self.isLiDAREnabled, !smoothedResults.isEmpty {
+                    let pts: [(id: UUID, point: CGPoint)] = smoothedResults.map { det in
+                        let center = CGPoint(x: det.rect.midX, y: det.rect.midY)
+                        return (det.id, center)
+                    }
+                    let metersByID = LiDARManager.shared.distancesInMeters(for: pts)
+                    var feetByID: [UUID: Int] = [:]
+                    for det in smoothedResults {
+                        if let m = metersByID[det.id] {
+                            feetByID[det.id] = LiDARManager.roundedFeet(fromMeters: m)
+                        }
+                    }
+                    self.lastDistancesFeet = feetByID
+                }
+
+                self.updateFPS()
+
+                if !smoothedResults.isEmpty {
+                    SpeechManager.shared.processDetectionsForSpeech(smoothedResults, lidarManager: LiDARManager.shared)
+                }
+
+                // Immediately process the next waiting frame if one arrived during inference
+                if self.latestPixelBuffer != nil {
+                    self.processLatestFrame()
+                } else {
                     self.isProcessing = false
-                    self.detections = results
-
-                    if self.isLiDAREnabled, !results.isEmpty {
-                        let pts: [(id: UUID, point: CGPoint)] = results.map { det in
-                            let center = CGPoint(x: det.rect.midX, y: det.rect.midY)
-                            return (det.id, center)
-                        }
-                        let metersByID = LiDARManager.shared.distancesInMeters(for: pts)
-                        var feetByID: [UUID: Int] = [:]
-                        for det in results {
-                            if let m = metersByID[det.id] {
-                                feetByID[det.id] = LiDARManager.roundedFeet(fromMeters: m)
-                            }
-                        }
-                        self.lastDistancesFeet = feetByID
-                    }
-
-                    // FPS now measures detection completions per second, not input frames.
-                    self.updateFPS()
-
-                    // Speech processing (delegated to shared SpeechManager)
-                    if !results.isEmpty {
-                        SpeechManager.shared.processDetectionsForSpeech(results, lidarManager: LiDARManager.shared)
-                    }
                 }
             }
         }

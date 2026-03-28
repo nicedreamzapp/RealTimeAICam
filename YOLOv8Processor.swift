@@ -1,3 +1,4 @@
+import Accelerate
 import AVFoundation
 import Combine
 import CoreMedia
@@ -327,9 +328,20 @@ final class YOLOv8Processor: ObservableObject, @unchecked Sendable {
         var detectionCount = 0
         let maxRawDetections = 150
 
-        // YOUR ORIGINAL TWO-PASS DETECTION
+        // ── Accelerate: pre-compute best class + score per anchor ──
+        let classStartPtr = dataPointer + 4 * numAnchors
+        var bestClasses = [Int](repeating: 0, count: numAnchors)
+        var maxScoresAll = [Float](repeating: 0, count: numAnchors)
 
-        // FIRST PASS: Find context objects
+        for i in 0 ..< numAnchors {
+            var maxVal: Float = 0
+            var maxIdx: vDSP_Length = 0
+            vDSP_maxvi(classStartPtr + i, vDSP_Stride(numAnchors), &maxVal, &maxIdx, vDSP_Length(numClasses))
+            maxScoresAll[i] = maxVal
+            bestClasses[i] = Int(maxIdx) / numAnchors
+        }
+
+        // FIRST PASS: Find context objects (using pre-computed scores)
         for i in 0 ..< numAnchors {
             let x_center = dataPointer[i]
             let y_center = dataPointer[numAnchors + i]
@@ -340,18 +352,8 @@ final class YOLOv8Processor: ObservableObject, @unchecked Sendable {
                 continue
             }
 
-            var maxScore: Float = 0
-            var bestClass = 0
-
-            for c in 0 ..< numClasses {
-                let score = dataPointer[(4 + c) * numAnchors + i]
-                if score > maxScore {
-                    maxScore = score
-                    bestClass = c
-                }
-            }
-
-            if maxScore > 0.5 {
+            if maxScoresAll[i] > 0.5 {
+                let bestClass = bestClasses[i]
                 let className = bestClass < classNames.count ? classNames[bestClass] : "Unknown"
                 if contextPairs.keys.contains(className) {
                     contextObjects.append(className)
@@ -359,7 +361,7 @@ final class YOLOv8Processor: ObservableObject, @unchecked Sendable {
             }
         }
 
-        // SECOND PASS: Main detection with YOUR ORIGINAL LOGIC
+        // SECOND PASS: Main detection with pre-computed scores
         for i in 0 ..< numAnchors {
             if detectionCount > maxRawDetections { break }
 
@@ -374,16 +376,8 @@ final class YOLOv8Processor: ObservableObject, @unchecked Sendable {
                 continue
             }
 
-            var maxScore: Float = 0
-            var bestClass = 0
-
-            for c in 0 ..< numClasses {
-                let score = dataPointer[(4 + c) * numAnchors + i]
-                if score > maxScore {
-                    maxScore = score
-                    bestClass = c
-                }
-            }
+            let maxScore = maxScoresAll[i]
+            let bestClass = bestClasses[i]
 
             let className = bestClass < classNames.count ? classNames[bestClass] : "Unknown"
 
