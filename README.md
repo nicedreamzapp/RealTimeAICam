@@ -14,6 +14,8 @@ Built specifically for **iPhone** • Works **100% offline** • Privacy-first d
 ## 🎉 **NOW AVAILABLE ON APP STORE - FREE DOWNLOAD!** 🎉
 
 [![Download on App Store](https://img.shields.io/badge/Download-App%20Store-007AFF?style=for-the-badge&logo=apple&logoColor=white)](https://apps.apple.com/us/app/realtime-ai-cam/id6751230739)
+[![Try it Live](https://img.shields.io/badge/Try%20it%20Live-HuggingFace%20Demo-FFD21E?style=for-the-badge&logo=huggingface&logoColor=black)](https://huggingface.co/spaces/divinetribe/yolov8-oiv7-demo)
+[![Model on HuggingFace](https://img.shields.io/badge/Model-HuggingFace-FFD21E?style=for-the-badge&logo=huggingface&logoColor=black)](https://huggingface.co/divinetribe/yolov8n-oiv7-coreml)
 
 </div>
 
