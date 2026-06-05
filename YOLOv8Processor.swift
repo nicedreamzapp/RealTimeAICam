@@ -137,14 +137,14 @@ final class YOLOv8Processor: ObservableObject, @unchecked Sendable {
         isPortrait: Bool,
         filterMode: String = "all",
         confidenceThreshold: Float = 0.5,
-        completion: @escaping @Sendable ([YOLODetection]) -> Void
+        completion: @escaping @Sendable ([YOLODetection]?) -> Void
     ) {
         autoreleasepool {
             // Simple processing check
             processingLock.lock()
             if isProcessing {
                 processingLock.unlock()
-                completion([])
+                completion(nil) // skipped, not "nothing detected" — keep last boxes
                 return
             }
             isProcessing = true
@@ -165,7 +165,7 @@ final class YOLOv8Processor: ObservableObject, @unchecked Sendable {
                     }
 
                     guard let self else {
-                        DispatchQueue.main.async { completion([]) }
+                        DispatchQueue.main.async { completion(nil) }
                         return
                     }
 
@@ -178,12 +178,12 @@ final class YOLOv8Processor: ObservableObject, @unchecked Sendable {
                     let imageHeight = CVPixelBufferGetHeight(px.buffer)
 
                     guard imageWidth > 100, imageHeight > 100 else {
-                        DispatchQueue.main.async { completion([]) }
+                        DispatchQueue.main.async { completion(nil) }
                         return
                     }
 
                     guard let finalBuffer = self.metalResizer?.resize(px.buffer, isPortrait: isPortrait) else {
-                        DispatchQueue.main.async { completion([]) }
+                        DispatchQueue.main.async { completion(nil) }
                         return
                     }
 
@@ -197,7 +197,7 @@ final class YOLOv8Processor: ObservableObject, @unchecked Sendable {
                           let feature = output.featureValue(for: "var_914"),
                           let rawOutput = feature.multiArrayValue
                     else {
-                        DispatchQueue.main.async { completion([]) }
+                        DispatchQueue.main.async { completion(nil) }
                         return
                     }
 
@@ -686,11 +686,11 @@ extension YOLOv8Processor {
         isPortrait: Bool,
         filterMode: String = "all",
         confidenceThreshold: Float = 0.5,
-        completion: @escaping @Sendable ([YOLODetection]) -> Void
+        completion: @escaping @Sendable ([YOLODetection]?) -> Void
     ) {
         // Use frameSkipPattern for throttling
         if frameCount % frameSkipPattern != 0 {
-            completion([])
+            completion(nil) // skipped frame — keep last boxes, don't clear the overlay
             return
         }
 

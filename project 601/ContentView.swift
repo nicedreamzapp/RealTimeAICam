@@ -111,7 +111,9 @@ struct ContentView: View {
             } else {
                 mode = .home
             }
-            setupOrientationObserver()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
+            orientation = UIDevice.current.orientation
         }
         .onChange(of: scenePhase) { newValue in
             handleScenePhaseChange(newValue)
@@ -265,14 +267,6 @@ struct ContentView: View {
             utterance.rate = 0.5
             utterance.volume = 0.9
             speechSynthesizer.speak(utterance)
-        }
-    }
-
-    private func setupOrientationObserver() {
-        NotificationCenter.default.addObserver(forName: UIDevice.orientationDidChangeNotification, object: nil, queue: .main) { _ in
-            Task { @MainActor in
-                orientation = UIDevice.current.orientation
-            }
         }
     }
 

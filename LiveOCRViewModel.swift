@@ -108,17 +108,18 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
 
     // MARK: - Frame Processing (OCR Only)
 
-    // This method is now backgrounded using Swift Concurrency (Task.detached) for UI performance
+    // Called on the capture videoQueue (a serial background queue). Vision OCR runs
+    // synchronously here so the CVPixelBuffer stays valid for the whole request —
+    // the previous Task.detached path could read a buffer AVFoundation had already
+    // recycled (alwaysDiscardsLateVideoFrames = true), risking garbled text/crashes.
     func processFrame(_ pixelBuffer: CVPixelBuffer, mode: OCRMode) {
         autoreleasepool {
-            defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
-            // NEW: do nothing while user is reviewing/copying
+            // Do nothing while user is reviewing/copying
             guard !isFrozen else { return }
             guard !isPinching else { return }
             let now = Date()
             guard now.timeIntervalSince(lastProcessedTime) >= processInterval else { return }
             lastProcessedTime = now
-            guard !isProcessing else { return }
 
             let targetLanguage = (mode == .spanishToEnglish) ? "es-ES" : "en-US"
             if currentLanguage != targetLanguage {
@@ -126,26 +127,11 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
                 textRecognitionRequest?.recognitionLanguages = (mode == .spanishToEnglish) ? ["es-ES", "es"] : ["en-US", "en"]
             }
 
-            let request = self.textRecognitionRequest
-            Task.detached { [weak self] in
-                guard let self else { return }
-                await MainActor.run {
-                    self.isProcessing = true
-                }
-                let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, options: [:])
-                if let request {
-                    do {
-                        try handler.perform([request])
-                    } catch {
-                        await MainActor.run {
-                            self.isProcessing = false
-                        }
-                    }
-                    await MainActor.run {
-                        request.cancel()
-                    }
-                }
-            }
+            guard let request = textRecognitionRequest else { return }
+            // Serial videoQueue + synchronous perform = frames are naturally serialized,
+            // so no overlap guard is needed. The completion handler publishes results on main.
+            let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, options: [:])
+            try? handler.perform([request])
         }
     }
 

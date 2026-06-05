@@ -286,20 +286,13 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
             forName: UIDevice.orientationDidChangeNotification,
             object: nil,
             queue: .main
-        ) { _ in
-            self.deviceOrientationDidChange()
+        ) { [weak self] _ in
+            self?.deviceOrientationDidChange()
         }
 
         currentOrientation = UIDevice.current.orientation
         if !currentOrientation.isValidInterfaceOrientation {
             currentOrientation = .portrait
-        }
-
-        NotificationCenter.default.addObserver(
-            forName: UIApplication.didReceiveMemoryWarningNotification,
-            object: nil,
-            queue: .main
-        ) { _ in
         }
 
         updateFrameProcessingRate()
@@ -835,31 +828,35 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
             isPortrait: portrait,
             filterMode: filterMode,
             confidenceThreshold: confidenceThreshold
-        ) { (results: [YOLODetection]) in
+        ) { (results: [YOLODetection]?) in
             DispatchQueue.main.async {
-                let smoothedResults = ObjectTracker.shared.update(with: results)
-                self.detections = smoothedResults
+                // results == nil means this frame was skipped/failed by the processor —
+                // keep the last boxes (and the tracker state) so the overlay doesn't flicker.
+                if let results {
+                    let smoothedResults = ObjectTracker.shared.update(with: results)
+                    self.detections = smoothedResults
 
-                if self.isLiDAREnabled, !smoothedResults.isEmpty {
-                    let pts: [(id: UUID, point: CGPoint)] = smoothedResults.map { det in
-                        let center = CGPoint(x: det.rect.midX, y: det.rect.midY)
-                        return (det.id, center)
-                    }
-                    let metersByID = LiDARManager.shared.distancesInMeters(for: pts)
-                    var feetByID: [UUID: Int] = [:]
-                    for det in smoothedResults {
-                        if let m = metersByID[det.id] {
-                            feetByID[det.id] = LiDARManager.roundedFeet(fromMeters: m)
+                    if self.isLiDAREnabled, !smoothedResults.isEmpty {
+                        let pts: [(id: UUID, point: CGPoint)] = smoothedResults.map { det in
+                            let center = CGPoint(x: det.rect.midX, y: det.rect.midY)
+                            return (det.id, center)
                         }
+                        let metersByID = LiDARManager.shared.distancesInMeters(for: pts)
+                        var feetByID: [UUID: Int] = [:]
+                        for det in smoothedResults {
+                            if let m = metersByID[det.id] {
+                                feetByID[det.id] = LiDARManager.roundedFeet(fromMeters: m)
+                            }
+                        }
+                        self.lastDistancesFeet = feetByID
                     }
-                    self.lastDistancesFeet = feetByID
+
+                    if !smoothedResults.isEmpty {
+                        SpeechManager.shared.processDetectionsForSpeech(smoothedResults, lidarManager: LiDARManager.shared)
+                    }
                 }
 
                 self.updateFPS()
-
-                if !smoothedResults.isEmpty {
-                    SpeechManager.shared.processDetectionsForSpeech(smoothedResults, lidarManager: LiDARManager.shared)
-                }
 
                 // Immediately process the next waiting frame if one arrived during inference
                 if self.latestPixelBuffer != nil {

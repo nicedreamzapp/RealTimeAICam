@@ -247,6 +247,7 @@ final class FixedSpanishEngine {
 
     // Cache (simplified, no concurrency needed)
     private var cache: [String: String] = [:]
+    private let cacheLimit = 500
 
     private(set) var isLoaded = false
 
@@ -299,6 +300,11 @@ final class FixedSpanishEngine {
             .replacingOccurrences(of: #"(\s+)"#, with: " ", options: NSString.CompareOptions.regularExpression)
             .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
 
+        // OCR feeds a near-infinite stream of unique strings, so cap the cache to
+        // avoid unbounded memory growth over a long session.
+        if cache.count >= cacheLimit {
+            cache.removeAll(keepingCapacity: true)
+        }
         cache[cacheKey] = result
         return result
     }
