@@ -4,12 +4,30 @@ import Foundation
 import Metal
 import MetalKit
 
+/// Letterbox geometry produced by the resize step and consumed by the detection
+/// decoder. Passed by value alongside the resized buffer so the two stages don't
+/// have to communicate through global UserDefaults (which was both slow — disk-backed
+/// writes every frame — and a cross-frame data race when two frames overlapped).
+struct LetterboxInfo {
+    let scale: Float
+    let padX: Int
+    let padY: Int
+    let wasRotated: Bool
+}
+
 class MetalImageResizer {
     private let device: MTLDevice
     private let commandQueue: MTLCommandQueue
     private let letterboxPipelineState: MTLComputePipelineState
     private let rotatePipelineState: MTLComputePipelineState
     private let textureCache: CVMetalTextureCache
+
+    // Reused across frames to avoid per-frame allocations (~1.6MB output buffer +
+    // ~8MB rotated texture every frame). Safe because frames are processed serially
+    // and each frame fully overwrites these before the next one starts.
+    private var outputBufferPool: CVPixelBufferPool?
+    private var cachedRotatedTexture: MTLTexture?
+    private var cachedRotatedDims: (w: Int, h: Int)?
 
     init?() {
         guard let device = MTLCreateSystemDefaultDevice(),
@@ -101,7 +119,7 @@ class MetalImageResizer {
         }
     }
 
-    func resize(_ pixelBuffer: CVPixelBuffer, isPortrait: Bool) -> CVPixelBuffer? {
+    func resize(_ pixelBuffer: CVPixelBuffer, isPortrait: Bool) -> (buffer: CVPixelBuffer, info: LetterboxInfo)? {
         autoreleasepool {
             let width = CVPixelBufferGetWidth(pixelBuffer)
             let height = CVPixelBufferGetHeight(pixelBuffer)
@@ -140,20 +158,19 @@ class MetalImageResizer {
                 padY = (640 - scaledHeight) / 2
             }
 
-            // Store info
-            UserDefaults.standard.set(scale, forKey: "letterbox_scale")
-            UserDefaults.standard.set(padX, forKey: "letterbox_padX")
-            UserDefaults.standard.set(padY, forKey: "letterbox_padY")
-            UserDefaults.standard.set(shouldRotate ? height : width, forKey: "original_width")
-            UserDefaults.standard.set(shouldRotate ? width : height, forKey: "original_height")
-            UserDefaults.standard.set(shouldRotate, forKey: "was_rotated")
+            let letterbox = LetterboxInfo(scale: scale, padX: padX, padY: padY, wasRotated: shouldRotate)
 
             // Create textures
             guard let inputTexture = createTexture(from: pixelBuffer) else {
                 return nil
             }
 
-            guard let outputPixelBuffer = createPixelBuffer(width: 640, height: 640),
+            guard let pool = outputPool(width: 640, height: 640) else {
+                return nil
+            }
+            var pooledBuffer: CVPixelBuffer?
+            CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &pooledBuffer)
+            guard let outputPixelBuffer = pooledBuffer,
                   let outputTexture = createTexture(from: outputPixelBuffer)
             else {
                 return nil
@@ -174,16 +191,21 @@ class MetalImageResizer {
             let processedTexture: MTLTexture
 
             if shouldRotate {
-                // Create intermediate texture for rotation
-                let rotatedDesc = MTLTextureDescriptor.texture2DDescriptor(
-                    pixelFormat: .bgra8Unorm,
-                    width: height, // Swapped dimensions
-                    height: width,
-                    mipmapped: false
-                )
-                rotatedDesc.usage = [.shaderRead, .shaderWrite]
+                // Reuse a cached intermediate texture; only (re)allocate if the input
+                // dimensions changed (they're constant for a given camera/orientation).
+                if cachedRotatedDims?.w != height || cachedRotatedDims?.h != width || cachedRotatedTexture == nil {
+                    let rotatedDesc = MTLTextureDescriptor.texture2DDescriptor(
+                        pixelFormat: .bgra8Unorm,
+                        width: height, // Swapped dimensions
+                        height: width,
+                        mipmapped: false
+                    )
+                    rotatedDesc.usage = [.shaderRead, .shaderWrite]
+                    cachedRotatedTexture = device.makeTexture(descriptor: rotatedDesc)
+                    cachedRotatedDims = (height, width)
+                }
 
-                guard let rotatedTexture = device.makeTexture(descriptor: rotatedDesc),
+                guard let rotatedTexture = cachedRotatedTexture,
                       let rotateEncoder = commandBuffer.makeComputeCommandEncoder()
                 else {
                     return nil
@@ -239,7 +261,7 @@ class MetalImageResizer {
             CVMetalTextureCacheFlush(textureCache, 0)
             // All buffers will be released at this point
 
-            return outputPixelBuffer
+            return (outputPixelBuffer, letterbox)
         }
     }
 
@@ -267,25 +289,31 @@ class MetalImageResizer {
         return CVMetalTextureGetTexture(texture)
     }
 
-    private func createPixelBuffer(width: Int, height: Int) -> CVPixelBuffer? {
-        let attributes: [String: Any] = [
+    private func outputPool(width: Int, height: Int) -> CVPixelBufferPool? {
+        if let pool = outputBufferPool { return pool }
+
+        let pixelBufferAttributes: [String: Any] = [
             kCVPixelBufferCGImageCompatibilityKey as String: true,
             kCVPixelBufferCGBitmapContextCompatibilityKey as String: true,
             kCVPixelBufferMetalCompatibilityKey as String: true,
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+            kCVPixelBufferWidthKey as String: width,
+            kCVPixelBufferHeightKey as String: height,
+        ]
+        let poolAttributes: [String: Any] = [
+            kCVPixelBufferPoolMinimumBufferCountKey as String: 3,
         ]
 
-        var pixelBuffer: CVPixelBuffer?
-        let status = CVPixelBufferCreate(
+        var pool: CVPixelBufferPool?
+        let status = CVPixelBufferPoolCreate(
             kCFAllocatorDefault,
-            width,
-            height,
-            kCVPixelFormatType_32BGRA,
-            attributes as CFDictionary,
-            &pixelBuffer
+            poolAttributes as CFDictionary,
+            pixelBufferAttributes as CFDictionary,
+            &pool
         )
 
-        return status == kCVReturnSuccess ? pixelBuffer : nil
+        outputBufferPool = (status == kCVReturnSuccess) ? pool : nil
+        return outputBufferPool
     }
 
     func cleanup() {

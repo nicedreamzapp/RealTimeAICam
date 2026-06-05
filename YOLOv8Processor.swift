@@ -182,16 +182,16 @@ final class YOLOv8Processor: ObservableObject, @unchecked Sendable {
                         return
                     }
 
-                    guard let finalBuffer = self.metalResizer?.resize(px.buffer, isPortrait: isPortrait) else {
+                    guard let resized = self.metalResizer?.resize(px.buffer, isPortrait: isPortrait) else {
                         DispatchQueue.main.async { completion(nil) }
                         return
                     }
+                    let finalBuffer = resized.buffer
+                    let letterboxInfo = resized.info
 
                     defer {
                         CVPixelBufferUnlockBaseAddress(finalBuffer, .readOnly)
                     }
-
-                    let letterboxInfo = self.getLetterboxInfo(originalWidth: imageWidth, originalHeight: imageHeight)
 
                     guard let output = try? self.model.prediction(image: finalBuffer),
                           let feature = output.featureValue(for: "var_914"),
@@ -289,30 +289,12 @@ final class YOLOv8Processor: ObservableObject, @unchecked Sendable {
     }
 
     // YOUR ORIGINAL LETTERBOX METHOD
-    private func getLetterboxInfo(originalWidth: Int, originalHeight: Int) -> (scale: Float, padX: Int, padY: Int) {
-        let scale = UserDefaults.standard.float(forKey: "letterbox_scale")
-        let padX = UserDefaults.standard.integer(forKey: "letterbox_padX")
-        let padY = UserDefaults.standard.integer(forKey: "letterbox_padY")
-
-        if scale > 0 {
-            return (scale: scale, padX: padX, padY: padY)
-        } else {
-            let targetSize: Float = 640.0
-            let calcScale = min(targetSize / Float(originalWidth), targetSize / Float(originalHeight))
-            let scaledWidth = Int(Float(originalWidth) * calcScale)
-            let scaledHeight = Int(Float(originalHeight) * calcScale)
-            let calcPadX = (640 - scaledWidth) / 2
-            let calcPadY = (640 - scaledHeight) / 2
-            return (scale: calcScale, padX: calcPadX, padY: calcPadY)
-        }
-    }
-
     // YOUR ORIGINAL DECODE METHOD - The heart of good detection!
     private func decodeOutput(
         _ rawOutput: MLMultiArray,
         originalWidth: Int,
         originalHeight: Int,
-        letterboxInfo: (scale: Float, padX: Int, padY: Int),
+        letterboxInfo: LetterboxInfo,
         filterMode: String,
         confidenceThreshold: Float
     ) -> [YOLODetection] {
@@ -322,8 +304,10 @@ final class YOLOv8Processor: ObservableObject, @unchecked Sendable {
         var contextObjects: [String] = []
 
         let dataPointer = rawOutput.dataPointer.assumingMemoryBound(to: Float.self)
-        let (scale, padX, padY) = letterboxInfo
-        let wasRotated = UserDefaults.standard.bool(forKey: "was_rotated")
+        let scale = letterboxInfo.scale
+        let padX = letterboxInfo.padX
+        let padY = letterboxInfo.padY
+        let wasRotated = letterboxInfo.wasRotated
 
         var detectionCount = 0
         let maxRawDetections = 150
@@ -625,15 +609,6 @@ final class YOLOv8Processor: ObservableObject, @unchecked Sendable {
     private func performPeriodicReset() {
         detectionHistory.removeAll()
         frameCount = 0
-
-        // Clear cache
-        UserDefaults.standard.removeObject(forKey: "letterbox_scale")
-        UserDefaults.standard.removeObject(forKey: "letterbox_padX")
-        UserDefaults.standard.removeObject(forKey: "letterbox_padY")
-        UserDefaults.standard.removeObject(forKey: "original_width")
-        UserDefaults.standard.removeObject(forKey: "original_height")
-        UserDefaults.standard.removeObject(forKey: "was_rotated")
-
         print("🔄 Performed periodic reset at frame \(frameCount)")
     }
 
