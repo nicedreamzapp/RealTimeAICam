@@ -14,13 +14,7 @@ private struct PixelBufferBox: @unchecked Sendable { let buffer: CVPixelBuffer }
 
 // ✅ ADD ObservableObject CONFORMANCE
 final class YOLOv8Processor: ObservableObject, @unchecked Sendable {
-    // YOLOE (4585 classes, decode-in-graph) is preferred when bundled;
-    // yolov8n_oiv7 (601 classes) remains as fallback. Same tuned decode
-    // pipeline runs for both — only the tensor unpacking differs.
-    // Stored as Any because the generated class is iOS 17+ and the app
-    // still targets iOS 16 — cast inside #available guards.
-    private let modelE: Any?
-    private let model: yolov8n_oiv7?
+    private let model: yolov8n_oiv7
     private let classNames: [String]
     private let metalResizer: MetalImageResizer?
     private let processingLock = NSLock()
@@ -118,49 +112,15 @@ final class YOLOv8Processor: ObservableObject, @unchecked Sendable {
             config.computeUnits = .all
         }
 
-        var loadedE: Any? = nil
-        var loadedNames: [String]? = nil
-        if #available(iOS 17.0, *) {
-            if let yoloe = try? yoloe11s_pf(configuration: config),
-               let yoloeNames = Self.loadYOLOEClassNames() {
-                loadedE = yoloe
-                loadedNames = yoloeNames
-                print("✅ YOLOE loaded (\(yoloeNames.count) classes)")
-            }
-        }
-
-        if let loadedE, let loadedNames {
-            modelE = loadedE
-            model = nil
-            classNames = loadedNames
-        } else {
-            modelE = nil
-            model = try yolov8n_oiv7(configuration: config)
-            classNames = Self.loadClassNames() ?? Self.generateDefaultClassNames()
-            print("✅ YOLOv8 OIV7 loaded (\(classNames.count) classes)")
-        }
+        model = try yolov8n_oiv7(configuration: config)
+        classNames = Self.loadClassNames() ?? Self.generateDefaultClassNames()
 
         // Warm up the model - essential for good performance
         if let dummy = YOLOv8Processor.createDummyPixelBuffer() {
             autoreleasepool {
-                if #available(iOS 17.0, *), let modelE = modelE as? yoloe11s_pf {
-                    _ = try? modelE.prediction(image: dummy)
-                } else {
-                    _ = try? model?.prediction(image: dummy)
-                }
+                _ = try? model.prediction(image: dummy)
             }
         }
-    }
-
-    /// YOLOE ships lowercase names ("mobile phone"); capitalize the first
-    /// letter to match OIV7 style so the priority/context/indoor/outdoor
-    /// sets keep matching where vocabularies overlap, and UI text looks right.
-    private static func loadYOLOEClassNames() -> [String]? {
-        guard let url = Bundle.main.url(forResource: "yoloe_class_names", withExtension: "txt"),
-              let content = try? String(contentsOf: url, encoding: .utf8) else { return nil }
-        let names = content.components(separatedBy: "\n").filter { !$0.isEmpty }
-            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
-        return names.isEmpty ? nil : names
     }
 
     func configureTargetSide(_ side: Int) {
@@ -229,42 +189,22 @@ final class YOLOv8Processor: ObservableObject, @unchecked Sendable {
                         CVPixelBufferUnlockBaseAddress(finalBuffer, .readOnly)
                     }
 
-                    let detections: [YOLODetection]
-                    if #available(iOS 17.0, *), let modelE = self.modelE as? yoloe11s_pf {
-                        guard let output = try? modelE.prediction(image: finalBuffer),
-                              let conf = output.featureValue(for: "confidence")?.multiArrayValue,
-                              let cls = output.featureValue(for: "class_id")?.multiArrayValue,
-                              let boxes = output.featureValue(for: "boxes")?.multiArrayValue
-                        else {
-                            DispatchQueue.main.async { completion(nil) }
-                            return
-                        }
-                        detections = self.decodeYOLOEOutput(
-                            confidence: conf, classId: cls, boxes: boxes,
-                            originalWidth: imageWidth,
-                            originalHeight: imageHeight,
-                            letterboxInfo: letterboxInfo,
-                            filterMode: filterMode,
-                            confidenceThreshold: adjustedConfidence
-                        )
-                    } else {
-                        guard let model = self.model,
-                              let output = try? model.prediction(image: finalBuffer),
-                              let feature = output.featureValue(for: "var_914"),
-                              let rawOutput = feature.multiArrayValue
-                        else {
-                            DispatchQueue.main.async { completion(nil) }
-                            return
-                        }
-                        detections = self.decodeOutput(
-                            rawOutput,
-                            originalWidth: imageWidth,
-                            originalHeight: imageHeight,
-                            letterboxInfo: letterboxInfo,
-                            filterMode: filterMode,
-                            confidenceThreshold: adjustedConfidence
-                        )
+                    guard let output = try? self.model.prediction(image: finalBuffer),
+                          let feature = output.featureValue(for: "var_914"),
+                          let rawOutput = feature.multiArrayValue
+                    else {
+                        DispatchQueue.main.async { completion(nil) }
+                        return
                     }
+
+                    let detections = self.decodeOutput(
+                        rawOutput,
+                        originalWidth: imageWidth,
+                        originalHeight: imageHeight,
+                        letterboxInfo: letterboxInfo,
+                        filterMode: filterMode,
+                        confidenceThreshold: adjustedConfidence
+                    )
 
                     DispatchQueue.main.async {
                         completion(detections)
@@ -286,8 +226,17 @@ final class YOLOv8Processor: ObservableObject, @unchecked Sendable {
     ) -> [YOLODetection] {
         let numAnchors = 8400
         let numClasses = 601
+        var detections: [YOLODetection] = []
+        var contextObjects: [String] = []
 
         let dataPointer = rawOutput.dataPointer.assumingMemoryBound(to: Float.self)
+        let scale = letterboxInfo.scale
+        let padX = letterboxInfo.padX
+        let padY = letterboxInfo.padY
+        let wasRotated = letterboxInfo.wasRotated
+
+        var detectionCount = 0
+        let maxRawDetections = 150
 
         // ── Accelerate: pre-compute best class + score per anchor ──
         let classStartPtr = dataPointer + 4 * numAnchors
@@ -301,83 +250,6 @@ final class YOLOv8Processor: ObservableObject, @unchecked Sendable {
             maxScoresAll[i] = maxVal
             bestClasses[i] = Int(maxIdx) / numAnchors
         }
-
-        // coords occupy the first 4*8400 floats — same layout decodeCore expects
-        var coords = [Float](repeating: 0, count: 4 * numAnchors)
-        for i in 0 ..< 4 * numAnchors { coords[i] = dataPointer[i] }
-
-        return decodeCore(
-            coords: coords, bestClasses: bestClasses, maxScoresAll: maxScoresAll,
-            originalWidth: originalWidth, originalHeight: originalHeight,
-            letterboxInfo: letterboxInfo, filterMode: filterMode,
-            confidenceThreshold: confidenceThreshold
-        )
-    }
-
-    /// YOLOE decode: per-anchor argmax is baked into the CoreML graph, so we
-    /// just unpack the three ready-made tensors and run the same tuned pipeline.
-    private func decodeYOLOEOutput(
-        confidence: MLMultiArray,
-        classId: MLMultiArray,
-        boxes: MLMultiArray,
-        originalWidth: Int,
-        originalHeight: Int,
-        letterboxInfo: LetterboxInfo,
-        filterMode: String,
-        confidenceThreshold: Float
-    ) -> [YOLODetection] {
-        let numAnchors = confidence.count
-
-        func toFloats(_ arr: MLMultiArray) -> [Float] {
-            var out = [Float](repeating: 0, count: arr.count)
-            if arr.dataType == .float16 {
-                let p = arr.dataPointer.assumingMemoryBound(to: Float16.self)
-                for i in 0 ..< arr.count { out[i] = Float(p[i]) }
-            } else {
-                let p = arr.dataPointer.assumingMemoryBound(to: Float.self)
-                for i in 0 ..< arr.count { out[i] = p[i] }
-            }
-            return out
-        }
-
-        let maxScoresAll = toFloats(confidence)
-        let coords = toFloats(boxes) // [4, 8400] flattened — same layout as v8 rows 0-3
-
-        var bestClasses = [Int](repeating: 0, count: numAnchors)
-        let clsPtr = classId.dataPointer.assumingMemoryBound(to: Int32.self)
-        for i in 0 ..< numAnchors { bestClasses[i] = Int(clsPtr[i]) }
-
-        return decodeCore(
-            coords: coords, bestClasses: bestClasses, maxScoresAll: maxScoresAll,
-            originalWidth: originalWidth, originalHeight: originalHeight,
-            letterboxInfo: letterboxInfo, filterMode: filterMode,
-            confidenceThreshold: confidenceThreshold
-        )
-    }
-
-    // YOUR ORIGINAL DECODE BODY — unchanged logic, now shared by both models
-    private func decodeCore(
-        coords: [Float],
-        bestClasses: [Int],
-        maxScoresAll: [Float],
-        originalWidth: Int,
-        originalHeight: Int,
-        letterboxInfo: LetterboxInfo,
-        filterMode: String,
-        confidenceThreshold: Float
-    ) -> [YOLODetection] {
-        let numAnchors = maxScoresAll.count
-        var detections: [YOLODetection] = []
-        var contextObjects: [String] = []
-
-        let dataPointer = coords // same indexing as the original raw pointer
-        let scale = letterboxInfo.scale
-        let padX = letterboxInfo.padX
-        let padY = letterboxInfo.padY
-        let wasRotated = letterboxInfo.wasRotated
-
-        var detectionCount = 0
-        let maxRawDetections = 150
 
         // FIRST PASS: Find context objects (using pre-computed scores)
         for i in 0 ..< numAnchors {
