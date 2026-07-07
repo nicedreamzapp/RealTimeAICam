@@ -1000,15 +1000,19 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
     }
 
     private func presentCameraDeniedAlert() {
-        cameraPermissionAlert = CameraPermissionAlert(
-            title: "Camera Access Needed",
-            message: "This app requires access to your camera to function. Please allow camera access in Settings.",
-            openSettings: {
-                if let url = URL(string: UIApplication.openSettingsURLString) {
-                    UIApplication.shared.open(url)
+        // startSession() can be called from a background queue; @Published must
+        // be set on main or SwiftUI never shows the alert.
+        DispatchQueue.main.async { [weak self] in
+            self?.cameraPermissionAlert = CameraPermissionAlert(
+                title: "Camera Access Needed",
+                message: "This app requires access to your camera to function. Please allow camera access in Settings.",
+                openSettings: {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
                 }
-            }
-        )
+            )
+        }
     }
 
     // MARK: - Reinitialization

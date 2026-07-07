@@ -119,6 +119,14 @@ struct ContentView: View {
             handleScenePhaseChange(newValue)
             storedMode = mode
         }
+        .alert(item: $viewModel.cameraPermissionAlert) { alert in
+            Alert(
+                title: Text(alert.title),
+                message: Text(alert.message),
+                primaryButton: .default(Text("Open Settings")) { alert.openSettings() },
+                secondaryButton: .cancel()
+            )
+        }
     }
 
     @ViewBuilder
@@ -290,6 +298,12 @@ struct ContentView: View {
         // Ensure newMode is the AppMode enum expected by ResourceManager.switchToMode()
         resourceManager.switchToMode(newMode)
         mode = newMode
+
+        // Every camera mode needs this: OCR uses its own capture pipeline that
+        // never checks, and a denied user otherwise gets a silent black screen.
+        if newMode != .home {
+            viewModel.checkAndHandleCameraPermission()
+        }
     }
 }
 
