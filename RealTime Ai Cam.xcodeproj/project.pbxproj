@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1EB8D15CE5FF535A5B484E85 /* yoloe_class_names.txt in Resources */ = {isa = PBXBuildFile; fileRef = 0F5FD486302DFBC7937247DA /* yoloe_class_names.txt */; };
 		9900AAAA2E680000000000AA /* ObjectTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9900AAAB2E680000000000AA /* ObjectTracker.swift */; };
 		990EECF12E489EBD00B7CD8C /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 990EECF02E489EBD00B7CD8C /* LICENSE */; };
 		9919DE3D2E50A7BC0053038B /* SpanishTranslationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9919DE3C2E50A79F0053038B /* SpanishTranslationEngine.swift */; };
@@ -46,6 +47,7 @@
 		99D77E892E4359E8005583DC /* AppInstructionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99D77E882E4359E8005583DC /* AppInstructionsView.swift */; };
 		99D7E6A72E47639F007BBFB7 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 99D7E6A42E4761E9007BBFB7 /* PrivacyInfo.xcprivacy */; };
 		99EE6CEF2E67071800A2F3F3 /* es_final_with_rules.json.gz in Resources */ = {isa = PBXBuildFile; fileRef = 99EE6CEE2E67071800A2F3F3 /* es_final_with_rules.json.gz */; };
+		C3AE48750C56E0A071FF627B /* yoloe11s_pf.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = 420BA15C75FBECED30EF0ECB /* yoloe11s_pf.mlpackage */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -66,6 +68,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		0F5FD486302DFBC7937247DA /* yoloe_class_names.txt */ = {isa = PBXFileReference; includeInIndex = 1; path = yoloe_class_names.txt; sourceTree = SOURCE_ROOT; };
+		420BA15C75FBECED30EF0ECB /* yoloe11s_pf.mlpackage */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.mlpackage; path = yoloe11s_pf.mlpackage; sourceTree = SOURCE_ROOT; };
 		9900AAAB2E680000000000AA /* ObjectTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectTracker.swift; sourceTree = "<group>"; };
 		990EECF02E489EBD00B7CD8C /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		9919DE3C2E50A79F0053038B /* SpanishTranslationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpanishTranslationEngine.swift; sourceTree = "<group>"; };
@@ -113,21 +117,29 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		99BA10322E34CF71001E5140 /* project 601 */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = "project 601";
 			sourceTree = "<group>";
 		};
 		99BA10402E34CF71001E5140 /* project 601Tests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = "project 601Tests";
 			sourceTree = "<group>";
 		};
 		99BA104A2E34CF71001E5140 /* project 601UITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = "project 601UITests";
 			sourceTree = "<group>";
 		};
 		99D302382E3CE3D200CAF01A /* Resources */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = Resources;
 			sourceTree = "<group>";
 		};
@@ -222,6 +234,8 @@
 				993E64242E4DC654000B362C /* MemoryManager.swift */,
 				9968DE142E532EBF00629ECE /* DebouncedButton.swift */,
 				99EE6CEE2E67071800A2F3F3 /* es_final_with_rules.json.gz */,
+				420BA15C75FBECED30EF0ECB /* yoloe11s_pf.mlpackage */,
+				0F5FD486302DFBC7937247DA /* yoloe_class_names.txt */,
 			);
 			sourceTree = "<group>";
 		};
@@ -255,8 +269,6 @@
 				99D302382E3CE3D200CAF01A /* Resources */,
 			);
 			name = "RealTime Ai Cam";
-			packageProductDependencies = (
-			);
 			productName = "project 601";
 			productReference = 99BA10302E34CF71001E5140 /* RealTime Ai Cam.app */;
 			productType = "com.apple.product-type.application";
@@ -278,8 +290,6 @@
 				99BA10402E34CF71001E5140 /* project 601Tests */,
 			);
 			name = "RealTime Ai CamTests";
-			packageProductDependencies = (
-			);
 			productName = "project 601Tests";
 			productReference = 99BA103D2E34CF71001E5140 /* RealTime Ai CamTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -301,8 +311,6 @@
 				99BA104A2E34CF71001E5140 /* project 601UITests */,
 			);
 			name = "RealTime Ai CamUITests";
-			packageProductDependencies = (
-			);
 			productName = "project 601UITests";
 			productReference = 99BA10472E34CF71001E5140 /* RealTime Ai CamUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
@@ -360,6 +368,7 @@
 				99D7E6A72E47639F007BBFB7 /* PrivacyInfo.xcprivacy in Resources */,
 				990EECF12E489EBD00B7CD8C /* LICENSE in Resources */,
 				996B92FF2E3894BF00AE22AA /* class_names.txt in Resources */,
+				1EB8D15CE5FF535A5B484E85 /* yoloe_class_names.txt in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -410,6 +419,7 @@
 				99D77E892E4359E8005583DC /* AppInstructionsView.swift in Sources */,
 				9998FD862E3B4209006F41F7 /* LiveOCRViewModel.swift in Sources */,
 				996B930E2E38A24400AE22AA /* MetalImageResizer.swift in Sources */,
+				C3AE48750C56E0A071FF627B /* yoloe11s_pf.mlpackage in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
