@@ -5,7 +5,6 @@ import SwiftUI
 struct ObjectDetectionView: View {
     @ObservedObject var viewModel: CameraViewModel
     @Binding var mode: AppMode
-    @Binding var showSettings: Bool
     @StateObject private var lidar = LiDARManager.shared
     @State private var showConfidenceSlider = false
     let orientation: UIDeviceOrientation

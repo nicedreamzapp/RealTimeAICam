@@ -206,14 +206,6 @@ enum TextDomain {
     case restaurant, signage, narrative, general
 }
 
-// MARK: - Translation Result Models
-
-struct TranslationResult {
-    let text: String
-    let confidence: Double
-    let unknownTokens: [String]
-}
-
 // MARK: - FixedSpanishEngine (Your exact class name with working logic)
 
 // No longer @MainActor: translation is pure CPU work (tokenize + dictionary
@@ -334,31 +326,6 @@ final class FixedSpanishEngine {
         cache[cacheKey] = result
         stateLock.unlock()
         return result
-    }
-
-    func interpretSpanishWithConfidence(_ text: String) -> TranslationResult {
-        guard isLoaded else { return .init(text: text, confidence: 0, unknownTokens: []) }
-        let domain = detectDomain(text)
-        let sentences = splitIntoSentences(text)
-        let batches = batchSentences(sentences, targetChars: 2200)
-
-        var outPieces: [String] = []
-        var unknowns: [String] = []
-        var total = 0
-        var translated = 0
-
-        for batch in batches {
-            let (t, u, tok, got) = translateBatchTelemetry(batch, domain: domain)
-            outPieces.append(t)
-            unknowns.append(contentsOf: u)
-            total += tok
-            translated += got
-        }
-        let result = outPieces.joined(separator: " ")
-            .replacingOccurrences(of: #"(\s+)"#, with: " ", options: NSString.CompareOptions.regularExpression)
-            .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
-        let conf = total > 0 ? Double(translated) / Double(total) : 1.0
-        return .init(text: result, confidence: conf, unknownTokens: Array(Set(unknowns)))
     }
 
     // MARK: - Core Translation Methods (Your exact working logic!)
@@ -507,41 +474,6 @@ final class FixedSpanishEngine {
         // Finalizer
         out = finalize(out)
         return out
-    }
-
-    private func translateBatchTelemetry(_ text: String, domain: TextDomain) -> (String, [String], Int, Int) {
-        let tokens = tokenize(text.replacingOccurrences(of: #"\s+"#, with: " ", options: NSString.CompareOptions.regularExpression))
-        let phraseApplied = phraseMatcher?.match(tokens: tokens.map { $0.lowercased() }) ?? tokens.map { ($0.lowercased(), nil) }
-
-        var unknowns: [String] = []
-        var total = 0
-        var translated = 0
-        let englishPieces = englishPieces(
-            from: reorderNounAdjective(phraseApplied),
-            unknowns: &unknowns, total: &total, translated: &translated
-        )
-        var out = englishPieces.joined(separator: " ")
-
-        if domain == .restaurant || domain == .signage || domain == .general {
-            out = applyRulePack(reflexiveRules, to: out)
-        }
-
-        out = applyRulePack(builtinPriceAndUnits, to: out)
-        out = applyRulePack(builtinMenuLexicon, to: out)
-        out = applyRulePack(builtinAlInfinitivo, to: out)
-        out = applyRulePack(builtinPrepositions, to: out)
-
-        out = applyRulePack(compiledGeneral, to: out)
-        out = applyRulePack(compiledGrammar, to: out)
-        out = applyRulePack(builtinNarrativeGrammar, to: out)
-        if domain == .narrative {
-            out = applyRulePack(builtinDialogue, to: out)
-            out = applyRulePack(compiledDialogueFromJSON, to: out)
-        }
-        out = applyRulePack(compiledCleanup, to: out)
-
-        out = finalize(out)
-        return (out, unknowns, total, translated)
     }
 
     private func applyRulePack(_ pack: [(NSRegularExpression, String)], to text: String) -> String {

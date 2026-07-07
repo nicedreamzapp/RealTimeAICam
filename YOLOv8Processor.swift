@@ -26,11 +26,6 @@ final class YOLOv8Processor: ObservableObject, @unchecked Sendable {
     private var framesSinceLastCleanup = 0
 
     // SMART THROTTLING - Prevents freezing while keeping speed
-    private var currentFPSTarget: Int = 30
-    private var frameSkipPattern: Int = 1
-    private var throttleCounter = 0
-    private var lastPerformanceCheck = Date()
-    private var memoryPressureLevel = 0
 
     // YOUR ORIGINAL WORKING THRESHOLDS - The key to good detection!
     private let baseThreshold: Float = 0.20
@@ -217,76 +212,6 @@ final class YOLOv8Processor: ObservableObject, @unchecked Sendable {
                 }
             }
         }
-    }
-
-    // SMART PERFORMANCE ADJUSTMENT - Prevents freezing
-    // Update the checkPerformanceAndAdjust method in YOLOv8Processor.swift
-    // Replace the existing method with this less aggressive version:
-
-    private func checkPerformanceAndAdjust() {
-        let now = Date()
-        guard now.timeIntervalSince(lastPerformanceCheck) > 3.0 else { return } // Increased from 2.0 to 3.0
-        lastPerformanceCheck = now
-
-        let thermalState = ProcessInfo.processInfo.thermalState
-        let memoryUsage = MemoryManager.currentMemoryUsageMB()
-
-        // More lenient memory pressure detection
-        if memoryUsage > 1000 { // Increased from 800
-            memoryPressureLevel += 1
-        } else if memoryUsage < 500 { // Increased from 400
-            memoryPressureLevel = max(0, memoryPressureLevel - 1)
-        }
-
-        // LESS AGGRESSIVE thermal management
-        switch (thermalState, memoryPressureLevel) {
-        case (.nominal, 0):
-            if frameSkipPattern > 1 || currentFPSTarget < 30 {
-                adjustPerformance(fps: 30, skip: 1)
-            }
-
-        case (.fair, 0 ... 1): // More lenient for fair thermal state
-            adjustPerformance(fps: 25, skip: 1) // Less aggressive
-
-        case (.fair, _), (.nominal, 2 ... 3): // Require more memory pressure
-            adjustPerformance(fps: 20, skip: 2)
-
-        case (.serious, 0 ... 1): // Don't immediately throttle on serious
-            adjustPerformance(fps: 20, skip: 2)
-
-        case (.serious, _), (_, 4 ... 5): // Require higher memory pressure
-            adjustPerformance(fps: 15, skip: 3)
-
-        case (.critical, _), (_, 6...): // Only stop on critical + high memory
-            adjustPerformance(fps: 10, skip: 4)
-
-        case (.nominal, _):
-            break
-
-        @unknown default:
-            adjustPerformance(fps: 22, skip: 1) // Less aggressive default
-        }
-
-        // Log thermal state for debugging
-        print("🌡️ Thermal: \(thermalState), Memory: \(memoryUsage)MB, Pressure: \(memoryPressureLevel)")
-    }
-
-    // Also update the adjustPerformance method to be less likely to stop detection:
-    private func adjustPerformance(fps: Int, skip: Int) {
-        currentFPSTarget = fps
-        frameSkipPattern = skip
-
-        // Removed UI notification and performanceStatus updates
-
-        // Removed print related to performance status
-    }
-
-    func resetThermalProtection() {
-        memoryPressureLevel = 0
-        lastPerformanceCheck = Date.distantPast
-        frameSkipPattern = 1
-        currentFPSTarget = 25
-        print("🔄 Thermal protection manually reset")
     }
 
     // YOUR ORIGINAL LETTERBOX METHOD
@@ -642,21 +567,14 @@ final class YOLOv8Processor: ObservableObject, @unchecked Sendable {
         isProcessing = false
         frameCount = 0
         detectionHistory.removeAll()
-        currentFPSTarget = 30
-        frameSkipPattern = 1
-        memoryPressureLevel = 0
 
         performPeriodicReset()
     }
 }
 
 extension YOLOv8Processor {
-    // Thermal optimization method to be called periodically
-    func applyThermalOptimizations() {
-        checkPerformanceAndAdjust()
-    }
-
-    // Predict method that respects thermal limits and performance adjustments
+    // Thermal throttling lives in CameraViewModel (frame rate + preset); the
+    // processor-side skip machinery was dead code and has been removed.
     func predictWithThermalLimits(
         image: CVPixelBuffer,
         isPortrait: Bool,
@@ -664,15 +582,6 @@ extension YOLOv8Processor {
         confidenceThreshold: Float = 0.5,
         completion: @escaping @Sendable ([YOLODetection]?) -> Void
     ) {
-        // Throttle on a counter that advances every call. (frameCount only advances
-        // inside predict(), so gating on it deadlocked: once a skip happened,
-        // frameCount never moved again and every frame was skipped forever.)
-        throttleCounter &+= 1
-        if throttleCounter % frameSkipPattern != 0 {
-            completion(nil) // skipped frame — keep last boxes, don't clear the overlay
-            return
-        }
-
         predict(image: image, isPortrait: isPortrait, filterMode: filterMode, confidenceThreshold: confidenceThreshold, completion: completion)
     }
 }

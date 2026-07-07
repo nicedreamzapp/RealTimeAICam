@@ -8,7 +8,6 @@ struct ContentView: View {
     @State private var mode: AppMode = .home
     @StateObject private var viewModel = CameraViewModel()
     @State private var orientation = UIDevice.current.orientation
-    @StateObject private var ocrViewModel = LiveOCRViewModel()
     @StateObject private var buttonDebouncer = ButtonPressDebouncer()
     // Correct singleton pattern: use @ObservedObject for ResourceManager.shared in SwiftUI views.
     @ObservedObject private var resourceManager = ResourceManager.shared
@@ -21,7 +20,6 @@ struct ContentView: View {
         }
     }
 
-    @State private var showSettings = false
     @State private var speechSynthesizer = AVSpeechSynthesizer()
     @State private var animationState = AnimationState()
     @Environment(\.scenePhase) private var scenePhase
@@ -73,18 +71,6 @@ struct ContentView: View {
             .padding([.top, .leading], 12)
 
             contentForMode
-
-            if showSettings, mode == .ocrEnglish || mode == .ocrSpanish {
-                SettingsOverlayView(viewModel: viewModel, isPresented: $showSettings, mode: mode)
-                    .onAppear {
-                        ocrViewModel.stopSession()
-                    }
-                    .onDisappear {
-                        if mode == .ocrEnglish || mode == .ocrSpanish {
-                            ocrViewModel.startSession()
-                        }
-                    }
-            }
 
             if mode == .home {
                 VStack {
@@ -145,7 +131,6 @@ struct ContentView: View {
             ObjectDetectionView(
                 viewModel: viewModel,
                 mode: $mode,
-                showSettings: $showSettings,
                 orientation: normalizedOrientation,
                 isPortrait: isPortrait,
                 rotationAngle: rotationAngle,
@@ -190,20 +175,6 @@ struct ContentView: View {
             selectedVoiceIdentifier: viewModel.selectedVoiceIdentifier
         )
         .ignoresSafeArea()
-        .onDisappear {
-            ocrViewModel.shutdown()
-        }
-        .sheet(isPresented: $showSettings) {
-            SettingsOverlayView(viewModel: viewModel, isPresented: $showSettings, mode: mode)
-                .onAppear {
-                    ocrViewModel.stopSession()
-                }
-                .onDisappear {
-                    if mode == .ocrEnglish || mode == .ocrSpanish {
-                        ocrViewModel.startSession()
-                    }
-                }
-        }
     }
 
     private func switchToHome() {
@@ -216,18 +187,15 @@ struct ContentView: View {
         switchToMode(.home)
 
         viewModel.reinitialize()
-        ocrViewModel.shutdown()
     }
 
     private func cleanupCurrentMode() {
         SpeechManager.shared.resetSpeechState()
-        ocrViewModel.shutdown()
 
         if mode == .objectDetection {
             viewModel.stopSession()
             viewModel.clearDetections()
         }
-        showSettings = false
     }
 
     private func performReset() {
@@ -237,8 +205,7 @@ struct ContentView: View {
             viewModel.stopSession()
             SpeechManager.shared.resetSpeechState()
             viewModel.stopSpeech()
-            ocrViewModel.shutdown()
-
+    
             viewModel.clearDetections()
 
             if let yoloProc = viewModel.yoloProcessor {
@@ -251,11 +218,9 @@ struct ContentView: View {
             LiDARManager.shared.stop()
             LiDARManager.shared.cleanupOldHistories(currentDetectionIds: Set())
 
-            ocrViewModel.clearText()
         }
 
         viewModel.reinitialize()
-        ocrViewModel.shutdown()
         // print("Basic reset completed")
     }
 
@@ -282,7 +247,6 @@ struct ContentView: View {
             mode = .home
         } else if newPhase == .inactive {
             viewModel.stopSession()
-            ocrViewModel.stopSession()
         } else if newPhase == .active {
             // Coming back from Control Center / notification shade is not a fresh
             // launch — just restart the paused session; don't wipe the user's state.

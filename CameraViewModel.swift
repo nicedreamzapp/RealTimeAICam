@@ -1257,13 +1257,6 @@ extension CameraViewModel {
         DispatchQueue.main.asyncAfter(deadline: .now() + 5.0, execute: work)
     }
 
-    func enableMemoryPressureRelief() {
-        // This can be called before intensive operations to reduce memory pressure
-        if frameRate > 15 {
-            frameRate = 15
-            processEveryNFrames = 3
-        }
-    }
 
     private func setThermalOptimizedSessionPreset() {
         // Lower session preset for thermal savings if possible

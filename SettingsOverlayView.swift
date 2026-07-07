@@ -4,9 +4,6 @@ struct SettingsOverlayView: View {
     @ObservedObject var viewModel: CameraViewModel
     @Binding var isPresented: Bool
     let mode: AppMode
-    let onAppear: (() -> Void)? = nil
-    let onDisappear: (() -> Void)? = nil
-    let onDismiss: (() -> Void)? = nil
 
     @StateObject private var buttonDebouncer = ButtonPressDebouncer()
 
@@ -19,7 +16,6 @@ struct SettingsOverlayView: View {
                 .ignoresSafeArea()
                 .onTapGesture {
                     if buttonDebouncer.canPress("SettingsOverlayView-1") {
-                        onDismiss?()
                         withAnimation(.spring(response: 0.3)) {
                             isPresented = false
                         }
@@ -36,8 +32,7 @@ struct SettingsOverlayView: View {
 
                     Button(action: {
                         if buttonDebouncer.canPress("SettingsOverlayView-2") {
-                            onDismiss?()
-                            withAnimation(.spring(response: 0.3)) {
+                                withAnimation(.spring(response: 0.3)) {
                                 isPresented = false
                             }
                         }
@@ -55,45 +50,6 @@ struct SettingsOverlayView: View {
 
                 ScrollView {
                     VStack(spacing: 20) {
-                        if mode == .objectDetection {
-                            VStack(alignment: .leading, spacing: 16) {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    HStack {
-                                        Image(systemName: "eye.circle")
-                                            .font(.system(size: 20))
-                                            .foregroundStyle(.blue)
-
-                                        Text("Detection Sensitivity")
-                                            .font(.headline)
-
-                                        Spacer()
-
-                                        Text("\(Int(viewModel.confidenceThreshold * 100))%")
-                                            .font(.system(.body, design: .rounded))
-                                            .foregroundStyle(.secondary)
-                                    }
-
-                                    Slider(value: $viewModel.confidenceThreshold, in: 0.0001 ... 1.0)
-                                        .accentColor(.blue)
-
-                                    HStack {
-                                        Text("More Objects")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                        Spacer()
-                                        Text("Fewer Objects")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                                .padding()
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(.ultraThinMaterial.opacity(0.3))
-                                )
-                            }
-                        }
-
                         if mode == .ocrEnglish || mode == .ocrSpanish {
                             VStack(alignment: .leading, spacing: 12) {
                                 HStack {
@@ -210,24 +166,17 @@ struct SettingsOverlayView: View {
                                     .font(.headline)
                             }
 
-                            if mode == .objectDetection {
-                                Text("• 🤏 Pinch to zoom the camera")
-                                Text("• 🗣️ Speak detected objects")
-                                Text("• 🔦 Adjust flashlight")
-                                Text("• 🌎 Toggle wide/ultra-wide lens")
-                                Text("• ⚙️ Open settings")
-                            } else {
-                                Text("• 🤏 Pinch to zoom the camera")
-                                Text("• 📋 Copy detected/translated text")
-                                HStack {
-                                    Image(systemName: "arrow.clockwise")
-                                    Text("Reset/Stop — Clears text, translation, and stops speaking")
-                                }
-                                Text("• 🗣️ Speak detected/translated text")
-                                Text("• 🔦 Adjust flashlight")
-                                Text("• 🌎 Toggle wide/ultra-wide lens")
-                                Text("• ⚙️ Open settings/history")
+                            // This overlay is only ever presented from the OCR screens
+                            Text("• 🤏 Pinch to zoom the camera")
+                            Text("• 📋 Copy detected/translated text")
+                            HStack {
+                                Image(systemName: "arrow.clockwise")
+                                Text("Reset/Stop — Clears text, translation, and stops speaking")
                             }
+                            Text("• 🗣️ Speak detected/translated text")
+                            Text("• 🔦 Adjust flashlight")
+                            Text("• 🌎 Toggle wide/ultra-wide lens")
+                            Text("• ⚙️ Open settings/history")
                         }
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -259,7 +208,6 @@ struct SettingsOverlayView: View {
             DragGesture().onEnded { value in
                 if value.translation.height > 80, abs(value.translation.width) < 50 {
                     if buttonDebouncer.canPress("SettingsOverlayView-5") {
-                        onDismiss?()
                         withAnimation(.spring(response: 0.3)) {
                             isPresented = false
                         }
@@ -267,8 +215,6 @@ struct SettingsOverlayView: View {
                 }
             }
         )
-        .onAppear { onAppear?() }
-        .onDisappear { onDisappear?() }
     }
 
     static func addToCopyHistory(_ text: String) {

@@ -36,7 +36,6 @@ struct CameraPreview: UIViewRepresentable {
 
 class CameraPreviewView: UIView {
     // Add a callback for when the view is ready
-    var onViewReady: ((CameraPreviewView) -> Void)?
 
     private let session = AVCaptureSession()
     private let videoOutput = AVCaptureVideoDataOutput()
@@ -60,7 +59,6 @@ class CameraPreviewView: UIView {
         // Notify that view is ready
         DispatchQueue.main.async { [weak self] in
             if let self {
-                onViewReady?(self)
             }
         }
     }
@@ -73,7 +71,6 @@ class CameraPreviewView: UIView {
         // Notify that view is ready
         DispatchQueue.main.async { [weak self] in
             if let self {
-                onViewReady?(self)
             }
         }
     }
@@ -348,19 +345,6 @@ class CameraPreviewView: UIView {
         }
     }
 
-    func pauseCapture() {
-        isPaused = true
-        session.stopRunning()
-    }
-
-    func resumeCapture() {
-        isPaused = false
-        if !session.isRunning {
-            sessionQueue.async { [weak self] in
-                self?.session.startRunning()
-            }
-        }
-    }
 
     func reconfigureCamera() {
         sessionQueue.async { [weak self] in
