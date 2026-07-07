@@ -32,17 +32,14 @@ Built specifically for **iPhone** • Works **100% offline** • Privacy-first d
 
 <div align="center">
 
-## 🆕 **In the repo now: YOLOE — 4,585 classes**
+## 🧪 **Experimental: YOLOE — 4,585 classes** (on the [`yoloe-experiment`](https://github.com/nicedreamzapp/RealTimeAICam/tree/yoloe-experiment) branch)
 
-The source now includes an upgrade from YOLOv8's 601 classes to **YOLOE
-(prompt-free open-vocabulary), detecting 4,585 object types** — with
-per-anchor decoding baked into the CoreML graph so it keeps realtime speed
-on the Neural Engine. The original YOLOv8 model ships alongside it as an
-automatic fallback (and for iOS 16 devices). Coming to the App Store build
-after on-device testing wraps up.
-
-![YOLOE Classes](https://img.shields.io/badge/YOLOE-4585_Classes-orange?style=for-the-badge)
-![Backward Compatible](https://img.shields.io/badge/YOLOv8_Fallback-Included-success?style=for-the-badge)
+A prototype upgrade from 601 to **4,585 detectable object types** using
+YOLOE (prompt-free open-vocabulary) lives on a separate branch — realtime
+on the Neural Engine, with YOLOv8 kept as automatic fallback. First device
+test showed it needs confidence retuning before it's release-quality, so
+it stays out of main until it earns its way in. See `YOLOE_EXPERIMENT.md`
+on that branch for the full findings.
 
 </div>
 
