@@ -44,8 +44,9 @@ struct TorchButton: View {
                 onLevelChanged?(0.0)
                 showPresets = false
             } else {
-                // If torch is off, show presets
-                showPresets = true
+                // Toggle so a second tap dismisses the menu instead of
+                // stranding the user with no way to close it.
+                showPresets.toggle()
             }
         }) {
             Image(systemName: torchLevel > 0 ? "flashlight.on.fill" : "flashlight.off.fill")

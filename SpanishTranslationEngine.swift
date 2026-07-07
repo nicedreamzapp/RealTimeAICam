@@ -170,19 +170,24 @@ final class PhraseMatcher {
     private static func normalize(_ s: String) -> String {
         s.lowercased()
          .folding(options: .diacriticInsensitive, locale: .current)
-         .replacingOccurrences(of: #"\\s+"#, with: " ", options: .regularExpression)
+         .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
          .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     func match(tokens: [String]) -> [(String, String?)] {
+        // Keys are stored accent-folded (normalize above), so the lookup must
+        // fold too — otherwise "está lloviendo" can never match its own entry
+        // and 38% of the phrase dictionary (all accented phrases) is dead.
+        let folded = tokens.map { $0.folding(options: .diacriticInsensitive, locale: .current) }
         var i = 0
         var out: [(String, String?)] = []
         while i < tokens.count {
             var matched = false
             for L in lengths {
                 guard i + L <= tokens.count else { continue }
-                let span = tokens[i ..< (i + L)].joined(separator: " ")
-                if let eng = phraseMap[span] {
+                let foldedSpan = folded[i ..< (i + L)].joined(separator: " ")
+                if let eng = phraseMap[foldedSpan] {
+                    let span = tokens[i ..< (i + L)].joined(separator: " ")
                     out.append((span, eng))
                     i += L
                     matched = true
@@ -211,10 +216,13 @@ struct TranslationResult {
 
 // MARK: - FixedSpanishEngine (Your exact class name with working logic)
 
-@MainActor
+// No longer @MainActor: translation is pure CPU work (tokenize + dictionary
+// lookups + regex packs) and was freezing the UI for long pages. All stores are
+// written once at load (guarded by stateLock before isLoaded flips), then only
+// read — so translate() is safe to call from any thread.
 final class FixedSpanishEngine {
     // Helper to collect phrases from multiple rule buckets
-    private nonisolated func collectRulePhrases(_ dicts: [String: Any]) -> [String: String] {
+    private func collectRulePhrases(_ dicts: [String: Any]) -> [String: String] {
         var out: [String: String] = [:]
         for (_, v) in dicts {
             if let d = v as? [String: String] {
@@ -253,11 +261,16 @@ final class FixedSpanishEngine {
     private var builtinNarrativeGrammar: [(NSRegularExpression, String)] = []
     private var builtinDialogue: [(NSRegularExpression, String)] = []
 
-    // Cache (simplified, no concurrency needed)
+    // Cache + loaded flag are the only state mutated after load; guard them.
+    private let stateLock = NSLock()
     private var cache: [String: String] = [:]
     private let cacheLimit = 500
 
-    private(set) var isLoaded = false
+    private var _isLoaded = false
+    var isLoaded: Bool {
+        stateLock.lock(); defer { stateLock.unlock() }
+        return _isLoaded
+    }
 
     private init() { Task { await loadSpanishData() } }
 
@@ -290,7 +303,10 @@ final class FixedSpanishEngine {
     private func interpretSpanishWithContext(_ text: String) -> String {
         guard isLoaded else { return text }
         let cacheKey = normalizeKey(text)
-        if let cached = cache[cacheKey] {
+        stateLock.lock()
+        let cached = cache[cacheKey]
+        stateLock.unlock()
+        if let cached {
             return cached
         }
 
@@ -310,10 +326,12 @@ final class FixedSpanishEngine {
 
         // OCR feeds a near-infinite stream of unique strings, so cap the cache to
         // avoid unbounded memory growth over a long session.
+        stateLock.lock()
         if cache.count >= cacheLimit {
             cache.removeAll(keepingCapacity: true)
         }
         cache[cacheKey] = result
+        stateLock.unlock()
         return result
     }
 
@@ -555,10 +573,10 @@ final class FixedSpanishEngine {
 
     // MARK: - Data Loading with Gzip Support (Updated method)
 
-    // nonisolated so decompression, JSON decode, and regex compilation all run off
-    // the main thread — only the final publish hops back to the main actor. Keeping
-    // this @MainActor froze the UI for seconds on the first translate tap.
-    private nonisolated func loadSpanishData() async {
+    // Decompression, JSON decode, and regex compilation run off the main thread
+    // (called from a Task in init); the finished stores are published under
+    // stateLock before isLoaded flips.
+    private func loadSpanishData() async {
         let master: ESMaster? = {
             guard let url = locateJSON(),
                   let compressedData = try? Data(contentsOf: url, options: .mappedIfSafe)
@@ -705,36 +723,36 @@ final class FixedSpanishEngine {
             }
         }
 
-        // Publish to singleton on main actor (let-snapshots keep the closure Sendable-clean)
-        let finalDict = newDict
-        let finalReflexives = reflexiveCompiled
-        let finalGen = gen
-        let finalDia = diaJSON
-        let finalGra = gra
-        let finalCle = cle
-        await MainActor.run {
-            self.dict = finalDict
-            self.phraseMatcher = matcher
-            self.reflexiveRules = finalReflexives
-            self.compiledGeneral = finalGen
-            self.compiledDialogueFromJSON = finalDia
-            self.compiledGrammar = finalGra
-            self.compiledCleanup = finalCle
+        // Publish: stores are written before _isLoaded flips under the lock, so
+        // any thread that observes isLoaded == true sees fully-built stores.
+        dict = newDict
+        phraseMatcher = matcher
+        reflexiveRules = reflexiveCompiled
+        compiledGeneral = gen
+        compiledDialogueFromJSON = diaJSON
+        compiledGrammar = gra
+        compiledCleanup = cle
 
-            self.builtinPriceAndUnits = packs.priceUnits
-            self.builtinAlInfinitivo = packs.alInf
-            self.builtinPrepositions = packs.preps
-            self.builtinMenuLexicon = packs.menuLex
-            self.builtinNarrativeGrammar = packs.narrative
-            self.builtinDialogue = packs.dialogue
+        builtinPriceAndUnits = packs.priceUnits
+        builtinAlInfinitivo = packs.alInf
+        builtinPrepositions = packs.preps
+        builtinMenuLexicon = packs.menuLex
+        builtinNarrativeGrammar = packs.narrative
+        builtinDialogue = packs.dialogue
 
-            self.cache.removeAll()
-            self.isLoaded = true
-            print("✅ es data loaded: dict=\(self.dict.count) phrases=\(self.phraseMatcher == nil ? 0 : 1) regex: gen=\(self.compiledGeneral.count) gra=\(self.compiledGrammar.count) diaJSON=\(self.compiledDialogueFromJSON.count) cle=\(self.compiledCleanup.count) builtinNarr=\(self.builtinNarrativeGrammar.count)")
-        }
+        markLoaded()
+        print("✅ es data loaded: dict=\(dict.count) phrases=\(phraseMatcher == nil ? 0 : 1) regex: gen=\(compiledGeneral.count) gra=\(compiledGrammar.count) diaJSON=\(compiledDialogueFromJSON.count) cle=\(compiledCleanup.count) builtinNarr=\(builtinNarrativeGrammar.count)")
     }
 
-    private nonisolated func locateJSON() -> URL? {
+    // Synchronous so NSLock is legal here (locks are unavailable in async contexts).
+    private func markLoaded() {
+        stateLock.lock()
+        cache.removeAll()
+        _isLoaded = true
+        stateLock.unlock()
+    }
+
+    private func locateJSON() -> URL? {
         // Updated to look for .gz files first, then fallback to .json
         let candidates = [
             ("es_final_with_rules_CLEANED", "json.gz"),
@@ -783,11 +801,11 @@ final class FixedSpanishEngine {
         let dialogue: [(NSRegularExpression, String)]
     }
 
-    private nonisolated static func rex(_ p: String, _ opt: NSRegularExpression.Options = [.caseInsensitive]) -> NSRegularExpression? {
+    private static func rex(_ p: String, _ opt: NSRegularExpression.Options = [.caseInsensitive]) -> NSRegularExpression? {
         try? NSRegularExpression(pattern: p, options: opt)
     }
 
-    private nonisolated static func compileBuiltinRules() -> Packs {
+    private static func compileBuiltinRules() -> Packs {
         // Prices/units
         let pricePatterns: [(String, String)] = [
             (#"(\d+)\s*(€|euros?)\s+el\s+kilo"#, "$1$2 per kilo"),

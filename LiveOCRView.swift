@@ -209,6 +209,11 @@ struct LiveOCRView: View {
 
     @StateObject private var buttonDebouncer = ButtonPressDebouncer() // Debouncer to avoid rapid multiple presses
 
+    // Created ONCE for the settings overlay. Building CameraViewModel() inline in
+    // body leaked a new capture session + observers on every re-render (~1/sec
+    // while OCR text updates with settings open).
+    @StateObject private var settingsViewModel = CameraViewModel()
+
     // Computed property for display text
     private var displayText: String {
         if ocrMode == .english {
@@ -293,7 +298,7 @@ struct LiveOCRView: View {
                     HStack {
                         // Back button (left side)
                         Button(action: {
-                            if buttonDebouncer.canPress() {
+                            if buttonDebouncer.canPress("LiveOCRView-1") {
                                 let impactFeedback = UIImpactFeedbackGenerator(style: .light)
                                 impactFeedback.impactOccurred()
 
@@ -391,7 +396,7 @@ struct LiveOCRView: View {
                     HStack(spacing: metrics.spacing) {
                         // Settings button
                         Button(action: {
-                            if buttonDebouncer.canPress() {
+                            if buttonDebouncer.canPress("LiveOCRView-2") {
                                 withAnimation(.spring(response: 0.3)) {
                                     showSettings = true
                                 }
@@ -413,7 +418,7 @@ struct LiveOCRView: View {
                         // Torch button with overlay for presets
                         ZStack {
                             Button(action: {
-                                if buttonDebouncer.canPress() {
+                                if buttonDebouncer.canPress("LiveOCRView-3") {
                                     if viewModel.torchLevel > 0 {
                                         viewModel.handleToggleTorch(level: 0.0)
                                         showTorchPresets = false
@@ -441,7 +446,7 @@ struct LiveOCRView: View {
 
                         // Wide Screen Toggle button
                         Button(action: {
-                            if buttonDebouncer.canPress() {
+                            if buttonDebouncer.canPress("LiveOCRView-4") {
                                 viewModel.handleToggleCameraZoom()
                             }
                         }) {
@@ -466,7 +471,7 @@ struct LiveOCRView: View {
 
                         // Reset (Clear) button
                         Button(action: {
-                            if buttonDebouncer.canPress() {
+                            if buttonDebouncer.canPress("LiveOCRView-5") {
                                 withAnimation(.spring(response: 0.3)) {
                                     viewModel.stopSpeaking()
                                     viewModel.clearText()
@@ -519,7 +524,7 @@ struct LiveOCRView: View {
                 // Settings overlay
                 if showSettings {
                     SettingsOverlayView(
-                        viewModel: CameraViewModel(),
+                        viewModel: settingsViewModel,
                         isPresented: $showSettings,
                         mode: ocrMode == .english ? .ocrEnglish : .ocrSpanish
                     )
@@ -541,6 +546,7 @@ struct LiveOCRView: View {
         .onChange(of: viewModel.torchLevel) { newLevel in
             cameraPreviewRef?.setTorchLevel(newLevel)
         }
+        .appleSpanishTranslation(viewModel: viewModel, enabled: ocrMode == .spanishToEnglish)
     }
 
     // Helper views to break up complex expressions
@@ -584,7 +590,7 @@ struct LiveOCRView: View {
         Group {
             if ocrMode == .spanishToEnglish, !viewModel.isTranslated {
                 Button(action: {
-                    if buttonDebouncer.canPress() {
+                    if buttonDebouncer.canPress("LiveOCRView-6") {
                         isTranslating = true
                         viewModel.translateSpanishText { success in
                             isTranslating = false
@@ -611,7 +617,7 @@ struct LiveOCRView: View {
                 .opacity(isTranslating ? 0.6 : 1)
             } else {
                 Button(action: {
-                    if buttonDebouncer.canPress() {
+                    if buttonDebouncer.canPress("LiveOCRView-7") {
                         if ocrMode == .spanishToEnglish, !viewModel.isTranslated {
                             isTranslating = true
                             viewModel.translateSpanishText { success in
@@ -649,7 +655,7 @@ struct LiveOCRView: View {
     @ViewBuilder
     private func speakButton(buttonSize: CGFloat) -> some View {
         Button(action: {
-            if buttonDebouncer.canPress() {
+            if buttonDebouncer.canPress("LiveOCRView-8") {
                 if isSpeaking {
                     viewModel.stopSpeaking()
                     isSpeaking = false
@@ -694,3 +700,62 @@ struct LiveOCRView: View {
         .animation(.easeInOut(duration: 0.2), value: isSpeaking)
     }
 }
+
+// MARK: - Apple on-device neural translation (iOS 18+)
+
+// Long passages (stories, paragraphs) read far better through Apple's neural
+// translator than the offline rule engine. The rule engine remains the instant
+// path for short text and the fallback when the language model isn't available.
+extension View {
+    @ViewBuilder
+    func appleSpanishTranslation(viewModel: LiveOCRViewModel, enabled: Bool) -> some View {
+        if #available(iOS 18.0, *), enabled {
+            modifier(AppleSpanishTranslationModifier(viewModel: viewModel))
+        } else {
+            self
+        }
+    }
+}
+
+#if canImport(Translation)
+import Translation
+
+@available(iOS 18.0, *)
+private struct AppleSpanishTranslationModifier: ViewModifier {
+    @ObservedObject var viewModel: LiveOCRViewModel
+    @State private var configuration: TranslationSession.Configuration?
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: viewModel.appleTranslationRequest) { _, request in
+                guard request != nil else { return }
+                if configuration == nil {
+                    configuration = TranslationSession.Configuration(
+                        source: Locale.Language(identifier: "es"),
+                        target: Locale.Language(identifier: "en")
+                    )
+                } else {
+                    // Same config object → invalidate to re-fire the task.
+                    configuration?.invalidate()
+                }
+            }
+            .translationTask(configuration) { session in
+                guard let text = viewModel.appleTranslationRequest else { return }
+                do {
+                    let response = try await session.translate(text)
+                    viewModel.completeAppleTranslation(response.targetText)
+                } catch {
+                    // Model not downloaded / translation failed → nil result
+                    // makes the view model fall back to the offline engine.
+                    viewModel.completeAppleTranslation(nil)
+                }
+            }
+    }
+}
+#else
+@available(iOS 18.0, *)
+private struct AppleSpanishTranslationModifier: ViewModifier {
+    @ObservedObject var viewModel: LiveOCRViewModel
+    func body(content: Content) -> some View { content }
+}
+#endif

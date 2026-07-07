@@ -9,6 +9,7 @@ final class ButtonPressDebouncer: ObservableObject {
     @Published private var dummy = false
 
     private var lastTapDate: Date = .distantPast
+    private var lastTapDates: [String: Date] = [:]
     private let minimumInterval: TimeInterval
 
     /// Create a new debouncer. Default = 500ms between taps.
@@ -22,6 +23,18 @@ final class ButtonPressDebouncer: ObservableObject {
         let now = Date()
         if now.timeIntervalSince(lastTapDate) > minimumInterval {
             lastTapDate = now
+            return true
+        }
+        return false
+    }
+
+    /// Per-button debounce: each id gets its own cooldown, so rapid-tapping
+    /// one control never swallows a tap on a different control.
+    @MainActor
+    func canPress(_ id: String) -> Bool {
+        let now = Date()
+        if now.timeIntervalSince(lastTapDates[id] ?? .distantPast) > minimumInterval {
+            lastTapDates[id] = now
             return true
         }
         return false

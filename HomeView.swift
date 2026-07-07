@@ -54,12 +54,12 @@ struct HomeView: View {
         .sheet(isPresented: $showInstructions) {
             AppInstructionsView(selectedVoiceIdentifier: viewModel.selectedVoiceIdentifier)
                 .onAppear {
-                    if buttonDebouncer.canPress() {
+                    if buttonDebouncer.canPress("HomeView-1") {
                         viewModel.pauseCameraAndProcessing()
                     }
                 }
                 .onDisappear {
-                    if buttonDebouncer.canPress() {
+                    if buttonDebouncer.canPress("HomeView-2") {
                         if mode == .objectDetection {
                             viewModel.resumeCameraAndProcessing()
                         }
@@ -94,7 +94,7 @@ struct HomeView: View {
 
     private func englishOCRButton(scale: CGFloat, screenWidth: CGFloat) -> some View {
         Button(action: {
-            guard buttonDebouncer.canPress() else { return }
+            guard buttonDebouncer.canPress("HomeView-3") else { return }
             onEnglishOCR()
         }) {
             HStack(spacing: 4 * scale) {
@@ -142,7 +142,7 @@ struct HomeView: View {
 
     private func spanishOCRButton(scale: CGFloat, screenWidth: CGFloat) -> some View {
         Button(action: {
-            guard buttonDebouncer.canPress() else { return }
+            guard buttonDebouncer.canPress("HomeView-4") else { return }
             onSpanishOCR()
         }) {
             HStack(spacing: 2 * scale) {
@@ -193,7 +193,7 @@ struct HomeView: View {
 
     private func objectDetectionButton(scale: CGFloat, screenWidth: CGFloat) -> some View {
         Button(action: {
-            guard buttonDebouncer.canPress() else { return }
+            guard buttonDebouncer.canPress("HomeView-5") else { return }
             onObjectDetection()
         }) {
             HStack(spacing: 4 * scale) {
@@ -246,13 +246,13 @@ struct HomeView: View {
             speechSynthesizer: speechSynthesizer
         )
         .onTapGesture {
-            _ = buttonDebouncer.canPress()
+            _ = buttonDebouncer.canPress("HomeView-6")
         }
     }
 
     private var infoButton: some View {
         Button(action: {
-            guard buttonDebouncer.canPress() else { return }
+            guard buttonDebouncer.canPress("HomeView-7") else { return }
             showInstructions = true
         }) {
             HStack(spacing: 6) {

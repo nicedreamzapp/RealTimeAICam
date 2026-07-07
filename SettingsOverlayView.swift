@@ -17,7 +17,7 @@ struct SettingsOverlayView: View {
             Color.black.opacity(0.4)
                 .ignoresSafeArea()
                 .onTapGesture {
-                    if buttonDebouncer.canPress() {
+                    if buttonDebouncer.canPress("SettingsOverlayView-1") {
                         onDismiss?()
                         withAnimation(.spring(response: 0.3)) {
                             isPresented = false
@@ -34,7 +34,7 @@ struct SettingsOverlayView: View {
                     Spacer()
 
                     Button(action: {
-                        if buttonDebouncer.canPress() {
+                        if buttonDebouncer.canPress("SettingsOverlayView-2") {
                             onDismiss?()
                             withAnimation(.spring(response: 0.3)) {
                                 isPresented = false
@@ -107,7 +107,7 @@ struct SettingsOverlayView: View {
 
                                     if !copyHistory.isEmpty {
                                         Button("Clear") {
-                                            if buttonDebouncer.canPress() {
+                                            if buttonDebouncer.canPress("SettingsOverlayView-3") {
                                                 copyHistory.removeAll()
                                                 UserDefaults.standard.removeObject(forKey: "ocrCopyHistory")
                                             }
@@ -133,7 +133,7 @@ struct SettingsOverlayView: View {
                                                     .frame(maxWidth: .infinity, alignment: .leading)
 
                                                 Button(action: {
-                                                    if buttonDebouncer.canPress() {
+                                                    if buttonDebouncer.canPress("SettingsOverlayView-4") {
                                                         UIPasteboard.general.string = text
 
                                                         let generator = UINotificationFeedbackGenerator()
@@ -242,7 +242,7 @@ struct SettingsOverlayView: View {
         .gesture(
             DragGesture().onEnded { value in
                 if value.translation.height > 80, abs(value.translation.width) < 50 {
-                    if buttonDebouncer.canPress() {
+                    if buttonDebouncer.canPress("SettingsOverlayView-5") {
                         onDismiss?()
                         withAnimation(.spring(response: 0.3)) {
                             isPresented = false

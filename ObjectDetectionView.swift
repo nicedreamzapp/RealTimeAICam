@@ -70,7 +70,7 @@ struct ObjectDetectionView: View {
                     VStack {
                         HStack(alignment: .top) {
                             Button(action: {
-                                guard buttonDebouncer.canPress() else { return }
+                                guard buttonDebouncer.canPress("ObjectDetectionView-1") else { return }
                                 // Encapsulated back action logic
                                 viewModel.handleBackAction(onBack: onBack)
                             }) {
@@ -170,7 +170,7 @@ struct ObjectDetectionView: View {
 
                     // Landscape back button - consistent positioning and styled
                     Button(action: {
-                        guard buttonDebouncer.canPress() else { return }
+                        guard buttonDebouncer.canPress("ObjectDetectionView-2") else { return }
                         // Encapsulated back action logic
                         viewModel.handleBackAction(onBack: onBack)
                     }) {
@@ -352,7 +352,7 @@ struct ObjectDetectionView: View {
                             size: 22,
                             frameSize: buttonSize,
                             action: {
-                                guard buttonDebouncer.canPress() else { return }
+                                guard buttonDebouncer.canPress("ObjectDetectionView-3") else { return }
                                 viewModel.handleFlipCamera()
                             }
                         )
@@ -366,7 +366,7 @@ struct ObjectDetectionView: View {
                             size: 22,
                             frameSize: buttonSize,
                             action: {
-                                guard buttonDebouncer.canPress() else { return }
+                                guard buttonDebouncer.canPress("ObjectDetectionView-4") else { return }
                                 viewModel.handleToggleCameraZoom()
                             }
                         )
@@ -389,7 +389,7 @@ struct ObjectDetectionView: View {
                             size: 22,
                             frameSize: buttonSize,
                             action: {
-                                guard buttonDebouncer.canPress() else { return }
+                                guard buttonDebouncer.canPress("ObjectDetectionView-5") else { return }
                                 let newState = !viewModel.useLiDAR
                                 viewModel.setLiDAR(enabled: newState)
                                 if newState {
@@ -403,7 +403,7 @@ struct ObjectDetectionView: View {
                         .disabled(!(viewModel.isLiDARSupported && viewModel.cameraPosition == .back && LiDARManager.shared.isAvailable))
 
                         Button(action: {
-                            guard buttonDebouncer.canPress() else { return }
+                            guard buttonDebouncer.canPress("ObjectDetectionView-6") else { return }
                             viewModel.handleToggleSpeech()
                         }) {
                             Text("🗣️")
@@ -429,7 +429,7 @@ struct ObjectDetectionView: View {
                         .accessibilityValue(viewModel.isSpeechEnabled ? "Speech enabled" : "Speech disabled")
 
                         Button(action: {
-                            guard buttonDebouncer.canPress() else { return }
+                            guard buttonDebouncer.canPress("ObjectDetectionView-7") else { return }
                             withAnimation(.spring(response: 0.3)) {
                                 showConfidenceSlider.toggle()
                             }
@@ -468,7 +468,7 @@ struct ObjectDetectionView: View {
                 size: 24,
                 frameSize: 48,
                 action: {
-                    guard buttonDebouncer.canPress() else { return }
+                    guard buttonDebouncer.canPress("ObjectDetectionView-8") else { return }
                     viewModel.handleFlipCamera()
                 }
             )
@@ -483,7 +483,7 @@ struct ObjectDetectionView: View {
                 size: 24,
                 frameSize: 48,
                 action: {
-                    guard buttonDebouncer.canPress() else { return }
+                    guard buttonDebouncer.canPress("ObjectDetectionView-9") else { return }
                     viewModel.handleToggleCameraZoom()
                 }
             )
@@ -510,7 +510,7 @@ struct ObjectDetectionView: View {
                 size: 24,
                 frameSize: 48,
                 action: {
-                    guard buttonDebouncer.canPress() else { return }
+                    guard buttonDebouncer.canPress("ObjectDetectionView-10") else { return }
                     let newState = !viewModel.useLiDAR
                     viewModel.setLiDAR(enabled: newState)
                     if newState {
@@ -528,7 +528,7 @@ struct ObjectDetectionView: View {
             .accessibilityHint("Measures distance to detected objects")
 
             Button(action: {
-                guard buttonDebouncer.canPress() else { return }
+                guard buttonDebouncer.canPress("ObjectDetectionView-11") else { return }
                 viewModel.handleToggleSpeech()
             }) {
                 Text("🗣️")
@@ -557,7 +557,7 @@ struct ObjectDetectionView: View {
             .accessibilityValue(viewModel.isSpeechEnabled ? "Speech enabled" : "Speech disabled")
 
             Button(action: {
-                guard buttonDebouncer.canPress() else { return }
+                guard buttonDebouncer.canPress("ObjectDetectionView-12") else { return }
                 withAnimation(.spring(response: 0.3)) {
                     showConfidenceSlider.toggle()
                 }

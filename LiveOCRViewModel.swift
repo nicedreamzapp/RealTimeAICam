@@ -135,40 +135,79 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
         }
     }
 
-    // MARK: - On-Demand Translation (Updated for SimpleSpanishEngine)
+    // MARK: - On-Demand Translation
+
+    /// Long passages read far better through Apple's on-device neural translator
+    /// (iOS 18+); short signs/menus stay on the instant offline rule engine,
+    /// which also serves as the fallback everywhere.
+    private static let appleTranslationMinChars = 120
+
+    /// Non-nil while a request is waiting on Apple's translator; observed by
+    /// LiveOCRView's translationTask modifier (iOS 18+ only).
+    @Published var appleTranslationRequest: String?
+    private var pendingAppleCompletion: ((Bool) -> Void)?
 
     func translateSpanishText(completion: @escaping (Bool) -> Void) {
         guard !recognizedText.isEmpty else { completion(false); return }
+        isFrozen = true
+        let text = recognizedText
 
-        Task {
-            let engineIsReady = await MainActor.run { FixedSpanishEngine.shared.isReady() }
-            if !engineIsReady {
-                await MainActor.run { self.isTranslatorLoading = true }
-                // Wait for the engine to load by polling
-                while await !(MainActor.run { FixedSpanishEngine.shared.isReady() }) {
-                    try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s
-                }
-                await MainActor.run { self.isTranslatorLoading = false }
-            }
+        if #available(iOS 18.0, *), text.count >= Self.appleTranslationMinChars {
+            pendingAppleCompletion = completion
+            appleTranslationRequest = text // LiveOCRView's translationTask takes over
+            return
+        }
+        translateWithEngine(text, completion: completion)
+    }
 
-            await MainActor.run { self.isFrozen = true }
-            let textToTranslate = self.recognizedText // capture to avoid actor crossing
+    /// Called by the view when Apple's translator finishes (or fails — nil result
+    /// falls back to the offline rule engine so translation always produces output).
+    func completeAppleTranslation(_ result: String?) {
+        let completion = pendingAppleCompletion
+        pendingAppleCompletion = nil
+        let requested = appleTranslationRequest
+        appleTranslationRequest = nil
 
-            let translation = await MainActor.run { FixedSpanishEngine.shared.translate(textToTranslate) }
-            await MainActor.run {
-                self.translatedText = translation
-                self.isTranslated = true
-                completion(true)
-            }
+        if let result, !result.isEmpty {
+            translatedText = result
+            isTranslated = true
+            completion?(true)
+        } else if let requested {
+            translateWithEngine(requested, completion: completion ?? { _ in })
         }
     }
 
-    func translateSpanishTextWithConfidence(completion: @escaping (String?) -> Void) {
-        guard !recognizedText.isEmpty else { completion(nil); return }
-        DispatchQueue.global(qos: .userInitiated).async {
-            Task { @MainActor in
-                let result = FixedSpanishEngine.shared.translate(self.recognizedText)
-                DispatchQueue.main.async { completion(result) }
+    private func translateWithEngine(_ text: String, completion: @escaping (Bool) -> Void) {
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let engine = FixedSpanishEngine.shared
+
+            // Wait for the dictionary, but never forever: a corrupt/missing data
+            // file used to leave this loop spinning and the feature dead with no
+            // message. 10s is generous for a one-time load.
+            if !engine.isReady() {
+                await MainActor.run { self?.isTranslatorLoading = true }
+                let deadline = Date().addingTimeInterval(10)
+                while !engine.isReady(), Date() < deadline {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                await MainActor.run { self?.isTranslatorLoading = false }
+            }
+
+            guard engine.isReady() else {
+                await MainActor.run {
+                    self?.translatedText = "Translation data couldn't load. Please close and reopen the app."
+                    self?.isTranslated = true
+                    completion(false)
+                }
+                return
+            }
+
+            // Heavy regex work runs right here on the background executor.
+            let translation = engine.translate(text)
+            await MainActor.run {
+                self?.translatedText = translation
+                self?.isTranslated = true
+                completion(true)
             }
         }
     }
