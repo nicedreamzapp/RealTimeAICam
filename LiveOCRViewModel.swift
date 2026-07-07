@@ -137,9 +137,10 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
 
     // MARK: - On-Demand Translation
 
-    /// Long passages read far better through Apple's on-device neural translator
-    /// (iOS 18+); short signs/menus stay on the instant offline rule engine,
-    /// which also serves as the fallback everywhere.
+    /// Matt's call 2026-07-06: everything ships inside the app with zero
+    /// downloads, so Apple's neural translator (which needs a one-time language
+    /// pack download) stays OFF. Flip to true to re-enable the iOS 18+ path.
+    private static let useAppleTranslation = false
     private static let appleTranslationMinChars = 120
 
     /// Non-nil while a request is waiting on Apple's translator; observed by
@@ -152,7 +153,7 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
         isFrozen = true
         let text = recognizedText
 
-        if #available(iOS 18.0, *), text.count >= Self.appleTranslationMinChars {
+        if Self.useAppleTranslation, #available(iOS 18.0, *), text.count >= Self.appleTranslationMinChars {
             pendingAppleCompletion = completion
             appleTranslationRequest = text // LiveOCRView's translationTask takes over
             return

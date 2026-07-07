@@ -244,6 +244,7 @@ final class FixedSpanishEngine {
 
     // Core stores
     private var dict: [String: String] = [:] // surface (lowercased) → translation
+    private var posMap: [String: String] = [:] // surface → NOUN/ADJ/ADV/VERB
     private var phraseMatcher: PhraseMatcher?
     private var reflexiveRules: [(NSRegularExpression, String)] = [] // "se vende" → "for sale", precompiled
 
@@ -362,22 +363,97 @@ final class FixedSpanishEngine {
 
     // MARK: - Core Translation Methods (Your exact working logic!)
 
+    // MARK: - Word-level core (shared by both translate paths)
+
+    private func lookup(_ surface: String) -> String? {
+        dict[surface] ?? dict[surface.folding(options: .diacriticInsensitive, locale: .current)]
+    }
+
+    private func posOf(_ token: String) -> String? {
+        posMap[token] ?? posMap[token.folding(options: .diacriticInsensitive, locale: .current)]
+    }
+
+    // Spanish object pronouns come before the verb; English puts them after
+    // ("me ofreció" → "offered me"). Empty value = drop entirely (reflexive "se").
+    private static let cliticObjects: [String: String] = [
+        "me": "me", "te": "you", "le": "him", "les": "them", "nos": "us", "os": "you", "se": "",
+    ]
+    // Verb translations that already carry their subject ("I woke up") absorb the clitic.
+    private static let subjectStarts = ["i ", "he ", "she ", "we ", "they ", "you ", "it "]
+
+    // Spanish puts adjectives after nouns ("paraguas azul"); English reverses
+    // ("blue umbrella"). Applies only to spans the phrase matcher didn't claim.
+    private func reorderNounAdjective(_ items: [(String, String?)]) -> [(String, String?)] {
+        var out = items
+        var i = 0
+        while i < out.count - 1 {
+            guard out[i].1 == nil, out[i + 1].1 == nil, posOf(out[i].0) == "NOUN" else { i += 1; continue }
+            // A following "de" marks a participial phrase ("manos cubiertas de
+            // harina" = hands covered WITH flour) — reordering those reads worse.
+            let adjFollowedByDe: (Int) -> Bool = { adjIdx in
+                adjIdx + 1 < out.count && out[adjIdx + 1].0 == "de"
+            }
+            if i + 2 < out.count, out[i + 2].1 == nil, posOf(out[i + 1].0) == "ADV", posOf(out[i + 2].0) == "ADJ",
+               !adjFollowedByDe(i + 2)
+            {
+                // "pan recién horneado" → "recién horneado pan" → "freshly baked bread"
+                let noun = out[i]
+                out[i] = out[i + 1]; out[i + 1] = out[i + 2]; out[i + 2] = noun
+                i += 3
+            } else if posOf(out[i + 1].0) == "ADJ", !adjFollowedByDe(i + 1) {
+                out.swapAt(i, i + 1)
+                i += 2
+            } else {
+                i += 1
+            }
+        }
+        return out
+    }
+
+    private func englishPieces(
+        from items: [(String, String?)],
+        unknowns: inout [String], total: inout Int, translated: inout Int
+    ) -> [String] {
+        var pieces: [String] = []
+        pieces.reserveCapacity(items.count)
+        var i = 0
+        while i < items.count {
+            let (surface, ph) = items[i]
+            total += 1
+            if let eng = ph { pieces.append(eng); translated += 1; i += 1; continue }
+
+            // Clitic pronoun directly before a verb
+            if let obj = Self.cliticObjects[surface], i + 1 < items.count, items[i + 1].1 == nil,
+               posOf(items[i + 1].0) == "VERB", let verbTr = lookup(items[i + 1].0)
+            {
+                let lower = verbTr.lowercased() + " "
+                let subjectEmbedded = Self.subjectStarts.contains { lower.hasPrefix($0) }
+                pieces.append(verbTr)
+                if !obj.isEmpty, !subjectEmbedded { pieces.append(obj) }
+                total += 1
+                translated += 2
+                i += 2
+                continue
+            }
+
+            if let eng = lookup(surface) { pieces.append(eng); translated += 1 }
+            else { pieces.append(surface); unknowns.append(surface) }
+            i += 1
+        }
+        return pieces
+    }
+
     private func translateBatch(_ text: String, domain: TextDomain) -> String {
         let tokens = tokenize(text.replacingOccurrences(of: #"\s+"#, with: " ", options: NSString.CompareOptions.regularExpression))
         let phraseApplied = phraseMatcher?.match(tokens: tokens.map { $0.lowercased() }) ?? tokens.map { ($0.lowercased(), nil) }
 
-        var englishPieces: [String] = []
-        englishPieces.reserveCapacity(phraseApplied.count)
-        for (surface, ph) in phraseApplied {
-            if let eng = ph { englishPieces.append(eng); continue }
-            if let eng = dict[surface] {
-                englishPieces.append(eng)
-            } else if let eng = dict[surface.folding(options: .diacriticInsensitive, locale: .current)] {
-                englishPieces.append(eng)
-            } else {
-                englishPieces.append(surface)
-            }
-        }
+        var unknowns: [String] = []
+        var total = 0
+        var translated = 0
+        let englishPieces = englishPieces(
+            from: reorderNounAdjective(phraseApplied),
+            unknowns: &unknowns, total: &total, translated: &translated
+        )
         var out = englishPieces.joined(separator: " ")
 
         // Fast reflexive pack for menus/signage/general
@@ -416,18 +492,13 @@ final class FixedSpanishEngine {
         let tokens = tokenize(text.replacingOccurrences(of: #"\s+"#, with: " ", options: NSString.CompareOptions.regularExpression))
         let phraseApplied = phraseMatcher?.match(tokens: tokens.map { $0.lowercased() }) ?? tokens.map { ($0.lowercased(), nil) }
 
-        var englishPieces: [String] = []
         var unknowns: [String] = []
         var total = 0
         var translated = 0
-
-        for (surface, ph) in phraseApplied {
-            total += 1
-            if let eng = ph { englishPieces.append(eng); translated += 1; continue }
-            if let eng = dict[surface] { englishPieces.append(eng); translated += 1 }
-            else if let eng = dict[surface.folding(options: .diacriticInsensitive, locale: .current)] { englishPieces.append(eng); translated += 1 }
-            else { englishPieces.append(surface); unknowns.append(surface) }
-        }
+        let englishPieces = englishPieces(
+            from: reorderNounAdjective(phraseApplied),
+            unknowns: &unknowns, total: &total, translated: &translated
+        )
         var out = englishPieces.joined(separator: " ")
 
         if domain == .restaurant || domain == .signage || domain == .general {
@@ -544,6 +615,9 @@ final class FixedSpanishEngine {
 
     private func finalize(_ s: String) -> String {
         var out = s
+        // English doesn't use inverted punctuation
+        out = out.replacingOccurrences(of: "¿", with: "")
+        out = out.replacingOccurrences(of: "¡", with: "")
         out = out.replacingOccurrences(of: #"\s+([,\.!\?:;)\]\}])"#, with: "$1", options: NSString.CompareOptions.regularExpression)
         out = out.replacingOccurrences(of: #"([,\.!\?:;])([^\s\)\]\}])"#, with: "$1 $2", options: NSString.CompareOptions.regularExpression)
         out = out.replacingOccurrences(of: #"([\(\[\{])\s+"#, with: "$1", options: NSString.CompareOptions.regularExpression)
@@ -630,12 +704,17 @@ final class FixedSpanishEngine {
 
         guard let master else { return }
         var newDict: [String: String] = [:]
+        var newPos: [String: String] = [:]
         if let d = master.dictionary {
             var m: [String: String] = [:]
             m.reserveCapacity(d.count)
             for (k, v) in d {
                 let key = k.lowercased()
                 if let t = v.translation, !t.isEmpty { m[key] = t }
+                // POS tags power the noun-adjective reorder pass
+                if let p = v.pos, p == "NOUN" || p == "ADJ" || p == "ADV" || p == "VERB" {
+                    newPos[key] = p
+                }
             }
             newDict = m
         }
@@ -726,6 +805,7 @@ final class FixedSpanishEngine {
         // Publish: stores are written before _isLoaded flips under the lock, so
         // any thread that observes isLoaded == true sees fully-built stores.
         dict = newDict
+        posMap = newPos
         phraseMatcher = matcher
         reflexiveRules = reflexiveCompiled
         compiledGeneral = gen
@@ -834,6 +914,9 @@ final class FixedSpanishEngine {
             (#"\brestaurant of to the side\b"#, "next-door restaurant"),
             (#"\bOctopos\b"#, "octopus"),
             (#"\boctopos\b"#, "octopus"),
+            // English article agreement after reordering ("a old man" → "an old man")
+            (#"\ba ([aeiou])"#, "an $1"),
+            (#"\bA ([aeiou])"#, "An $1"),
         ]
         let preps = prepPatterns.compactMap { p, r in rex(p).map { ($0, r) } }
 
