@@ -39,15 +39,7 @@ final class MemoryManager: ObservableObject {
 
     /// Emergency cleanup for caches and memory pressure. Posts notifications for all listeners to reduce usage.
     @objc private func handleMemoryWarning() {
-        autoreleasepool {
-            URLCache.shared.removeAllCachedResponses()
-            // Small allocation trick to trigger further GC.
-            var dummy: [Data] = []
-            for _ in 0 ..< 100 {
-                dummy.append(Data(count: 1024))
-            }
-            dummy.removeAll()
-        }
+        URLCache.shared.removeAllCachedResponses()
         // Notify all components to reduce memory, lower quality, reduce frame rate, etc.
         NotificationCenter.default.post(name: .reduceQualityForMemory, object: nil)
         NotificationCenter.default.post(name: .reduceFrameRate, object: nil)

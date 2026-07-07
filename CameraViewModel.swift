@@ -186,6 +186,22 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
         }
     }()
 
+    // MARK: - Device-Tier Defaults
+
+    // Single source of truth for per-tier performance targets; every
+    // restore/reset path must come back to these, not hardcoded values.
+    var tierDefaultFrameRate: Int {
+        switch DevicePerf.shared.tier {
+        case .low: 10
+        case .mid: 15
+        case .high: 20
+        }
+    }
+
+    var tierDefaultPreset: AVCaptureSession.Preset {
+        DevicePerf.shared.tier == .low ? .hd1280x720 : .hd1920x1080
+    }
+
     // MARK: - Private Properties
 
     private var frameCounter = 0
@@ -243,40 +259,31 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
         }
 
         // Set conservative defaults based on device tier
+        frameRate = tierDefaultFrameRate
+        if session.canSetSessionPreset(tierDefaultPreset) {
+            session.sessionPreset = tierDefaultPreset
+        }
         switch DevicePerf.shared.tier {
-        case .low:
-            frameRate = 10
-            confidenceThreshold = 0.45
-            if session.canSetSessionPreset(.hd1280x720) {
-                session.sessionPreset = .hd1280x720
-            }
-        case .mid:
-            frameRate = 15
-            confidenceThreshold = 0.42
-            if session.canSetSessionPreset(.hd1920x1080) {
-                session.sessionPreset = .hd1920x1080
-            }
-        case .high:
-            frameRate = 20
-            confidenceThreshold = 0.39
-            if session.canSetSessionPreset(.hd1920x1080) {
-                session.sessionPreset = .hd1920x1080
-            }
+        case .low: confidenceThreshold = 0.45
+        case .mid: confidenceThreshold = 0.42
+        case .high: confidenceThreshold = 0.39
         }
 
         // Add MemoryManager observers
         NotificationCenter.default.addObserver(forName: Notification.Name.reduceQualityForMemory, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
             clearDetections()
-            yoloProcessor?.reset()
+            // Note: intentionally NOT calling yoloProcessor.reset() here — it mutates
+            // tracking dictionaries the decode queue also touches, and frees ~nothing.
         }
         NotificationCenter.default.addObserver(forName: Notification.Name.reduceFrameRate, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
-            frameRate = 15
+            frameRate = min(frameRate, 15)
             processEveryNFrames = 3
-            DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
-                self.frameRate = 30
-                self.processEveryNFrames = 1
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+                guard let self else { return }
+                frameRate = tierDefaultFrameRate
+                processEveryNFrames = 1
             }
         }
     }
@@ -389,11 +396,10 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
 
         session.beginConfiguration()
         if isOCREnabled {
-            if session.canSetSessionPreset(.photo) {
-                session.sessionPreset = .photo
-            } else if session.canSetSessionPreset(.hd4K3840x2160) {
-                session.sessionPreset = .hd4K3840x2160
-            } else if session.canSetSessionPreset(.hd1920x1080) {
+            // 1080p is plenty for Vision OCR (the dedicated OCR screen runs 720p).
+            // .photo streamed ~12MP frames through the whole pipeline at 30fps —
+            // huge memory/bandwidth cost for zero accuracy gain.
+            if session.canSetSessionPreset(.hd1920x1080) {
                 session.sessionPreset = .hd1920x1080
             } else {
                 configureSessionPreset()
@@ -820,7 +826,6 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
         latestPixelBuffer = nil
         let portrait = latestIsPortrait
 
-        enableMemoryPressureRelief()
         isProcessing = true
 
         yoloProcessor.predictWithThermalLimits(
@@ -1030,9 +1035,10 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
 
             detections = []
             framesPerSecond = 0
-            filterMode = "all"
-            confidenceThreshold = 0.39
-            frameRate = 20
+            // filterMode and confidenceThreshold are user settings — they survive
+            // reinitialization. Only hardware-tied state (zoom, torch, camera
+            // position) resets, because a rebuilt session really is back at 1x/off.
+            frameRate = tierDefaultFrameRate
 
             useLiDAR = false
             isLiDAREnabled = false
@@ -1204,9 +1210,9 @@ extension CameraViewModel {
     }
 
     private func restorePerformance() {
-        frameRate = 30
+        frameRate = tierDefaultFrameRate
         processEveryNFrames = 1
-        setSessionPresetIfAvailable(.hd1920x1080)
+        setSessionPresetIfAvailable(tierDefaultPreset)
     }
 
     private func enableThermalBreaks() {

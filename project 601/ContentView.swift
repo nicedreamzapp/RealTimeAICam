@@ -237,11 +237,8 @@ struct ContentView: View {
                 yoloProc.reset()
             }
 
-            viewModel.confidenceThreshold = 0.75
-            viewModel.frameRate = 30
-            viewModel.filterMode = "all"
-            viewModel.currentZoomLevel = 1.0
-            viewModel.isUltraWide = false
+            // User settings (confidence, filter, frame rate) survive resets;
+            // reinitialize() below handles the hardware-tied state.
 
             LiDARManager.shared.stop()
             LiDARManager.shared.cleanupOldHistories(currentDetectionIds: Set())
@@ -279,12 +276,10 @@ struct ContentView: View {
             viewModel.stopSession()
             ocrViewModel.stopSession()
         } else if newPhase == .active {
-            performReset()
-            SpeechManager.shared.resetSpeechState()
-
+            // Coming back from Control Center / notification shade is not a fresh
+            // launch — just restart the paused session; don't wipe the user's state.
             if mode == .objectDetection {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    viewModel.reinitialize()
                     viewModel.startSession()
                 }
             }

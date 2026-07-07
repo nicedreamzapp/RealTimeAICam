@@ -28,6 +28,7 @@ final class YOLOv8Processor: ObservableObject, @unchecked Sendable {
     // SMART THROTTLING - Prevents freezing while keeping speed
     private var currentFPSTarget: Int = 30
     private var frameSkipPattern: Int = 1
+    private var throttleCounter = 0
     private var lastPerformanceCheck = Date()
     private var memoryPressureLevel = 0
 
@@ -663,8 +664,11 @@ extension YOLOv8Processor {
         confidenceThreshold: Float = 0.5,
         completion: @escaping @Sendable ([YOLODetection]?) -> Void
     ) {
-        // Use frameSkipPattern for throttling
-        if frameCount % frameSkipPattern != 0 {
+        // Throttle on a counter that advances every call. (frameCount only advances
+        // inside predict(), so gating on it deadlocked: once a skip happened,
+        // frameCount never moved again and every frame was skipped forever.)
+        throttleCounter &+= 1
+        if throttleCounter % frameSkipPattern != 0 {
             completion(nil) // skipped frame — keep last boxes, don't clear the overlay
             return
         }
