@@ -30,7 +30,13 @@ final class LiDARManager: NSObject, ObservableObject {
 
     // MARK: - Private
 
-    private var latestDepthData: AVDepthData?
+    // Written on the camera depth-delegate queue, read on main — lock required.
+    private let depthLock = NSLock()
+    private var _latestDepthData: AVDepthData?
+    private var latestDepthData: AVDepthData? {
+        get { depthLock.lock(); defer { depthLock.unlock() }; return _latestDepthData }
+        set { depthLock.lock(); _latestDepthData = newValue; depthLock.unlock() }
+    }
     private let processingQueue = DispatchQueue(label: "lidar.processing", qos: .userInitiated)
     private var depthHistory: [UUID: [Double]] = [:]
     private let maxHistorySize = 7
@@ -57,49 +63,13 @@ final class LiDARManager: NSObject, ObservableObject {
     @objc private func handleReduceFrameRate() {}
 
     private func checkSupport() {
-        // First check for dedicated LiDAR camera (iPhone 12 Pro+, iPhone 13 Pro+, iPhone 14 Pro+, iPhone 15 Pro+)
-        if AVCaptureDevice.default(.builtInLiDARDepthCamera, for: .video, position: .back) != nil {
-            DispatchQueue.main.async {
-                self.isSupported = true
-            }
-            return
-        }
-
-        // Fallback check for other depth-capable devices
-        let discoverySession = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [
-                .builtInTrueDepthCamera,
-                .builtInDualCamera,
-                .builtInDualWideCamera,
-                .builtInTripleCamera,
-                .builtInWideAngleCamera,
-            ],
-            mediaType: .video,
-            position: .back
-        )
-
-        for device in discoverySession.devices {
-            if !device.activeFormat.supportedDepthDataFormats.isEmpty {
-                DispatchQueue.main.async {
-                    self.isSupported = true
-                }
-                return
-            }
-
-            if device.deviceType == .builtInTrueDepthCamera ||
-                device.deviceType == .builtInDualCamera ||
-                device.deviceType == .builtInDualWideCamera ||
-                device.deviceType == .builtInTripleCamera
-            {
-                DispatchQueue.main.async {
-                    self.isSupported = true
-                }
-                return
-            }
-        }
-
+        // Only the dedicated LiDAR camera counts (iPhone 12 Pro and later Pro
+        // models). The camera pipeline attaches depth exclusively from
+        // builtInLiDARDepthCamera, so advertising the ruler button on dual/triple
+        // camera non-Pro phones showed a toggle that could never produce a distance.
+        let supported = AVCaptureDevice.default(.builtInLiDARDepthCamera, for: .video, position: .back) != nil
         DispatchQueue.main.async {
-            self.isSupported = false
+            self.isSupported = supported
         }
     }
 

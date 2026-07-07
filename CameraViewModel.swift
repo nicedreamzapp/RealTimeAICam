@@ -220,6 +220,10 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
     // FPS tracking
     private var lastFrameTimestamps: [CFTimeInterval] = []
 
+    // Pending thermal-break resume; cancelled by stopSession()
+    private var thermalResumeWork: DispatchWorkItem?
+    private var modelFailureNotified = false
+
     // Observers
     private var orientationObserver: NSObjectProtocol?
     private var rotationCoordinator: Any?
@@ -644,6 +648,8 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
     }
 
     func stopSession() {
+        thermalResumeWork?.cancel()
+        thermalResumeWork = nil
         guard session.isRunning else {
             return
         }
@@ -821,7 +827,17 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
 
     private func processLatestFrame() {
         guard let pixelBuffer = latestPixelBuffer else { return }
-        guard let yoloProcessor else { return }
+        guard let yoloProcessor else {
+            // Model failed to load/compile — say so once instead of showing a
+            // live preview that silently never detects anything.
+            if !modelFailureNotified {
+                modelFailureNotified = true
+                DispatchQueue.main.async {
+                    self.showLiDARNotification("Detection engine failed to load — please restart the app")
+                }
+            }
+            return
+        }
 
         latestPixelBuffer = nil
         let portrait = latestIsPortrait
@@ -1122,10 +1138,15 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
     }
 
     func setSessionPresetIfAvailable(_ preset: AVCaptureSession.Preset) {
-        if session.canSetSessionPreset(preset) {
-            session.beginConfiguration()
-            session.sessionPreset = preset
-            session.commitConfiguration()
+        // AVCaptureSession config is not thread-safe; the thermal Combine sink
+        // calls this from main while sessionQueue may be mid-setup. Serialize.
+        Self.sessionQueue.async { [weak self] in
+            guard let self else { return }
+            if session.canSetSessionPreset(preset) {
+                session.beginConfiguration()
+                session.sessionPreset = preset
+                session.commitConfiguration()
+            }
         }
     }
 
@@ -1224,11 +1245,16 @@ extension CameraViewModel {
     }
 
     private func takeProcessingBreak() {
-        // Pause processing briefly to reduce thermal load
+        // Pause processing briefly to reduce thermal load. The resume is a
+        // cancellable work item: stopSession() cancels it so leaving the camera
+        // screen during a break no longer relights the camera on the Home screen.
         pauseCameraAndProcessing()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
+        thermalResumeWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
             self?.resumeCameraAndProcessing()
         }
+        thermalResumeWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0, execute: work)
     }
 
     func enableMemoryPressureRelief() {

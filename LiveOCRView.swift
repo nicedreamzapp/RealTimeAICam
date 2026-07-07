@@ -665,18 +665,21 @@ struct LiveOCRView: View {
                         viewModel.translateSpanishText { success in
                             isTranslating = false
                             if success {
+                                // Set BEFORE speak(): empty text invokes the
+                                // completion synchronously, and setting it after
+                                // left the button stuck green with no audio.
+                                isSpeaking = true
                                 viewModel.speak(text: viewModel.translatedText, voiceIdentifier: selectedVoiceIdentifier) {
                                     isSpeaking = false
                                 }
-                                isSpeaking = true
                             }
                         }
                     } else {
                         let textToSpeak = ocrMode == .english ? viewModel.recognizedText : viewModel.translatedText
+                        isSpeaking = true
                         viewModel.speak(text: textToSpeak, voiceIdentifier: selectedVoiceIdentifier) {
                             isSpeaking = false
                         }
-                        isSpeaking = true
                     }
                 }
             }

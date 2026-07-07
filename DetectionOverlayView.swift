@@ -6,28 +6,26 @@ struct DetectionOverlayView: View {
     let isPortrait: Bool
     let orientation: UIDeviceOrientation
 
-    // Create a color palette for unique object colors
-    private var objectColors: [String: Color] {
-        var colors: [String: Color] = [:]
-        let vibrantColors: [Color] = [
-            Color(red: 1.0, green: 0.2, blue: 0.4), // Hot Pink
-            Color(red: 0.0, green: 0.9, blue: 1.0), // Cyan
-            Color(red: 0.5, green: 1.0, blue: 0.0), // Lime Green
-            Color(red: 1.0, green: 0.5, blue: 0.0), // Orange
-            Color(red: 0.8, green: 0.0, blue: 1.0), // Purple
-            Color(red: 1.0, green: 1.0, blue: 0.0), // Yellow
-            Color(red: 0.0, green: 0.5, blue: 1.0), // Sky Blue
-            Color(red: 1.0, green: 0.0, blue: 0.5), // Magenta
-            Color(red: 0.0, green: 1.0, blue: 0.5), // Spring Green
-            Color(red: 1.0, green: 0.7, blue: 0.0), // Gold
-        ]
+    private static let vibrantColors: [Color] = [
+        Color(red: 1.0, green: 0.2, blue: 0.4), // Hot Pink
+        Color(red: 0.0, green: 0.9, blue: 1.0), // Cyan
+        Color(red: 0.5, green: 1.0, blue: 0.0), // Lime Green
+        Color(red: 1.0, green: 0.5, blue: 0.0), // Orange
+        Color(red: 0.8, green: 0.0, blue: 1.0), // Purple
+        Color(red: 1.0, green: 1.0, blue: 0.0), // Yellow
+        Color(red: 0.0, green: 0.5, blue: 1.0), // Sky Blue
+        Color(red: 1.0, green: 0.0, blue: 0.5), // Magenta
+        Color(red: 0.0, green: 1.0, blue: 0.5), // Spring Green
+        Color(red: 1.0, green: 0.7, blue: 0.0), // Gold
+    ]
 
-        let sortedObjects = detectedObjects.sorted { $0.id.uuidString < $1.id.uuidString }
-        for (index, object) in sortedObjects.enumerated() {
-            let colorIndex = index % vibrantColors.count
-            colors[object.id.uuidString] = vibrantColors[colorIndex]
-        }
-        return colors
+    // Color keyed to the track's stable UUID: an object keeps its color for as
+    // long as it's tracked. The old sorted-index scheme reassigned every box's
+    // color whenever any object appeared or disappeared (rainbow flicker).
+    private func objectColor(_ id: String) -> Color {
+        var hash: UInt64 = 5381
+        for b in id.utf8 { hash = hash &* 33 &+ UInt64(b) }
+        return Self.vibrantColors[Int(hash % UInt64(Self.vibrantColors.count))]
     }
 
     var body: some View {
@@ -47,10 +45,10 @@ struct DetectionOverlayView: View {
 
                     // Draw bounding box with animation
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(objectColors[object.id.uuidString]?.opacity(0.15) ?? Color.blue.opacity(0.15))
+                        .fill(objectColor(object.id.uuidString).opacity(0.15))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(objectColors[object.id.uuidString]?.opacity(0.5) ?? Color.blue.opacity(0.5), lineWidth: 2)
+                                .stroke(objectColor(object.id.uuidString).opacity(0.5), lineWidth: 2)
                         )
                         .frame(width: displayRect.width, height: displayRect.height)
                         .position(x: displayRect.midX, y: displayRect.midY)
@@ -67,7 +65,7 @@ struct DetectionOverlayView: View {
                         .padding(.vertical, 3)
                         .background(
                             Capsule()
-                                .fill(objectColors[labelPosition.objectId]?.opacity(0.25) ?? Color.blue.opacity(0.25))
+                                .fill(objectColor(labelPosition.objectId).opacity(0.25))
                         )
                         .shadow(color: .black.opacity(0.3), radius: 2, x: 1, y: 1)
                         .rotationEffect(getLabelRotation())

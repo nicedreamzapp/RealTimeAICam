@@ -11,6 +11,7 @@ struct SettingsOverlayView: View {
     @StateObject private var buttonDebouncer = ButtonPressDebouncer()
 
     @State private var copyHistory: [String] = UserDefaults.standard.stringArray(forKey: "ocrCopyHistory") ?? []
+    @State private var copiedIndex: Int?
 
     var body: some View {
         ZStack {
@@ -125,7 +126,7 @@ struct SettingsOverlayView: View {
                                         .padding(.vertical, 20)
                                 } else {
                                     VStack(spacing: 8) {
-                                        ForEach(Array(copyHistory.enumerated()), id: \.offset) { _, text in
+                                        ForEach(Array(copyHistory.enumerated()), id: \.offset) { index, text in
                                             HStack {
                                                 Text(text)
                                                     .font(.system(.body, design: .monospaced))
@@ -138,11 +139,26 @@ struct SettingsOverlayView: View {
 
                                                         let generator = UINotificationFeedbackGenerator()
                                                         generator.notificationOccurred(.success)
+                                                        // Visible confirmation alongside the haptic
+                                                        withAnimation(.easeIn(duration: 0.15)) { copiedIndex = index }
+                                                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                                                            withAnimation(.easeOut(duration: 0.3)) {
+                                                                if copiedIndex == index { copiedIndex = nil }
+                                                            }
+                                                        }
                                                     }
                                                 }) {
-                                                    Image(systemName: "doc.on.doc")
-                                                        .font(.body)
-                                                        .foregroundStyle(.blue)
+                                                    if copiedIndex == index {
+                                                        HStack(spacing: 3) {
+                                                            Image(systemName: "checkmark.circle.fill")
+                                                            Text("Copied").font(.caption.bold())
+                                                        }
+                                                        .foregroundStyle(.green)
+                                                    } else {
+                                                        Image(systemName: "doc.on.doc")
+                                                            .font(.body)
+                                                            .foregroundStyle(.blue)
+                                                    }
                                                 }
                                             }
                                             .padding(12)

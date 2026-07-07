@@ -23,6 +23,7 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
     private let speechSynthesizer = AVSpeechSynthesizer()
     private var announcementQueue: [String] = []
     private var isProcessingQueue = false
+    private var announceGeneration = 0
     private var lastAnnouncementTime = Date.distantPast
     private var lastSpokenByClass: [String: Date] = [:] // Track by class name
 
@@ -195,12 +196,16 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
 
         speechSynthesizer.speak(utterance)
 
-        // Safety timeout - force continue if delegate fails
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-            if self?.isSpeaking == true {
-                self?.isSpeaking = false
-                self?.processNextInQueue()
-            }
+        // Safety timeout - force continue if delegate fails. Scaled to the
+        // utterance length (the old fixed 2s cut off anything longer and let a
+        // stale timer clobber the NEXT utterance) and generation-guarded.
+        announceGeneration += 1
+        let generation = announceGeneration
+        let timeout = max(2.0, Double(text.count) * 0.11 + 0.8)
+        DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
+            guard let self, announceGeneration == generation, isSpeaking else { return }
+            isSpeaking = false
+            processNextInQueue()
         }
     }
 
