@@ -410,17 +410,31 @@ final class FixedSpanishEngine {
         return out
     }
 
+    // "el gato se abalanzó" must not become "the cat He pounced": when the
+    // sentence already has a subject (a noun right before the verb), strip the
+    // subject pronoun some dictionary verb translations carry embedded.
+    private func stripEmbeddedSubject(_ verbTr: String) -> String {
+        let lower = verbTr.lowercased() + " "
+        for s in Self.subjectStarts where lower.hasPrefix(s) {
+            return String(verbTr.dropFirst(s.count))
+        }
+        return verbTr
+    }
+
     private func englishPieces(
         from items: [(String, String?)],
         unknowns: inout [String], total: inout Int, translated: inout Int
     ) -> [String] {
         var pieces: [String] = []
         pieces.reserveCapacity(items.count)
+        var prevWasNoun = false
         var i = 0
         while i < items.count {
             let (surface, ph) = items[i]
             total += 1
-            if let eng = ph { pieces.append(eng); translated += 1; i += 1; continue }
+            if let eng = ph { pieces.append(eng); translated += 1; prevWasNoun = false; i += 1; continue }
+
+            let pos = posOf(surface)
 
             // Clitic pronoun directly before a verb
             if let obj = Self.cliticObjects[surface], i + 1 < items.count, items[i + 1].1 == nil,
@@ -428,16 +442,23 @@ final class FixedSpanishEngine {
             {
                 let lower = verbTr.lowercased() + " "
                 let subjectEmbedded = Self.subjectStarts.contains { lower.hasPrefix($0) }
-                pieces.append(verbTr)
+                pieces.append(prevWasNoun ? stripEmbeddedSubject(verbTr) : verbTr)
                 if !obj.isEmpty, !subjectEmbedded { pieces.append(obj) }
                 total += 1
                 translated += 2
+                prevWasNoun = false
                 i += 2
                 continue
             }
 
-            if let eng = lookup(surface) { pieces.append(eng); translated += 1 }
-            else { pieces.append(surface); unknowns.append(surface) }
+            if let eng = lookup(surface) {
+                pieces.append(pos == "VERB" && prevWasNoun ? stripEmbeddedSubject(eng) : eng)
+                translated += 1
+            } else {
+                pieces.append(surface)
+                unknowns.append(surface)
+            }
+            prevWasNoun = (pos == "NOUN")
             i += 1
         }
         return pieces
