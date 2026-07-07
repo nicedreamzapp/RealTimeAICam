@@ -122,16 +122,24 @@ private extension Data {
             defer { compression_stream_destroy(stream) }
             stream.pointee.src_ptr = base
             stream.pointee.src_size = srcPtr.count
+            // All input is provided up front, so FINALIZE is correct and lets the
+            // decoder report END/ERROR instead of waiting for more input forever.
+            let flags = Int32(COMPRESSION_STREAM_FINALIZE.rawValue)
             while true {
                 stream.pointee.dst_ptr = dstBuffer
                 stream.pointee.dst_size = bufferSize
-                let status = compression_stream_process(stream, 0)
+                let status = compression_stream_process(stream, flags)
                 let count = bufferSize - stream.pointee.dst_size
                 if count > 0 {
                     output.append(dstBuffer, count: count)
                 }
                 switch status {
                 case COMPRESSION_STATUS_OK:
+                    // No output produced and no input left = truncated/corrupt
+                    // stream; bail out rather than spinning forever.
+                    if count == 0, stream.pointee.src_size == 0 {
+                        throw DecompressionError.processFailed
+                    }
                     continue
                 case COMPRESSION_STATUS_END:
                     return
@@ -206,7 +214,7 @@ struct TranslationResult {
 @MainActor
 final class FixedSpanishEngine {
     // Helper to collect phrases from multiple rule buckets
-    private func collectRulePhrases(_ dicts: [String: Any]) -> [String: String] {
+    private nonisolated func collectRulePhrases(_ dicts: [String: Any]) -> [String: String] {
         var out: [String: String] = [:]
         for (_, v) in dicts {
             if let d = v as? [String: String] {
@@ -229,7 +237,7 @@ final class FixedSpanishEngine {
     // Core stores
     private var dict: [String: String] = [:] // surface (lowercased) → translation
     private var phraseMatcher: PhraseMatcher?
-    private var reflexiveMap: [String: String] = [:] // "se vende" → "for sale"
+    private var reflexiveRules: [(NSRegularExpression, String)] = [] // "se vende" → "for sale", precompiled
 
     // Compiled regex packs (from JSON)
     private var compiledGeneral: [(NSRegularExpression, String)] = []
@@ -356,14 +364,7 @@ final class FixedSpanishEngine {
 
         // Fast reflexive pack for menus/signage/general
         if domain == .restaurant || domain == .signage || domain == .general {
-            if !reflexiveMap.isEmpty {
-                for (k, v) in reflexiveMap {
-                    let pat = "\\b" + NSRegularExpression.escapedPattern(for: k) + "\\b"
-                    if let re = try? NSRegularExpression(pattern: pat, options: [.caseInsensitive]) {
-                        out = re.stringByReplacingMatches(in: out, range: NSRange(out.startIndex..., in: out), withTemplate: v)
-                    }
-                }
-            }
+            out = applyRulePack(reflexiveRules, to: out)
         }
 
         // Built-ins first (surgical, deterministic)
@@ -412,14 +413,7 @@ final class FixedSpanishEngine {
         var out = englishPieces.joined(separator: " ")
 
         if domain == .restaurant || domain == .signage || domain == .general {
-            if !reflexiveMap.isEmpty {
-                for (k, v) in reflexiveMap {
-                    let pat = "\\b" + NSRegularExpression.escapedPattern(for: k) + "\\b"
-                    if let re = try? NSRegularExpression(pattern: pat, options: [.caseInsensitive]) {
-                        out = re.stringByReplacingMatches(in: out, range: NSRange(out.startIndex..., in: out), withTemplate: v)
-                    }
-                }
-            }
+            out = applyRulePack(reflexiveRules, to: out)
         }
 
         out = applyRulePack(builtinPriceAndUnits, to: out)
@@ -551,7 +545,9 @@ final class FixedSpanishEngine {
                 if j < chars.count, chars[j].isLetter {
                     chars[j] = Character(String(chars[j]).capitalized)
                 }
-                i = j
+                // j can equal i when punctuation is followed by a non-letter,
+                // non-space char (e.g. ".)"), so always advance past it.
+                i = j + 1
             } else { i += 1 }
         }
         return String(chars)
@@ -559,14 +555,16 @@ final class FixedSpanishEngine {
 
     // MARK: - Data Loading with Gzip Support (Updated method)
 
-    private func loadSpanishData() async {
-        // Load & decode JSON on main actor, then parse off main actor, then assign on main actor
-        let (master, _) = await MainActor.run { () -> (ESMaster?, URL?) in
+    // nonisolated so decompression, JSON decode, and regex compilation all run off
+    // the main thread — only the final publish hops back to the main actor. Keeping
+    // this @MainActor froze the UI for seconds on the first translate tap.
+    private nonisolated func loadSpanishData() async {
+        let master: ESMaster? = {
             guard let url = locateJSON(),
                   let compressedData = try? Data(contentsOf: url, options: .mappedIfSafe)
             else {
                 print("⚠️ Could not find/load es_final_with_rules*.json.gz")
-                return (nil, nil)
+                return nil
             }
 
             print("📊 Loaded file size: \(compressedData.count) bytes from: \(url.lastPathComponent)")
@@ -589,7 +587,7 @@ final class FixedSpanishEngine {
                 let decoder = JSONDecoder()
                 let master = try decoder.decode(ESMaster.self, from: data)
                 print("✅ Successfully decoded JSON structure")
-                return (master, url)
+                return master
 
             } catch let error as DecompressionError {
                 print("⚠️ Gzip decompression error: \(error.localizedDescription)")
@@ -600,21 +598,19 @@ final class FixedSpanishEngine {
                     let decoder = JSONDecoder()
                     let master = try decoder.decode(ESMaster.self, from: compressedData)
                     print("✅ Successfully parsed as uncompressed JSON")
-                    return (master, url)
+                    return master
                 } catch {
                     print("❌ Failed to parse as uncompressed JSON: \(error)")
-                    return (nil, nil)
+                    return nil
                 }
 
             } catch {
                 print("⚠️ JSON decode error: \(error)")
-                return (nil, nil)
+                return nil
             }
-        }
+        }()
 
         guard let master else { return }
-
-        // Process off-main actor (rest of the method remains the same)
         var newDict: [String: String] = [:]
         if let d = master.dictionary {
             var m: [String: String] = [:]
@@ -699,15 +695,31 @@ final class FixedSpanishEngine {
         // Compile built-ins
         let packs = Self.compileBuiltinRules()
 
-        // Publish to singleton on main actor
+        // Precompile reflexive patterns once (previously rebuilt on every translate call)
+        var reflexiveCompiled: [(NSRegularExpression, String)] = []
+        reflexiveCompiled.reserveCapacity(reflexives.count)
+        for (k, v) in reflexives {
+            let pat = "\\b" + NSRegularExpression.escapedPattern(for: k) + "\\b"
+            if let re = try? NSRegularExpression(pattern: pat, options: [.caseInsensitive]) {
+                reflexiveCompiled.append((re, v))
+            }
+        }
+
+        // Publish to singleton on main actor (let-snapshots keep the closure Sendable-clean)
+        let finalDict = newDict
+        let finalReflexives = reflexiveCompiled
+        let finalGen = gen
+        let finalDia = diaJSON
+        let finalGra = gra
+        let finalCle = cle
         await MainActor.run {
-            self.dict = newDict
+            self.dict = finalDict
             self.phraseMatcher = matcher
-            self.reflexiveMap = reflexives
-            self.compiledGeneral = gen
-            self.compiledDialogueFromJSON = diaJSON
-            self.compiledGrammar = gra
-            self.compiledCleanup = cle
+            self.reflexiveRules = finalReflexives
+            self.compiledGeneral = finalGen
+            self.compiledDialogueFromJSON = finalDia
+            self.compiledGrammar = finalGra
+            self.compiledCleanup = finalCle
 
             self.builtinPriceAndUnits = packs.priceUnits
             self.builtinAlInfinitivo = packs.alInf
@@ -722,7 +734,7 @@ final class FixedSpanishEngine {
         }
     }
 
-    private func locateJSON() -> URL? {
+    private nonisolated func locateJSON() -> URL? {
         // Updated to look for .gz files first, then fallback to .json
         let candidates = [
             ("es_final_with_rules_CLEANED", "json.gz"),
@@ -771,11 +783,11 @@ final class FixedSpanishEngine {
         let dialogue: [(NSRegularExpression, String)]
     }
 
-    private static func rex(_ p: String, _ opt: NSRegularExpression.Options = [.caseInsensitive]) -> NSRegularExpression? {
+    private nonisolated static func rex(_ p: String, _ opt: NSRegularExpression.Options = [.caseInsensitive]) -> NSRegularExpression? {
         try? NSRegularExpression(pattern: p, options: opt)
     }
 
-    private static func compileBuiltinRules() -> Packs {
+    private nonisolated static func compileBuiltinRules() -> Packs {
         // Prices/units
         let pricePatterns: [(String, String)] = [
             (#"(\d+)\s*(€|euros?)\s+el\s+kilo"#, "$1$2 per kilo"),
