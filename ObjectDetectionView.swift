@@ -624,7 +624,7 @@ struct ObjectDetectionView: View {
             Group {
                 if isPortrait {
                     VStack(spacing: 8) {
-                        Slider(value: $viewModel.confidenceThreshold, in: 0.15 ... 1.0, onEditingChanged: { editing in
+                        Slider(value: $viewModel.confidenceThreshold, in: 0.0001 ... 1.0, onEditingChanged: { editing in
                             if !editing {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                     showConfidenceSlider = false
@@ -640,7 +640,7 @@ struct ObjectDetectionView: View {
                     }
                 } else {
                     VStack(spacing: 8) {
-                        Slider(value: $viewModel.confidenceThreshold, in: 0.15 ... 1.0, onEditingChanged: { editing in
+                        Slider(value: $viewModel.confidenceThreshold, in: 0.0001 ... 1.0, onEditingChanged: { editing in
                             if !editing {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                     showConfidenceSlider = false
