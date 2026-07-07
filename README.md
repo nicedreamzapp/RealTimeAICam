@@ -32,6 +32,24 @@ Built specifically for **iPhone** • Works **100% offline** • Privacy-first d
 
 <div align="center">
 
+## 🆕 **In the repo now: YOLOE — 4,585 classes**
+
+The source now includes an upgrade from YOLOv8's 601 classes to **YOLOE
+(prompt-free open-vocabulary), detecting 4,585 object types** — with
+per-anchor decoding baked into the CoreML graph so it keeps realtime speed
+on the Neural Engine. The original YOLOv8 model ships alongside it as an
+automatic fallback (and for iOS 16 devices). Coming to the App Store build
+after on-device testing wraps up.
+
+![YOLOE Classes](https://img.shields.io/badge/YOLOE-4585_Classes-orange?style=for-the-badge)
+![Backward Compatible](https://img.shields.io/badge/YOLOv8_Fallback-Included-success?style=for-the-badge)
+
+</div>
+
+---
+
+<div align="center">
+
 ## 🏆 Project Status & Performance
 
 ### 📱 **Platform & Compatibility**
@@ -197,10 +215,10 @@ graph TB
 ### ⚙️ **Quick Setup**
 ```bash
 # 1. Clone the repository
-git clone https://github.com/nicedreamzapp/nicedreamzapp.git
+git clone https://github.com/nicedreamzapp/RealTimeAICam.git
 
 # 2. Navigate to project
-cd nicedreamzapp
+cd RealTimeAICam
 
 # 3. Open in Xcode
 open "RealTime Ai Cam.xcodeproj"
@@ -310,8 +328,8 @@ Advanced users can swap the included YOLOv8 model with a custom CoreML model:
 ### If this project helped you, please give it a star! ⭐
 
 [![Download on App Store](https://img.shields.io/badge/Download-App%20Store-007AFF?style=for-the-badge&logo=apple&logoColor=white)](https://apps.apple.com/us/app/realtime-ai-cam/id6751230739)
-[![GitHub Stars](https://img.shields.io/github/stars/nicedreamzapp/nicedreamzapp?style=for-the-badge&logo=github)](https://github.com/nicedreamzapp/nicedreamzapp)
-[![GitHub Forks](https://img.shields.io/github/forks/nicedreamzapp/nicedreamzapp?style=for-the-badge&logo=github)](https://github.com/nicedreamzapp/nicedreamzapp/fork)
+[![GitHub Stars](https://img.shields.io/github/stars/nicedreamzapp/RealTimeAICam?style=for-the-badge&logo=github)](https://github.com/nicedreamzapp/RealTimeAICam)
+[![GitHub Forks](https://img.shields.io/github/forks/nicedreamzapp/RealTimeAICam?style=for-the-badge&logo=github)](https://github.com/nicedreamzapp/RealTimeAICam/fork)
 
 ### 🚀 **Made with ❤️ by NiceDreamzApps**
 
