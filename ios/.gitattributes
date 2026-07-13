@@ -1,0 +1,14 @@
+
+
+# Keep remote (GitHub) copies for docs/images so pushes never overwrite them
+README.md merge=theirs
+*.png      merge=theirs
+*.jpg      merge=theirs
+*.jpeg     merge=theirs
+
+# Xcode: avoid pbxproj/xcworkspace merge hell — keep OUR local version on merges
+*.pbxproj        merge=ours
+*.xcworkspace    merge=ours
+*.xcbkptlist     merge=ours
+*.xcuserdatad/** merge=ours
+xcshareddata/**  merge=ours
