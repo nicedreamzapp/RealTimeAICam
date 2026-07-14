@@ -22,7 +22,7 @@ SwiftUI + CoreML + Metal + Neural Engine. Full source, Xcode project, and the YO
 
 The Android port — TensorFlow Lite YOLOv8 (601 classes), with the model and conversion tooling included. Source in [`android/`](android/).
 
-**Status:** Coming soon to Google Play. The code is available now in [`android/`](android/).
+**Status:** Submitted to Google Play — review in progress (July 2026). The code is available now in [`android/`](android/).
 
 ## Links
 
