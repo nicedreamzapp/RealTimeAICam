@@ -6,6 +6,10 @@
 
 YOLOv8 with all **601 Open Images classes** at ~10 FPS, on-device English OCR, offline Spanish→English translation, and per-object LiDAR depth. Works 100% offline. Privacy-first.
 
+### [![Download on the App Store](https://img.shields.io/badge/Download_on_the-App_Store-0D96F6?style=for-the-badge&logo=apple&logoColor=white)](https://apps.apple.com/us/app/id6751230739)
+
+**[Get RealTime AI Cam on the App Store](https://apps.apple.com/us/app/id6751230739) — free, no account, no ads.**
+
 [![License](https://img.shields.io/badge/License-GPL--3.0-blue?style=flat-square)]()
 
 </div>
