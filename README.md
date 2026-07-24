@@ -6,7 +6,7 @@
 
 YOLOv8 with all **601 Open Images classes** at ~10 FPS, on-device English OCR, offline Spanish→English translation, and per-object LiDAR depth. Works 100% offline. Privacy-first.
 
-### [![Download on the App Store](https://img.shields.io/badge/Download_on_the-App_Store-0D96F6?style=for-the-badge&logo=apple&logoColor=white)](https://apps.apple.com/us/app/id6751230739)
+### [![Download on the App Store](https://img.shields.io/badge/Download_on_the-App_Store-0D96F6?style=for-the-badge&logo=apple&logoColor=white)](https://apps.apple.com/us/app/id6751230739) [![Get it on Google Play](https://img.shields.io/badge/Get_it_on-Google_Play-01875f?style=for-the-badge&logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.mattmacosko.realtimeaicam)
 
 **[Get RealTime AI Cam on the App Store](https://apps.apple.com/us/app/id6751230739) — free, no account, no ads.**
 
@@ -20,7 +20,7 @@ This repo holds both platforms, cleanly separated:
 
 SwiftUI + CoreML + Metal + Neural Engine. Full source, Xcode project, and the YOLOv8 CoreML model live in [`ios/`](ios/).
 
-**Status:** On the App Store — [download free](https://apps.apple.com/us/app/realtime-ai-cam/id6751230739).
+**Status:** Live on the App Store and Google Play — [iPhone](https://apps.apple.com/us/app/realtime-ai-cam/id6751230739) · [Android](https://play.google.com/store/apps/details?id=com.mattmacosko.realtimeaicam), free on both.
 
 ## 🤖 Android
 
