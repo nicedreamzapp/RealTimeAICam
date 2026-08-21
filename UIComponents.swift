@@ -16,6 +16,8 @@ struct ShadedEmoji: View {
             Text(emoji)
                 .font(.system(size: size))
         }
+        // Decorative only — the containing control carries the real label
+        .accessibilityHidden(true)
     }
 }
 
@@ -63,6 +65,10 @@ struct OutlinedText: View {
                 .font(.system(size: fontSize, weight: .bold, design: .default))
                 .foregroundColor(fillColor)
         }
+        // The outline is five stacked copies of the same string. Without this,
+        // VoiceOver reads the text five times over.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(text)
     }
 }
 
@@ -248,6 +254,31 @@ struct AnimatedVoicePicker: View {
         }
     }
 
+    /// Extracted from the grid body on purpose: inline, the label maths plus the
+    /// selected-state background put the whole ForEach past the type-checker's
+    /// time budget and the file stopped compiling.
+    @ViewBuilder
+    private func voiceTile(for voice: AVSpeechSynthesisVoice, isSelected: Bool) -> some View {
+        let tag = qualityTag(for: voice)
+        let cleanedName = voice.name
+            .replacingOccurrences(of: " (Enhanced)", with: "")
+            .replacingOccurrences(of: " (Premium)", with: "")
+        let gridLabel: String = tag.isEmpty ? cleanedName : cleanedName + " " + tag
+        VStack(spacing: 4) {
+            Text(genderEmoji(for: voice))
+                .font(.system(size: 20))
+            Text(gridLabel)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.white)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isSelected ? Color.purple.opacity(0.5) : Color.black.opacity(0.6))
+        )
+    }
+
     private func qualityTag(for voice: AVSpeechSynthesisVoice) -> String {
         if isPremiumPlus(voice) {
             return "(Premium)"
@@ -260,6 +291,22 @@ struct AnimatedVoicePicker: View {
 
     private var selectedVoice: AVSpeechSynthesisVoice? {
         premiumEnglishVoices.first(where: { $0.identifier == viewModel.selectedVoiceIdentifier })
+    }
+
+    /// Marks the currently chosen voice as selected for VoiceOver.
+    private func traits(for voice: AVSpeechSynthesisVoice) -> AccessibilityTraits {
+        voice.identifier == viewModel.selectedVoiceIdentifier ? [.isButton, .isSelected] : [.isButton]
+    }
+
+    /// Spoken name for a voice, e.g. "Ava, Premium quality"
+    private func accessibilityLabel(for voice: AVSpeechSynthesisVoice) -> String {
+        let name = voice.name
+            .replacingOccurrences(of: " (Enhanced)", with: "")
+            .replacingOccurrences(of: " (Premium)", with: "")
+        let tag = qualityTag(for: voice)
+            .replacingOccurrences(of: "(", with: "")
+            .replacingOccurrences(of: ")", with: "")
+        return tag.isEmpty ? name : "\(name), \(tag) quality"
     }
 
     var body: some View {
@@ -293,6 +340,13 @@ struct AnimatedVoicePicker: View {
         .opacity(animateIn ? 1 : 0)
         .scaleEffect(animateIn ? 1 : 0.7)
         .animation(.easeOut(duration: 0.3), value: animateIn)
+        // These must stay ABOVE the overlay below. Applied after it, they collapse
+        // the popup grid into this one element and the voice buttons become
+        // unreachable with VoiceOver.
+        .accessibilityLabel("Voice Selection")
+        .accessibilityValue(selectedVoice?.name ?? "No voice selected")
+        .accessibilityHint(showVoiceGrid ? "Closes the list of voices" : "Opens a list of voices to choose from")
+        .accessibilityAddTraits(.isButton)
         .overlay(
             Group {
                 if showVoiceGrid {
@@ -305,6 +359,7 @@ struct AnimatedVoicePicker: View {
                             }
                         }
                         .offset(y: -400)
+                        .accessibilityHidden(true)
 
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                         ForEach(premiumEnglishVoices, id: \.identifier) { voice in
@@ -315,26 +370,15 @@ struct AnimatedVoicePicker: View {
                                     showVoiceGrid = false
                                 }
                             }) {
-                                let tag = qualityTag(for: voice)
-                                let cleanedName = voice.name
-                                    .replacingOccurrences(of: " (Enhanced)", with: "")
-                                    .replacingOccurrences(of: " (Premium)", with: "")
-                                VStack(spacing: 4) {
-                                    Text(genderEmoji(for: voice))
-                                        .font(.system(size: 20))
-                                    Text(cleanedName + (tag.isEmpty ? "" : " \(tag)"))
-                                        .font(.system(size: 11, weight: .medium))
-                                        .foregroundColor(.white)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 6)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .fill(voice.identifier == viewModel.selectedVoiceIdentifier ?
-                                            Color.purple.opacity(0.5) :
-                                            Color.black.opacity(0.6))
+                                voiceTile(
+                                    for: voice,
+                                    isSelected: voice.identifier == viewModel.selectedVoiceIdentifier
                                 )
                             }
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(accessibilityLabel(for: voice))
+                            .accessibilityHint("Sets this as the voice that reads text aloud")
+                            .accessibilityAddTraits(traits(for: voice))
                         }
                     }
                     .padding(8)

@@ -90,6 +90,8 @@ struct ObjectDetectionView: View {
                                 )
                             }
                             .padding(.leading, max(geometry.safeAreaInsets.leading + 16, 28))
+                            .accessibilityLabel("Back")
+                            .accessibilityHint("Returns to the home screen")
 
                             Spacer()
 
@@ -119,6 +121,9 @@ struct ObjectDetectionView: View {
                                 )
                                 .fixedSize()
                                 .layoutPriority(1)
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel("Speed")
+                                .accessibilityValue("\(Int(viewModel.framesPerSecond)) frames per second")
                             }
                             .frame(maxWidth: .infinity, alignment: .trailing)
                         }
@@ -149,6 +154,12 @@ struct ObjectDetectionView: View {
                                         )
                                 )
                                 .padding(.trailing, max(geometry.safeAreaInsets.trailing + 28, 36))
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel(
+                                    viewModel.detectedObjectCount == 1
+                                        ? "1 object in view"
+                                        : "\(viewModel.detectedObjectCount) objects in view"
+                                )
                             }
                         }
 
@@ -253,6 +264,8 @@ struct ObjectDetectionView: View {
                             )
                             .transition(.scale(scale: 0.9).combined(with: .opacity))
                             .animation(.spring(response: 0.3), value: viewModel.lidarNotificationMessage)
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(message)
                             Spacer()
                         }
                         .rotationEffect(isPortrait ? .zero : rotationAngle)
@@ -276,6 +289,13 @@ struct ObjectDetectionView: View {
                 if granted {
                     // Camera access granted
                 }
+            }
+        }
+        .onChange(of: viewModel.lidarNotificationMessage) { newValue in
+            // These are on-screen toasts. Speak them so a VoiceOver user hears
+            // why LiDAR just switched off instead of being left guessing.
+            if let message = newValue, !message.isEmpty {
+                UIAccessibility.post(notification: .announcement, argument: message)
             }
         }
         .onChange(of: lidar.isAvailable) { newValue in
@@ -400,6 +420,11 @@ struct ObjectDetectionView: View {
                         )
                         .opacity(viewModel.isLiDARSupported && viewModel.cameraPosition == .back && LiDARManager.shared.isAvailable ? 1.0 : 0.0)
                         .disabled(!(viewModel.isLiDARSupported && viewModel.cameraPosition == .back && LiDARManager.shared.isAvailable))
+                        .accessibilityLabel(
+                            viewModel.useLiDAR ? "Turn off distance measurement" : "Turn on distance measurement"
+                        )
+                        .accessibilityHint("Announces how far away each object is, in feet")
+                        .accessibilityValue(viewModel.useLiDAR ? "On" : "Off")
 
                         Button(action: {
                             guard buttonDebouncer.canPress("ObjectDetectionView-6") else { return }
@@ -445,6 +470,14 @@ struct ObjectDetectionView: View {
                             .background(Circle().fill(Color.black.opacity(0.25)))
                             .clipShape(Circle())
                         }
+                        // Accessibility must come before the overlay, or the slider
+                        // inside it gets folded into this element and VoiceOver
+                        // users can never reach it.
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("Detection sensitivity")
+                        .accessibilityValue("\(Int(viewModel.confidenceThreshold * 100)) percent")
+                        .accessibilityHint("Opens a slider to control how sure the app must be before naming something")
+                        .accessibilityAddTraits(.isButton)
                         .overlay(
                             confidenceSliderOverlay(isPortrait: true)
                         )
@@ -573,6 +606,11 @@ struct ObjectDetectionView: View {
                 .background(Circle().fill(Color.black.opacity(0.25)))
                 .clipShape(Circle())
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Detection sensitivity")
+            .accessibilityValue("\(Int(viewModel.confidenceThreshold * 100)) percent")
+            .accessibilityHint("Opens a slider to control how sure the app must be before naming something")
+            .accessibilityAddTraits(.isButton)
             .overlay(
                 confidenceSliderOverlay(isPortrait: false)
             )
@@ -634,6 +672,8 @@ struct ObjectDetectionView: View {
                         .accentColor(.blue)
                         .rotationEffect(.degrees(-90))
                         .frame(width: 160, height: 32)
+                        .accessibilityLabel("Detection sensitivity")
+                        .accessibilityValue("\(Int(viewModel.confidenceThreshold * 100)) percent")
                         Text("\(Int(viewModel.confidenceThreshold * 100))%")
                             .font(.caption.bold())
                             .foregroundColor(.primary)
@@ -649,6 +689,8 @@ struct ObjectDetectionView: View {
                         })
                         .accentColor(.blue)
                         .frame(width: 160, height: 32)
+                        .accessibilityLabel("Detection sensitivity")
+                        .accessibilityValue("\(Int(viewModel.confidenceThreshold * 100)) percent")
                         Text("\(Int(viewModel.confidenceThreshold * 100))%")
                             .font(.caption.bold())
                             .foregroundColor(.primary)

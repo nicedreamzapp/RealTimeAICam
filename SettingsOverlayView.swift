@@ -21,6 +21,7 @@ struct SettingsOverlayView: View {
                         }
                     }
                 }
+                .accessibilityHidden(true)
 
             VStack(spacing: 0) {
                 HStack {
@@ -42,6 +43,7 @@ struct SettingsOverlayView: View {
                             .symbolRenderingMode(.hierarchical)
                             .foregroundStyle(.secondary)
                     }
+                    .accessibilityLabel("Close settings")
                 }
                 .padding()
 
@@ -71,6 +73,8 @@ struct SettingsOverlayView: View {
                                         }
                                         .font(.caption)
                                         .foregroundStyle(.red)
+                                        .accessibilityLabel("Clear copy history")
+                                        .accessibilityHint("Deletes every saved copy from this device")
                                     }
                                 }
 
@@ -116,6 +120,8 @@ struct SettingsOverlayView: View {
                                                             .foregroundStyle(.blue)
                                                     }
                                                 }
+                                                .accessibilityLabel(copiedIndex == index ? "Copied" : "Copy this saved text")
+                                                .accessibilityHint("Copies it to the clipboard")
                                             }
                                             .padding(12)
                                             .background(
@@ -203,6 +209,8 @@ struct SettingsOverlayView: View {
             .shadow(radius: 20)
             .scaleEffect(isPresented ? 1 : 0.9)
             .opacity(isPresented ? 1 : 0)
+            // Keeps VoiceOver inside the panel while it is open
+            .accessibilityAddTraits(.isModal)
         }
         .gesture(
             DragGesture().onEnded { value in

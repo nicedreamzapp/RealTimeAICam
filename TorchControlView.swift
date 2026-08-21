@@ -22,6 +22,8 @@ struct TorchPresetButton: View {
                         .stroke(isSelected ? Color.yellow : Color.white.opacity(0.3), lineWidth: 1)
                 )
         }
+        .accessibilityLabel("Flashlight \(percentage) percent")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])
     }
 }
 
@@ -50,9 +52,6 @@ struct TorchButton: View {
             }
         }) {
             Image(systemName: torchLevel > 0 ? "flashlight.on.fill" : "flashlight.off.fill")
-                .accessibilityLabel(torchLevel > 0 ? "Turn off flashlight" : "Turn on flashlight")
-                .accessibilityHint("Controls camera flashlight brightness. Double tap to adjust brightness levels")
-                .accessibilityValue(torchLevel > 0 ? "Flashlight is on at \(Int(torchLevel * 100)) percent" : "Flashlight is off")
                 .symbolRenderingMode(.palette)
                 .foregroundStyle(torchLevel > 0 ? .yellow : .primary)
                 .font(.system(size: 20))
@@ -66,6 +65,11 @@ struct TorchButton: View {
                         )
                 )
         }
+        // Must stay above the preset overlay below, otherwise the 25/50/75/100
+        // percent buttons collapse into this element and become unreachable.
+        .accessibilityLabel(torchLevel > 0 ? "Turn off flashlight" : "Turn on flashlight")
+        .accessibilityValue(torchLevel > 0 ? "On at \(Int(torchLevel * 100)) percent" : "Off")
+        .accessibilityHint(torchLevel > 0 ? "Turns the flashlight off" : "Opens the brightness choices")
         .overlay(
             // Vertical preset buttons positioned with overlay
             Group {

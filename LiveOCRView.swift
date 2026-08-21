@@ -4,11 +4,16 @@ import SwiftUI
 enum OCRMode {
     case english
     case spanishToEnglish
+    /// Same camera and OCR as .english — but instead of reading the page top to
+    /// bottom it says the point of it: who sent it, what it is, what's due.
+    case mail
 }
 
 // Enhanced Camera Preview with zoom support
 struct EnhancedCameraPreview: UIViewRepresentable {
     let onFrame: (CVPixelBuffer) -> Void
+    /// Mail mode captures stills of a whole page instead of sampling video.
+    var highResolution: Bool = false
     let cameraManager: ZoomCameraManager
     var onCameraReady: ((CameraPreviewView) -> Void)?
     @ObservedObject var viewModel: LiveOCRViewModel
@@ -19,6 +24,12 @@ struct EnhancedCameraPreview: UIViewRepresentable {
     func makeUIView(context _: Context) -> EnhancedCameraPreviewView {
         let view = EnhancedCameraPreviewView()
         view.onFrame = onFrame
+        if highResolution {
+            // setupCamera() already kicked off on its own queue with the default
+            // preset, so flip the flag and make it configure again.
+            view.useHighResolutionCapture = true
+            view.reconfigureCamera()
+        }
         view.cameraManager = cameraManager
         view.isUltraWide = viewModel.isUltraWide
         view.cameraPosition = viewModel.cameraPosition
@@ -89,6 +100,7 @@ struct TranslationActionsPopup: View {
                         onContinue()
                     }
                 }
+                .accessibilityHidden(true)
 
             // Glass popup
             VStack(spacing: 20) {
@@ -187,6 +199,9 @@ struct TranslationActionsPopup: View {
             .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
             .scaleEffect(isPresented ? 1 : 0.9)
             .opacity(isPresented ? 1 : 0)
+            // Keeps VoiceOver inside the popup instead of wandering back to the
+            // camera controls underneath it.
+            .accessibilityAddTraits(.isModal)
         }
     }
 }
@@ -207,6 +222,13 @@ struct LiveOCRView: View {
 
     @State private var showTorchPresets = false
 
+    /// What the last capture read. Mail mode is aim-then-capture: stitching live
+    /// video frames was compensating for reading a page at 720p, and no amount of
+    /// stitching fixes text the recognizer never resolved.
+    @State private var scannedSummary = ""
+    @State private var scannedText = ""
+    @State private var isScanning = false
+
     @StateObject private var buttonDebouncer = ButtonPressDebouncer() // Debouncer to avoid rapid multiple presses
 
     // Created ONCE for the settings overlay. Building CameraViewModel() inline in
@@ -216,19 +238,84 @@ struct LiveOCRView: View {
 
     // Computed property for display text
     private var displayText: String {
-        if ocrMode == .english {
+        switch ocrMode {
+        case .english:
             viewModel.recognizedText
-        } else {
+        case .mail:
+            mailSummary
+        case .spanishToEnglish:
             viewModel.isTranslated ? viewModel.translatedText : viewModel.recognizedText
         }
     }
 
+    /// The one sentence a sighted person gets from a glance. Empty until the OCR
+    /// has enough of the page to be worth summarizing — a third of a letter
+    /// produces a confident wrong answer, which is worse than saying nothing.
+    private var mailSummary: String {
+        // Mail mode is aim-then-capture, so the screen is silent until the shutter
+        // is pressed. Say so, otherwise holding a letter up looks like a dead app.
+        scannedSummary.isEmpty
+            ? "Point the camera at the whole page, then press Read this page."
+            : scannedSummary
+    }
+
+    /// Capture one full-resolution still, read it properly, say what it is.
+    private func scanPage() {
+        guard !isScanning else { return }
+        isScanning = true
+        viewModel.stopSpeaking()
+        isSpeaking = false
+        // Wipe the last page before the new one arrives. Anything left on screen
+        // during the scan is from a different piece of paper.
+        scannedText = ""
+        scannedSummary = "Reading the page…"
+
+        cameraPreviewRef?.capturePhoto { image in
+            guard let image else {
+                isScanning = false
+                scannedSummary = "The camera couldn't take the picture. Try again."
+                return
+            }
+            PageScanner.read(image) { page in
+                DispatchQueue.main.async {
+                    scannedText = page.text
+                    // The pattern-matched version is the floor, not the answer: it
+                    // is what gets said if the model can't run or can't help.
+                    let fallback = MailSummarizer.summarize(page.text).spoken
+                    scannedSummary = "Working out what it says…"
+
+                    guard #available(iOS 17.0, *) else {
+                        say(fallback)
+                        return
+                    }
+                    Task {
+                        let said = await OnDeviceNarrator.shared.narrate(page.text)
+                        await MainActor.run { say(said ?? fallback) }
+                    }
+                }
+            }
+        }
+    }
+
+    /// One place where a sentence becomes speech, so the model path and the
+    /// fallback path can never drift apart.
+    private func say(_ sentence: String) {
+        isScanning = false
+        scannedSummary = sentence
+        // Spoken without being asked — the whole point is not having to find a
+        // button after pointing the camera.
+        viewModel.speak(text: sentence, voiceIdentifier: selectedVoiceIdentifier) {
+            isSpeaking = false
+        }
+        isSpeaking = true
+    }
+
     // Header text that changes based on state
     private var headerText: String {
-        if ocrMode == .english {
-            "Detected"
-        } else {
-            viewModel.isTranslated ? "Translation" : "Spanish Text"
+        switch ocrMode {
+        case .english: "Detected"
+        case .mail: "Summary"
+        case .spanishToEnglish: viewModel.isTranslated ? "Translation" : "Spanish Text"
         }
     }
 
@@ -258,10 +345,14 @@ struct LiveOCRView: View {
                 // Full-screen camera preview
                 EnhancedCameraPreview(
                     onFrame: { pixelBuffer in
+                        // Mail mode reads from a captured still, so the live stream
+                        // is only there for aiming.
+                        guard ocrMode != .mail else { return }
                         if !viewModel.isPinching, !isTranslating {
                             viewModel.processFrame(pixelBuffer, mode: ocrMode)
                         }
                     },
+                    highResolution: ocrMode == .mail,
                     cameraManager: viewModel.cameraManager,
                     onCameraReady: { cameraView in
                         cameraPreviewRef = cameraView
@@ -325,11 +416,14 @@ struct LiveOCRView: View {
                             )
                         }
                         .fixedSize()
+                        .accessibilityLabel("Back")
+                        .accessibilityHint("Returns to the home screen")
 
                         Spacer()
 
                         // Mode indicator (right side)
-                        Text(ocrMode == .english ? "English" : "Span → Eng")
+                        Text(ocrMode == .english ? "English"
+                             : (ocrMode == .mail ? "Summarize" : "Span → Eng"))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 12)
@@ -340,6 +434,11 @@ struct LiveOCRView: View {
                                     .opacity(0.85)
                             )
                             .fixedSize()
+                            .accessibilityLabel("Mode")
+                            .accessibilityValue(
+                                ocrMode == .english ? "Reading English text"
+                                : (ocrMode == .mail ? "Summarizing what you point at"
+                                   : "Translating Spanish to English"))
                     }
                     .padding(.horizontal, max(geometry.safeAreaInsets.leading, geometry.safeAreaInsets.trailing) + 20)
                     .padding(.top, geometry.safeAreaInsets.top + 15)
@@ -382,14 +481,67 @@ struct LiveOCRView: View {
                                 .fill(.ultraThinMaterial.opacity(0.95))
                         )
                         .onTapGesture {
+                            if ocrMode == .mail, !scannedText.isEmpty {
+                                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                                impactFeedback.impactOccurred()
+                                viewModel.stopSpeaking()
+                                viewModel.speak(text: scannedText,
+                                                voiceIdentifier: selectedVoiceIdentifier) {
+                                    isSpeaking = false
+                                }
+                                isSpeaking = true
+                            }
                             if ocrMode == .spanishToEnglish, viewModel.isTranslated {
                                 let impactFeedback = UIImpactFeedbackGenerator(style: .light)
                                 impactFeedback.impactOccurred()
                                 showTranslationPopup = true
                             }
                         }
+                        // Read as one block instead of a status dot, a heading and a
+                        // scroll view the user has to hunt through.
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(headerText)
+                        .accessibilityValue(displayText)
+                        .accessibilityHint(
+                            ocrMode == .mail
+                                ? "Double tap to hear all of it"
+                                : (ocrMode == .spanishToEnglish && viewModel.isTranslated
+                                    ? "Double tap for copy, continue reading or new scan"
+                                    : "")
+                        )
+                        .accessibilityAddTraits(
+                            ocrMode == .mail
+                                || (ocrMode == .spanishToEnglish && viewModel.isTranslated)
+                                ? [.isButton] : []
+                        )
                         .padding(.horizontal, 20)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+
+                    // Mail mode's primary action. Big, centred, and the only thing
+                    // you have to find — aim at the page and press it.
+                    if ocrMode == .mail {
+                        Button(action: { scanPage() }) {
+                            HStack(spacing: 10) {
+                                Image(systemName: isScanning ? "hourglass" : "doc.text.viewfinder")
+                                    .font(.system(size: 22, weight: .semibold))
+                                Text(isScanning ? "Reading…" : "Read this page")
+                                    .font(.system(size: 19, weight: .semibold))
+                            }
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(
+                                Capsule()
+                                    .fill(Color.purple.opacity(isScanning ? 0.35 : 0.75))
+                                    .overlay(Capsule().stroke(Color.white.opacity(0.5), lineWidth: 1.5))
+                            )
+                        }
+                        .disabled(isScanning)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 14)
+                        .accessibilityLabel(isScanning ? "Reading the page" : "Read this page")
+                        .accessibilityHint("Takes a picture of the page and says what it is")
                     }
 
                     // Bottom action buttons - using extracted metrics
@@ -414,6 +566,8 @@ struct LiveOCRView: View {
                                 )
                                 .contentShape(Circle())
                         }
+                        .accessibilityLabel("Settings")
+                        .accessibilityHint("Opens settings, copy history and tips")
 
                         // Torch button with overlay for presets
                         ZStack {
@@ -439,6 +593,9 @@ struct LiveOCRView: View {
                                     )
                                     .contentShape(Circle())
                             }
+                            .accessibilityLabel(viewModel.torchLevel > 0 ? "Turn off flashlight" : "Turn on flashlight")
+                            .accessibilityValue(viewModel.torchLevel > 0 ? "On at \(Int(viewModel.torchLevel * 100)) percent" : "Off")
+                            .accessibilityHint(viewModel.torchLevel > 0 ? "Turns the flashlight off" : "Opens the brightness choices")
                             .overlay(
                                 torchPresetOverlay
                             )
@@ -462,6 +619,8 @@ struct LiveOCRView: View {
                                 )
                                 .contentShape(Circle())
                         }
+                        .accessibilityLabel(viewModel.isUltraWide ? "Switch to normal camera" : "Switch to wide angle camera")
+                        .accessibilityHint("Changes how much the camera can see at once")
 
                         // Translate or Copy button
                         translateOrCopyButton(buttonSize: metrics.buttonSize)
@@ -476,6 +635,8 @@ struct LiveOCRView: View {
                                     viewModel.stopSpeaking()
                                     viewModel.clearText()
                                     viewModel.resetTranslation()
+                                    scannedSummary = ""
+                                    scannedText = ""
                                     isSpeaking = false
                                 }
                             }
@@ -492,6 +653,8 @@ struct LiveOCRView: View {
                                 )
                                 .contentShape(Circle())
                         }
+                        .accessibilityLabel("Clear and stop")
+                        .accessibilityHint("Clears the detected text and stops speaking")
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.horizontal, metrics.padding + max(geometry.safeAreaInsets.leading, geometry.safeAreaInsets.trailing))
@@ -526,7 +689,7 @@ struct LiveOCRView: View {
                     SettingsOverlayView(
                         viewModel: settingsViewModel,
                         isPresented: $showSettings,
-                        mode: ocrMode == .english ? .ocrEnglish : .ocrSpanish
+                        mode: ocrMode == .spanishToEnglish ? .ocrSpanish : .ocrEnglish
                     )
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
                 }
@@ -574,6 +737,10 @@ struct LiveOCRView: View {
                                         .stroke(Int(viewModel.torchLevel * 100) == percentage ? Color.yellow : Color.white.opacity(0.3), lineWidth: 1)
                                 )
                         }
+                        .accessibilityLabel("Flashlight \(percentage) percent")
+                        .accessibilityAddTraits(
+                            Int(viewModel.torchLevel * 100) == percentage ? [.isButton, .isSelected] : [.isButton]
+                        )
                     }
                 }
                 .padding(.vertical, 8)
@@ -615,6 +782,9 @@ struct LiveOCRView: View {
                 }
                 .disabled(isTranslating)
                 .opacity(isTranslating ? 0.6 : 1)
+                .accessibilityLabel("Translate")
+                .accessibilityHint("Translates the Spanish text on screen into English")
+                .accessibilityValue(isTranslating ? "Translating" : "")
             } else {
                 Button(action: {
                     if buttonDebouncer.canPress("LiveOCRView-7") {
@@ -629,7 +799,20 @@ struct LiveOCRView: View {
                                 }
                             }
                         } else {
-                            let textToCopy = ocrMode == .english ? viewModel.recognizedText : viewModel.translatedText
+                            // Summarize mode has no live recognized text — the page
+                            // lives in the scan. Copying the empty translation field
+                            // here is why this button did nothing after a summary.
+                            let textToCopy: String
+                            switch ocrMode {
+                            case .mail:
+                                textToCopy = scannedText.isEmpty
+                                    ? scannedSummary
+                                    : scannedSummary + "\n\n" + scannedText
+                            case .english:
+                                textToCopy = viewModel.recognizedText
+                            case .spanishToEnglish:
+                                textToCopy = viewModel.translatedText
+                            }
                             viewModel.copyText(textToCopy)
                             let feedback = UINotificationFeedbackGenerator()
                             feedback.notificationOccurred(.success)
@@ -648,6 +831,11 @@ struct LiveOCRView: View {
                         )
                         .contentShape(Circle())
                 }
+                .accessibilityLabel(ocrMode == .mail ? "Copy summary" : "Copy text")
+                .accessibilityHint(
+                    ocrMode == .mail
+                        ? "Copies the summary and the full page to the clipboard"
+                        : "Copies the text on screen to the clipboard")
             }
         }
     }
@@ -675,7 +863,9 @@ struct LiveOCRView: View {
                             }
                         }
                     } else {
-                        let textToSpeak = ocrMode == .english ? viewModel.recognizedText : viewModel.translatedText
+                        let textToSpeak = ocrMode == .mail
+                            ? mailSummary
+                            : (ocrMode == .english ? viewModel.recognizedText : viewModel.translatedText)
                         isSpeaking = true
                         viewModel.speak(text: textToSpeak, voiceIdentifier: selectedVoiceIdentifier) {
                             isSpeaking = false
@@ -701,6 +891,12 @@ struct LiveOCRView: View {
         }
         .scaleEffect(isSpeaking ? 1.1 : 1.0)
         .animation(.easeInOut(duration: 0.2), value: isSpeaking)
+        .accessibilityLabel(isSpeaking ? "Stop reading"
+            : (ocrMode == .mail ? "Say the summary again" : "Read text aloud"))
+        .accessibilityHint(isSpeaking ? "Stops speaking the text"
+            : (ocrMode == .mail ? "Repeats the summary out loud"
+               : "Speaks the text the camera has found"))
+        .accessibilityValue(isSpeaking ? "Speaking" : "Not speaking")
     }
 }
 

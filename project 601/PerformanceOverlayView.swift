@@ -55,6 +55,8 @@ struct PerformanceOverlayView: View {
                         .shadow(color: objectCountColor.opacity(0.3), radius: 4, x: 0, y: 2)
                         .shadow(color: .black.opacity(0.5), radius: 8, x: 0, y: 4)
                 )
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(objectCount == 1 ? "1 object in view" : "\(objectCount) objects in view")
             }
 
             // FPS Indicator
@@ -86,6 +88,9 @@ struct PerformanceOverlayView: View {
                     .shadow(color: fpsColor.opacity(0.3), radius: 4, x: 0, y: 2)
                     .shadow(color: .black.opacity(0.5), radius: 8, x: 0, y: 4)
             )
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Speed")
+            .accessibilityValue("\(Int(fps)) frames per second")
         }
     }
 }

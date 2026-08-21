@@ -9,6 +9,7 @@ struct CameraPreview: UIViewRepresentable {
     var isUltraWide: Bool = false
     var cameraPosition: AVCaptureDevice.Position = .back
 
+
     func makeUIView(context _: Context) -> CameraPreviewView {
         let view = CameraPreviewView()
         view.onFrame = onFrame
@@ -39,11 +40,19 @@ class CameraPreviewView: UIView {
 
     private let session = AVCaptureSession()
     private let videoOutput = AVCaptureVideoDataOutput()
+    private let photoOutput = AVCapturePhotoOutput()
     private let sessionQueue = DispatchQueue(label: "ocr.camera.session")
     private let videoQueue = DispatchQueue(label: "ocr.camera.video", qos: .userInitiated)
 
     var onFrame: ((CVPixelBuffer) -> Void)?
     var onCameraReady: ((AVCaptureDevice) -> Void)?
+
+    /// Mail mode reads a whole sheet of paper at once, where the body text is a
+    /// few percent of the frame. At 720p that's a handful of pixels per letter and
+    /// the recognizer guesses. This switches the session to full photo resolution
+    /// so a single still has real detail to work with.
+    var useHighResolutionCapture = false
+    private var photoCompletion: ((CGImage?) -> Void)?
 
     private var currentDevice: AVCaptureDevice?
     private var focusIndicatorLayer: CALayer?
@@ -215,8 +224,9 @@ class CameraPreviewView: UIView {
     private func configureSession() {
         session.beginConfiguration()
 
-        // Configure session preset for OCR (lower resolution is fine)
-        session.sessionPreset = .hd1280x720
+        // 720p is plenty when you're pointing at a sign or a paragraph. It is NOT
+        // enough for a full page — see useHighResolutionCapture.
+        session.sessionPreset = useHighResolutionCapture ? .photo : .hd1280x720
 
         // Select camera based on position and wide angle setting
         let camera: AVCaptureDevice? = if cameraPosition == .front {
@@ -286,6 +296,14 @@ class CameraPreviewView: UIView {
             session.addOutput(videoOutput)
         }
 
+        if useHighResolutionCapture, session.canAddOutput(photoOutput) {
+            session.addOutput(photoOutput)
+            // Asking a capture for full quality is only legal if the output was
+            // told to allow it first. Without this line the capture request is
+            // rejected with an exception rather than an error.
+            photoOutput.maxPhotoQualityPrioritization = .quality
+        }
+
         // Set video orientation
         if let connection = videoOutput.connection(with: .video) {
             if #available(iOS 17.0, *) {
@@ -302,6 +320,19 @@ class CameraPreviewView: UIView {
         }
 
         session.commitConfiguration()
+
+        // Resolution has to be asked for AFTER the commit. Switching the preset to
+        // .photo only changes the camera's active format when the configuration
+        // lands, so a size read before that describes the 720p format we are
+        // leaving — and a size the format doesn't support is refused at capture
+        // time by throwing, which takes the whole app down.
+        if useHighResolutionCapture, #available(iOS 16.0, *),
+           let largest = currentDevice?.activeFormat.supportedMaxPhotoDimensions.last,
+           largest.width > 0, largest.height > 0 {
+            session.beginConfiguration()
+            photoOutput.maxPhotoDimensions = largest
+            session.commitConfiguration()
+        }
 
         // Configure preview layer
         DispatchQueue.main.async { [weak self] in
@@ -321,6 +352,60 @@ class CameraPreviewView: UIView {
         sessionQueue.async { [weak self] in
             self?.session.stopRunning()
             print("📷 CameraPreviewView: Camera session stopped")
+        }
+    }
+
+    // MARK: - Still Capture
+
+    /// Grabs one full-resolution frame. Reading a page is a deliberate act — aim,
+    /// then capture — not something to sample thirty times a second off a video
+    /// stream and hope a good frame shows up.
+    func capturePhoto(completion: @escaping (CGImage?) -> Void) {
+        guard useHighResolutionCapture, session.isRunning else {
+            completion(nil)
+            return
+        }
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+
+            // Every one of these is a hard requirement of capturePhoto: miss one
+            // and it throws instead of reporting failure. Checked here, on the
+            // session queue, so the answer can't go stale between test and use.
+            guard let connection = photoOutput.connection(with: .video), connection.isActive else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+
+            // Point the still the way the phone is actually being held. The video
+            // stream elsewhere is pinned to one angle, which is fine for a live
+            // preview and wrong for a page — text that arrives sideways reads as
+            // gibberish no matter how good the recognizer is.
+            if #available(iOS 17.0, *), let device = currentDevice {
+                let coordinator = AVCaptureDevice.RotationCoordinator(
+                    device: device, previewLayer: nil
+                )
+                let angle = coordinator.videoRotationAngleForHorizonLevelCapture
+                if connection.isVideoRotationAngleSupported(angle) {
+                    connection.videoRotationAngle = angle
+                }
+            }
+
+            let settings = AVCapturePhotoSettings()
+            if #available(iOS 16.0, *) {
+                // Mirror the output's own setting rather than asking for a size of
+                // our own: whatever it currently holds is valid by definition.
+                settings.maxPhotoDimensions = photoOutput.maxPhotoDimensions
+            }
+            // Never ask for more than the output was configured to allow — that
+            // mismatch is itself a throwing offence.
+            settings.photoQualityPrioritization = photoOutput.maxPhotoQualityPrioritization
+            // The flash decision belongs to the torch button the user already set.
+            if photoOutput.supportedFlashModes.contains(.off) {
+                settings.flashMode = .off
+            }
+
+            photoCompletion = completion
+            photoOutput.capturePhoto(with: settings, delegate: self)
         }
     }
 
@@ -360,6 +445,38 @@ class CameraPreviewView: UIView {
 
             session.startRunning()
         }
+    }
+}
+
+// MARK: - Photo Output Delegate
+
+extension CameraPreviewView: AVCapturePhotoCaptureDelegate {
+    func photoOutput(_: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto,
+                     error: Error?) {
+        let image: CGImage? = error == nil ? Self.uprightImage(from: photo) : nil
+        DispatchQueue.main.async { [weak self] in
+            let done = self?.photoCompletion
+            self?.photoCompletion = nil
+            done?(image)
+        }
+    }
+
+    /// The recogniser reads pixels, not metadata, so a photo that merely *claims*
+    /// to be rotated is still a sideways page to it. Bake the rotation in.
+    private static func uprightImage(from photo: AVCapturePhoto) -> CGImage? {
+        guard let data = photo.fileDataRepresentation(),
+              let captured = UIImage(data: data) else {
+            return photo.cgImageRepresentation()
+        }
+        if captured.imageOrientation == .up { return captured.cgImage }
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1  // the image is already at full pixel size; don't multiply it
+        format.opaque = true
+        let renderer = UIGraphicsImageRenderer(size: captured.size, format: format)
+        let redrawn = renderer.image { _ in
+            captured.draw(in: CGRect(origin: .zero, size: captured.size))
+        }
+        return redrawn.cgImage ?? captured.cgImage
     }
 }
 
