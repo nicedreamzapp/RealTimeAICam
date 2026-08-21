@@ -555,9 +555,9 @@ struct LiveOCRView: View {
                     if ocrMode == .mail {
                         Button(action: { scanPage() }) {
                             HStack(spacing: 10) {
-                                Image(systemName: isScanning ? "hourglass" : "doc.text.viewfinder")
+                                Image(systemName: isScanning ? "hourglass" : "viewfinder")
                                     .font(.system(size: 22, weight: .semibold))
-                                Text(isScanning ? "Reading…" : "Read this page")
+                                Text(isScanning ? "Looking…" : "What's this?")
                                     .font(.system(size: 19, weight: .semibold))
                             }
                             .foregroundStyle(.white)
@@ -572,8 +572,8 @@ struct LiveOCRView: View {
                         .disabled(isScanning)
                         .padding(.horizontal, 20)
                         .padding(.bottom, 14)
-                        .accessibilityLabel(isScanning ? "Reading the page" : "Read this page")
-                        .accessibilityHint("Takes a picture of the page and says what it is")
+                        .accessibilityLabel(isScanning ? "Looking" : "What's this?")
+                        .accessibilityHint("Takes a picture and says what it is: a letter, a bill, a label, or whatever is in front of you")
                     }
 
                     // Bottom action buttons - using extracted metrics
