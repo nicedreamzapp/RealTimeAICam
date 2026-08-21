@@ -276,22 +276,42 @@ struct LiveOCRView: View {
                 scannedSummary = "The camera couldn't take the picture. Try again."
                 return
             }
-            PageScanner.read(image) { page in
-                DispatchQueue.main.async {
-                    scannedText = page.text
-                    // The pattern-matched version is the floor, not the answer: it
-                    // is what gets said if the model can't run or can't help.
-                    let fallback = MailSummarizer.summarize(page.text).spoken
-                    scannedSummary = "Working out what it says…"
+            // Vision path: when the app ships a VisionModel folder the model is
+            // shown the photo itself — no recognizer, no text narrator. Without
+            // the folder (or if the model can't answer) it is the OCR path below,
+            // exactly as before.
+            if #available(iOS 17.0, *), OnDeviceVisionNarrator.isBundled {
+                scannedSummary = "Working out what it says…"
+                Task {
+                    let said = await OnDeviceVisionNarrator.shared.narratePage(UIImage(cgImage: image))
+                    await MainActor.run {
+                        if let said { say(said) } else { readWithOCR(image) }
+                    }
+                }
+                return
+            }
+            readWithOCR(image)
+        }
+    }
 
-                    guard #available(iOS 17.0, *) else {
-                        say(fallback)
-                        return
-                    }
-                    Task {
-                        let said = await OnDeviceNarrator.shared.narrate(page.text)
-                        await MainActor.run { say(said ?? fallback) }
-                    }
+    /// The original path: recognize the words, then have the text model say
+    /// what they mean.
+    private func readWithOCR(_ image: CGImage) {
+        PageScanner.read(image) { page in
+            DispatchQueue.main.async {
+                scannedText = page.text
+                // The pattern-matched version is the floor, not the answer: it
+                // is what gets said if the model can't run or can't help.
+                let fallback = MailSummarizer.summarize(page.text).spoken
+                scannedSummary = "Working out what it says…"
+
+                guard #available(iOS 17.0, *) else {
+                    say(fallback)
+                    return
+                }
+                Task {
+                    let said = await OnDeviceNarrator.shared.narrate(page.text)
+                    await MainActor.run { say(said ?? fallback) }
                 }
             }
         }

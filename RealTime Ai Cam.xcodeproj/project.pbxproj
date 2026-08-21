@@ -10,6 +10,7 @@
 		AA0000072E4400000000A007 /* NarratorModel in Resources */ = {isa = PBXBuildFile; fileRef = AA0000062E4400000000A006 /* NarratorModel */; };
 		AA0000042E4400000000A004 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000022E4400000000A002 /* MLXLLM */; };
 		AA0000052E4400000000A005 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000032E4400000000A003 /* MLXLMCommon */; };
+		AA0000082E4400000000A008 /* MLXVLM in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000092E4400000000A009 /* MLXVLM */; };
 		9900AAAA2E680000000000AA /* ObjectTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9900AAAB2E680000000000AA /* ObjectTracker.swift */; };
 		990EECF12E489EBD00B7CD8C /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 990EECF02E489EBD00B7CD8C /* LICENSE */; };
 		9919DE3D2E50A7BC0053038B /* SpanishTranslationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9919DE3C2E50A79F0053038B /* SpanishTranslationEngine.swift */; };
@@ -144,6 +145,7 @@
 			files = (
 				AA0000042E4400000000A004 /* MLXLLM in Frameworks */,
 				AA0000052E4400000000A005 /* MLXLMCommon in Frameworks */,
+				AA0000082E4400000000A008 /* MLXVLM in Frameworks */,
 				996B93022E38A15B00AE22AA /* Metal.framework in Frameworks */,
 				99A922CC2E39BB7A0070BDB5 /* Accelerate.framework in Frameworks */,
 				996B93062E38A17000AE22AA /* MetalPerformanceShaders.framework in Frameworks */,
@@ -265,6 +267,7 @@
 			packageProductDependencies = (
 				AA0000022E4400000000A002 /* MLXLLM */,
 				AA0000032E4400000000A003 /* MLXLMCommon */,
+				AA0000092E4400000000A009 /* MLXVLM */,
 			);
 			productName = "project 601";
 			productReference = 99BA10302E34CF71001E5140 /* RealTime Ai Cam.app */;
@@ -807,6 +810,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = AA0000012E4400000000A001 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
 			productName = MLXLMCommon;
+		};
+		AA0000092E4400000000A009 /* MLXVLM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA0000012E4400000000A001 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXVLM;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
