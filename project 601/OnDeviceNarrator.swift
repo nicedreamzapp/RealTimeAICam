@@ -75,12 +75,13 @@ actor OnDeviceNarrator {
     /// this model produced from them. Two reasons — a wrong answer can be looked
     /// at instead of argued about, and each line is a training example for the
     /// model that replaces this one.
-    nonisolated static func log(read: String, said: String?) {
-        let entry: [String: Any] = [
+    nonisolated static func log(read: String, said: String?, extra: [String: Any] = [:]) {
+        var entry: [String: Any] = [
             "at": ISO8601DateFormatter().string(from: Date()),
             "read": read,
             "said": said ?? "",
         ]
+        for (k, v) in extra { entry[k] = v }
         guard let line = try? JSONSerialization.data(withJSONObject: entry),
               let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
         else { return }

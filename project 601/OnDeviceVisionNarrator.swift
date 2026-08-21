@@ -3,6 +3,7 @@ import Foundation
 import MLXLMCommon
 import MLXVLM
 import UIKit
+import Vision
 
 /// Looks at the photo and says what matters.
 ///
@@ -36,20 +37,24 @@ actor OnDeviceVisionNarrator {
 
     /// A page of mail, a bill, a label, a receipt. Long side 1024 px so small
     /// print survives.
-    func narratePage(_ image: UIImage) async -> String? {
-        await narrate(image, longSide: 1024, asking: "What is this page?", kind: "page")
+    /// `gate` is the FrameQualityGate log string for the shot that passed.
+    func narratePage(_ image: UIImage, gate: String = "ok") async -> String? {
+        await narrate(image, longSide: 1024, asking: "What is this page?", kind: "page", gate: gate)
     }
 
     /// A room, a street, a thing in front of the camera. 768 px is plenty for a
     /// scene and keeps the answer quick.
-    func narrateScene(_ image: UIImage) async -> String? {
-        await narrate(image, longSide: 768, asking: "What is in front of me?", kind: "scene")
+    func narrateScene(_ image: UIImage, gate: String = "ok") async -> String? {
+        await narrate(image, longSide: 768, asking: "What is in front of me?", kind: "scene", gate: gate)
     }
 
-    private func narrate(_ image: UIImage, longSide: CGFloat, asking question: String, kind: String)
-        async -> String?
+    private func narrate(_ image: UIImage, longSide: CGFloat, asking question: String, kind: String,
+                         gate: String) async -> String?
     {
         guard !unavailable else { return nil }
+        #if DEBUG
+        assert(MoneyCrossCheck.selfCheck(), "MoneyCrossCheck self-check failed")
+        #endif
         guard let photo = Self.downscaled(image, longSide: longSide) else { return nil }
         do {
             let model = try await loaded()
@@ -75,14 +80,42 @@ actor OnDeviceVisionNarrator {
                 additionalContext: ["enable_thinking": false]
             )
             let answer = try await session.respond(to: question, image: .ciImage(photo))
-            let said = Self.tidy(answer)
-            OnDeviceNarrator.log(read: "[photo: \(kind), long side \(Int(longSide)) px]", said: said)
+            var said = Self.tidy(answer)
+            var extra: [String: Any] = ["gate": gate]
+            // Money double-read: on a page, let Apple's recognizer check every
+            // dollar amount the model spoke. Digits are where a small VLM slips.
+            if kind == "page", let sentence = said, let cg = image.cgImage {
+                let ocr = await Self.recognizedText(in: cg)
+                let checked = MoneyCrossCheck.reconcile(sentence: sentence, ocrText: ocr)
+                if let agreed = checked.agreed {
+                    extra["money_agreed"] = agreed
+                    extra["money_vlm"] = MoneyCrossCheck.amounts(in: sentence)
+                    extra["money_ocr"] = MoneyCrossCheck.amounts(in: ocr)
+                }
+                said = checked.sentence
+            }
+            OnDeviceNarrator.log(read: "[photo: \(kind), long side \(Int(longSide)) px]", said: said,
+                                 extra: extra)
             return said
         } catch {
             // A missing or broken model bundle degrades the feature, never the scan.
             unavailable = true
             return nil
         }
+    }
+
+    /// Full-res accurate OCR for the cross-check, off the main thread. Empty
+    /// string if Vision throws, which makes the cross-check a no-op.
+    private static func recognizedText(in image: CGImage) async -> String {
+        await Task.detached(priority: .userInitiated) { () -> String in
+            let request = VNRecognizeTextRequest()
+            request.recognitionLevel = .accurate
+            request.usesLanguageCorrection = false
+            let handler = VNImageRequestHandler(cgImage: image, options: [:])
+            do { try handler.perform([request]) } catch { return "" }
+            let lines = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+            return lines.joined(separator: "\n")
+        }.value
     }
 
     private func loaded() async throws -> ModelContainer {

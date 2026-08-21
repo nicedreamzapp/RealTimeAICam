@@ -283,7 +283,19 @@ struct LiveOCRView: View {
             if #available(iOS 17.0, *), OnDeviceVisionNarrator.isBundled {
                 scannedSummary = "Working out what it says…"
                 Task {
-                    let said = await OnDeviceVisionNarrator.shared.narratePage(UIImage(cgImage: image))
+                    // Cheap look at the shot first: a dark, blurry or cut-off
+                    // page gets spoken guidance instead of a model run.
+                    let gate = await Task.detached(priority: .userInitiated) {
+                        FrameQualityGate.check(image, checkDocumentEdges: true)
+                    }.value
+                    if case .retake(let why) = gate.verdict {
+                        OnDeviceNarrator.log(read: "[photo: page, gated]", said: why,
+                                             extra: ["gate": gate.logValue])
+                        await MainActor.run { say(why) }
+                        return
+                    }
+                    let said = await OnDeviceVisionNarrator.shared.narratePage(
+                        UIImage(cgImage: image), gate: gate.logValue)
                     await MainActor.run {
                         if let said { say(said) } else { readWithOCR(image) }
                     }
