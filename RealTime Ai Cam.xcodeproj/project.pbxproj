@@ -739,7 +739,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = "project 601";
+				TEST_TARGET_NAME = "RealTime Ai Cam";
 			};
 			name = Debug;
 		};
@@ -759,7 +759,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = "project 601";
+				TEST_TARGET_NAME = "RealTime Ai Cam";
 			};
 			name = Release;
 		};

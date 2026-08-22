@@ -347,6 +347,16 @@ class CameraPreviewView: UIView {
         session.startRunning()
     }
 
+    /// Brings the camera back after a pause (see `stopSession`). Used around a
+    /// model run: the camera daemon alone holds ~1.5 GB while streaming, which on
+    /// a 6 GB phone is the difference between answering and being jetsammed.
+    func resumeSession() {
+        sessionQueue.async { [weak self] in
+            guard let self, !session.isRunning else { return }
+            session.startRunning()
+        }
+    }
+
     func stopSession() {
         print("📷 CameraPreviewView: Stopping camera session")
         sessionQueue.async { [weak self] in

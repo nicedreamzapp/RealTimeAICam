@@ -282,7 +282,11 @@ struct LiveOCRView: View {
             // exactly as before.
             if #available(iOS 17.0, *), OnDeviceVisionNarrator.isBundled {
                 scannedSummary = "Working out what it says…"
+                // Free the camera pipeline while the model thinks; it comes back
+                // the moment the answer is spoken.
+                cameraPreviewRef?.stopSession()
                 Task {
+                    defer { cameraPreviewRef?.resumeSession() }
                     // Cheap look at the shot first: a dark, blurry or cut-off
                     // page gets spoken guidance instead of a model run.
                     let gate = await Task.detached(priority: .userInitiated) {
