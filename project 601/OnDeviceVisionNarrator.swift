@@ -1,5 +1,6 @@
 import CoreImage
 import Foundation
+import MLX
 import MLXHuggingFace
 import MLXLMCommon
 import MLXVLM
@@ -122,6 +123,9 @@ actor OnDeviceVisionNarrator {
         guard let url = Bundle.main.url(forResource: "VisionModel", withExtension: nil) else {
             throw VisionNarratorError.noModelInBundle
         }
+        // Keep MLX's Metal buffer cache tiny: on a 6 GB phone the default cache
+        // plus a 1.7 GB model is enough to get the app jetsammed (signal 9).
+        MLX.GPU.set(cacheLimit: 20 * 1024 * 1024)
         // mlx-swift-lm 3.x: the tokenizer implementation is injected rather than
         // bundled; the weights and tokenizer.json both come from the app bundle.
         let loaded = try await VLMModelFactory.shared.loadContainer(
