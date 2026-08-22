@@ -1,7 +1,9 @@
 import CoreImage
 import Foundation
+import MLXHuggingFace
 import MLXLMCommon
 import MLXVLM
+import Tokenizers
 import UIKit
 import Vision
 
@@ -58,13 +60,10 @@ actor OnDeviceVisionNarrator {
         guard let photo = Self.downscaled(image, longSide: longSide) else { return nil }
         do {
             let model = try await loaded()
-            // A fresh session per photo, on purpose. Two reasons: one letter must
-            // never colour the next, and mlx-swift-lm #157 — the Qwen3.5 VLM in
-            // the pinned release keeps M-RoPE position state inside the model
-            // between evaluations, so reusing a session or a KV cache across
-            // requests can crash with a broadcast-shape mismatch. A new session
-            // with an image in its first turn resets that state. (Fixed upstream
-            // in 3.31.4, "models should not mutate state during eval", #283.)
+            // A fresh session per photo, on purpose: one letter must never colour
+            // the next. (mlx-swift-lm #157, the Qwen3.5 M-RoPE state crash, is
+            // fixed in 3.31.4 — position ids now live in per-request LMOutput
+            // state — which is why the project pins 3.x.)
             let session = ChatSession(
                 model,
                 instructions: Self.instructions,
@@ -123,9 +122,10 @@ actor OnDeviceVisionNarrator {
         guard let url = Bundle.main.url(forResource: "VisionModel", withExtension: nil) else {
             throw VisionNarratorError.noModelInBundle
         }
+        // mlx-swift-lm 3.x: the tokenizer implementation is injected rather than
+        // bundled; the weights and tokenizer.json both come from the app bundle.
         let loaded = try await VLMModelFactory.shared.loadContainer(
-            configuration: ModelConfiguration(directory: url)
-        )
+            from: url, using: #huggingFaceTokenizerLoader())
         container = loaded
         return loaded
     }

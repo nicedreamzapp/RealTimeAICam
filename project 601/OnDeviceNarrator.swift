@@ -1,6 +1,8 @@
 import Foundation
+import MLXHuggingFace
 import MLXLLM
 import MLXLMCommon
+import Tokenizers
 
 /// Says what the page means, not what it says.
 ///
@@ -55,7 +57,10 @@ actor OnDeviceNarrator {
         guard let url = Bundle.main.url(forResource: "NarratorModel", withExtension: nil) else {
             throw NarratorError.noModelInBundle
         }
-        let loaded = try await loadModel(configuration: ModelConfiguration(directory: url))
+        // mlx-swift-lm 3.x: the tokenizer implementation is injected rather than
+        // bundled; the weights and tokenizer.json both come from the app bundle.
+        let loaded = try await LLMModelFactory.shared.load(
+            from: url, using: #huggingFaceTokenizerLoader())
         context = loaded
         return loaded
     }
