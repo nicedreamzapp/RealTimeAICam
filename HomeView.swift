@@ -6,6 +6,9 @@ struct HomeView: View {
     @Binding var animationState: ContentView.AnimationState
     @Binding var mode: AppMode
     @State private var showInstructions = false
+    @ObservedObject private var modelDownloader = VisionModelDownloader.shared
+    /// Last quarter (25/50/75/100) already spoken aloud, so each is said once.
+    @State private var spokenDownloadQuarter = 0
 
     @StateObject var buttonDebouncer: ButtonPressDebouncer
 
@@ -15,6 +18,70 @@ struct HomeView: View {
     let onReadMail: () -> Void
     let onVoiceChange: () -> Void
     let speechSynthesizer: AVSpeechSynthesizer
+
+    // MARK: - Vision model download
+
+    /// One small row under the buttons. Hidden once the model is on the phone
+    /// (bundled or downloaded); until then every scan takes the OCR path as before.
+    @ViewBuilder
+    private var visionModelBanner: some View {
+        switch modelDownloader.state {
+        case .ready:
+            EmptyView()
+        case .idle, .failed:
+            VStack(spacing: 4) {
+                if case .failed(let why) = modelDownloader.state {
+                    Text("Download failed: \(why)")
+                        .font(.footnote)
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                }
+                Button {
+                    modelDownloader.start()
+                } label: {
+                    Text("Download the vision model (\(VisionModelStore.approximateSizeDescription), one time, Wi-Fi recommended)")
+                        .font(.footnote.weight(.semibold))
+                        .multilineTextAlignment(.center)
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .frame(maxWidth: .infinity)
+                        .background(Color.white.opacity(0.15))
+                        .cornerRadius(10)
+                }
+                .accessibilityLabel("Download the vision model")
+                .accessibilityHint("One point two gigabytes, one time. Wi-Fi recommended. Lets the app describe photos without reading text first.")
+            }
+            .padding(.bottom, 6)
+        case .downloading, .verifying:
+            let percent = Int((modelDownloader.progress * 100).rounded(.down))
+            VStack(spacing: 4) {
+                Text(modelDownloader.state == .verifying
+                     ? "Checking the vision model…"
+                     : "Downloading the vision model… \(percent)%")
+                    .font(.footnote.weight(.semibold))
+                ProgressView(value: modelDownloader.progress)
+                    .tint(.white)
+            }
+            .padding(.bottom, 6)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(modelDownloader.state == .verifying
+                                ? "Checking the vision model"
+                                : "Downloading the vision model, \(percent) percent")
+        }
+    }
+
+    /// Speaks 25, 50, 75 and 100 percent, each once, through the app's voice.
+    private func announceDownloadProgress(_ value: Double) {
+        guard modelDownloader.state == .downloading || modelDownloader.state == .verifying else { return }
+        let quarter = Int((value * 4).rounded(.down))
+        guard quarter > spokenDownloadQuarter, quarter >= 1 else { return }
+        spokenDownloadQuarter = quarter
+        if quarter >= 4 {
+            SpeechManager.shared.speak("Download complete. Checking the vision model.")
+        } else {
+            SpeechManager.shared.speak("Vision model download \(quarter * 25) percent.")
+        }
+    }
 
     var body: some View {
         // Use iPhone 14 Pro Max (390pt) as baseline
@@ -41,6 +108,7 @@ struct HomeView: View {
                     }
                     .frame(height: 300)
                     Spacer()
+                    visionModelBanner
                     voicePicker
                     Spacer(minLength: 25)
                 }
@@ -67,6 +135,15 @@ struct HomeView: View {
                         }
                     }
                 }
+        }
+        .onChange(of: modelDownloader.progress) { _, value in
+            announceDownloadProgress(value)
+        }
+        .onChange(of: modelDownloader.state) { _, value in
+            if value == .ready, spokenDownloadQuarter < 4 {
+                spokenDownloadQuarter = 4
+                SpeechManager.shared.speak("Vision model ready.")
+            }
         }
         .onAppear {
             if !animationState.hasAnimatedOnce {
