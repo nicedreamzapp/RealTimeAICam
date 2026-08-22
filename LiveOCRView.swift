@@ -455,7 +455,7 @@ struct LiveOCRView: View {
 
                         // Mode indicator (right side)
                         Text(ocrMode == .english ? "English"
-                             : (ocrMode == .mail ? "Summarize" : "Span → Eng"))
+                             : (ocrMode == .mail ? "What's this?" : "Span → Eng"))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 12)

@@ -248,7 +248,7 @@ struct HomeView: View {
         }) {
             HStack(spacing: 4 * scale) {
                 Text("\u{1F4C4}").font(.system(size: 32 * scale))
-                OutlinedText(text: "Summarize", fontSize: 20 * scale)
+                OutlinedText(text: "What's this?", fontSize: 20 * scale)
             }
             .padding(.vertical, 16 * scale)
         }
@@ -282,8 +282,8 @@ struct HomeView: View {
         .shadow(color: Color.purple.opacity(0.50), radius: 12 * scale)
         .scaleEffect(animationState.button4 ? 1 : 0.7)
         .animation(.easeOut(duration: 0.3), value: animationState.button4)
-        .accessibilityLabel("Summarize")
-        .accessibilityHint("Point the camera at a page, a bill or a package to hear what it is")
+        .accessibilityLabel("What's this?")
+        .accessibilityHint("Point the camera at a page, a bill, a package, or a room to hear what it is")
         .accessibilityAddTraits(.isButton)
     }
 

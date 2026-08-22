@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		AA0000072E4400000000A007 /* NarratorModel in Resources */ = {isa = PBXBuildFile; fileRef = AA0000062E4400000000A006 /* NarratorModel */; };
+		AA0000112E4400000000A011 /* VisionModel in Resources */ = {isa = PBXBuildFile; fileRef = AA0000102E4400000000A010 /* VisionModel */; };
 		AA0000042E4400000000A004 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000022E4400000000A002 /* MLXLLM */; };
 		AA0000052E4400000000A005 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000032E4400000000A003 /* MLXLMCommon */; };
 		AA0000082E4400000000A008 /* MLXVLM in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000092E4400000000A009 /* MLXVLM */; };
@@ -71,6 +72,7 @@
 
 /* Begin PBXFileReference section */
 		AA0000062E4400000000A006 /* NarratorModel */ = {isa = PBXFileReference; lastKnownFileType = folder; path = NarratorModel; sourceTree = "<group>"; };
+		AA0000102E4400000000A010 /* VisionModel */ = {isa = PBXFileReference; lastKnownFileType = folder; path = VisionModel; sourceTree = "<group>"; };
 		9900AAAB2E680000000000AA /* ObjectTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectTracker.swift; sourceTree = "<group>"; };
 		990EECF02E489EBD00B7CD8C /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		9919DE3C2E50A79F0053038B /* SpanishTranslationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpanishTranslationEngine.swift; sourceTree = "<group>"; };
@@ -195,6 +197,7 @@
 			isa = PBXGroup;
 			children = (
 				AA0000062E4400000000A006 /* NarratorModel */,
+				AA0000102E4400000000A010 /* VisionModel */,
 				996869012E513773001898DB /* ResourceManager.swift */,
 				9919DE3C2E50A79F0053038B /* SpanishTranslationEngine.swift */,
 				99502F932E509A3F0064DD92 /* UIComponents.swift */,
@@ -372,6 +375,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA0000072E4400000000A007 /* NarratorModel in Resources */,
+				AA0000112E4400000000A011 /* VisionModel in Resources */,
 				99EE6CEF2E67071800A2F3F3 /* es_final_with_rules.json.gz in Resources */,
 				99D7E6A72E47639F007BBFB7 /* PrivacyInfo.xcprivacy in Resources */,
 				990EECF12E489EBD00B7CD8C /* LICENSE in Resources */,

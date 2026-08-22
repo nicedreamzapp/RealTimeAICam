@@ -10,3 +10,4 @@ build/
 # macOS noise
 .DS_Store
 NarratorModel/
+VisionModel/
