@@ -64,6 +64,10 @@ dependencies {
 
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.activity:activity-compose:1.9.0")
+    // A transitive dep drags in androidx.fragment 1.1.0, which predates the
+    // ActivityResult API that activity-compose uses. lintVitalRelease treats that as
+    // FATAL, so a release build fails before it ever reaches packaging. Pin it forward.
+    implementation("androidx.fragment:fragment-ktx:1.8.5")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.2")
 
     val cameraxVersion = "1.3.4"
