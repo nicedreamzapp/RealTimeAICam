@@ -17,7 +17,14 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // Play requires >=25% DEX coverage from Feb 2027; false is 0%.
+            // proguard-rules.pro keeps TFLite/JNI, ML Kit and CameraX.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 
