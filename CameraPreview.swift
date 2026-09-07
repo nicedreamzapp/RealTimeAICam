@@ -301,7 +301,7 @@ class CameraPreviewView: UIView {
             // Asking a capture for full quality is only legal if the output was
             // told to allow it first. Without this line the capture request is
             // rejected with an exception rather than an error.
-            photoOutput.maxPhotoQualityPrioritization = .quality
+            photoOutput.maxPhotoQualityPrioritization = .speed  // single-frame, near-instant shutter; the model downscales to 1024px so Deep Fusion was pure delay
         }
 
         // Set video orientation

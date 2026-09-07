@@ -42,14 +42,66 @@ actor OnDeviceVisionNarrator {
     /// A page of mail, a bill, a label, a receipt. Long side 1024 px so small
     /// print survives.
     /// `gate` is the FrameQualityGate log string for the shot that passed.
-    func narratePage(_ image: UIImage, gate: String = "ok") async -> String? {
-        await narrate(image, longSide: 1024, asking: "What is this page?", kind: "page", gate: gate)
+    func narratePage(_ image: UIImage, gate: String = "ok", hint: String? = nil,
+                     cutOff: String? = nil) async -> String? {
+        var notes: [String] = []
+        if let hint { notes.append(hint) }
+        if let cutOff { notes.append("cut off at the \(cutOff)") }
+        let ask: String
+        if notes.isEmpty {
+            ask = "What is this page?"
+        } else {
+            ask = "What is this page? The photo is \(notes.joined(separator: " and ")), but do not refuse. "
+                + "Read whatever text, amounts and dates you can make out, and begin with a short note that the shot was hard to read."
+        }
+        return await narrate(image, longSide: 1024, asking: ask, kind: "page", gate: gate)
     }
 
     /// A room, a street, a thing in front of the camera. 768 px is plenty for a
     /// scene and keeps the answer quick.
-    func narrateScene(_ image: UIImage, gate: String = "ok") async -> String? {
-        await narrate(image, longSide: 768, asking: "What is in front of me?", kind: "scene", gate: gate)
+    func narrateScene(_ image: UIImage, gate: String = "ok", hint: String? = nil) async -> String? {
+        let ask: String
+        if let hint {
+            ask = "What is in front of me? The photo looks \(hint), but do not refuse. "
+                + "Give your best guess of what you can make out, and begin by saying it is hard to see clearly."
+        } else {
+            ask = "What is in front of me? Describe the scene: the objects, any people, and where they are."
+        }
+        return await narrate(image, longSide: 768, asking: ask, kind: "scene", gate: gate)
+    }
+
+    /// A spoken follow-up question about a photo already on screen — same model,
+    /// same offline promise. Used by the hold-to-ask button after a scan.
+    func ask(_ question: String, about image: UIImage) async -> String? {
+        guard !unavailable else { return nil }
+        guard let photo = Self.downscaled(image, longSide: 1024) else { return nil }
+        do {
+            let model = try await loaded()
+            func run(_ q: String, _ temp: Float) async throws -> String? {
+                let session = ChatSession(
+                    model, instructions: Self.instructions,
+                    generateParameters: GenerateParameters(maxTokens: 160, temperature: temp,
+                                                           repetitionPenalty: 1.1),
+                    processing: UserInput.Processing(resize: nil),
+                    additionalContext: ["enable_thinking": false]
+                )
+                return Self.tidy(try await session.respond(to: q, image: .ciImage(photo)))
+            }
+            let started = Date()
+            var said = try await run(question, 0.2)
+            if Self.looksLikeRefusal(said) {
+                said = try await run(
+                    "Answer this question as best you can from the photo, even if it is unclear. "
+                    + "Do not refuse. Question: \(question)", 0.3)
+            }
+            OnDeviceNarrator.log(read: "[ask: \(question)]", said: said,
+                                 extra: ["kind": "ask",
+                                         "seconds": (Date().timeIntervalSince(started) * 100).rounded() / 100])
+            return said
+        } catch {
+            OnDeviceNarrator.log(read: "[ask]", said: nil, extra: ["error": String(describing: error)])
+            return nil
+        }
     }
 
     private func narrate(_ image: UIImage, longSide: CGFloat, asking question: String, kind: String,
@@ -80,11 +132,43 @@ actor OnDeviceVisionNarrator {
                 // Qwen's chat-template switch for "answer, don't deliberate."
                 additionalContext: ["enable_thinking": false]
             )
+            let started = Date()
             let answer = try await session.respond(to: question, image: .ciImage(photo))
             var said = Self.tidy(answer)
-            var extra: [String: Any] = ["gate": gate]
+            // Wall-clock seconds from photo to sentence, on this phone. The M5
+            // numbers never meant anything for the device; this does.
+            var extra: [String: Any] = ["gate": gate,
+                                        "seconds": (Date().timeIntervalSince(started) * 100).rounded() / 100,
+                                        "model": VisionModelStore.installedURL?.lastPathComponent ?? "?"]
+            // Never leave the user with a flat "I can't" — mail or scene. If the
+            // model balked, ask once more and require an answer that leads with an
+            // honest caveat instead of a refusal.
+            if Self.looksLikeRefusal(said) {
+                let forced: String
+                if kind == "page" {
+                    forced = "Read whatever you can from this page even though it is unclear. "
+                        + "Do not say you cannot. Start with \"The shot was hard to read, but I can make out\" "
+                        + "and then read the words, amounts and dates you can see."
+                } else {
+                    forced = "Describe what is in this photo even though it is unclear. "
+                        + "Do not say you cannot. Start with \"It's hard to see clearly, but\" and then "
+                        + "describe the shapes, colours, objects and people you can make out and where they are."
+                }
+                let retrySession = ChatSession(
+                    model, instructions: Self.instructions,
+                    generateParameters: GenerateParameters(maxTokens: 120, temperature: 0.2,
+                                                           repetitionPenalty: 1.1),
+                    processing: UserInput.Processing(resize: nil),
+                    additionalContext: ["enable_thinking": false]
+                )
+                if let retry = Self.tidy(try await retrySession.respond(to: forced, image: .ciImage(photo))) {
+                    said = retry
+                    extra["forced_describe"] = true
+                }
+            }
             // Money double-read: on a page, let Apple's recognizer check every
-            // dollar amount the model spoke. Digits are where a small VLM slips.
+            // dollar amount the model spoke — after the retry, so it checks the
+            // words actually about to be spoken. Digits are where a small VLM slips.
             if kind == "page", let sentence = said, let cg = image.cgImage {
                 let ocr = await Self.recognizedText(in: cg)
                 let checked = MoneyCrossCheck.reconcile(sentence: sentence, ocrText: ocr)
@@ -99,7 +183,10 @@ actor OnDeviceVisionNarrator {
                                  extra: extra)
             return said
         } catch {
-            // A missing or broken model bundle degrades the feature, never the scan.
+            // A missing or broken model bundle degrades the feature, never the scan --
+            // but it is written down, so a silent fallback to OCR can be seen.
+            OnDeviceNarrator.log(read: "[photo: \(kind)]", said: nil,
+                                 extra: ["error": String(describing: error), "gate": gate])
             unavailable = true
             return nil
         }
@@ -171,6 +258,18 @@ actor OnDeviceVisionNarrator {
         }
         text = text.trimmingCharacters(in: CharacterSet(charactersIn: " \n\"'"))
         return text.count >= 12 ? text : nil
+    }
+
+    /// Does this answer read as a refusal rather than a description? Used only
+    /// on the scene path, to trigger one forced best-guess retry. A nil answer
+    /// counts as a refusal so an empty result also gets the second try.
+    private static func looksLikeRefusal(_ s: String?) -> Bool {
+        guard let s = s?.lowercased() else { return true }
+        let markers = ["can't", "cannot", "can not", "too dark", "too blurry", "unable to",
+                       "make out", "retake", "hold the camera", "hold the phone",
+                       "turn on a light", "turn on the flash", "add some light",
+                       "move closer", "move back", "try again", "out of focus", "not clear enough"]
+        return markers.contains { s.contains($0) }
     }
 
     enum VisionNarratorError: Error { case noModelInBundle }

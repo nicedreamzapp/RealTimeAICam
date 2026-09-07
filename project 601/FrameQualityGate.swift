@@ -32,6 +32,17 @@ struct FrameQualityGate {
         var documentFound: Bool? = nil // nil when the edge check was skipped
         var cutOffEdge: String? = nil  // "top"/"bottom"/"left"/"right"
 
+        /// Scene path only: a short note on a usable-but-ugly shot, handed to the
+        /// model so it leads with the caveat instead of refusing. nil when clean.
+        var qualityHint: String? {
+            if brightness < FrameQualityGate.minBrightness { return "dark" }
+            if clipped > FrameQualityGate.maxClipped || brightness > FrameQualityGate.maxBrightness {
+                return "washed out by glare"
+            }
+            if sharpness < FrameQualityGate.minSharpness { return "blurry" }
+            return nil
+        }
+
         /// Short string for the "gate" log key, e.g. "ok s=312 b=168 c=0.01".
         var logValue: String {
             let tag: String
@@ -62,6 +73,10 @@ struct FrameQualityGate {
     /// Mean gray below this is a shot taken in the dark. 50/255 is roughly
     /// "can't tell text from paper" on an iPhone exposure.
     static let minBrightness: Double = 50
+
+    /// Below this the frame is essentially black — nothing to describe in either
+    /// mode, so it is the one darkness level that stops a scene too.
+    static let nearBlackBrightness: Double = 16
 
     /// Mean gray above this is a washed-out frame (lamp in the lens, white wall).
     static let maxBrightness: Double = 235
@@ -94,29 +109,23 @@ struct FrameQualityGate {
         report.clipped = thumb.clippedFraction
         report.sharpness = thumb.laplacianVariance
 
-        // Order matters: a dark frame is also "blurry" by the numbers, so say
-        // the thing that actually fixes the shot first.
-        if report.brightness < minBrightness {
-            report.verdict = .retake("It's too dark. Add some light or turn on the flash.")
-            return report
-        }
-        if report.clipped > maxClipped || report.brightness > maxBrightness {
-            report.verdict = .retake("There's glare on the page. Tilt the phone slightly.")
-            return report
-        }
-        if report.sharpness < minSharpness {
-            report.verdict = .retake("The page is blurry. Hold the phone still and try again.")
-            return report
-        }
+        // Whether a page is in frame decides how strict we are. A bill must be
+        // sharp and whole — a misread amount is worse than no answer — but a room,
+        // a dog or a street only needs to be describable, so we let far more
+        // through and let the model hedge rather than bouncing the shot.
+        var isDocument = false
         if checkDocumentEdges {
             let doc = documentEdges(in: image)
             report.documentFound = doc.found
             report.cutOffEdge = doc.cutOff
-            if let edge = doc.cutOff {
-                report.verdict = .retake("The \(edge) edge is cut off. Move back a little.")
-                return report
-            }
+            isDocument = doc.found
         }
+
+        // The gate no longer blocks anything. It looks, measures, and hands the
+        // findings on — `documentFound` routes page vs scene, `cutOffEdge` and
+        // `qualityHint` become the caveat the model leads with — so the model
+        // always gets to try. Nothing here refuses a shot any more.
+        _ = isDocument
         return report
     }
 

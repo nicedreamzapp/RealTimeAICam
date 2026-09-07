@@ -1,4 +1,6 @@
 import AVFoundation
+import Combine
+import Speech
 import SwiftUI
 
 enum OCRMode {
@@ -228,6 +230,12 @@ struct LiveOCRView: View {
     @State private var scannedSummary = ""
     @State private var scannedText = ""
     @State private var isScanning = false
+    // The still we just captured, held on screen (and soon, asked about)
+    // until Next shot. nil means the live camera is showing.
+    @State private var frozenPhoto: UIImage?
+    @State private var isListening = false
+    @State private var isAsking = false
+    @StateObject private var listener = SpeechRecognizer()
 
     @StateObject private var buttonDebouncer = ButtonPressDebouncer() // Debouncer to avoid rapid multiple presses
 
@@ -276,6 +284,9 @@ struct LiveOCRView: View {
                 scannedSummary = "The camera couldn't take the picture. Try again."
                 return
             }
+            // Hold this exact frame on screen — it's what the model is looking at.
+            let captured = UIImage(cgImage: image)
+            DispatchQueue.main.async { frozenPhoto = captured }
             // Vision path: when the app ships a VisionModel folder the model is
             // shown the photo itself — no recognizer, no text narrator. Without
             // the folder (or if the model can't answer) it is the OCR path below,
@@ -293,13 +304,23 @@ struct LiveOCRView: View {
                         FrameQualityGate.check(image, checkDocumentEdges: true)
                     }.value
                     if case .retake(let why) = gate.verdict {
-                        OnDeviceNarrator.log(read: "[photo: page, gated]", said: why,
+                        OnDeviceNarrator.log(read: "[photo: gated]", said: why,
                                              extra: ["gate": gate.logValue])
                         await MainActor.run { say(why) }
                         return
                     }
-                    let said = await OnDeviceVisionNarrator.shared.narratePage(
-                        UIImage(cgImage: image), gate: gate.logValue)
+                    // Paper gets the strict mail reader; anything else — a room, a
+                    // dog, a street — gets the scene describer, which hedges on a
+                    // dim or soft shot instead of refusing it.
+                    let uiImage = UIImage(cgImage: image)
+                    let said: String?
+                    if gate.documentFound == true {
+                        said = await OnDeviceVisionNarrator.shared.narratePage(
+                            uiImage, gate: gate.logValue, hint: gate.qualityHint, cutOff: gate.cutOffEdge)
+                    } else {
+                        said = await OnDeviceVisionNarrator.shared.narrateScene(
+                            uiImage, gate: gate.logValue, hint: gate.qualityHint)
+                    }
                     await MainActor.run {
                         if let said { say(said) } else { readWithOCR(image) }
                     }
@@ -344,6 +365,46 @@ struct LiveOCRView: View {
             isSpeaking = false
         }
         isSpeaking = true
+    }
+
+    /// Let go of the frozen shot and return to the live camera for a new one.
+    private func nextShot() {
+        viewModel.stopSpeaking()
+        isSpeaking = false
+        scannedText = ""
+        scannedSummary = ""
+        frozenPhoto = nil
+        cameraPreviewRef?.resumeSession()
+    }
+
+    /// Hold-to-ask: begins listening while the button is held.
+    private func startAsk() {
+        guard frozenPhoto != nil, !isListening, !isAsking else { return }
+        viewModel.stopSpeaking()
+        isSpeaking = false
+        isListening = true
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        Task { await listener.start() }
+    }
+
+    /// Let go: transcribe the question on-device, answer it about the frozen photo.
+    private func finishAsk() {
+        guard isListening else { return }
+        isListening = false
+        Task {
+            let heard = await listener.stopAndTranscribe()
+            let q = heard.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let photo = frozenPhoto, !q.isEmpty else {
+                await MainActor.run { scannedSummary = "I didn't catch that. Hold the button and ask again." }
+                return
+            }
+            await MainActor.run { isAsking = true; scannedSummary = "Thinking…" }
+            let answer = await OnDeviceVisionNarrator.shared.ask(q, about: photo)
+            await MainActor.run {
+                isAsking = false
+                say(answer ?? "Sorry, I couldn't work that out. Try asking again.")
+            }
+        }
     }
 
     // Header text that changes based on state
@@ -398,6 +459,16 @@ struct LiveOCRView: View {
                     onPinchEnded: { viewModel.isPinching = false }
                 )
                 .ignoresSafeArea()
+
+                // The shot you just took, held on screen over the live preview
+                // so you can see what was read until you choose Next shot.
+                if let frozenPhoto {
+                    Image(uiImage: frozenPhoto)
+                        .resizable()
+                        .scaledToFill()
+                        .ignoresSafeArea()
+                        .accessibilityHidden(true)
+                }
 
                 // Gradient overlays
                 VStack {
@@ -554,30 +625,82 @@ struct LiveOCRView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
 
-                    // Mail mode's primary action. Big, centred, and the only thing
-                    // you have to find — aim at the page and press it.
+                    // Mail mode's primary action. Big, centred, the only thing you
+                    // have to find — aim and press. Once a shot is frozen on screen
+                    // it turns into Next shot, to let go and aim again.
                     if ocrMode == .mail {
-                        Button(action: { scanPage() }) {
-                            HStack(spacing: 10) {
-                                Image(systemName: isScanning ? "hourglass" : "viewfinder")
-                                    .font(.system(size: 22, weight: .semibold))
-                                Text(isScanning ? "Looking…" : "What's this?")
-                                    .font(.system(size: 19, weight: .semibold))
+                        if frozenPhoto != nil, !isScanning {
+                            VStack(spacing: 10) {
+                                // Hold to ask a question about the photo on screen.
+                                HStack(spacing: 10) {
+                                    Image(systemName: isListening ? "waveform"
+                                          : (isAsking ? "hourglass" : "mic.fill"))
+                                        .font(.system(size: 22, weight: .semibold))
+                                    Text(isListening ? "Listening… let go to ask"
+                                         : (isAsking ? "Thinking…" : "Hold to ask about this"))
+                                        .font(.system(size: 18, weight: .semibold))
+                                }
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(
+                                    Capsule()
+                                        .fill((isListening ? Color.red : Color.blue).opacity(0.8))
+                                        .overlay(Capsule().stroke(Color.white.opacity(0.5), lineWidth: 1.5))
+                                )
+                                .contentShape(Capsule())
+                                .gesture(
+                                    DragGesture(minimumDistance: 0)
+                                        .onChanged { _ in startAsk() }
+                                        .onEnded { _ in finishAsk() }
+                                )
+                                .accessibilityLabel("Ask about this photo")
+                                .accessibilityHint("Hold, speak your question, then let go to hear the answer")
+
+                                Button(action: { nextShot() }) {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: "camera.viewfinder")
+                                            .font(.system(size: 22, weight: .semibold))
+                                        Text("Next shot")
+                                            .font(.system(size: 19, weight: .semibold))
+                                    }
+                                    .foregroundStyle(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .background(
+                                        Capsule()
+                                            .fill(Color.purple.opacity(0.75))
+                                            .overlay(Capsule().stroke(Color.white.opacity(0.5), lineWidth: 1.5))
+                                    )
+                                }
+                                .accessibilityLabel("Next shot")
+                                .accessibilityHint("Clears this photo and returns to the camera for a new picture")
                             }
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(
-                                Capsule()
-                                    .fill(Color.purple.opacity(isScanning ? 0.35 : 0.75))
-                                    .overlay(Capsule().stroke(Color.white.opacity(0.5), lineWidth: 1.5))
-                            )
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 14)
+                        } else {
+                            Button(action: { scanPage() }) {
+                                HStack(spacing: 10) {
+                                    Image(systemName: isScanning ? "hourglass" : "viewfinder")
+                                        .font(.system(size: 22, weight: .semibold))
+                                    Text(isScanning ? "Looking…" : "What's this?")
+                                        .font(.system(size: 19, weight: .semibold))
+                                }
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(
+                                    Capsule()
+                                        .fill(Color.purple.opacity(isScanning ? 0.35 : 0.75))
+                                        .overlay(Capsule().stroke(Color.white.opacity(0.5), lineWidth: 1.5))
+                                )
+                            }
+                            .disabled(isScanning)
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 14)
+                            .accessibilityLabel(isScanning ? "Looking" : "What's this?")
+                            .accessibilityHint("Takes a picture and says what it is: a letter, a bill, a label, or whatever is in front of you")
                         }
-                        .disabled(isScanning)
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 14)
-                        .accessibilityLabel(isScanning ? "Looking" : "What's this?")
-                        .accessibilityHint("Takes a picture and says what it is: a letter, a bill, a label, or whatever is in front of you")
                     }
 
                     // Bottom action buttons - using extracted metrics
@@ -994,3 +1117,70 @@ private struct AppleSpanishTranslationModifier: ViewModifier {
     func body(content: Content) -> some View { content }
 }
 #endif
+
+// MARK: - Follow-up question listening (on-device, offline)
+
+/// Press-and-hold speech to text for follow-up questions about the frozen photo.
+/// Everything stays on the phone: on-device recognition is requested, and the
+/// audio session is handed straight back to the speaker the moment you let go.
+@MainActor
+final class SpeechRecognizer: ObservableObject {
+    @Published private(set) var isRunning = false
+
+    private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+    private let engine = AVAudioEngine()
+    private var request: SFSpeechAudioBufferRecognitionRequest?
+    private var task: SFSpeechRecognitionTask?
+    private var transcript = ""
+
+    func start() async {
+        guard await Self.authorize(), let recognizer, recognizer.isAvailable else { return }
+        transcript = ""
+        let req = SFSpeechAudioBufferRecognitionRequest()
+        req.shouldReportPartialResults = true
+        if recognizer.supportsOnDeviceRecognition { req.requiresOnDeviceRecognition = true }
+        request = req
+        do {
+            let s = AVAudioSession.sharedInstance()
+            try s.setCategory(.playAndRecord, mode: .measurement, options: [.duckOthers, .defaultToSpeaker])
+            try s.setActive(true, options: .notifyOthersOnDeactivation)
+        } catch { return }
+        let node = engine.inputNode
+        node.removeTap(onBus: 0)
+        node.installTap(onBus: 0, bufferSize: 1024, format: node.outputFormat(forBus: 0)) { [weak self] buf, _ in
+            self?.request?.append(buf)
+        }
+        task = recognizer.recognitionTask(with: req) { [weak self] result, _ in
+            guard let result else { return }
+            let text = result.bestTranscription.formattedString
+            Task { @MainActor in self?.transcript = text }
+        }
+        engine.prepare()
+        do { try engine.start(); isRunning = true } catch { isRunning = false }
+    }
+
+    func stopAndTranscribe() async -> String {
+        guard isRunning else { return transcript }
+        engine.stop()
+        engine.inputNode.removeTap(onBus: 0)
+        request?.endAudio()
+        isRunning = false
+        try? await Task.sleep(nanoseconds: 400_000_000) // let the last words land
+        task?.cancel(); task = nil; request = nil
+        // Hand audio back to the speaker so the answer can be read aloud.
+        let s = AVAudioSession.sharedInstance()
+        try? s.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+        try? s.setActive(true)
+        return transcript
+    }
+
+    private static func authorize() async -> Bool {
+        let speech = await withCheckedContinuation { c in
+            SFSpeechRecognizer.requestAuthorization { c.resume(returning: $0 == .authorized) }
+        }
+        guard speech else { return false }
+        return await withCheckedContinuation { c in
+            AVAudioSession.sharedInstance().requestRecordPermission { c.resume(returning: $0) }
+        }
+    }
+}
