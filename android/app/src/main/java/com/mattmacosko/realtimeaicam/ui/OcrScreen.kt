@@ -79,6 +79,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -204,7 +208,14 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit) {
                 modifier = Modifier
                     .clip(RoundedCornerShape(20.dp))
                     .background(IosColors.Material.copy(alpha = 0.85f), RoundedCornerShape(20.dp))
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                    .semantics {
+                        contentDescription = if (isSpanish) {
+                            "Mode, translating Spanish to English"
+                        } else {
+                            "Mode, reading English text"
+                        }
+                    },
             )
         }
 
@@ -241,6 +252,11 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit) {
         ) {
             val displayText = translated ?: text
             val isTranslationShown = translated != null
+            val cardHeading = when {
+                !isSpanish -> "Detected"
+                isTranslationShown -> "Translation"
+                else -> "Spanish text"
+            }
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -250,8 +266,14 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit) {
                         enabled = isSpanish && isTranslationShown,
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
+                        onClickLabel = "Show copy, continue reading and new scan",
                     ) { pipeline.showTranslationPopup.value = true }
-                    .padding(16.dp),
+                    .padding(16.dp)
+                    // Read as one block: a status dot, a heading and a scrolling
+                    // body are three separate stops otherwise.
+                    .semantics(mergeDescendants = true) {
+                        contentDescription = "$cardHeading. $displayText"
+                    },
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Row(
@@ -301,12 +323,19 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit) {
                 .padding(bottom = 32.dp, start = 20.dp, end = 20.dp),
         ) {
             // 1. Settings
-            CircleControlButton(onClick = { showSettings = true }) {
+            CircleControlButton(
+                label = "Settings",
+                clickLabel = "Open settings and tips",
+                onClick = { showSettings = true },
+            ) {
                 Icon(Icons.Default.Settings, null, tint = Color.White, modifier = Modifier.size(22.dp))
             }
             // 2. Torch
             CircleControlButton(
                 ringColor = if (torchOn) IosColors.Yellow.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.2f),
+                label = if (torchOn) "Turn off flashlight" else "Turn on flashlight",
+                stateLabel = if (torchOn) "On" else "Off",
+                clickLabel = if (torchOn) "Turn the flashlight off" else "Open the brightness choices",
                 onClick = {
                     if (torchOn) pipeline.setTorch(false) else showTorchPopup = !showTorchPopup
                 },
@@ -320,9 +349,12 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit) {
             }
             // 3. Translate (Spanish, pre-translation) or Copy
             if (isSpanish && translated == null) {
-                CircleControlButton(onClick = {
-                    if (debouncer.tryFire()) pipeline.translate()
-                }) {
+                CircleControlButton(
+                    label = "Translate",
+                    stateLabel = if (translating) "Translating" else null,
+                    clickLabel = "Translate the Spanish text on screen into English",
+                    onClick = { if (debouncer.tryFire()) pipeline.translate() },
+                ) {
                     Icon(
                         Icons.Default.Translate,
                         null,
@@ -331,10 +363,14 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit) {
                     )
                 }
             } else {
-                CircleControlButton(onClick = {
-                    val t = translated ?: text
-                    if (t.isNotBlank()) copyToClipboard(context, t)
-                }) {
+                CircleControlButton(
+                    label = "Copy text",
+                    clickLabel = "Copy the text on screen to the clipboard",
+                    onClick = {
+                        val t = translated ?: text
+                        if (t.isNotBlank()) copyToClipboard(context, t)
+                    },
+                ) {
                     Icon(Icons.Default.ContentCopy, null, tint = Color.White, modifier = Modifier.size(22.dp))
                 }
             }
@@ -343,6 +379,9 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit) {
             CircleControlButton(
                 fillColor = if (isSpeaking) IosColors.Green.copy(alpha = 0.30f)
                 else Color.Black.copy(alpha = 0.32f),
+                label = if (isSpeaking) "Stop reading" else "Read text aloud",
+                stateLabel = if (isSpeaking) "Speaking" else "Not speaking",
+                clickLabel = if (isSpeaking) "Stop speaking" else "Speak the text the camera has found",
                 onClick = {
                     if (debouncer.tryFire()) pipeline.speakCurrent()
                 },
@@ -350,7 +389,11 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit) {
                 Icon(Icons.Default.RecordVoiceOver, null, tint = Color.White, modifier = Modifier.size(22.dp))
             }
             // 5. Reset
-            CircleControlButton(onClick = { pipeline.reset() }) {
+            CircleControlButton(
+                label = "Clear and stop",
+                clickLabel = "Clear the detected text and stop speaking",
+                onClick = { pipeline.reset() },
+            ) {
                 Icon(Icons.Default.Refresh, null, tint = Color.White, modifier = Modifier.size(22.dp))
             }
         }
@@ -363,7 +406,9 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit) {
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
+                        onClickLabel = "Close the flashlight brightness choices",
                     ) { showTorchPopup = false }
+                    .semantics { contentDescription = "Close flashlight brightness" }
             )
         }
 
@@ -405,10 +450,14 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit) {
                                 if (selected) IosColors.Yellow else Color.White.copy(alpha = 0.3f),
                                 RoundedCornerShape(8.dp),
                             )
-                            .clickable {
+                            .clickable(role = Role.Button) {
                                 torchPreset = preset
                                 pipeline.setTorch(true)
                                 showTorchPopup = false
+                            }
+                            .semantics(mergeDescendants = true) {
+                                contentDescription = "Flashlight $preset percent"
+                                stateDescription = if (selected) "Selected" else "Not selected"
                             },
                     ) {
                         Text("$preset%", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Color.White)
@@ -450,8 +499,10 @@ private fun TranslationActionsPopup(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
+                onClickLabel = "Close and keep reading",
                 onClick = onContinue,
-            ),
+            )
+            .semantics { contentDescription = "Close translation options" },
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -497,8 +548,9 @@ private fun PopupActionButton(
             .clip(RoundedCornerShape(14.dp))
             .background(accent.copy(alpha = 0.30f), RoundedCornerShape(14.dp))
             .border(1.dp, accent.copy(alpha = 0.50f), RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick)
-            .padding(vertical = 14.dp),
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(vertical = 14.dp)
+            .semantics(mergeDescendants = true) { contentDescription = label },
     ) {
         Spacer(Modifier.weight(1f))
         Icon(icon, null, tint = Color.White, modifier = Modifier.size(18.dp))
@@ -562,8 +614,10 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit) {
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
+                onClickLabel = "Close settings",
                 onClick = onDismiss,
-            ),
+            )
+            .semantics { contentDescription = "Close settings" },
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -594,9 +648,11 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit) {
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
+                            role = Role.Button,
                             onClick = onDismiss,
                         )
-                        .padding(4.dp),
+                        .padding(4.dp)
+                        .semantics { contentDescription = "Close settings" },
                 )
             }
             Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.15f)))
@@ -622,10 +678,15 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit) {
                         if (history.isNotEmpty()) {
                             Text(
                                 "Clear", fontSize = 12.sp, color = IosColors.Red,
-                                modifier = Modifier.clickable {
-                                    CopyHistory.clear(context)
-                                    history = emptyList()
-                                },
+                                modifier = Modifier
+                                    .clickable(
+                                        role = Role.Button,
+                                        onClickLabel = "Delete every saved copy from this device",
+                                    ) {
+                                        CopyHistory.clear(context)
+                                        history = emptyList()
+                                    }
+                                    .semantics { contentDescription = "Clear copy history" },
                             )
                         }
                     }
@@ -662,7 +723,8 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit) {
                                     tint = IosColors.Blue,
                                     modifier = Modifier
                                         .size(18.dp)
-                                        .clickable { copyToClipboard(context, item) },
+                                        .clickable(role = Role.Button) { copyToClipboard(context, item) }
+                                        .semantics { contentDescription = "Copy this saved text" },
                                 )
                             }
                         }

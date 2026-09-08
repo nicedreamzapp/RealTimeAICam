@@ -58,6 +58,12 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -159,20 +165,34 @@ fun DetectionChrome(
         // The six buttons are one content lambda shared by both orientations.
         val controlButtons: @Composable () -> Unit = {
             // 1. Camera flip — iOS handleFlipCamera (front ↔ rear)
-            CircleControlButton(onClick = {
-                if (buttonDebouncer.tryFire()) pipeline.flipCamera()
-            }) {
+            CircleControlButton(
+                label = "Switch camera",
+                stateLabel = if (isFront) "Front camera" else "Rear camera",
+                clickLabel = "Switch between the front and rear camera",
+                onClick = { if (buttonDebouncer.tryFire()) pipeline.flipCamera() },
+            ) {
                 Icon(Icons.Default.Cameraswitch, null, tint = Color.White, modifier = Modifier.size(22.dp))
             }
             // 2. Lens toggle — iOS handleToggleCameraZoom (ultra-wide).
             //    Hidden (slot preserved) when unsupported or front camera,
             //    exactly like iOS's opacity-0 + disabled treatment.
-            Box(Modifier.alpha(if (hasUltraWide && !isFront) 1f else 0f)) {
-                CircleControlButton(onClick = {
-                    if (hasUltraWide && !isFront && buttonDebouncer.tryFire()) {
-                        pipeline.toggleUltraWide()
-                    }
-                }) {
+            val lensVisible = hasUltraWide && !isFront
+            Box(
+                Modifier
+                    .alpha(if (lensVisible) 1f else 0f)
+                    // An invisible button is still a TalkBack stop unless the
+                    // semantics go with the pixels.
+                    .then(if (lensVisible) Modifier else Modifier.clearAndSetSemantics { })
+            ) {
+                CircleControlButton(
+                    label = if (isUltraWide) "Switch to normal camera" else "Switch to wide angle camera",
+                    clickLabel = "Change how much the camera can see at once",
+                    onClick = {
+                        if (hasUltraWide && !isFront && buttonDebouncer.tryFire()) {
+                            pipeline.toggleUltraWide()
+                        }
+                    },
+                ) {
                     Icon(
                         Icons.Default.Widgets,
                         null,
@@ -182,9 +202,16 @@ fun DetectionChrome(
                 }
             }
             // 3. Torch — hidden when front camera (no flash), like iOS
-            Box(Modifier.alpha(if (isFront) 0f else 1f)) {
+            Box(
+                Modifier
+                    .alpha(if (isFront) 0f else 1f)
+                    .then(if (isFront) Modifier.clearAndSetSemantics { } else Modifier)
+            ) {
                 CircleControlButton(
                     ringColor = if (torchOn) IosColors.Yellow.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.2f),
+                    label = if (torchOn) "Turn off flashlight" else "Turn on flashlight",
+                    stateLabel = if (torchOn) "On" else "Off",
+                    clickLabel = if (torchOn) "Turn the flashlight off" else "Open the brightness choices",
                     onClick = {
                         if (isFront) return@CircleControlButton
                         if (torchOn) pipeline.setTorch(false)
@@ -199,8 +226,9 @@ fun DetectionChrome(
                     )
                 }
             }
-            // 4. LiDAR — no Android equivalent: alpha 0, slot preserved (spec §7.1)
-            Box(Modifier.alpha(0f)) {
+            // 4. LiDAR — no Android equivalent: alpha 0, slot preserved (spec §7.1).
+            // Hidden from TalkBack too: it does nothing, so it must not be a stop.
+            Box(Modifier.alpha(0f).clearAndSetSemantics { }) {
                 CircleControlButton(onClick = {}) {
                     Icon(Icons.Default.Straighten, null, tint = IosColors.Blue, modifier = Modifier.size(22.dp))
                 }
@@ -209,6 +237,9 @@ fun DetectionChrome(
             CircleControlButton(
                 ringColor = if (speechEnabled) IosColors.Green.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.25f),
                 ringWidth = if (speechEnabled) 2.dp else 1.dp,
+                label = if (speechEnabled) "Turn off spoken announcements" else "Turn on spoken announcements",
+                stateLabel = if (speechEnabled) "Announcements on" else "Announcements off",
+                clickLabel = "Control whether detected objects are spoken aloud",
                 onClick = {
                     if (!buttonDebouncer.tryFire()) return@CircleControlButton
                     pipeline.announcer.setEnabled(!speechEnabled)
@@ -217,7 +248,12 @@ fun DetectionChrome(
                 Text("🗣️", fontSize = 20.sp)
             }
             // 6. Confidence
-            CircleControlButton(onClick = { showConfidencePopup = !showConfidencePopup }) {
+            CircleControlButton(
+                label = "Detection sensitivity",
+                stateLabel = "${(confidence * 100).roundToInt()} percent",
+                clickLabel = "Open a slider for how sure the app must be before naming something",
+                onClick = { showConfidencePopup = !showConfidencePopup },
+            ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     Icon(Icons.Default.Visibility, null, tint = Color.White, modifier = Modifier.size(16.dp))
                     Text(
@@ -305,7 +341,9 @@ fun DetectionChrome(
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
+                            onClickLabel = "Close the flashlight brightness choices",
                         ) { showTorchPopup = false }
+                        .semantics { contentDescription = "Close flashlight brightness" }
                 )
             }
 
@@ -341,6 +379,7 @@ fun DetectionChrome(
                 ) {
                     for (preset in listOf(100, 75, 50, 25)) {
                         val selected = preset == torchPreset
+                        val isPresetSelected = selected
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier
@@ -356,10 +395,14 @@ fun DetectionChrome(
                                     if (selected) IosColors.Yellow else Color.White.copy(alpha = 0.3f),
                                     RoundedCornerShape(8.dp),
                                 )
-                                .clickable {
+                                .clickable(role = Role.Button) {
                                     torchPreset = preset
                                     pipeline.setTorch(true)
                                     showTorchPopup = false
+                                }
+                                .semantics(mergeDescendants = true) {
+                                    contentDescription = "Flashlight $preset percent"
+                                    stateDescription = if (isPresetSelected) "Selected" else "Not selected"
                                 },
                         ) {
                             Text("$preset%", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Color.White)
@@ -419,7 +462,11 @@ fun DetectionChrome(
                             ),
                             modifier = Modifier
                                 .requiredWidth(160.dp)
-                                .rotate(-90f),
+                                .rotate(-90f)
+                                .semantics {
+                                    contentDescription = "Detection sensitivity"
+                                    stateDescription = "${(confidence * 100).roundToInt()} percent"
+                                },
                         )
                     }
                     Text(
@@ -449,7 +496,10 @@ private fun FpsChip(fps: Float) {
             .clip(RoundedCornerShape(12.dp))
             .background(IosColors.Material.copy(alpha = 0.55f), RoundedCornerShape(12.dp))
             .border(1.25.dp, fpsColor, RoundedCornerShape(12.dp))
-            .padding(vertical = 8.dp, horizontal = 10.dp),
+            .padding(vertical = 8.dp, horizontal = 10.dp)
+            .semantics(mergeDescendants = true) {
+                contentDescription = "Speed, ${fps.roundToInt()} frames per second"
+            },
     ) {
         Icon(Icons.Default.Speed, null, tint = fpsColor, modifier = Modifier.size(12.dp))
         Text("%.2f".format(fps), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
@@ -474,7 +524,10 @@ private fun CountChip(count: Int) {
             .clip(RoundedCornerShape(12.dp))
             .background(IosColors.Material.copy(alpha = 0.85f), RoundedCornerShape(12.dp))
             .border(1.5.dp, countColor, RoundedCornerShape(12.dp))
-            .padding(vertical = 8.dp, horizontal = 12.dp),
+            .padding(vertical = 8.dp, horizontal = 12.dp)
+            .semantics(mergeDescendants = true) {
+                contentDescription = if (count == 1) "1 object in view" else "$count objects in view"
+            },
     ) {
         Icon(Icons.Default.Visibility, null, tint = countColor, modifier = Modifier.size(12.dp))
         Text("$count", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
@@ -487,6 +540,9 @@ fun CircleControlButton(
     ringColor: Color = Color.White.copy(alpha = 0.2f),
     ringWidth: Dp = 1.dp,
     fillColor: Color = Color.Black.copy(alpha = 0.32f),
+    label: String = "",
+    clickLabel: String? = null,
+    stateLabel: String? = null,
     onClick: () -> Unit,
     content: @Composable () -> Unit,
 ) {
@@ -500,8 +556,16 @@ fun CircleControlButton(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
+                role = Role.Button,
+                onClickLabel = clickLabel,
                 onClick = onClick,
-            ),
+            )
+            // These are icon-only circles. Without a label TalkBack announces
+            // nothing but "button".
+            .semantics(mergeDescendants = true) {
+                if (label.isNotEmpty()) contentDescription = label
+                if (stateLabel != null) stateDescription = stateLabel
+            },
     ) { content() }
 }
 
@@ -537,6 +601,7 @@ fun IosSegmentedControl(
         )
         Row(Modifier.fillMaxSize()) {
             options.forEachIndexed { i, label ->
+                val isChosen = i == selectedIndex
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
@@ -545,7 +610,13 @@ fun IosSegmentedControl(
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
-                        ) { onSelect(i) },
+                            role = Role.Tab,
+                            onClickLabel = "Show $label objects",
+                        ) { onSelect(i) }
+                        .semantics(mergeDescendants = true) {
+                            contentDescription = "$label objects"
+                            selected = isChosen
+                        },
                 ) {
                     Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.White)
                 }

@@ -15,6 +15,8 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Text
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import android.os.SystemClock
 
 /** iOS dark-mode system colors — the app is always dark (UI_SPEC §0). */
@@ -52,7 +54,9 @@ fun OutlinedText(
     fontWeight: FontWeight = FontWeight.Bold,
 ) {
     val w = with(LocalDensity.current) { strokeWidth.toPx() }.let { kotlin.math.ceil(it).toInt() }
-    Box(modifier) {
+    // The outline is the same string drawn five times. Without collapsing the
+    // semantics here, TalkBack reads every label on the home screen five times.
+    Box(modifier.clearAndSetSemantics { contentDescription = text }) {
         for ((dx, dy) in listOf(-w to -w, w to -w, -w to w, w to w)) {
             Text(
                 text = text,

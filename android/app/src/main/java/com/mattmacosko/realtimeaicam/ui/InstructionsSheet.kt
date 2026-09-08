@@ -43,6 +43,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -122,11 +125,14 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
+                            role = Role.Button,
+                            onClickLabel = "Close the instructions",
                         ) {
                             stopAudio()
                             onDismiss()
                         }
-                        .padding(4.dp),
+                        .padding(4.dp)
+                        .semantics { contentDescription = "Done" },
                 )
                 Text(
                     "Instructions",
@@ -164,7 +170,15 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
                             (if (speaking) IosColors.Red else IosColors.Blue).copy(alpha = 0.18f),
                             RoundedCornerShape(12.dp),
                         )
-                        .clickable(enabled = ttsReady) {
+                        .clickable(
+                            enabled = ttsReady,
+                            role = Role.Button,
+                            onClickLabel = if (speaking) {
+                                "Stop the spoken instructions"
+                            } else {
+                                "Speak a full guide to the app"
+                            },
+                        ) {
                             if (speaking) {
                                 stopAudio()
                             } else {
@@ -172,7 +186,14 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
                                 tts.speak(TUTORIAL_TEXT, TextToSpeech.QUEUE_FLUSH, null, "tutorial")
                             }
                         }
-                        .padding(16.dp),
+                        .padding(16.dp)
+                        .semantics(mergeDescendants = true) {
+                            contentDescription = if (speaking) {
+                                "Stop audio tutorial"
+                            } else {
+                                "Play full audio tutorial"
+                            }
+                        },
                 ) {
                     Spacer(Modifier.weight(1f))
                     Icon(

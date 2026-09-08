@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "RealTime AI Cam"
 include(":app")
+include(":vision_model")

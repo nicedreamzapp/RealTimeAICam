@@ -26,6 +26,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -189,8 +193,10 @@ fun VoiceGridPopup(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
+                onClickLabel = "Close the voice list",
                 onClick = onDismiss,
-            ),
+            )
+            .semantics { contentDescription = "Close voice list" },
         contentAlignment = Alignment.BottomCenter,
     ) {
         Column(
@@ -231,11 +237,18 @@ fun VoiceGridPopup(
                                     else Color.Black.copy(alpha = 0.6f),
                                     RoundedCornerShape(8.dp),
                                 )
-                                .clickable {
+                                .clickable(
+                                    role = Role.Button,
+                                    onClickLabel = "Use this voice for reading aloud",
+                                ) {
                                     model.select(option)
                                     onDismiss()
                                 }
-                                .padding(vertical = 6.dp, horizontal = 4.dp),
+                                .padding(vertical = 6.dp, horizontal = 4.dp)
+                                .semantics(mergeDescendants = true) {
+                                    contentDescription = option.display
+                                    stateDescription = if (isSelected) "Selected" else "Not selected"
+                                },
                         ) {
                             Text(option.emoji, fontSize = 20.sp)
                             Text(

@@ -45,6 +45,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -65,6 +69,7 @@ fun HomeScreen(
     onEnglishOcr: () -> Unit,
     onSpanishOcr: () -> Unit,
     onObjectDetection: () -> Unit,
+    onWhatsThis: () -> Unit,
     onInfo: () -> Unit,
     onVoicePicker: () -> Unit,
 ) {
@@ -108,9 +113,12 @@ fun HomeScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 EntryAnimated(700) {
-                    ModeButton(IosColors.Blue, scale, screenWidth, onClick = {
-                        if (debouncer.tryFire()) onEnglishOcr()
-                    }) {
+                    ModeButton(
+                        IosColors.Blue, scale, screenWidth,
+                        onClick = { if (debouncer.tryFire()) onEnglishOcr() },
+                        label = "English text to speech",
+                        clickLabel = "Point the camera at English text to read it aloud",
+                    ) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -122,9 +130,12 @@ fun HomeScreen(
                     }
                 }
                 EntryAnimated(1200) {
-                    ModeButton(IosColors.Green, scale, screenWidth, onClick = {
-                        if (debouncer.tryFire()) onSpanishOcr()
-                    }) {
+                    ModeButton(
+                        IosColors.Green, scale, screenWidth,
+                        onClick = { if (debouncer.tryFire()) onSpanishOcr() },
+                        label = "Spanish to English translator",
+                        clickLabel = "Point the camera at Spanish text to hear it in English",
+                    ) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(2.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -139,9 +150,28 @@ fun HomeScreen(
                     }
                 }
                 EntryAnimated(1700) {
-                    ModeButton(IosColors.Orange, scale, screenWidth, onClick = {
-                        if (debouncer.tryFire()) onObjectDetection()
-                    }) {
+                    ModeButton(
+                        IosColors.Purple, scale, screenWidth,
+                        onClick = { if (debouncer.tryFire()) onWhatsThis() },
+                        label = "What's this?",
+                        clickLabel = "Take a photo and hear what it is",
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("\uD83D\uDC41\uFE0F", fontSize = (32 * scale).sp)
+                            OutlinedText("What's this?", (20 * scale).sp)
+                        }
+                    }
+                }
+                EntryAnimated(2000) {
+                    ModeButton(
+                        IosColors.Orange, scale, screenWidth,
+                        onClick = { if (debouncer.tryFire()) onObjectDetection() },
+                        label = "Object detection",
+                        clickLabel = "Identify objects around you and hear them announced",
+                    ) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -301,6 +331,8 @@ fun ModeButton(
     scale: Float,
     screenWidth: Dp,
     onClick: () -> Unit,
+    label: String = "",
+    clickLabel: String? = null,
     content: @Composable () -> Unit,
 ) {
     val buttonWidth = minOf((340 * scale).dp, screenWidth - 36.dp)
@@ -327,8 +359,13 @@ fun ModeButton(
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
+                    role = Role.Button,
+                    onClickLabel = clickLabel,
                     onClick = onClick,
-                ),
+                )
+                .semantics(mergeDescendants = true) {
+                    if (label.isNotEmpty()) contentDescription = label
+                },
             contentAlignment = Alignment.Center,
         ) {
             // Accent inner stroke, inset inside the white stroke
@@ -371,7 +408,11 @@ fun ModeButton(
 @Composable
 fun ShadedEmoji(emoji: String, sizeSp: Float) {
     val circle = (sizeSp * 1.35f).dp
-    Box(contentAlignment = Alignment.Center) {
+    // Decorative — the containing control carries the real label.
+    Box(
+        modifier = Modifier.clearAndSetSemantics { },
+        contentAlignment = Alignment.Center,
+    ) {
         Box(
             Modifier
                 .size(circle)
@@ -400,8 +441,11 @@ private fun InfoGuideButton(onClick: () -> Unit) {
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
+                role = Role.Button,
+                onClickLabel = "Open the instructions and audio tutorial",
                 onClick = onClick,
-            ),
+            )
+            .semantics(mergeDescendants = true) { contentDescription = "Info and guide" },
         contentAlignment = Alignment.Center,
     ) {
         Box(
@@ -440,9 +484,12 @@ private fun VoicePickerPill(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
+                role = Role.Button,
+                onClickLabel = "Choose a different voice",
                 onClick = onClick,
             )
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .semantics(mergeDescendants = true) { contentDescription = "Voice, $label" },
     ) {
         Text(emoji, fontSize = (28 * scale).sp)
         Text(

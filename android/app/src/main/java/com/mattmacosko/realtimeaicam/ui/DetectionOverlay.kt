@@ -14,6 +14,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mattmacosko.realtimeaicam.detection.Detection
@@ -46,7 +49,24 @@ fun DetectionOverlay(
     }
     val chipPaint = remember { android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG) }
 
-    Canvas(modifier = modifier.fillMaxSize()) {
+    // A canvas carries no semantics of its own, so everything drawn here is
+    // invisible to TalkBack. Expose the current list as one readable stop.
+    val spokenSummary = if (detections.isEmpty()) {
+        "Nothing detected yet"
+    } else {
+        detections
+            .sortedByDescending { it.score }
+            .joinToString(", ") { "${it.className} ${(it.score * 100).roundToInt()} percent" }
+    }
+
+    Canvas(
+        modifier = modifier
+            .fillMaxSize()
+            .semantics {
+                contentDescription = "Detected objects"
+                stateDescription = spokenSummary
+            }
+    ) {
         if (frameWidth <= 0 || frameHeight <= 0 || detections.isEmpty()) return@Canvas
 
         // FILL_CENTER mapping: frame -> view

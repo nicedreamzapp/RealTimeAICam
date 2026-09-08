@@ -41,7 +41,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.mattmacosko.realtimeaicam.camera.DetectionPipeline
 
 /** iOS AppMode state machine (UI_SPEC §0): no tabs, no nav bar. */
-enum class AppMode { Home, ObjectDetection, OcrEnglish, OcrSpanish }
+enum class AppMode { Home, ObjectDetection, OcrEnglish, OcrSpanish, WhatsThis }
 
 /** Root router. Launch → Home always; camera modes ↔ Home only. */
 @Composable
@@ -98,6 +98,7 @@ fun MainScreen(
                     onEnglishOcr = { onModeChange(AppMode.OcrEnglish) },
                     onSpanishOcr = { onModeChange(AppMode.OcrSpanish) },
                     onObjectDetection = { onModeChange(AppMode.ObjectDetection) },
+                    onWhatsThis = { onModeChange(AppMode.WhatsThis) },
                     onInfo = { showInstructions = true },
                     onVoicePicker = { showVoiceGrid = true },
                 )
@@ -116,6 +117,10 @@ fun MainScreen(
 
             AppMode.OcrSpanish -> CameraGate(hasCameraPermission, onRequestPermission) {
                 OcrScreen(isSpanish = true, onBack = { onModeChange(AppMode.Home) })
+            }
+
+            AppMode.WhatsThis -> CameraGate(hasCameraPermission, onRequestPermission) {
+                WhatsThisScreen(onBack = { onModeChange(AppMode.Home) })
             }
         }
 

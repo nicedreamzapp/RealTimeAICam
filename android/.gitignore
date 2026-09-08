@@ -6,3 +6,12 @@ local.properties
 tools/venv/
 *.iml
 .idea/
+keystore.properties
+
+# Built by hand, too big for git — see android/NARRATOR.md to rebuild both:
+#   app/src/main/jniLibs/**   llama.cpp cross-compiled for Android
+#   vision_model/src/main/assets/*.gguf   the 736 MB vision narrator
+app/src/main/jniLibs/
+vision_model/src/main/assets/
+app/.cxx/
+app/src/main/cpp/include/
