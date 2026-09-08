@@ -6,14 +6,82 @@ struct HomeView: View {
     @Binding var animationState: ContentView.AnimationState
     @Binding var mode: AppMode
     @State private var showInstructions = false
+    @ObservedObject private var modelDownloader = VisionModelDownloader.shared
+    /// Last quarter (25/50/75/100) already spoken aloud, so each is said once.
+    @State private var spokenDownloadQuarter = 0
 
     @StateObject var buttonDebouncer: ButtonPressDebouncer
 
     let onEnglishOCR: () -> Void
     let onSpanishOCR: () -> Void
     let onObjectDetection: () -> Void
+    let onReadMail: () -> Void
     let onVoiceChange: () -> Void
     let speechSynthesizer: AVSpeechSynthesizer
+
+    // MARK: - Vision model download
+
+    /// One small row under the buttons. Hidden once the model is on the phone
+    /// (bundled or downloaded); until then every scan takes the OCR path as before.
+    @ViewBuilder
+    private var visionModelBanner: some View {
+        switch modelDownloader.state {
+        case .ready:
+            EmptyView()
+        case .idle, .failed:
+            VStack(spacing: 4) {
+                if case .failed(let why) = modelDownloader.state {
+                    Text("Download failed: \(why)")
+                        .font(.footnote)
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                }
+                Button {
+                    modelDownloader.start()
+                } label: {
+                    Text("Download the vision model (\(VisionModelStore.approximateSizeDescription), one time, Wi-Fi recommended)")
+                        .font(.footnote.weight(.semibold))
+                        .multilineTextAlignment(.center)
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .frame(maxWidth: .infinity)
+                        .background(Color.white.opacity(0.15))
+                        .cornerRadius(10)
+                }
+                .accessibilityLabel("Download the vision model")
+                .accessibilityHint("One point two gigabytes, one time. Wi-Fi recommended. Lets the app describe photos without reading text first.")
+            }
+            .padding(.bottom, 6)
+        case .downloading, .verifying:
+            let percent = Int((modelDownloader.progress * 100).rounded(.down))
+            VStack(spacing: 4) {
+                Text(modelDownloader.state == .verifying
+                     ? "Checking the vision model…"
+                     : "Downloading the vision model… \(percent)%")
+                    .font(.footnote.weight(.semibold))
+                ProgressView(value: modelDownloader.progress)
+                    .tint(.white)
+            }
+            .padding(.bottom, 6)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(modelDownloader.state == .verifying
+                                ? "Checking the vision model"
+                                : "Downloading the vision model, \(percent) percent")
+        }
+    }
+
+    /// Speaks 25, 50, 75 and 100 percent, each once, through the app's voice.
+    private func announceDownloadProgress(_ value: Double) {
+        guard modelDownloader.state == .downloading || modelDownloader.state == .verifying else { return }
+        let quarter = Int((value * 4).rounded(.down))
+        guard quarter > spokenDownloadQuarter, quarter >= 1 else { return }
+        spokenDownloadQuarter = quarter
+        if quarter >= 4 {
+            SpeechManager.shared.speak("Download complete. Checking the vision model.")
+        } else {
+            SpeechManager.shared.speak("Vision model download \(quarter * 25) percent.")
+        }
+    }
 
     var body: some View {
         // Use iPhone 14 Pro Max (390pt) as baseline
@@ -29,16 +97,18 @@ struct HomeView: View {
                     HeadingView(animateIn: animationState.heading)
                     Spacer()
                     GeometryReader { _ in
-                        VStack(spacing: 18) {
+                        VStack(spacing: 14) {
                             englishOCRButton(scale: scale, screenWidth: screenWidth)
                             spanishOCRButton(scale: scale, screenWidth: screenWidth)
                             objectDetectionButton(scale: scale, screenWidth: screenWidth)
+                            readMailButton(scale: scale, screenWidth: screenWidth)
                         }
                         .frame(maxWidth: .infinity, alignment: .center)
                         // GeometryReader used for vertical spacing only
                     }
-                    .frame(height: 220)
+                    .frame(height: 300)
                     Spacer()
+                    visionModelBanner
                     voicePicker
                     Spacer(minLength: 25)
                 }
@@ -66,6 +136,15 @@ struct HomeView: View {
                     }
                 }
         }
+        .onChange(of: modelDownloader.progress) { _, value in
+            announceDownloadProgress(value)
+        }
+        .onChange(of: modelDownloader.state) { _, value in
+            if value == .ready, spokenDownloadQuarter < 4 {
+                spokenDownloadQuarter = 4
+                SpeechManager.shared.speak("Vision model ready.")
+            }
+        }
         .onAppear {
             if !animationState.hasAnimatedOnce {
                 animateInSequence()
@@ -89,6 +168,7 @@ struct HomeView: View {
                 .resizable()
                 .scaledToFill()
                 .ignoresSafeArea(.all, edges: .all)
+                .accessibilityHidden(true)
         }
     }
 
@@ -238,6 +318,52 @@ struct HomeView: View {
         .accessibilityAddTraits(.isButton)
     }
 
+    private func readMailButton(scale: CGFloat, screenWidth: CGFloat) -> some View {
+        Button(action: {
+            guard buttonDebouncer.canPress("HomeView-6") else { return }
+            onReadMail()
+        }) {
+            HStack(spacing: 4 * scale) {
+                Text("\u{1F4C4}").font(.system(size: 32 * scale))
+                OutlinedText(text: "What's this?", fontSize: 20 * scale)
+            }
+            .padding(.vertical, 16 * scale)
+        }
+        .frame(maxWidth: min(340 * scale, screenWidth - 36), alignment: .center)
+        .padding(.horizontal, 8 * scale)
+        .background(
+            ZStack {
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.white.opacity(0.23), Color.purple.opacity(0.50)]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                Capsule()
+                    .fill(Color.white.opacity(0.13))
+                    .frame(height: 24 * scale)
+                    .offset(y: -18 * scale)
+                Capsule().stroke(Color.white.opacity(0.80), lineWidth: 4.8 * scale)
+                Capsule().stroke(Color.purple, lineWidth: 2.4 * scale)
+                Capsule()
+                    .fill(Color.black.opacity(0.12))
+                    .blur(radius: 7 * scale)
+                    .offset(y: 16 * scale)
+            }
+        )
+        .shadow(color: Color.black.opacity(0.38), radius: 15 * scale, y: 5 * scale)
+        .clipShape(Capsule())
+        .opacity(animationState.button4 ? 1 : 0)
+        .shadow(color: Color.purple.opacity(0.50), radius: 12 * scale)
+        .scaleEffect(animationState.button4 ? 1 : 0.7)
+        .animation(.easeOut(duration: 0.3), value: animationState.button4)
+        .accessibilityLabel("What's this?")
+        .accessibilityHint("Point the camera at a page, a bill, a package, or a room to hear what it is")
+        .accessibilityAddTraits(.isButton)
+    }
+
     private var voicePicker: some View {
         AnimatedVoicePicker(
             viewModel: viewModel,
@@ -288,6 +414,10 @@ struct HomeView: View {
         )
         .shadow(color: Color.black.opacity(0.38), radius: 12, y: 5)
         .clipShape(Capsule())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Info and guide")
+        .accessibilityHint("Opens the instructions, including a spoken audio tutorial")
+        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: - Helper Methods
@@ -311,6 +441,9 @@ struct HomeView: View {
             animationState.button3 = true
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.20) {
+            animationState.button4 = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.70) {
             animationState.picker = true
         }
     }

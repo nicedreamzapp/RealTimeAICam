@@ -42,6 +42,7 @@ struct ContentView: View {
         var button1 = false
         var button2 = false
         var button3 = false
+        var button4 = false
         var picker = false
         var hasAnimatedOnce = false
 
@@ -51,6 +52,7 @@ struct ContentView: View {
             button1 = false
             button2 = false
             button3 = false
+            button4 = false
             picker = false
         }
 
@@ -59,6 +61,7 @@ struct ContentView: View {
             button1 = true
             button2 = true
             button3 = true
+            button4 = true
             picker = true
         }
     }
@@ -127,6 +130,9 @@ struct ContentView: View {
         case .ocrSpanish:
             ocrView(mode: .spanishToEnglish)
 
+        case .mail:
+            ocrView(mode: .mail)
+
         case .objectDetection:
             ObjectDetectionView(
                 viewModel: viewModel,
@@ -162,6 +168,9 @@ struct ContentView: View {
             },
             onObjectDetection: {
                 switchToMode(.objectDetection)
+            },
+            onReadMail: {
+                switchToMode(.mail)
             },
             onVoiceChange: playWelcomeMessage,
             speechSynthesizer: speechSynthesizer
@@ -258,10 +267,27 @@ struct ContentView: View {
         }
     }
 
+    /// The whole screen is replaced on a mode switch. Tell VoiceOver so it moves
+    /// focus and says where it landed instead of going silent.
+    private func announceScreenChange(to newMode: AppMode) {
+        let name: String = switch newMode {
+        case .home: "Home screen"
+        case .objectDetection: "Object detection camera"
+        case .ocrEnglish: "English text reader"
+        case .ocrSpanish: "Spanish to English translator"
+        case .mail: "Mail reader"
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            UIAccessibility.post(notification: .screenChanged, argument: name)
+        }
+    }
+
     private func switchToMode(_ newMode: AppMode) {
         // Ensure newMode is the AppMode enum expected by ResourceManager.switchToMode()
         resourceManager.switchToMode(newMode)
         mode = newMode
+        announceScreenChange(to: newMode)
 
         // Every camera mode needs this: OCR uses its own capture pipeline that
         // never checks, and a denied user otherwise gets a silent black screen.

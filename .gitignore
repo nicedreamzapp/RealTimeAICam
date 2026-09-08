@@ -9,10 +9,15 @@ build/
 
 # macOS noise
 .DS_Store
-
 # Android
 android/build/
 android/app/build/
 android/.gradle/
 android/local.properties
 **/.DS_Store
+
+# On-device model weights (too large for git; see tools/make_manifest.py)
+NarratorModel/
+VisionModel/
+ios/NarratorModel/
+ios/VisionModel/

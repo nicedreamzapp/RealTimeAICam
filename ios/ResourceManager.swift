@@ -10,6 +10,7 @@ enum AppMode: String, CaseIterable {
     case objectDetection
     case ocrEnglish
     case ocrSpanish
+    case mail
 
     var displayName: String {
         switch self {
@@ -17,6 +18,7 @@ enum AppMode: String, CaseIterable {
         case .objectDetection: "Object Detection"
         case .ocrEnglish: "English OCR"
         case .ocrSpanish: "Spanish OCR"
+        case .mail: "Read My Mail"
         }
     }
 }
@@ -83,6 +85,11 @@ final class ResourceManager: ObservableObject {
 
         case .ocrSpanish:
             loadOCRMode(language: .spanish)
+
+        case .mail:
+            // Same camera and recognizer as English OCR — the difference is only
+            // in what gets read back to you.
+            loadOCRMode(language: .english)
         }
 
         updateResourceCount()
