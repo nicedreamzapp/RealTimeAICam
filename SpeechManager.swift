@@ -71,6 +71,10 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
             let audioSession = AVAudioSession.sharedInstance()
             try audioSession.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
             try audioSession.setActive(true)
+            // .playback already prefers the speaker, but force it so a prior
+            // record route (the mic for a follow-up question) can never leave
+            // the voice stuck on the earpiece.
+            try? audioSession.overrideOutputAudioPort(.speaker)
         } catch {
             // Audio session setup failed - silently ignore
         }
@@ -212,6 +216,7 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
     // MARK: - Public Speech Methods (REPLACE ALL OTHER SPEECH SYSTEMS)
 
     func speak(_ text: String) {
+        setupAudioSession() // re-assert the loudspeaker route before talking
         // Stop current speech if any
         if speechSynthesizer.isSpeaking {
             speechSynthesizer.stopSpeaking(at: .immediate)

@@ -224,6 +224,11 @@ class CameraPreviewView: UIView {
     private func configureSession() {
         session.beginConfiguration()
 
+        // Do NOT let the capture session touch the app audio session. Left on
+        // (the default), resuming the camera after a scan flips the route to the
+        // receiver and the spoken description comes out the quiet earpiece.
+        session.automaticallyConfiguresApplicationAudioSession = false
+
         // 720p is plenty when you're pointing at a sign or a paragraph. It is NOT
         // enough for a full page — see useHighResolutionCapture.
         session.sessionPreset = useHighResolutionCapture ? .photo : .hd1280x720

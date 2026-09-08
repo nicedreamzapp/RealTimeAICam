@@ -461,11 +461,13 @@ struct LiveOCRView: View {
                 .ignoresSafeArea()
 
                 // The shot you just took, held on screen over the live preview
-                // so you can see what was read until you choose Next shot.
+                // until you choose Next shot. scaledToFit (on black) shows the
+                // WHOLE frame the model actually looked at, not a cropped fill.
                 if let frozenPhoto {
+                    Color.black.ignoresSafeArea()
                     Image(uiImage: frozenPhoto)
                         .resizable()
-                        .scaledToFill()
+                        .scaledToFit()
                         .ignoresSafeArea()
                         .accessibilityHidden(true)
                 }
@@ -819,6 +821,7 @@ struct LiveOCRView: View {
                     .padding(.horizontal, metrics.padding + max(geometry.safeAreaInsets.leading, geometry.safeAreaInsets.trailing))
                     .padding(.bottom, 32)
                 }
+                .frame(width: geometry.size.width)
 
                 // Translation popup (Spanish mode only)
                 if showTranslationPopup, ocrMode == .spanishToEnglish {

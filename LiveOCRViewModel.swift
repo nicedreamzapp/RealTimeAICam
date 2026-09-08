@@ -232,6 +232,12 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
 
     func speak(text: String, voiceIdentifier: String, completion: @escaping () -> Void) {
         guard !text.isEmpty else { completion(); return }
+        // Force the loudspeaker: the camera or the mic can leave the route on the
+        // earpiece, which makes the spoken description come out quiet.
+        let audio = AVAudioSession.sharedInstance()
+        try? audio.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+        try? audio.setActive(true)
+        try? audio.overrideOutputAudioPort(.speaker)
         if speechSynthesizer.isSpeaking { speechSynthesizer.stopSpeaking(at: .immediate) }
         speechCompletionHandler = completion
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
