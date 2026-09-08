@@ -21,7 +21,10 @@ enum VisionModelStore {
     static let folderName = "VisionModel"
 
     /// Rough size shown to the user before they commit to the download.
-    static let approximateSizeDescription = "1.2 GB"
+    /// 1.2 GB was the 2B model. The bundle now carries the 0.8B at 4-bit,
+    /// which is 622 MB on disk (596 MB of weights). Telling a blind user on
+    /// cellular that a download is twice its real size is its own bug.
+    static let approximateSizeDescription = "622 MB"
 
     struct Manifest: Codable, Equatable {
         struct File: Codable, Equatable {
