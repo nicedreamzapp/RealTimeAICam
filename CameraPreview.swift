@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreMedia
 import SwiftUI
 
 // MARK: - Camera Preview for OCR
@@ -306,7 +307,9 @@ class CameraPreviewView: UIView {
             // Asking a capture for full quality is only legal if the output was
             // told to allow it first. Without this line the capture request is
             // rejected with an exception rather than an error.
-            photoOutput.maxPhotoQualityPrioritization = .speed  // single-frame, near-instant shutter; the model downscales to 1024px so Deep Fusion was pure delay
+            // Allow the full range so a dark scene can use Night mode; per shot
+            // we drop to .speed in good light for an instant shutter (capturePhoto).
+            photoOutput.maxPhotoQualityPrioritization = .quality
         }
 
         // Set video orientation
@@ -413,7 +416,14 @@ class CameraPreviewView: UIView {
             }
             // Never ask for more than the output was configured to allow — that
             // mismatch is itself a throwing offence.
-            settings.photoQualityPrioritization = photoOutput.maxPhotoQualityPrioritization
+            // Smart capture: instant single-frame in good light, but let the system
+            // use its multi-frame Night mode when it is genuinely dark. The camera's
+            // own ISO and exposure are the tell -- both climb in the dark. Without
+            // this a night shot comes back near-black and the model can only say so.
+            let iso = currentDevice?.iso ?? 0
+            let exposure = currentDevice.map { CMTimeGetSeconds($0.exposureDuration) } ?? 0
+            let dim = iso > 1000 || exposure > 0.08
+            settings.photoQualityPrioritization = dim ? .quality : .speed
             // The flash decision belongs to the torch button the user already set.
             if photoOutput.supportedFlashModes.contains(.off) {
                 settings.flashMode = .off

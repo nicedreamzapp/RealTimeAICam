@@ -263,7 +263,7 @@ struct LiveOCRView: View {
         // Mail mode is aim-then-capture, so the screen is silent until the shutter
         // is pressed. Say so, otherwise holding a letter up looks like a dead app.
         scannedSummary.isEmpty
-            ? "Point the camera at the whole page, then press Read this page."
+            ? "Point at anything, then press What's this?"
             : scannedSummary
     }
 
@@ -276,7 +276,7 @@ struct LiveOCRView: View {
         // Wipe the last page before the new one arrives. Anything left on screen
         // during the scan is from a different piece of paper.
         scannedText = ""
-        scannedSummary = "Reading the page…"
+        scannedSummary = "Working it out…"
 
         cameraPreviewRef?.capturePhoto { image in
             guard let image else {
@@ -287,12 +287,18 @@ struct LiveOCRView: View {
             // Hold this exact frame on screen — it's what the model is looking at.
             let captured = UIImage(cgImage: image)
             DispatchQueue.main.async { frozenPhoto = captured }
+            // Save the exact frame so it can be pulled and inspected when a shot
+            // is questioned -- his eyes are ground truth, but I need to see it too.
+            if let jpg = captured.jpegData(compressionQuality: 0.9),
+               let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                try? jpg.write(to: dir.appendingPathComponent("last_capture.jpg"))
+            }
             // Vision path: when the app ships a VisionModel folder the model is
             // shown the photo itself — no recognizer, no text narrator. Without
             // the folder (or if the model can't answer) it is the OCR path below,
             // exactly as before.
             if #available(iOS 17.0, *), OnDeviceVisionNarrator.isBundled {
-                scannedSummary = "Working out what it says…"
+                scannedSummary = "Working it out…"
                 // Free the camera pipeline while the model thinks; it comes back
                 // the moment the answer is spoken.
                 cameraPreviewRef?.stopSession()
@@ -340,7 +346,7 @@ struct LiveOCRView: View {
                 // The pattern-matched version is the floor, not the answer: it
                 // is what gets said if the model can't run or can't help.
                 let fallback = MailSummarizer.summarize(page.text).spoken
-                scannedSummary = "Working out what it says…"
+                scannedSummary = "Working it out…"
 
                 guard #available(iOS 17.0, *) else {
                     say(fallback)

@@ -44,29 +44,21 @@ actor OnDeviceVisionNarrator {
     /// `gate` is the FrameQualityGate log string for the shot that passed.
     func narratePage(_ image: UIImage, gate: String = "ok", hint: String? = nil,
                      cutOff: String? = nil) async -> String? {
-        var notes: [String] = []
-        if let hint { notes.append(hint) }
-        if let cutOff { notes.append("cut off at the \(cutOff)") }
-        let ask: String
-        if notes.isEmpty {
-            ask = "What is this page?"
-        } else {
-            ask = "What is this page? The photo is \(notes.joined(separator: " and ")), but do not refuse. "
-                + "Read whatever text, amounts and dates you can make out, and begin with a short note that the shot was hard to read."
-        }
-        return await narrate(image, longSide: 1024, asking: ask, kind: "page", gate: gate)
+        // Same lesson as the scene path: no dark/blurry/cut-off priming, it only
+        // triggers false refusals. Kept as params for logging.
+        _ = hint; _ = cutOff
+        return await narrate(image, longSide: 1024, asking: "What is this page?", kind: "page", gate: gate)
     }
 
     /// A room, a street, a thing in front of the camera. 768 px is plenty for a
     /// scene and keeps the answer quick.
     func narrateScene(_ image: UIImage, gate: String = "ok", hint: String? = nil) async -> String? {
-        let ask: String
-        if let hint {
-            ask = "What is in front of me? The photo looks \(hint), but do not refuse. "
-                + "Give your best guess of what you can make out, and begin by saying it is hard to see clearly."
-        } else {
-            ask = "What is in front of me? Describe the scene: the objects, any people, and where they are."
-        }
+        // NO "the photo looks dark" priming. On-device testing showed that telling
+        // the model the shot is dark or blurry is exactly what makes it refuse a
+        // perfectly readable dim photo -- the plain question describes dim scenes
+        // fine on its own. `hint` is kept for logging only.
+        _ = hint
+        let ask = "What is in front of me? Describe the scene: the objects, any people, and where they are."
         return await narrate(image, longSide: 768, asking: ask, kind: "scene", gate: gate)
     }
 
