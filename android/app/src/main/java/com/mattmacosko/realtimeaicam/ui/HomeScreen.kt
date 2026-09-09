@@ -151,22 +151,6 @@ fun HomeScreen(
                 }
                 EntryAnimated(1700) {
                     ModeButton(
-                        IosColors.Purple, scale, screenWidth,
-                        onClick = { if (debouncer.tryFire()) onWhatsThis() },
-                        label = "What's this?",
-                        clickLabel = "Take a photo and hear what it is",
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text("\uD83D\uDC41\uFE0F", fontSize = (32 * scale).sp)
-                            OutlinedText("What's this?", (20 * scale).sp)
-                        }
-                    }
-                }
-                EntryAnimated(2000) {
-                    ModeButton(
                         IosColors.Orange, scale, screenWidth,
                         onClick = { if (debouncer.tryFire()) onObjectDetection() },
                         label = "Object detection",
@@ -178,6 +162,22 @@ fun HomeScreen(
                         ) {
                             Text("🐶", fontSize = (35 * scale).sp)
                             OutlinedText("Object Detection", (20 * scale).sp)
+                        }
+                    }
+                }
+                EntryAnimated(2000) {
+                    ModeButton(
+                        IosColors.Purple, scale, screenWidth,
+                        onClick = { if (debouncer.tryFire()) onWhatsThis() },
+                        label = "What's this?",
+                        clickLabel = "Take a photo and hear what it is",
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("\uD83D\uDCC4", fontSize = (32 * scale).sp)
+                            OutlinedText("What's this?", (20 * scale).sp)
                         }
                     }
                 }

@@ -18,7 +18,7 @@ internal object NarratorNative {
         }
     }
 
-    external fun nativeInit(modelPath: String, mmprojPath: String, threads: Int): Long
+    external fun nativeInit(modelPath: String, mmprojPath: String, threads: Int, useGpu: Boolean): Long
     external fun nativeDescribe(
         handle: Long,
         imagePath: String,

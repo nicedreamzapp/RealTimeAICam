@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "llama.h"
+#include "ggml-backend.h"
 #include "mtmd.h"
 #include "mtmd-helper.h"
 
@@ -58,14 +59,51 @@ extern "C" {
 
 JNIEXPORT jlong JNICALL
 Java_com_mattmacosko_realtimeaicam_narrator_NarratorNative_nativeInit(
-        JNIEnv * env, jobject, jstring jmodel, jstring jmmproj, jint nThreads) {
+        JNIEnv * env, jobject, jstring jmodel, jstring jmmproj, jint nThreads, jboolean useGpu) {
     const std::string model_path  = jstr(env, jmodel);
     const std::string mmproj_path = jstr(env, jmmproj);
 
+    // llama.cpp and ggml talk to stderr, which Android throws away. Route
+    // them into logcat so a failed load says why.
+    llama_log_set([](ggml_log_level level, const char * text, void *) {
+        int prio = level == GGML_LOG_LEVEL_ERROR ? ANDROID_LOG_ERROR
+                 : level == GGML_LOG_LEVEL_WARN  ? ANDROID_LOG_WARN : ANDROID_LOG_INFO;
+        __android_log_write(prio, "llama", text);
+    }, nullptr);
     llama_backend_init();
+    LOGI("caller asked for %s", useGpu ? "GPU" : "CPU");
+
+    // Vulkan is linked in; whether a usable GPU showed up is decided here at
+    // runtime. No device (or the caller said no) means everything stays on
+    // the CPU exactly as before.
+    // A GPU is only used if it actually initialises. Some phone drivers
+    // (PowerVR GE8320: no 16-bit storage buffers) make ggml throw the moment
+    // the device is touched, and llama would then refuse to load the model
+    // even for a CPU run — so the device list handed to llama is built here,
+    // explicitly, and the GPU is probed first.
+    std::vector<ggml_backend_dev_t> devices;
+    for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+        ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+        LOGI("backend device %zu: %s (%s)", i, ggml_backend_dev_name(dev), ggml_backend_dev_description(dev));
+        if (!useGpu || ggml_backend_dev_type(dev) != GGML_BACKEND_DEVICE_TYPE_GPU) continue;
+        bool ok = false;
+        try {
+            ggml_backend_t probe = ggml_backend_dev_init(dev, nullptr);
+            if (probe) { ggml_backend_free(probe); ok = true; }
+        } catch (const std::exception & e) {
+            LOGE("GPU %s refused: %s", ggml_backend_dev_name(dev), e.what());
+        } catch (...) {
+            LOGE("GPU %s refused", ggml_backend_dev_name(dev));
+        }
+        if (ok) devices.push_back(dev);
+    }
+    const bool gpu = !devices.empty();
+    devices.push_back(nullptr);  // llama wants a null-terminated list
+    LOGI("running on %s", gpu ? ggml_backend_dev_description(devices[0]) : "CPU");
 
     llama_model_params mparams = llama_model_default_params();
-    mparams.n_gpu_layers = 0;                       // CPU only; phone GPUs vary too much
+    mparams.devices      = devices.data();
+    mparams.n_gpu_layers = gpu ? 99 : 0;
     llama_model * model = llama_model_load_from_file(model_path.c_str(), mparams);
     if (!model) { LOGE("failed to load %s", model_path.c_str()); return 0; }
 
@@ -79,7 +117,7 @@ Java_com_mattmacosko_realtimeaicam_narrator_NarratorNative_nativeInit(
     if (!lctx) { LOGE("failed to create context"); llama_model_free(model); return 0; }
 
     mtmd_context_params vparams = mtmd_context_params_default();
-    vparams.use_gpu        = false;
+    vparams.use_gpu        = gpu;
     vparams.print_timings  = false;
     vparams.n_threads      = nThreads;
     vparams.warmup         = false;

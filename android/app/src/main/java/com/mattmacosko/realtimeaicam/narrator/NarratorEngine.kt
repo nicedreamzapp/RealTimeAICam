@@ -35,7 +35,17 @@ class NarratorEngine private constructor(private val appContext: Context) {
         }
 
         val threads = Runtime.getRuntime().availableProcessors().coerceIn(2, 6)
-        handle = NarratorNative.nativeInit(model.absolutePath, mmproj.absolutePath, threads)
+        // Crash guard for odd GPU drivers: a marker file is left on disk while
+        // the GPU path is being tried. If the app died inside the driver the
+        // marker is still there next launch, and that phone stays on the CPU.
+        val marker = File(appContext.filesDir, GPU_ATTEMPT_MARKER)
+        val useGpu = !marker.exists()
+        if (!useGpu) Log.w(TAG, "a previous GPU attempt never finished; staying on the CPU")
+        if (useGpu) marker.writeText("trying")
+        handle = NarratorNative.nativeInit(model.absolutePath, mmproj.absolutePath, threads, useGpu)
+        // We came back at all, so the driver did not take the process down;
+        // a plain failure is reported by the return value, not the marker.
+        marker.delete()
         return handle != 0L
     }
 
@@ -68,7 +78,41 @@ class NarratorEngine private constructor(private val appContext: Context) {
     private fun modelDirectory(): File? {
         assetPackDirectory()?.let { return it }
         val local = File(appContext.filesDir, LOCAL_DIR)
-        return if (File(local, MODEL_FILE).isFile) local else null
+        if (File(local, MODEL_FILE).isFile && File(local, MMPROJ_FILE).isFile) return local
+        return apkAssetsDirectory(local)
+    }
+
+    /**
+     * Third home for the weights: a universal or sideloaded APK carries the
+     * asset pack's two files inside its own assets/, and Play's install-time
+     * packs are reachable the same way. llama.cpp needs a real path, so they
+     * are copied out once into app storage and reused on every later open.
+     */
+    private fun apkAssetsDirectory(local: File): File? {
+        val assets = appContext.assets
+        val present = try { assets.list("")?.toSet() ?: emptySet() } catch (t: Throwable) { emptySet() }
+        if (MODEL_FILE !in present || MMPROJ_FILE !in present) {
+            Log.w(TAG, "no model in the asset pack, app storage or the APK itself")
+            return null
+        }
+        local.mkdirs()
+        for (name in listOf(MODEL_FILE, MMPROJ_FILE)) {
+            val dst = File(local, name)
+            if (dst.isFile) continue
+            val tmp = File(local, "$name.part")
+            try {
+                assets.open(name).use { src ->
+                    tmp.outputStream().use { src.copyTo(it, 1 shl 20) }
+                }
+                if (!tmp.renameTo(dst)) throw java.io.IOException("rename failed for $name")
+                Log.i(TAG, "copied $name out of the APK (${dst.length()} bytes)")
+            } catch (t: Throwable) {
+                Log.e(TAG, "copying $name out of the APK failed", t)
+                tmp.delete()
+                return null
+            }
+        }
+        return local
     }
 
     private fun assetPackDirectory(): File? = try {
@@ -83,13 +127,18 @@ class NarratorEngine private constructor(private val appContext: Context) {
         null
     }
 
-    /** 32-bit phones cannot map 736 MB of weights, and the kernels are aarch64. */
-    private fun supportedDevice(): Boolean = Build.SUPPORTED_64_BIT_ABIS.isNotEmpty()
+    /**
+     * 32-bit phones cannot map 736 MB of weights, the kernels are aarch64, and
+     * the Vulkan build links the Android 9 (API 28) libvulkan.
+     */
+    private fun supportedDevice(): Boolean =
+        Build.SUPPORTED_64_BIT_ABIS.isNotEmpty() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
 
     companion object {
         private const val TAG = "NarratorEngine"
         private const val PACK_NAME = "vision_model"
         private const val LOCAL_DIR = "narrator"
+        private const val GPU_ATTEMPT_MARKER = "narrator-gpu-attempt"
         const val MODEL_FILE = "narrator-Q4_K_M.gguf"
         const val MMPROJ_FILE = "narrator-mmproj-f16.gguf"
         private const val MAX_TOKENS = 120
