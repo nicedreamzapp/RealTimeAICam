@@ -38,19 +38,18 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
 
     // MARK: - Voice Properties
 
+    /// Every English voice installed on the phone, alphabetical.
+    ///
+    /// Kept in step with the picker's own list (see `premiumEnglishVoices` in
+    /// UIComponents) after Joseph Weakland reported on AppleVis (2026-09-13)
+    /// that voices he had enabled were invisible to the app. This one used to
+    /// allow five hardcoded locales, then only voices whose identifier said
+    /// premium or enhanced or whose name was one of six, then stopped at six.
+    /// Any voice added after the fact failed all three tests.
     var availableEnglishVoices: [AVSpeechSynthesisVoice] {
-        let preferredLanguages = ["en-US", "en-GB", "en-AU", "en-IE", "en-ZA"]
-        let preferredNames = ["Samantha", "Daniel", "Moira", "Karen", "Tessa", "Serena"]
-
-        return AVSpeechSynthesisVoice.speechVoices()
-            .filter { preferredLanguages.contains($0.language) }
-            .filter { voice in
-                let id = voice.identifier.lowercased()
-                return id.contains("premium") || id.contains("enhanced") || preferredNames.contains(voice.name)
-            }
+        AVSpeechSynthesisVoice.speechVoices()
+            .filter { $0.language.hasPrefix("en") }
             .sorted { $0.name < $1.name }
-            .prefix(6)
-            .map { $0 }
     }
 
     // MARK: - Initialization

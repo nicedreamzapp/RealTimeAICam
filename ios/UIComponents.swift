@@ -213,37 +213,42 @@ struct AnimatedVoicePicker: View {
         return name.contains("premium") || name.contains("plus") || name.contains("ava")
     }
 
+    /// Every English voice the phone actually has, best first.
+    ///
+    /// Asked for by Joseph Weakland on AppleVis (2026-09-13): he enabled new
+    /// voices from another app and this picker could not see them. It was not
+    /// iOS hiding them. This list used to stop at ten and rank by a hardcoded
+    /// list of favourite names, so any voice he added sorted last and fell off
+    /// the end every time. The cap is gone. The ranking stays, because a blind
+    /// user wants the good voices under their thumb, not alphabetical order —
+    /// premium first, then enhanced, then the rest, favourites on top within
+    /// each band and alphabetical after that. The grid below scrolls now, so a
+    /// long list is a scroll, not an unreachable popup.
     private var premiumEnglishVoices: [AVSpeechSynthesisVoice] {
         let allVoices = AVSpeechSynthesisVoice.speechVoices().filter { v in
-            v.language.hasPrefix("en") && !v.name.lowercased().contains("robot") && !v.name.lowercased().contains("whisper") && !v.name.lowercased().contains("grandma")
+            let name = v.name.lowercased()
+            return v.language.hasPrefix("en")
+                && !name.contains("robot") && !name.contains("whisper") && !name.contains("grandma")
         }
         let favoriteNames = ["Ava", "Samantha", "Daniel", "Karen", "Moira", "Serena", "Martha", "Aaron", "Fred", "Tessa", "Fiona", "Allison", "Nicky", "Joelle", "Oliver"]
-        let premiumPlus = allVoices.filter { isPremiumPlus($0) }
-        let enhanced = allVoices.filter { $0.quality == .enhanced && !isPremiumPlus($0) }
-        let regular = allVoices.filter { $0.quality != .enhanced && !isPremiumPlus($0) }
-        let sortedPremiumPlus = premiumPlus.sorted { lhs, rhs in
-            let f1 = favoriteNames.firstIndex(of: lhs.name) ?? Int.max
-            let f2 = favoriteNames.firstIndex(of: rhs.name) ?? Int.max
-            return f1 < f2
+        func ranked(_ voices: [AVSpeechSynthesisVoice]) -> [AVSpeechSynthesisVoice] {
+            voices.sorted { lhs, rhs in
+                let f1 = favoriteNames.firstIndex(of: lhs.name) ?? Int.max
+                let f2 = favoriteNames.firstIndex(of: rhs.name) ?? Int.max
+                if f1 != f2 { return f1 < f2 }
+                return lhs.name < rhs.name
+            }
         }
-        let sortedEnhanced = enhanced.sorted { lhs, rhs in
-            let f1 = favoriteNames.firstIndex(of: lhs.name) ?? Int.max
-            let f2 = favoriteNames.firstIndex(of: rhs.name) ?? Int.max
-            return f1 < f2
-        }
-        let sortedRegular = regular.sorted { lhs, rhs in
-            let f1 = favoriteNames.firstIndex(of: lhs.name) ?? Int.max
-            let f2 = favoriteNames.firstIndex(of: rhs.name) ?? Int.max
-            return f1 < f2
-        }
-        var result = [AVSpeechSynthesisVoice]()
-        result.append(contentsOf: sortedPremiumPlus)
-        if result.count < 10 { result.append(contentsOf: sortedEnhanced.prefix(10 - result.count)) }
-        if result.count < 10 { result.append(contentsOf: sortedRegular.prefix(10 - result.count)) }
-        if let ava = allVoices.first(where: { $0.name == "Ava" && $0.language.hasPrefix("en") }), !result.contains(where: { $0.identifier == ava.identifier }) {
+        let premiumPlus = ranked(allVoices.filter { isPremiumPlus($0) })
+        let enhanced = ranked(allVoices.filter { $0.quality == .enhanced && !isPremiumPlus($0) })
+        let regular = ranked(allVoices.filter { $0.quality != .enhanced && !isPremiumPlus($0) })
+        var result = premiumPlus + enhanced + regular
+        if let ava = allVoices.first(where: { $0.name == "Ava" }),
+           let at = result.firstIndex(where: { $0.identifier == ava.identifier }), at != 0 {
+            result.remove(at: at)
             result.insert(ava, at: 0)
         }
-        return Array(result.prefix(10))
+        return result
     }
 
     private func genderEmoji(for voice: AVSpeechSynthesisVoice) -> String {
@@ -361,6 +366,10 @@ struct AnimatedVoicePicker: View {
                         .offset(y: -400)
                         .accessibilityHidden(true)
 
+                    // Scrolls because the list is no longer capped at ten. Without
+                    // this a phone with every voice installed pushes the tiles off
+                    // the screen and VoiceOver cannot reach the ones underneath.
+                    ScrollView {
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                         ForEach(premiumEnglishVoices, id: \.identifier) { voice in
                             Button(action: {
@@ -382,7 +391,9 @@ struct AnimatedVoicePicker: View {
                         }
                     }
                     .padding(8)
+                    }
                     .frame(width: 280)
+                    .frame(maxHeight: 320)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
                             .fill(Color.black.opacity(0.85))
