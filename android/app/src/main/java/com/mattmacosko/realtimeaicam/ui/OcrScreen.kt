@@ -49,6 +49,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material3.Switch
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.FlashlightOff
 import androidx.compose.material.icons.filled.FlashlightOn
 import androidx.compose.material.icons.filled.RecordVoiceOver
@@ -606,6 +609,9 @@ fun AnimatedLoader(size: androidx.compose.ui.unit.Dp) {
 fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit) {
     val context = LocalContext.current
     var history by remember { mutableStateOf(CopyHistory.get(context)) }
+    val prefs = remember { context.getSharedPreferences("rtcam", Context.MODE_PRIVATE) }
+    var countdownEnabled by remember { mutableStateOf(prefs.getBoolean("countdownBeforeCapture", true)) }
+    var speakAloud by remember { mutableStateOf(prefs.getBoolean("speakAnswersAloud", true)) }
 
     Box(
         Modifier
@@ -663,6 +669,56 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit) {
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
+                // Countdown before the photo — asked for on AppleVis by Dennis.
+                SettingsCard {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Timer, null, tint = IosColors.Purple, modifier = Modifier.size(20.dp))
+                        Column(Modifier.weight(1f).padding(start = 8.dp)) {
+                            Text("Countdown before photo", fontSize = 17.sp,
+                                fontWeight = FontWeight.SemiBold, color = Color.White)
+                            Text(
+                                "Counts three, two, one out loud, then takes the picture, so your hand is off the phone when it fires.",
+                                fontSize = 12.sp, color = IosColors.Gray,
+                            )
+                        }
+                        Switch(
+                            checked = countdownEnabled,
+                            onCheckedChange = {
+                                countdownEnabled = it
+                                prefs.edit().putBoolean("countdownBeforeCapture", it).apply()
+                            },
+                            modifier = Modifier.semantics {
+                                contentDescription = "Countdown before photo"
+                            },
+                        )
+                    }
+                }
+
+                // Let the screen reader do the talking — asked for by Cash.
+                SettingsCard {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.VolumeUp, null, tint = IosColors.Blue, modifier = Modifier.size(20.dp))
+                        Column(Modifier.weight(1f).padding(start = 8.dp)) {
+                            Text("Speak in the app's own voice", fontSize = 17.sp,
+                                fontWeight = FontWeight.SemiBold, color = Color.White)
+                            Text(
+                                "Turn this off and TalkBack reads everything instead, in your voice and at your speed, so the app is not talking over it.",
+                                fontSize = 12.sp, color = IosColors.Gray,
+                            )
+                        }
+                        Switch(
+                            checked = speakAloud,
+                            onCheckedChange = {
+                                speakAloud = it
+                                prefs.edit().putBoolean("speakAnswersAloud", it).apply()
+                            },
+                            modifier = Modifier.semantics {
+                                contentDescription = "Speak in the app's own voice"
+                            },
+                        )
+                    }
+                }
+
                 // Copy History
                 SettingsCard {
                     Row(verticalAlignment = Alignment.CenterVertically) {

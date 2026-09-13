@@ -234,6 +234,22 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
     /// and ducking other audio takes a moment, and whatever is spoken during that
     /// ramp gets clipped — which is why the "three" of the countdown was half
     /// missing (2026-09-12).
+    /// When this is off the app stays quiet and hands the sentence to VoiceOver
+    /// instead. Asked for on AppleVis by Cash (2026-09-12): with VoiceOver on,
+    /// the app's own voice and VoiceOver talk over each other, and the person
+    /// who needs it most hears two voices at once.
+    static var speaksAloud: Bool {
+        UserDefaults.standard.object(forKey: "speakAnswersAloud") as? Bool ?? true
+    }
+
+    /// The one way a sentence reaches the person, whichever voice is doing it.
+    private func announceInstead(_ text: String) {
+        guard !text.isEmpty else { return }
+        // .announcement is the notification VoiceOver reads in the user's OWN
+        // voice and rate, which is the whole point of the setting.
+        UIAccessibility.post(notification: .announcement, argument: text)
+    }
+
     func warmAudioRoute() {
         let audio = AVAudioSession.sharedInstance()
         try? audio.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
@@ -245,6 +261,7 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
     /// the audio session and waits 0.1s every time, which re-ducks between the
     /// numbers and clips them. The route is already warm here, so just say it.
     func speakCountdownWord(_ word: String, voiceIdentifier: String) {
+        if !Self.speaksAloud { announceInstead(word); return }
         if speechSynthesizer.isSpeaking { speechSynthesizer.stopSpeaking(at: .immediate) }
         let utterance = AVSpeechUtterance(string: word)
         if let voice = AVSpeechSynthesisVoice(identifier: voiceIdentifier) { utterance.voice = voice }
@@ -255,6 +272,11 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
 
     func speak(text: String, voiceIdentifier: String, completion: @escaping () -> Void) {
         guard !text.isEmpty else { completion(); return }
+        if !Self.speaksAloud {
+            announceInstead(text)
+            completion()
+            return
+        }
         // Force the loudspeaker: the camera or the mic can leave the route on the
         // earpiece, which makes the spoken description come out quiet.
         let audio = AVAudioSession.sharedInstance()

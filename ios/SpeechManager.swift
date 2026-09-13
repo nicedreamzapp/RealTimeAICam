@@ -1,6 +1,7 @@
 import AVFoundation
 import Combine
 import Foundation
+import UIKit
 
 // MARK: - Speech Manager (CONSOLIDATED - ONLY SPEECH SYSTEM IN APP)
 
@@ -215,7 +216,17 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
 
     // MARK: - Public Speech Methods (REPLACE ALL OTHER SPEECH SYSTEMS)
 
+    /// Off means the app stays quiet and lets VoiceOver read it instead — see
+    /// LiveOCRViewModel.speaksAloud, same defaults key.
+    private var speaksAloud: Bool {
+        UserDefaults.standard.object(forKey: "speakAnswersAloud") as? Bool ?? true
+    }
+
     func speak(_ text: String) {
+        if !speaksAloud {
+            UIAccessibility.post(notification: .announcement, argument: text)
+            return
+        }
         setupAudioSession() // re-assert the loudspeaker route before talking
         // Stop current speech if any
         if speechSynthesizer.isSpeaking {
@@ -331,6 +342,10 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
     /// queuing each segment as a separate utterance with pauses after each segment depending on punctuation.
     /// - Parameter text: The input string to be spoken with pauses.
     func speakWithPauses(_ text: String) {
+        if !speaksAloud {
+            UIAccessibility.post(notification: .announcement, argument: text)
+            return
+        }
         // Stop current speech if any
         if speechSynthesizer.isSpeaking {
             speechSynthesizer.stopSpeaking(at: .immediate)

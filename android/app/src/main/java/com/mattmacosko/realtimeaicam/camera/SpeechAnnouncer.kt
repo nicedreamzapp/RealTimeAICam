@@ -6,6 +6,8 @@ import android.os.Looper
 import android.os.SystemClock
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityManager
 import com.mattmacosko.realtimeaicam.detection.Detection
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -152,7 +154,23 @@ class SpeechAnnouncer(context: Context) {
         speakInternal(text, "speak-${utteranceSeq++}")
     }
 
+    /**
+     * Off means the app stays quiet and hands the line to TalkBack instead.
+     * Asked for on AppleVis by Cash (2026-09-12): with a screen reader running,
+     * the app's own voice and the reader talk over each other, and the person
+     * who needs it most hears two voices at once.
+     */
+    private val speaksAloud: Boolean
+        get() = appContext.getSharedPreferences("rtcam", Context.MODE_PRIVATE)
+            .getBoolean("speakAnswersAloud", true)
+
     private fun speakInternal(text: String, id: String) {
+        if (!speaksAloud) {
+            // TalkBack reads this in the user's OWN voice and rate, which is the
+            // whole point of the setting.
+            announceToScreenReader(text)
+            return
+        }
         // Honor the Home-screen voice selection (persisted)
         val wanted = com.mattmacosko.realtimeaicam.ui.VoicePrefs.get(appContext)
         if (wanted != null && wanted != appliedVoice) {
@@ -167,6 +185,16 @@ class SpeechAnnouncer(context: Context) {
      * force-disable speech (exactly like iOS — prevents late callbacks from
      * speaking again). Called on camera flip, Back navigation, mode changes.
      */
+    private fun announceToScreenReader(text: String) {
+        val am = appContext.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
+        if (am == null || !am.isEnabled) return
+        val event = AccessibilityEvent.obtain(AccessibilityEvent.TYPE_ANNOUNCEMENT)
+        event.className = SpeechAnnouncer::class.java.name
+        event.packageName = appContext.packageName
+        event.text.add(text)
+        am.sendAccessibilityEvent(event)
+    }
+
     fun stop() {
         tts.stop()
         isSpeaking = false
