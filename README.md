@@ -27,6 +27,22 @@ Press one button and it describes the whole room in a sentence you can act on.
 
 ---
 
+## 🐔 Where it started
+
+This began as the eyes of a **robot that watched a chicken coop**.
+
+The robot had to know what it was looking at while standing in a coop, where there is no wifi
+worth trusting and no reason to believe a server will answer. So the recognition had to run on
+the machine itself. That one constraint never went away, and it is why every part of this app
+still runs on your device and not on somebody else's computer.
+
+The camera turned out to be more useful than the robot. It moved to a phone. Then blind and
+low-vision users found it, and told us what it was really for.
+
+> **Chicken is still class 109 of the 601.** So are Fox, Raccoon, Owl and Eagle.
+
+---
+
 ## 🗣️ The part that matters most
 
 <div align="center">
