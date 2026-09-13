@@ -49,13 +49,19 @@ class NarratorEngine private constructor(private val appContext: Context) {
         return handle != 0L
     }
 
-    /** Blocking. Returns "" when the model could not answer. */
-    fun describe(photo: File, question: String): String {
+    /**
+     * Blocking. Returns "" when the model could not answer.
+     *
+     * `system` is a parameter so the last-resort passes can drop the page and
+     * money rules entirely and ask for nothing but a description.
+     */
+    @JvmOverloads
+    fun describe(photo: File, question: String, system: String = NarratorPrompt.SYSTEM): String {
         if (!ensureLoaded()) return ""
         return try {
             NarratorNative.nativeDescribe(
                 handle, photo.absolutePath,
-                NarratorPrompt.SYSTEM, question, MAX_TOKENS,
+                system, question, MAX_TOKENS,
             )
         } catch (t: Throwable) {
             Log.e(TAG, "describe failed", t)

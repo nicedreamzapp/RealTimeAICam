@@ -8,7 +8,11 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.ImageDecoder
+import android.graphics.Paint
 import android.os.Build
 import android.os.Bundle
 import android.speech.RecognitionListener
@@ -91,6 +95,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
@@ -115,6 +121,8 @@ import com.mattmacosko.realtimeaicam.narrator.NarratorEngine
 import com.mattmacosko.realtimeaicam.narrator.NarratorPrompt
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -165,8 +173,16 @@ fun WhatsThisScreen(onBack: () -> Unit) {
     var isListening by remember { mutableStateOf(false) }
     var isAsking by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
-    var showTorchPopup by remember { mutableStateOf(false) }
-    var torchPreset by remember { mutableStateOf(100) }
+    // Spoken countdown before the shutter, on by default. Asked for on AppleVis
+    // (2026-09-12): pressing the button is itself what nudges the phone and blurs
+    // the shot, and it is the only way to take a selfie you can't see to frame.
+    val prefs = remember { context.getSharedPreferences("rtcam", Context.MODE_PRIVATE) }
+    var countdownEnabled by remember {
+        mutableStateOf(prefs.getBoolean("countdownBeforeCapture", true))
+    }
+    var countdownRemaining by remember { mutableStateOf<Int?>(null) }
+    var countdownJob by remember { mutableStateOf<Job?>(null) }
+    val haptics = LocalHapticFeedback.current
 
     val micPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -234,12 +250,51 @@ fun WhatsThisScreen(onBack: () -> Unit) {
                     NarratorPrompt.SCENE_QUESTION
                 }
                 val started = System.currentTimeMillis()
-                val said = withContext(Dispatchers.IO) { engine.describe(shot, question) }
+                val isPage = question == NarratorPrompt.PAGE_QUESTION
+                val said = withContext(Dispatchers.IO) {
+                    describeNeverRefusing(context, shot, question, isPage, engine)
+                }
                 Log.i(TAG, "answer in ${System.currentTimeMillis() - started} ms: $said")
-                say(said.ifBlank { "Could not read that one. Try Next shot and get closer or add light." })
+                // No "get closer or add light" fallback: the person holding the
+                // camera cannot see where it is pointing, so that is not advice
+                // they can act on.
+                say(said.ifBlank { "It's hard to see clearly, and I couldn't make out enough to say." })
             } finally {
                 camera.resume(lifecycleOwner, previewView)
             }
+        }
+    }
+
+    fun cancelCountdown() {
+        countdownJob?.cancel()
+        countdownJob = null
+        countdownRemaining = null
+        speaker.stop()
+    }
+
+    /**
+     * The shutter as the button sees it: count out loud first, then take the
+     * picture, so the hand is off the phone when it fires. With the countdown
+     * switched off this is just the old one-tap capture.
+     */
+    fun startCapture() {
+        if (isScanning || countdownRemaining != null) return
+        if (!countdownEnabled) { scanPage(); return }
+        speaker.stop()
+        summary = ""
+        countdownRemaining = 3
+        countdownJob = scope.launch {
+            for ((number, word) in listOf(3 to "three", 2 to "two", 1 to "one")) {
+                countdownRemaining = number
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                // The app says the count in its own voice rather than leaving it
+                // to TalkBack, so it is heard the same way with TalkBack off.
+                speaker.speak(word)
+                delay(1000)
+            }
+            countdownRemaining = null
+            countdownJob = null
+            scanPage()
         }
     }
 
@@ -541,12 +596,17 @@ fun WhatsThisScreen(onBack: () -> Unit) {
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
                             role = Role.Button,
-                            onClickLabel = "Take a picture and say what it is: a letter, a bill, a label, or whatever is in front of you",
-                        ) { scanPage() }
+                            onClickLabel = if (countdownRemaining != null) {
+                                "Stop the countdown without taking the picture"
+                            } else {
+                                "Take a picture and say what it is: a letter, a bill, a label, or whatever is in front of you"
+                            },
+                        ) { if (countdownRemaining == null) startCapture() else cancelCountdown() }
                         .padding(vertical = 16.dp)
                         .semantics(mergeDescendants = true) {
                             contentDescription = when {
                                 isScanning -> "Looking"
+                                countdownRemaining != null -> "Cancel countdown"
                                 !ready && !modelMissing -> "Getting ready"
                                 else -> "What's this?"
                             }
@@ -559,6 +619,7 @@ fun WhatsThisScreen(onBack: () -> Unit) {
                     Text(
                         when {
                             isScanning -> "Looking…"
+                            countdownRemaining != null -> "${countdownRemaining}…"
                             !ready && !modelMissing -> "Getting ready…"
                             else -> "What's this?"
                         },
@@ -586,15 +647,16 @@ fun WhatsThisScreen(onBack: () -> Unit) {
             ) {
                 Icon(Icons.Default.Settings, null, tint = Color.White, modifier = Modifier.size(22.dp))
             }
-            // 2. Torch
+            // 2. Torch — one tap on at full brightness, one tap off. No brightness
+            // menu: AppleVis feedback (2026-09-12) was that picking a percentage
+            // before any light appears costs several screen-reader flicks at the
+            // exact moment you cannot see, and nobody wants a dim flashlight.
             CircleControlButton(
                 ringColor = if (torchOn) IosColors.Yellow.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.2f),
-                label = if (torchOn) "Turn off flashlight" else "Turn on flashlight",
+                label = "Flashlight",
                 stateLabel = if (torchOn) "On" else "Off",
-                clickLabel = if (torchOn) "Turn the flashlight off" else "Open the brightness choices",
-                onClick = {
-                    if (torchOn) camera.setTorch(false) else showTorchPopup = !showTorchPopup
-                },
+                clickLabel = if (torchOn) "Turn the flashlight off" else "Turn the flashlight on",
+                onClick = { camera.setTorch(!torchOn) },
             ) {
                 Icon(
                     if (torchOn) Icons.Default.FlashlightOn else Icons.Default.FlashlightOff,
@@ -652,70 +714,6 @@ fun WhatsThisScreen(onBack: () -> Unit) {
             }
         }
 
-        // Tap anywhere outside the torch popup to dismiss it
-        if (showTorchPopup && !torchOn) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClickLabel = "Close the flashlight brightness choices",
-                    ) { showTorchPopup = false }
-                    .semantics { contentDescription = "Close flashlight brightness" }
-            )
-        }
-
-        // Torch preset popup — floats above the torch button (2nd of the row)
-        AnimatedVisibility(
-            visible = showTorchPopup && !torchOn,
-            enter = scaleIn(initialScale = 0.95f, animationSpec = tween(100)) + fadeIn(tween(100)),
-            exit = scaleOut(targetScale = 0.95f, animationSpec = tween(100)) + fadeOut(tween(100)),
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .navigationBarsPadding()
-                .padding(bottom = 122.dp)
-                .offset(x = 52.dp + (fullWidth - 260.dp) / 3),
-        ) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(IosColors.Material.copy(alpha = 0.80f), RoundedCornerShape(12.dp))
-                    .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
-                    .padding(vertical = 8.dp, horizontal = 4.dp),
-            ) {
-                for (preset in listOf(100, 75, 50, 25)) {
-                    val selected = preset == torchPreset
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .size(width = 60.dp, height = 36.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(
-                                if (selected) IosColors.Yellow.copy(alpha = 0.4f) else Color.White.copy(alpha = 0.2f),
-                                RoundedCornerShape(8.dp),
-                            )
-                            .border(
-                                1.dp,
-                                if (selected) IosColors.Yellow else Color.White.copy(alpha = 0.3f),
-                                RoundedCornerShape(8.dp),
-                            )
-                            .clickable(role = Role.Button) {
-                                torchPreset = preset
-                                camera.setTorch(true)
-                                showTorchPopup = false
-                            }
-                            .semantics(mergeDescendants = true) {
-                                contentDescription = "Flashlight $preset percent"
-                                stateDescription = if (selected) "Selected" else "Not selected"
-                            },
-                    ) {
-                        Text("$preset%", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Color.White)
-                    }
-                }
-            }
-        }
 
         if (showSettings) {
             SettingsOverlay(zoom = zoom, onDismiss = { showSettings = false })
@@ -733,14 +731,138 @@ private fun copySummary(context: Context, text: String) {
     CopyHistory.add(context, text)
 }
 
+/**
+ * Ask, and keep asking until there is a description. Same four-step chain as the
+ * iPhone: the plain question, a forced best-guess, a describe-only pass with the
+ * page rules dropped, and finally a bare list of nouns. Each retry gets a
+ * BRIGHTER copy of the photo — when the model says it is too dark, a brighter
+ * picture is the useful answer, not a sterner question.
+ */
+private fun describeNeverRefusing(
+    context: Context,
+    shot: File,
+    question: String,
+    isPage: Boolean,
+    engine: NarratorEngine,
+): String {
+    var said = engine.describe(shot, question)
+    if (!looksLikeRefusal(said)) return said
+
+    val brighter = brightenedCopy(context, shot, "whats-this-bright.jpg", 1.8f) ?: shot
+    said = engine.describe(brighter, NarratorPrompt.forcedDescribe(isPage))
+    if (!looksLikeRefusal(said)) return said
+
+    val brightest = brightenedCopy(context, shot, "whats-this-brightest.jpg", 2.4f) ?: brighter
+    said = engine.describe(brightest, NarratorPrompt.PLAIN_DESCRIBE, NarratorPrompt.DESCRIBE_ONLY)
+    if (!looksLikeRefusal(said)) return said
+
+    val listed = engine.describe(brightest, NarratorPrompt.LIST_THINGS, NarratorPrompt.DESCRIBE_ONLY)
+    thingsOnly(listed)?.let {
+        // Matt's words for how this should sound: "I'm having a hard time seeing
+        // it, but this is what I think it is."
+        return "It's hard to see clearly, but I think I can make out $it."
+    }
+    return strippingExcuses(said) ?: ""
+}
+
+/**
+ * A brighter copy of the shot for the retry passes. A normal photo never goes
+ * through this — only one the model already balked at.
+ */
+private fun brightenedCopy(context: Context, src: File, name: String, factor: Float): File? = try {
+    val bitmap = BitmapFactory.decodeFile(src.path)
+    if (bitmap == null) null else {
+        val out = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+        val paint = Paint().apply {
+            colorFilter = ColorMatrixColorFilter(
+                ColorMatrix(
+                    floatArrayOf(
+                        factor, 0f, 0f, 0f, 0f,
+                        0f, factor, 0f, 0f, 0f,
+                        0f, 0f, factor, 0f, 0f,
+                        0f, 0f, 0f, 1f, 0f,
+                    )
+                )
+            )
+        }
+        Canvas(out).drawBitmap(bitmap, 0f, 0f, paint)
+        val file = File(context.cacheDir, name)
+        file.outputStream().use { out.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+        file
+    }
+} catch (t: Throwable) {
+    Log.e(TAG, "could not brighten the shot", t)
+    null
+}
+
+/**
+ * Keep the comma-separated things and throw away any apology wrapped around
+ * them. An instruction is not a thing: "hold the camera steady" came back from
+ * the listing pass once and was read out as something visible in the room.
+ */
+private fun thingsOnly(raw: String): String? {
+    var text = raw.trim().trim('"', '\'')
+    if (text.isEmpty()) return null
+    for (opener in listOf(
+        "in this picture, i can see", "in this photo, i can see",
+        "i can see", "i see", "the things i can see are",
+        "here is a list", "here are the things",
+    )) {
+        if (text.lowercase().startsWith(opener)) {
+            text = text.substring(opener.length)
+            break
+        }
+    }
+    val things = text.split(',', '\n', ';')
+        .map { it.trim().trim('.', ':', '-', '*') }
+        .filter { it.isNotEmpty() && it.length <= 40 && !looksLikeRefusal(it) && !isInstruction(it) }
+    if (things.isEmpty()) return null
+    val kept = things.take(4)
+    return if (kept.size == 1) kept[0]
+    else kept.dropLast(1).joinToString(", ") + " and " + kept.last()
+}
+
+private fun isInstruction(fragment: String): Boolean {
+    val verbs = listOf(
+        "hold", "move", "turn", "take", "try", "use", "ensure", "make sure",
+        "point", "adjust", "increase", "retry", "please", "consider",
+        "bring", "step", "add", "switch", "clean", "wipe", "check",
+    )
+    val f = fragment.lowercase().trim()
+    return verbs.any { f.startsWith("$it ") || f == it }
+}
+
+/** Cut the excuse sentences out and speak whatever description is left. */
+private fun strippingExcuses(sentence: String?): String? {
+    if (sentence.isNullOrBlank()) return null
+    val parts = sentence.split('.', '!', '?', ';')
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+    val described = parts.filter { !looksLikeRefusal(it) }
+    if (described.isNotEmpty()) {
+        val rebuilt = described.joinToString(". ") + "."
+        if (rebuilt.length >= 12) return rebuilt
+    }
+    return "It's hard to see clearly, and I couldn't make out enough to say."
+}
+
 /** Same markers as the iPhone: an answer that only says to retake is a refusal. */
 private fun looksLikeRefusal(s: String?): Boolean {
     val t = s?.lowercase() ?: return true
+    // These must be REFUSAL phrases, not description words. "make out" on its own
+    // flagged "I can make out a cat on a bed" as a refusal — and the forced retry
+    // asks for exactly that wording, so every good answer was thrown away and the
+    // chain fell through to the floor line. Match the whole phrase.
     val markers = listOf(
-        "can't", "cannot", "can not", "too dark", "too blurry", "unable to",
-        "make out", "retake", "hold the camera", "hold the phone",
+        "can't make out", "cannot make out", "can not make out",
+        "couldn't make out", "could not make out",
+        "can't see", "cannot see", "can't read", "cannot read",
+        "can't tell", "cannot tell", "can't determine", "cannot determine",
+        "unable to", "too dark to", "too blurry to", "too dark and blurry",
+        "retake", "hold the camera still", "hold the phone still",
         "turn on a light", "turn on the flash", "add some light",
-        "move closer", "move back", "try again", "out of focus", "not clear enough",
+        "move closer", "take the picture again", "take it again",
+        "try again", "not clear enough", "no details are visible",
     )
     return markers.any { t.contains(it) }
 }
