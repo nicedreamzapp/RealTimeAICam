@@ -7,6 +7,9 @@ struct SettingsOverlayView: View {
 
     @StateObject private var buttonDebouncer = ButtonPressDebouncer()
 
+    /// Shared with LiveOCRView through the same defaults key.
+    @AppStorage("countdownBeforeCapture") private var countdownBeforeCapture = true
+
     @State private var copyHistory: [String] = UserDefaults.standard.stringArray(forKey: "ocrCopyHistory") ?? []
     @State private var copiedIndex: Int?
 
@@ -52,6 +55,31 @@ struct SettingsOverlayView: View {
 
                 ScrollView {
                     VStack(spacing: 20) {
+                        if mode == .ocrEnglish {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Toggle(isOn: $countdownBeforeCapture) {
+                                    HStack {
+                                        Image(systemName: "timer")
+                                            .font(.system(size: 20))
+                                            .foregroundStyle(.purple)
+                                        Text("Countdown before photo")
+                                            .font(.headline)
+                                    }
+                                }
+                                .accessibilityLabel("Countdown before photo")
+                                .accessibilityHint("When on, the app counts three, two, one out loud and then takes the picture, so you are not touching the phone when it fires")
+
+                                Text("Counts three, two, one out loud, then takes the picture — your hand is off the phone when it fires.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.gray.opacity(0.1))
+                            )
+                        }
+
                         if mode == .ocrEnglish || mode == .ocrSpanish {
                             VStack(alignment: .leading, spacing: 12) {
                                 HStack {

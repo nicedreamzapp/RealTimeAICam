@@ -1,5 +1,6 @@
 import AVFoundation
 import Combine
+import PhotosUI
 import Speech
 import SwiftUI
 
@@ -222,7 +223,16 @@ struct LiveOCRView: View {
     @State private var isTranslating = false
     @State private var isWideScreen = false
 
-    @State private var showTorchPresets = false
+    /// Spoken countdown before the shutter, on by default. Asked for on AppleVis
+    /// (2026-09-12): pressing the button is itself what nudges the phone and
+    /// blurs the shot, and it is the only way to take a selfie you can't see to
+    /// frame. Off-switch lives in Settings.
+    @AppStorage("countdownBeforeCapture") private var countdownBeforeCapture = true
+
+    /// A picture already on the phone, chosen instead of taking a new one.
+    @State private var pickedItem: PhotosPickerItem?
+    @State private var countdownRemaining: Int?
+    @State private var countdownTask: Task<Void, Never>?
 
     /// What the last capture read. Mail mode is aim-then-capture: stitching live
     /// video frames was compensating for reading a page at 720p, and no amount of
@@ -267,6 +277,49 @@ struct LiveOCRView: View {
             : scannedSummary
     }
 
+    /// The shutter, as the button sees it: count down out loud first, then take
+    /// the picture, so the hand is off the phone at the moment it fires. With the
+    /// countdown switched off this is just the old one-tap capture.
+    private func startCapture() {
+        guard !isScanning, countdownRemaining == nil else { return }
+        guard countdownBeforeCapture else { scanPage(); return }
+        viewModel.stopSpeaking()
+        isSpeaking = false
+        scannedSummary = ""
+        countdownRemaining = 3
+        // Open the audio route first and give it a beat to settle, otherwise the
+        // duck ramp eats the front of "three".
+        viewModel.warmAudioRoute()
+        countdownTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            if Task.isCancelled { return }
+            for (number, word) in [(3, "three"), (2, "two"), (1, "one")] {
+                if Task.isCancelled { return }
+                countdownRemaining = number
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                // The app says the count in its own voice rather than leaving it
+                // to VoiceOver, so it is heard the same way with VoiceOver off.
+                viewModel.speakCountdownWord(word, voiceIdentifier: selectedVoiceIdentifier)
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+            if Task.isCancelled { return }
+            countdownRemaining = nil
+            countdownTask = nil
+            // A shutter you can feel, since you can't see the screen flash.
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            scanPage()
+        }
+    }
+
+    /// Tapping the button mid-count backs out instead of firing.
+    private func cancelCountdown() {
+        countdownTask?.cancel()
+        countdownTask = nil
+        countdownRemaining = nil
+        viewModel.stopSpeaking()
+        isSpeaking = false
+    }
+
     /// Capture one full-resolution still, read it properly, say what it is.
     private func scanPage() {
         guard !isScanning else { return }
@@ -293,48 +346,80 @@ struct LiveOCRView: View {
                let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
                 try? jpg.write(to: dir.appendingPathComponent("last_capture.jpg"))
             }
-            // Vision path: when the app ships a VisionModel folder the model is
-            // shown the photo itself — no recognizer, no text narrator. Without
-            // the folder (or if the model can't answer) it is the OCR path below,
-            // exactly as before.
-            if #available(iOS 17.0, *), OnDeviceVisionNarrator.isBundled {
-                scannedSummary = "Working it out…"
-                // Free the camera pipeline while the model thinks; it comes back
-                // the moment the answer is spoken.
-                cameraPreviewRef?.stopSession()
-                Task {
-                    defer { cameraPreviewRef?.resumeSession() }
-                    // Cheap look at the shot first: a dark, blurry or cut-off
-                    // page gets spoken guidance instead of a model run.
-                    let gate = await Task.detached(priority: .userInitiated) {
-                        FrameQualityGate.check(image, checkDocumentEdges: true)
-                    }.value
-                    if case .retake(let why) = gate.verdict {
-                        OnDeviceNarrator.log(read: "[photo: gated]", said: why,
-                                             extra: ["gate": gate.logValue])
-                        await MainActor.run { say(why) }
-                        return
-                    }
-                    // Paper gets the strict mail reader; anything else — a room, a
-                    // dog, a street — gets the scene describer, which hedges on a
-                    // dim or soft shot instead of refusing it.
-                    let uiImage = UIImage(cgImage: image)
-                    let said: String?
-                    if gate.documentFound == true {
-                        said = await OnDeviceVisionNarrator.shared.narratePage(
-                            uiImage, gate: gate.logValue, hint: gate.qualityHint, cutOff: gate.cutOffEdge)
-                    } else {
-                        said = await OnDeviceVisionNarrator.shared.narrateScene(
-                            uiImage, gate: gate.logValue, hint: gate.qualityHint)
-                    }
-                    await MainActor.run {
-                        if let said { say(said) } else { readWithOCR(image) }
-                    }
-                }
-                return
-            }
-            readWithOCR(image)
+            analyze(image, pauseCamera: true)
         }
+    }
+
+    /// Describe a picture the person already has. Same model, same answer, the
+    /// only difference is where the pixels came from. Asked for by AppleVis
+    /// readers who get sent photos and have no way to know what is in them.
+    private func describePickedPhoto(_ picked: UIImage) {
+        guard let cg = picked.cgImage ?? ciBackedCGImage(picked) else {
+            say("That picture couldn't be opened.")
+            return
+        }
+        viewModel.stopSpeaking()
+        isSpeaking = false
+        cancelCountdown()
+        isScanning = true
+        scannedText = ""
+        scannedSummary = "Working it out…"
+        frozenPhoto = picked
+        // The live camera has nothing to do with this one, so it stays running
+        // only until the model needs the memory.
+        analyze(cg, pauseCamera: true)
+    }
+
+    /// A photo from the library can be CIImage-backed with no CGImage of its own.
+    private func ciBackedCGImage(_ image: UIImage) -> CGImage? {
+        guard let ci = image.ciImage else { return nil }
+        return CIContext(options: [.useSoftwareRenderer: false])
+            .createCGImage(ci, from: ci.extent)
+    }
+
+    /// Vision path: when the app ships a VisionModel folder the model is shown
+    /// the photo itself — no recognizer, no text narrator. Without the folder (or
+    /// if the model can't answer) it is the OCR path, exactly as before.
+    private func analyze(_ image: CGImage, pauseCamera: Bool) {
+        if #available(iOS 17.0, *), OnDeviceVisionNarrator.isBundled {
+            scannedSummary = "Working it out…"
+            // Free the camera pipeline while the model thinks; it comes back
+            // the moment the answer is spoken.
+            if pauseCamera { cameraPreviewRef?.stopSession() }
+            Task {
+                defer { if pauseCamera { cameraPreviewRef?.resumeSession() } }
+                // Measure the shot for the log and to route page vs scene. It
+                // never blocks: the model always gets to look and answer.
+                let gate = await Task.detached(priority: .userInitiated) {
+                    FrameQualityGate.check(image, checkDocumentEdges: true)
+                }.value
+                // Paper gets the strict mail reader; anything else — a room, a
+                // dog, a street — gets the scene describer, which hedges on a
+                // dim or soft shot instead of refusing it.
+                let uiImage = UIImage(cgImage: image)
+                // The gate's document detector fires on any large rectangle, so a
+                // bed, a table or a wall came back as "a page" and the cat got
+                // asked "what is this page?" — which is where "too blurry to read"
+                // came from. A page now has to actually have words on it.
+                var looksLikePage = false
+                if gate.documentFound == true {
+                    looksLikePage = await OnDeviceVisionNarrator.hasReadableText(in: image)
+                }
+                let said: String?
+                if looksLikePage {
+                    said = await OnDeviceVisionNarrator.shared.narratePage(
+                        uiImage, gate: gate.logValue, hint: gate.qualityHint, cutOff: gate.cutOffEdge)
+                } else {
+                    said = await OnDeviceVisionNarrator.shared.narrateScene(
+                        uiImage, gate: gate.logValue, hint: gate.qualityHint)
+                }
+                await MainActor.run {
+                    if let said { say(said) } else { readWithOCR(image) }
+                }
+            }
+            return
+        }
+        readWithOCR(image)
     }
 
     /// The original path: recognize the words, then have the text model say
@@ -687,11 +772,15 @@ struct LiveOCRView: View {
                             .padding(.horizontal, 20)
                             .padding(.bottom, 14)
                         } else {
-                            Button(action: { scanPage() }) {
+                            Button(action: {
+                                countdownRemaining == nil ? startCapture() : cancelCountdown()
+                            }) {
                                 HStack(spacing: 10) {
-                                    Image(systemName: isScanning ? "hourglass" : "viewfinder")
+                                    Image(systemName: isScanning ? "hourglass"
+                                            : (countdownRemaining != nil ? "timer" : "viewfinder"))
                                         .font(.system(size: 22, weight: .semibold))
-                                    Text(isScanning ? "Looking…" : "What's this?")
+                                    Text(isScanning ? "Looking…"
+                                            : (countdownRemaining.map { "\($0)…" } ?? "What's this?"))
                                         .font(.system(size: 19, weight: .semibold))
                                 }
                                 .foregroundStyle(.white)
@@ -706,8 +795,11 @@ struct LiveOCRView: View {
                             .disabled(isScanning)
                             .padding(.horizontal, 20)
                             .padding(.bottom, 14)
-                            .accessibilityLabel(isScanning ? "Looking" : "What's this?")
-                            .accessibilityHint("Takes a picture and says what it is: a letter, a bill, a label, or whatever is in front of you")
+                            .accessibilityLabel(isScanning ? "Looking"
+                                    : (countdownRemaining != nil ? "Cancel countdown" : "What's this?"))
+                            .accessibilityHint(countdownRemaining != nil
+                                    ? "Stops the countdown without taking the picture"
+                                    : "Takes a picture and says what it is: a letter, a bill, a label, or whatever is in front of you")
                         }
                     }
 
@@ -736,16 +828,11 @@ struct LiveOCRView: View {
                         .accessibilityLabel("Settings")
                         .accessibilityHint("Opens settings, copy history and tips")
 
-                        // Torch button with overlay for presets
+                        // Torch button: one tap on at full brightness, one tap off.
                         ZStack {
                             Button(action: {
                                 if buttonDebouncer.canPress("LiveOCRView-3") {
-                                    if viewModel.torchLevel > 0 {
-                                        viewModel.handleToggleTorch(level: 0.0)
-                                        showTorchPresets = false
-                                    } else {
-                                        showTorchPresets = true
-                                    }
+                                    viewModel.handleToggleTorch(level: viewModel.torchLevel > 0 ? 0.0 : 1.0)
                                 }
                             }) {
                                 Image(systemName: viewModel.torchLevel > 0 ? "flashlight.on.fill" : "flashlight.off.fill")
@@ -760,55 +847,19 @@ struct LiveOCRView: View {
                                     )
                                     .contentShape(Circle())
                             }
-                            .accessibilityLabel(viewModel.torchLevel > 0 ? "Turn off flashlight" : "Turn on flashlight")
-                            .accessibilityValue(viewModel.torchLevel > 0 ? "On at \(Int(viewModel.torchLevel * 100)) percent" : "Off")
-                            .accessibilityHint(viewModel.torchLevel > 0 ? "Turns the flashlight off" : "Opens the brightness choices")
-                            .overlay(
-                                torchPresetOverlay
-                            )
+                            .accessibilityLabel("Flashlight")
+                            .accessibilityValue(viewModel.torchLevel > 0 ? "On" : "Off")
+                            .accessibilityAddTraits(.isButton)
                         }
 
-                        // Wide Screen Toggle button
-                        Button(action: {
-                            if buttonDebouncer.canPress("LiveOCRView-4") {
-                                viewModel.handleToggleCameraZoom()
-                            }
-                        }) {
-                            Image(systemName: "rectangle.3.offgrid")
-                                .font(.system(size: 22))
-                                .foregroundStyle(viewModel.isUltraWide ? .cyan : .white)
-                                .symbolRenderingMode(.palette)
-                                .frame(width: metrics.buttonSize, height: metrics.buttonSize)
-                                .background(
-                                    Circle()
-                                        .fill(.ultraThinMaterial.opacity(0.15))
-                                        .background(Circle().fill(Color.black.opacity(0.25)))
-                                )
-                                .contentShape(Circle())
-                        }
-                        .accessibilityLabel(viewModel.isUltraWide ? "Switch to normal camera" : "Switch to wide angle camera")
-                        .accessibilityHint("Changes how much the camera can see at once")
-
-                        // Translate or Copy button
-                        translateOrCopyButton(buttonSize: metrics.buttonSize)
-
-                        // Speak button
-                        speakButton(buttonSize: metrics.buttonSize)
-
-                        // Reset (Clear) button
-                        Button(action: {
-                            if buttonDebouncer.canPress("LiveOCRView-5") {
-                                withAnimation(.spring(response: 0.3)) {
-                                    viewModel.stopSpeaking()
-                                    viewModel.clearText()
-                                    viewModel.resetTranslation()
-                                    scannedSummary = ""
-                                    scannedText = ""
-                                    isSpeaking = false
-                                }
-                            }
-                        }) {
-                            Image(systemName: "arrow.clockwise")
+                        // A picture that is already on the phone: someone texted
+                        // it, or it was saved months ago, and there is no way to
+                        // know what is in it without asking a sighted person.
+                        // No `photoLibrary:` on purpose — the picker then runs
+                        // out of process and the app never gets library access,
+                        // so there is no permission prompt and nothing to leak.
+                        PhotosPicker(selection: $pickedItem, matching: .images) {
+                            Image(systemName: "photo.on.rectangle")
                                 .font(.system(size: 22))
                                 .foregroundStyle(.white)
                                 .symbolRenderingMode(.palette)
@@ -820,8 +871,16 @@ struct LiveOCRView: View {
                                 )
                                 .contentShape(Circle())
                         }
-                        .accessibilityLabel("Clear and stop")
-                        .accessibilityHint("Clears the detected text and stops speaking")
+                        .accessibilityLabel("Describe a photo from my library")
+                        .accessibilityHint("Pick a picture already on this phone and the app says what is in it")
+
+
+                        // Translate or Copy button
+                        translateOrCopyButton(buttonSize: metrics.buttonSize)
+
+                        // Speak button
+                        speakButton(buttonSize: metrics.buttonSize)
+
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.horizontal, metrics.padding + max(geometry.safeAreaInsets.leading, geometry.safeAreaInsets.trailing))
@@ -866,7 +925,25 @@ struct LiveOCRView: View {
         .onAppear {
             viewModel.startSession()
         }
+        .onChange(of: pickedItem) { item in
+            guard let item else { return }
+            // Say something immediately: choosing a photo then hearing nothing
+            // while it loads reads as the app having died.
+            scannedSummary = "Working it out…"
+            Task {
+                let data = try? await item.loadTransferable(type: Data.self)
+                await MainActor.run {
+                    pickedItem = nil
+                    if let data, let image = UIImage(data: data) {
+                        describePickedPhoto(image)
+                    } else {
+                        say("That picture couldn't be opened.")
+                    }
+                }
+            }
+        }
         .onDisappear {
+            cancelCountdown()
             viewModel.stopSession()
             viewModel.clearText()
             viewModel.resetTranslation()
@@ -881,45 +958,6 @@ struct LiveOCRView: View {
     }
 
     // Helper views to break up complex expressions
-    @ViewBuilder
-    private var torchPresetOverlay: some View {
-        Group {
-            if showTorchPresets {
-                VStack(spacing: 8) {
-                    ForEach([100, 75, 50, 25], id: \.self) { percentage in
-                        Button(action: {
-                            let level = Float(percentage) / 100.0
-                            viewModel.handleToggleTorch(level: level)
-                            showTorchPresets = false
-                        }) {
-                            Text("\(percentage)%")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.white)
-                                .frame(width: 60, height: 36)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .fill(Int(viewModel.torchLevel * 100) == percentage ? Color.yellow.opacity(0.4) : Color.white.opacity(0.2))
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Int(viewModel.torchLevel * 100) == percentage ? Color.yellow : Color.white.opacity(0.3), lineWidth: 1)
-                                )
-                        }
-                        .accessibilityLabel("Flashlight \(percentage) percent")
-                        .accessibilityAddTraits(
-                            Int(viewModel.torchLevel * 100) == percentage ? [.isButton, .isSelected] : [.isButton]
-                        )
-                    }
-                }
-                .padding(.vertical, 8)
-                .padding(.horizontal, 4)
-                .background(.ultraThinMaterial.opacity(0.8))
-                .offset(y: -90)
-                .transition(.scale(scale: 0.95).combined(with: .opacity))
-            }
-        }
-    }
-
     @ViewBuilder
     private func translateOrCopyButton(buttonSize: CGFloat) -> some View {
         Group {

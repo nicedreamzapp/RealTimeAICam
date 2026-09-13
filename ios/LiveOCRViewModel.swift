@@ -230,6 +230,29 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
 
     // MARK: - Speech
 
+    /// Bring the audio route up BEFORE the first word. Activating the session
+    /// and ducking other audio takes a moment, and whatever is spoken during that
+    /// ramp gets clipped — which is why the "three" of the countdown was half
+    /// missing (2026-09-12).
+    func warmAudioRoute() {
+        let audio = AVAudioSession.sharedInstance()
+        try? audio.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+        try? audio.setActive(true)
+        try? audio.overrideOutputAudioPort(.speaker)
+    }
+
+    /// One word of the countdown. Deliberately NOT `speak`: that call rebuilds
+    /// the audio session and waits 0.1s every time, which re-ducks between the
+    /// numbers and clips them. The route is already warm here, so just say it.
+    func speakCountdownWord(_ word: String, voiceIdentifier: String) {
+        if speechSynthesizer.isSpeaking { speechSynthesizer.stopSpeaking(at: .immediate) }
+        let utterance = AVSpeechUtterance(string: word)
+        if let voice = AVSpeechSynthesisVoice(identifier: voiceIdentifier) { utterance.voice = voice }
+        utterance.rate = 0.5
+        utterance.volume = 1.0
+        speechSynthesizer.speak(utterance)
+    }
+
     func speak(text: String, voiceIdentifier: String, completion: @escaping () -> Void) {
         guard !text.isEmpty else { completion(); return }
         // Force the loudspeaker: the camera or the mic can leave the route on the
