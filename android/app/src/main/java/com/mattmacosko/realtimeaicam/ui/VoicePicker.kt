@@ -6,12 +6,15 @@ import android.speech.tts.Voice
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -129,10 +132,15 @@ class VoicePickerModel(private val context: Context) {
     private fun loadVoices() {
         val t = tts ?: return
         val english = try {
+            // Every English voice the phone has, best first. The .take(10) that
+            // used to sit here meant any voice the user enabled AFTER install
+            // sorted below the built-ins and fell off the end, so they could
+            // never pick it. Reported by Joseph Weakland on AppleVis 2026-09-13
+            // against the iPhone build, which had the same cap. The popup below
+            // scrolls now, so a long list is a scroll, not unreachable buttons.
             t.voices.orEmpty()
                 .filter { it.locale.language == "en" && !it.isNetworkConnectionRequired }
-                .sortedByDescending { it.quality }
-                .take(10)
+                .sortedWith(compareByDescending<Voice> { it.quality }.thenBy { it.name })
         } catch (e: Exception) {
             emptyList()
         }
@@ -204,6 +212,7 @@ fun VoiceGridPopup(
             modifier = Modifier
                 .padding(bottom = 200.dp)
                 .width(280.dp)
+                .heightIn(max = 360.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(Color.Black.copy(alpha = 0.85f), RoundedCornerShape(12.dp))
                 .border(1.dp, IosColors.Purple.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
@@ -211,6 +220,7 @@ fun VoiceGridPopup(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                 ) { /* consume */ }
+                .verticalScroll(rememberScrollState())
                 .padding(8.dp),
         ) {
             if (model.voices.isEmpty()) {
