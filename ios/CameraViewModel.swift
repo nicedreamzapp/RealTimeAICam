@@ -93,7 +93,10 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
 
     // MARK: - Speech Manager
 
-    @StateObject private var speechManager = SpeechManager()
+    // SpeechManager is a singleton; this class is NOT a SwiftUI View, so it must
+    // never hold it in @StateObject — that wrapper's storage is installed by the
+    // view graph and reading it from here is undefined behaviour.
+    // Found while tracing Dennis Long's TestFlight crash on build 26, 2026-09-15.
 
     // MARK: - Published Properties
 
@@ -153,7 +156,7 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
     }
 
     var availableEnglishVoices: [AVSpeechSynthesisVoice] {
-        speechManager.availableEnglishVoices
+        SpeechManager.shared.availableEnglishVoices
     }
 
     // MARK: - Internal Properties
@@ -753,7 +756,7 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
     }
 
     func playWelcomeMessage() {
-        speechManager.playWelcomeMessage()
+        SpeechManager.shared.playWelcomeMessage()
     }
 
     // MARK: - Session Management
@@ -766,16 +769,23 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
     }
 
     func pauseCameraAndProcessing() {
+        // Speech is stopped on the main thread, not the session queue: the
+        // synthesiser is not safe to drive from a background queue.
+        DispatchQueue.main.async { [weak self] in
+            self?.stopSpeech()
+        }
+
         Self.sessionQueue.async { [weak self] in
             guard let self else { return }
 
             if session.isRunning {
                 session.stopRunning()
-                DispatchQueue.main.async { self.detections = [] }
+                // weak again on the hop back to main — matches clearDetections()
+                // above. Crash on build 26 (Dennis Long, 2026-09-15) landed in
+                // this block.
+                DispatchQueue.main.async { [weak self] in self?.detections = [] }
                 LiDARManager.shared.stop()
             }
-
-            stopSpeech()
         }
     }
 
