@@ -1,6 +1,7 @@
 import AVFoundation
 import Combine
 import Foundation
+import UIKit
 
 // MARK: - Speech Manager (CONSOLIDATED - ONLY SPEECH SYSTEM IN APP)
 
@@ -37,19 +38,18 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
 
     // MARK: - Voice Properties
 
+    /// Every English voice installed on the phone, alphabetical.
+    ///
+    /// Kept in step with the picker's own list (see `premiumEnglishVoices` in
+    /// UIComponents) after Joseph Weakland reported on AppleVis (2026-09-13)
+    /// that voices he had enabled were invisible to the app. This one used to
+    /// allow five hardcoded locales, then only voices whose identifier said
+    /// premium or enhanced or whose name was one of six, then stopped at six.
+    /// Any voice added after the fact failed all three tests.
     var availableEnglishVoices: [AVSpeechSynthesisVoice] {
-        let preferredLanguages = ["en-US", "en-GB", "en-AU", "en-IE", "en-ZA"]
-        let preferredNames = ["Samantha", "Daniel", "Moira", "Karen", "Tessa", "Serena"]
-
-        return AVSpeechSynthesisVoice.speechVoices()
-            .filter { preferredLanguages.contains($0.language) }
-            .filter { voice in
-                let id = voice.identifier.lowercased()
-                return id.contains("premium") || id.contains("enhanced") || preferredNames.contains(voice.name)
-            }
+        AVSpeechSynthesisVoice.speechVoices()
+            .filter { $0.language.hasPrefix("en") }
             .sorted { $0.name < $1.name }
-            .prefix(6)
-            .map { $0 }
     }
 
     // MARK: - Initialization
@@ -215,7 +215,17 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
 
     // MARK: - Public Speech Methods (REPLACE ALL OTHER SPEECH SYSTEMS)
 
+    /// Off means the app stays quiet and lets VoiceOver read it instead — see
+    /// LiveOCRViewModel.speaksAloud, same defaults key.
+    private var speaksAloud: Bool {
+        UserDefaults.standard.object(forKey: "speakAnswersAloud") as? Bool ?? true
+    }
+
     func speak(_ text: String) {
+        if !speaksAloud {
+            UIAccessibility.post(notification: .announcement, argument: text)
+            return
+        }
         setupAudioSession() // re-assert the loudspeaker route before talking
         // Stop current speech if any
         if speechSynthesizer.isSpeaking {
@@ -331,6 +341,10 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
     /// queuing each segment as a separate utterance with pauses after each segment depending on punctuation.
     /// - Parameter text: The input string to be spoken with pauses.
     func speakWithPauses(_ text: String) {
+        if !speaksAloud {
+            UIAccessibility.post(notification: .announcement, argument: text)
+            return
+        }
         // Stop current speech if any
         if speechSynthesizer.isSpeaking {
             speechSynthesizer.stopSpeaking(at: .immediate)

@@ -200,6 +200,7 @@ struct ContentView: View {
 
     private func cleanupCurrentMode() {
         SpeechManager.shared.resetSpeechState()
+        viewModel.turnOffTorch()
 
         if mode == .objectDetection {
             viewModel.stopSession()
@@ -251,10 +252,12 @@ struct ContentView: View {
 
     private func handleScenePhaseChange(_ newPhase: ScenePhase) {
         if newPhase == .background {
+            viewModel.turnOffTorch()
             performReset()
             SpeechManager.shared.resetSpeechState()
             mode = .home
         } else if newPhase == .inactive {
+            viewModel.turnOffTorch()
             viewModel.stopSession()
         } else if newPhase == .active {
             // Coming back from Control Center / notification shade is not a fresh

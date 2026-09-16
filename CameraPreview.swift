@@ -30,6 +30,7 @@ struct CameraPreview: UIViewRepresentable {
     }
 
     static func dismantleUIView(_ uiView: CameraPreviewView, coordinator _: ()) {
+        uiView.setTorchLevel(0)
         uiView.stopSession()
     }
 }
