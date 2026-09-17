@@ -32,6 +32,9 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
     // MARK: - Properties
 
     @Published var recognizedText: String = ""
+    /// The same read with its line breaks kept, so speech can pause where the
+    /// sign or envelope breaks a line (the screen shows `recognizedText`).
+    private var recognizedLines: String = ""
     @Published var translatedText: String = ""
     @Published var isProcessing: Bool = false
     @Published var isTranslated: Bool = false
@@ -79,6 +82,7 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
             guard let observations = request.results as? [VNRecognizedTextObservation] else { request.cancel(); return }
             let recognizedStrings = observations.compactMap { $0.topCandidates(1).first?.string }
             let fullText = recognizedStrings.joined(separator: " ")
+            let linedText = recognizedStrings.joined(separator: "\n")
             DispatchQueue.main.async {
                 guard !self.isFrozen else {
                     self.isProcessing = false
@@ -86,6 +90,7 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
                 }
                 let changed = (self.recognizedText != fullText)
                 self.recognizedText = fullText
+                self.recognizedLines = linedText
                 self.isProcessing = false
                 if changed { self.isTranslated = false; self.translatedText = "" }
             }
@@ -151,7 +156,9 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
     func translateSpanishText(completion: @escaping (Bool) -> Void) {
         guard !recognizedText.isEmpty else { completion(false); return }
         isFrozen = true
-        let text = recognizedText
+        // Translate the lines, not one run-on: a sign's lines are separate
+        // phrases, and the engine reordered words across them.
+        let text = recognizedLines.isEmpty ? recognizedText : recognizedLines
 
         if Self.useAppleTranslation, #available(iOS 18.0, *), text.count >= Self.appleTranslationMinChars {
             pendingAppleCompletion = completion
@@ -204,13 +211,32 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
             }
 
             // Heavy regex work runs right here on the background executor.
-            let translation = engine.translate(text)
+            let translation = Self.translationUnits(text).map(engine.translate)
+                .filter { !$0.isEmpty }.joined(separator: "\n")
             await MainActor.run {
                 self?.translatedText = translation
                 self?.isTranslated = true
                 completion(true)
             }
         }
+    }
+
+    /// One unit per printed line, except a line that starts lowercase after a
+    /// line with no ending punctuation: that's a sentence wrapping, keep it whole.
+    nonisolated static func translationUnits(_ text: String) -> [String] {
+        var units: [String] = []
+        for line in text.components(separatedBy: .newlines) {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            guard !t.isEmpty else { continue }
+            if let prev = units.last, let first = t.first, first.isLowercase,
+               let end = prev.last, !".!?:;".contains(end)
+            {
+                units[units.count - 1] = prev + " " + t
+            } else {
+                units.append(t)
+            }
+        }
+        return units
     }
 
     // MARK: - Reset Translation
@@ -273,7 +299,7 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
     func speak(text: String, voiceIdentifier: String, completion: @escaping () -> Void) {
         guard !text.isEmpty else { completion(); return }
         if !Self.speaksAloud {
-            announceInstead(text)
+            announceInstead(SpeakableText.make(text == recognizedText ? recognizedLines : text))
             completion()
             return
         }
@@ -285,8 +311,12 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
         try? audio.overrideOutputAudioPort(.speaker)
         if speechSynthesizer.isSpeaking { speechSynthesizer.stopSpeaking(at: .immediate) }
         speechCompletionHandler = completion
+        // Say numbers and addresses the way a person would ("three ninety-three
+        // Westgate Drive", phone numbers digit by digit, card numbers only by
+        // their last four). What's on screen and what gets copied stay as read.
+        let spoken = SpeakableText.make(text == recognizedText ? recognizedLines : text)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            let utterance = AVSpeechUtterance(string: text)
+            let utterance = AVSpeechUtterance(string: spoken)
             if let voice = AVSpeechSynthesisVoice(identifier: voiceIdentifier) { utterance.voice = voice }
             utterance.rate = 0.5
             utterance.volume = 0.9
@@ -310,6 +340,7 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
 
     func clearText() {
         recognizedText = ""
+        recognizedLines = ""
         translatedText = ""
         isTranslated = false
         isFrozen = false

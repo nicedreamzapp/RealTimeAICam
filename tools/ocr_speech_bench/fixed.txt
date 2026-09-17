@@ -1,0 +1,86 @@
+=== bank_statement
+  read:      Coast Central Credit Union Member Number 00482213 Checking ending in 4471 Routing Number 121141288 Beginning Balance $3,214.55 Deposits 2 totaling $1,500.00 Ending Balance $4,102.19 
+  fixed txt: Coast Central Credit Union, Member Number zero zero four eight two two one three, Checking ending in four four seven one, Routing Number one two one one four one two eight eight, Beginning Balance $3,214.55, Deposits 2 totaling $1,500.00, Ending Balance $4,102.19
+=== boarding_pass
+  read:      ALASKA AIRLINES Flight AS 1523 SFO to SEA Gate B12 Seat 14C Boards 6:45 PM Sep 23 Confirmation C6GEGZ Ticket 0272158843190 
+  fixed txt: ALASKA AIRLINES, Flight AS fifteen twenty-three SFO to SEA, Gate B12 Seat 14C, Boards 6:45 PM Sep 23, Confirmation C6GEGZ, Ticket zero two seven two one five eight eight four three one nine zero
+=== credit_card
+  read:      4111 1111 1111 1111 VALID THRU 04/28 MATTHEW MACOSKO 
+  fixed txt: four one one one, one one one one, one one one one, one one one one, VALID THRU 04/28, MATTHEW MACOSKO
+  spanish:   Calle Mayor 15, 3° B 28013 Madrid Teléfono: +34 912 345 67îŘš 
+=== es_direccion_es
+  read:      Calle Mayor 15, 3 ° B | 28013 Madrid | Phone: +34 912 345 67 Irs
+  fixed txt: Calle Mayor 15, 3 ° B, two eight zero one three Madrid, Phone: plus three four, nine one two, three four five, six seven Irs
+  spanish:   Av. Reforma 222, Piso 5 Col. Juárez, C.P. 06600 Ciudad de México, CDMX Tel. 55 1234 5678 
+=== es_direccion_mx
+  read:      Avenida Reforma 222, floor 5 | Colonia Juárez, postal code 06600 | City of Mexico, CDMX | Tel. 55 1234 5678
+  fixed txt: Avenida Reforma 222, floor 5, Colonia Juárez, postal code zero six six zero zero, City of Mexico, CDMX, Tel. five five, one two three four, five six seven eight
+  spanish:   Número de guía: 9400 1118 9922 3344 5566 77 Destinatario: María López Calle 5 de Mayo 123, Int. 4 C.P. 44100, Guadalajara, Jal. 
+=== es_envio
+  read:      Number of guide: | 9400 1118 9922 3344 5566 77 | Addressee: Maria López | Calle 5 de Mayo 123, Int. 4 | postal code 44100, Guadalajara, Jal.
+  fixed txt: Number of guide: long number, Addressee: Maria López, Calle 5 de Mayo 123, Int. 4, postal code four four one zero zero, Guadalajara, Jal.
+  spanish:   FACTURA No. 004512 Fecha: 16/09/2026 Total a pagar: 1.234,56 € NA 21%: 214,26 ęłą Cuenta IBAN ES91 2100 0418 4502 0005 1332 
+=== es_factura
+  read:      Bill no. 004512 | Date: 16/09/2026 | Total to pay: 1.234,56 € | NA 21%: 214,26 ęłą | Account IBAN ES91 2100 0418 4502 0005 1332
+  fixed txt: Bill number zero zero four five one two, Date: 16/09/2026, Total to pay: 1,234.56 €, NA 21%: 214,26 ęłą, Account IBAN ES91 long number
+  spanish:   Paracetamol 500 mg Tomar 1 tableta cada 8 horas Lote: AB12345 Caducidad: 09/2027 Receta No. 887612 
+=== es_farmacia
+  read:      Paracetamol 500 mg | Take 1 tablet each 8 hours | Batch: AB12345 | Expiration: 09/2027 | Recipe no. 887612
+  fixed txt: Paracetamol 500 mg, Take 1 tablet each 8 hours, Batch: A B one two three four five, Expiration: 09/2027, Recipe number eight eight seven six one two
+  spanish:   Horario: Lunes a Viernes 9:00 a 18:00 hrs Estacionamiento $15 por hora Salida 42 Carretera 101 
+=== es_letrero
+  read:      Schedule: Monday to Friday | 9:00 to 18:00 Hrs | Parking lot $15 by hour | Exit 42 Carretera 101
+  fixed txt: Schedule: Monday to Friday, 9:00 to 18:00 Hrs, Parking lot $15 by hour, Exit 42 Carretera 101
+  spanish:   Dr. José Ramírez Consultorio 204 Cita: 23 de septiembre, 10:30 Población: 1.500.000 habitantes Receta 1/2 tableta 
+=== es_medico
+  read:      Dr. José Ramírez | Office 204 | Appointment: 23 of September, 10:30 | Population: 1.500.000 population | Recipe 1/2 tablet
+  fixed txt: Dr. José Ramírez, Office 204, Appointment: 23 of September, 10:30, Population: 1,500,000 population, Recipe one half tablet
+  spanish:   SUPERMERCADO LA PLAZA Tienda 0147 Leche 1 L $24.50 Pan dulce $18.00 TOTAL $42.50 Tarjeta ****4471 Folio 99812345 
+=== es_recibo
+  read:      Supermarket the square | Store 0147 | Milk 1 L $24.50 | Bread dulce $18.00 | TOTAL $42.50 | Card ****4471 | Folio 99812345
+  fixed txt: Supermarket the square, Store zero one four seven, Milk 1 L $24.50, Bread dulce $18.00, TOTAL $42.50, Card ending in four four seven one, Folio nine nine eight one two three four five
+=== fedex_label
+  read:      FedEx Express TRK# 7712 3456 7890 Deliver by: Fri 09/19 2230 Hillside Ave, Ste 110 Walnut Creek, CA 94596 
+  fixed txt: FedEx Express, TRK number seventy-seven twelve three four five six, seven eight nine zero, Deliver by: Fri 09/19, twenty-two thirty Hillside Avenue, Suite one ten, Walnut Creek, C A, nine four five nine six
+=== grocery_receipt
+  read:      SAFEWAY STORE 1847 2 @ 3.99 BANANAS MILK 1 GAL EGGS 12 CT SUBTOTAL TAX TOTAL 7.98 4.29 5.49 17.7ćął 0.00 17.76 VISA ****** ****4471 AUTH 083144 ST# 1847 OP# 22 TE# 04 TR# 7731 09/16/26 10:42 AM 
+  fixed txt: SAFEWAY STORE eighteen forty-seven, 2 @ 3.99 BANANAS, MILK 1 GAL, EGGS 12 CT, SUBTOTAL, TAX, TOTAL, 7.98, 4.29, 5.49, 17.7ćął, 0.00, 17.76, VISA, **, ending in four four seven one, AUTH zero eight three one four four, ST number eighteen forty-seven OP number 22 TE number 04 TR number seventy-seven thirty-one, 09/16/26 10:42 AM
+=== insurance_card
+  read:      Blue Shield of California Member ID XEH912345678 Group No. 00W41873 RxBIN 610014 RxPCN MEDDPRIME Office Visit $25 ER $150 Member Services 1-888-256-3650 
+  fixed txt: Blue Shield of California, Member ID X E H nine one two three four five six seven eight, Group number zero zero W four one eight seven three, RxBIN six one zero zero one four RxPCN MEDDPRIME, Office Visit $25 ER $150, Member Services one, eight eight eight, two five six, three six five zero
+=== letter
+  read:      September 16, 2026 Dear Mr. Macosko, Your claim 27776183 was received on 9/12. Please call us at 800.555.0199 ext. 204 or write to 1600 Pennsylvania Ave NW, Washington, DC 20500. Sincerely, Dr. Karen Mills 
+  fixed txt: September 16, 2026, Dear Mr. Macosko, Your claim two seven seven seven six one eight three was received on 9/12. Please call us at eight zero zero, five five five, zero one nine nine ext. two oh four, or write to sixteen hundred Pennsylvania Avenue Northwest, Washington, D C, two zero five zero zero. Sincerely, Dr. Karen Mills
+=== nutrition
+  read:      Nutrition Facts Serving size 1 cup (240mL) Calories 150 Total Fat 8g 10% Sodium 120mg 5% Vitamin D 2mcg 10% 
+  fixed txt: Nutrition Facts, Serving size 1 cup (240mL), Calories 150, Total Fat 8g 10%, Sodium 120mg 5%, Vitamin D 2mcg 10%
+=== parking_ticket
+  read:      NOTICE OF PARKING VIOLATION Citation No. 802214557 Plate 8ABC123 CA Violation CVC 22500(e) Fine $65.00 Pay by 10/16/2026 Hwy 101 at 5th St, Eureka 
+  fixed txt: NOTICE OF PARKING VIOLATION, Citation number eight zero two two one four five five seven, Plate eight A B C one two three CA, Violation CVC two two five zero zero(e), Fine $65.00 Pay by 10/16/2026, Hwy 101 at 5th Street, Eureka
+=== pharmacy
+  read:      Rx# 6143902-05 CVS Pharmacy LISINOPRIL 10 MG TABLET TAKE 1 TABLET BY MOUTH DAILY Qty: 30 Refills: 3 NDC 68180-0514-01 Dr. Anita Patel Store (707) 822-4501 
+  fixed txt: Rx number six one four three nine zero two, zero five CVS Pharmacy, LISINOPRIL 10 MG TABLET, TAKE 1 TABLET BY MOUTH DAILY, Qty: 30 Refills: 3, NDC six eight one eight zero, zero five one four, zero one, Dr. Anita Patel, Store seven zero seven, eight two two, four five zero one
+=== product_box
+  read:      Model TUG-2.0 UPC 0 12345 67890 5 SN: A7B9C2D4E1F3G5H6J8K0 Made in China Input 5V 2A 1500mAh 
+  fixed txt: Model TUG-2.0, UPC zero, one two three four five, six seven eight nine zero, five, SN: long number, Made in China, Input 5V 2A 1500mAh
+=== restaurant_menu
+  read:      Lunch Specials 11 AM - 3 PM Burger and Fries 14.50 Fish Tacos (3) 16 Clam Chowder 8 oz $7 / 16 oz $12 Est. 1978 
+  fixed txt: Lunch Specials 11 AM - 3 PM, Burger and Fries 14.50, Fish Tacos (3) 16, Clam Chowder 8 oz $7 / 16 oz $12, Est. 1978
+=== street_sign
+  read:      N MAIN ST 1200 EXIT 42 US-101 NORTH Speed Limit 35 
+  fixed txt: N MAIN Street, 1200, EXIT 42 US-101 NORTH, Speed Limit 35
+=== tax_form
+  read:      Form W-2 Wage and Tax Statement 2025 Employer ID (EIN) 94-3217765 Employee SSN XXX-XX-6789 Wages, tips 1 $52,340.18 Control number 000123 
+  fixed txt: Form W-2 Wage and Tax Statement 2025, Employer ID (EIN) nine four, three two one seven seven six five, Employee SSN ending in six seven eight nine, Wages, tips 1 $52,340.18, Control number zero zero zero one two three
+=== ups_label
+  read:      UPS GROUND TRACKING #: 1Z 999 AA1 01 2345 6784 SHIP TO: ROBERT KING 77 W 45TH ST FL 3 NEW YORK NY 10036 REF: INV-2026-00451 
+  fixed txt: UPS GROUND, TRACKING number: long number, SHIP TO: ROBERT KING, seventy-seven West 45TH Street Floor three, NEW YORK N Y, one zero zero three six, REF: I N V, two zero two six, zero zero four five one
+=== usps_label
+  read:      USPS GROUND ADVANTAGE DIVINE TRIBE PO BOX 1234 ARCATA CA 95521 SHIP TO: JANE DOE 4821 OCEAN VIEW BLVD APT 12 SAN DIEGO CA 92107-3304 USPS TRACKING # EP 9400 1118 9922 3344 5566 77 
+  fixed txt: USPS GROUND ADVANTAGE, DIVINE TRIBE, P O Box twelve thirty-four, ARCATA C A, nine five five two one, SHIP TO: JANE DOE, forty-eight twenty-one OCEAN VIEW Boulevard Apartment twelve, SAN DIEGO C A, nine two one zero seven, three three zero four, USPS TRACKING number EP, long number
+=== utility_bill
+  read:      Pacific Gas and Electric Account Number: 4491027735-6 Service For: 393 Westgate Dr Statement Date: 09/02/2026 Amount Due: $142.87 Due Date: 09/23/2026 Questions? Call 1-800-743-5000 
+  fixed txt: Pacific Gas and Electric, Account Number: four four nine one zero two seven seven three five, six, Service For: three ninety-three Westgate Drive, Statement Date: 09/02/2026, Amount Due: $142.87, Due Date: 09/23/2026, Questions? Call one, eight zero zero, seven four three, five zero zero zero
+=== wifi_card
+  read:      Guest WiFi Network: Seaside_Guest Password: tide2026wave Router S/N 2K4J9X71QP 
+  fixed txt: Guest WiFi, Network: Seaside_Guest, Password: tide2026wave, Router S/N two K four J nine X seven one Q P

@@ -125,7 +125,11 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
     // MARK: - NEW: Build Speech Text Based on LiDAR Status
 
     private func buildSpeechText(for detection: YOLODetection, lidarManager: LiDARManager) -> String {
-        let objectName = detection.className.lowercased()
+        // "Bat (Animal)" was read out with its label note; say just "bat".
+        let objectName = detection.className
+            .replacingOccurrences(of: #"\s*\([^)]*\)"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: "&", with: "and")
+            .lowercased()
 
         // Check if LiDAR is active and enabled
         if lidarManager.isEnabled, lidarManager.isRunning {
@@ -140,7 +144,7 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
                 let positionWord = convertPositionToWord(position)
 
                 // Format: "bottle left 3 feet"
-                return "\(objectName) \(positionWord) \(distanceFeet) feet"
+                return "\(objectName) \(positionWord) \(distanceFeet) \(distanceFeet == 1 ? "foot" : "feet")"
             }
         }
 

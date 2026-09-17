@@ -1,0 +1,26 @@
+bank_statement.fix.caf       Coast Central Credit Union, member number 00482213, checking ending in 4471, routing number 121141288, beginning balance $3214.55, deposits two totaling $1,500, ending balance $4,102.19.
+boarding_pass.fix.caf        Alaska Airlines. Flight is 1523 SFO2C. Gate B12C14C. Board 6.45 PM September 23. Confirmation C6GEGC. Ticket 0272158843190.
+credit_card.fix.caf          four one one one one one one one one one one one one one one one one one valid through zero four slash twenty eight. Matthew McCosco.
+es_direccion_es.fix.caf      Calle Mayer 15, three degrees B, two eight zero one three Madrid, phone, plus three four, nine one two, three four five, six seven Ayers.
+es_direccion_mx.fix.caf      Avenida Reforma 222, Floor 5, Colonia Juarez, Postal Code 06600, City of Mexico, CDMX, Tel 55, 1234, 5678.
+es_envio.fix.caf             Number of guide, long number, address e, Maria Lopez, Calle 5D Mayo 123, Int 4, Postal Code 44100, Guadalajara, Jal.
+es_factura.fix.caf           Bill number 004512. Date. September 16, 2026. Total to pay. €1234.56. NA 21%. 214.26 ELA. Account E-BAN ES-91 Long Number.
+es_farmacia.fix.caf          Paracetamol 500 milligrams. Take one tablet each eight hours. Batch. AB12345. Expiration. 09.2027. Recipe number 887612.
+es_letrero.fix.caf           Schedule, Monday to Friday, nine o'clock to eighteen hundred hours HRS, parking lot fifteen dollars by hour, exit 42 Caratera 101.
+es_medico.fix.caf            Dr. Jose Ramirez, Office 204, Appointment, 23 of September, 10-30, Population, 1,500,000 Population, Recipe 1 Half Tablet.
+es_recibo.fix.caf            Supermarket The Square, Store zero one four seven, Milk one L twenty four dollars and fifty cents, Bread Dulce eighteen dollars, Total forty two dollars and fifty cents, Card ending in four four seven one, Folio nine nine eight one two three four five.
+fedex_label.fix.caf          FedEx Express, TRK number 771234567890, Deliver by, Friday September 19th, 2230 Hillside Avenue, Suite 110, Walnut Creek, CA, 94596.
+grocery_receipt.fix.caf      Safeway store 1847, two at three point nine nine bananas, milk one gallon, eggs twelve ct, subtotal, tax, total, seven point nine eight, four point two nine, five point four nine, seventeen point seven cal, zero point zero zero, seventeen point seven six, visa, ending in four four seven one, off zero eight three one four four, ST number 1847 OP number 22 TA number 04 TR number 77 31, September 16, 2026, 1042 AM.
+insurance_card.fix.caf       Blue Shield of California, member ID XEH 912345678, group number 00W41873, RxBIN 610014 RxPCN MedPrime, office visit $25ER150, member services 1, 888-256-3650.
+letter.fix.caf               September 16, 2026. Dear Mr. McCosco, your claim 27776183 was received on 9-12. Please call us at 800-555.
+nutrition.fix.caf            Nutrition Facts Serving Size 1 cup, 240 ml, calories 150, total fat 8 grams 10%, sodium 120 milligrams 5%, vitamin D 2 micrograms 10%.
+parking_ticket.fix.caf       Notice of parking violation. Citation number 802214557. Playdate ABC 123CA. Violation CVC 22500E. Fine $65 pay by October 16, 2026. Highway 101 at 5th Street. Eureka.
+pharmacy.fix.caf             Rx number six one four three nine zero two, zero five CVS pharmacy, lisinopril 10mg tablet, take one tablet by mouth daily, QTY, thirty refills, three, NDC six eight one eight zero, zero five one four, zero one, Dr. Anita Patel, store seven zero seven, eight two two, four five zero one.
+product_box.fix.caf          Model tug 2.0, UPC0, 12345, 67890, 5, SN, long number, made in China, input 5V2A1500MA.
+restaurant_menu.fix.caf      Lunch specials 11 am 3 pm, burger and fries 14.50, fish tacos, three, sixteen, clam chowder eight ounces seven dollars 16 ounces 12 dollars, s 1978.
+street_sign.fix.caf          N Main Street, 1200, exit 42 US 101 North, speed limit 35.
+tax_form.fix.caf             Form W-2 Wage and Tax Statement 2025, Employer ID, IN, 94,3217765, Employee SSN ending in 6789, Wages, Tips $1.52340.18, Control Number 000123.
+ups_label.fix.caf            UPS ground. Tracking number, long number, ship to, Robert King, 77 West 45th Street Floor 3, New York NY, 10036, REF, INV, 2026, 00451.
+usps_label.fix.caf           USPS Ground Advantage, Divine Tribe, P.O. Box 1234, Arcata CA, 95521, Ship 2, Jane DOE, 4821 Ocean View Boulevard Apartment 12, San Diego CA, 92107, 3304, USPS Tracking Number EP, Long Number.
+utility_bill.fix.caf         Pacific Gas and Electric, account number, four four nine one zero two seven seven three five, six, service four, three ninety-three Westgate Drive, statement date, September 2nd, 2026, amount due, one hundred forty-two dollars and eighty-seven cents, due date, September 23rd, 2026, questions, call one eight zero zero seven four three five zero.
+wifi_card.fix.caf            Guest Wi-Fi, network, seaside guest, password, TI-2026 WAVE, router SN2K4J9X71QP.

@@ -282,9 +282,95 @@ final class FixedSpanishEngine {
             return text
         }
 
-        let result = interpretSpanishWithContext(text)
+        let (shielded, held) = Self.shieldLiterals(text)
+        let result = Self.restoreLiterals(interpretSpanishWithContext(shielded), held)
         print("   🎯 RESULT: '\(result)'")
         return result
+    }
+
+    // MARK: - Things that must come through untouched
+
+    /// Numbers, prices, dates, times, codes and street names are not Spanish
+    /// words. Run through the word engine they came back broken: "1.234,56 €"
+    /// became "1. 234, 56 €", "9:00" became "9: 00", "IBAN" became "they were",
+    /// "Col. Juárez" became "cabbage. Juarez", "Calle Mayor" became "Elderly
+    /// street" (2026-09-16). Each one is swapped for a placeholder word the
+    /// engine can't translate, then put back afterwards exactly as printed.
+    private static let literalPatterns: [(NSRegularExpression, (String) -> String)] = {
+        func re(_ p: String) -> NSRegularExpression { try! NSRegularExpression(pattern: p) }
+        let keep: (String) -> String = { $0 }
+        let name = #"(?:\s+(?:de\s+(?:la\s+|los\s+|las\s+)?|del\s+)?[A-ZÁÉÍÓÚÑ0-9][\wáéíóúñü]*)+"#
+        return [
+            // Street and neighborhood names stay in Spanish; they match the signs.
+            (re(#"\b(?:Av\.|Avda\.|Avenida|Calle|C/|Paseo|Plaza|Pza\.|Bulevar|Blvd\.|Callej[oó]n|Privada|Col\.|Colonia|Carretera|Ctra\.)"# + name),
+             { s in s.replacingOccurrences(of: #"^(Av\.|Avda\.)"#, with: "Avenida", options: .regularExpression)
+                     .replacingOccurrences(of: #"^Col\."#, with: "Colonia", options: .regularExpression)
+                     .replacingOccurrences(of: #"^Ctra\."#, with: "Carretera", options: .regularExpression)
+                     .replacingOccurrences(of: #"^Pza\."#, with: "Plaza", options: .regularExpression) }),
+            (re(#"\bC\.\s?P\.(?=\s*\d)"#), { _ in "postal code" }),
+            // "a las 9:00" is a time, "at 9:00" (the digits are hidden from the engine).
+            (re(#"\b[Aa]\s+las?(?=\s+\d{1,2}(?::\d{2})?\b)"#), { _ in "at" }),
+            // Medicine labels: "Receta No. 887612" is a prescription, not a recipe;
+            // "cada 8 horas" is every 8 hours.
+            (re(#"\b[Rr]eceta(?=\s+(?:No\.|n[úu]m|#|m[ée]dica\b|\d))"#), { _ in "Prescription" }),
+            (re(#"\b[Cc]ada(?=\s+\d)"#), { _ in "every" }),
+            (re(#"\b[Dd]e(?=\s+\d{1,2}(?::\d{2})?\s*(?:hrs?\.?\s+)?a\s+\d)"#), { _ in "from" }),
+            (re(#"\bIVA\b"#), { _ in "VAT" }),
+            (re(#"\b(?:IBAN|RFC|CURP|CDMX|NIF|DNI|CIF|NSS|CLABE)\b"#), keep),
+            // Spanish dates are day first: "16/09/2026" -> "16 September 2026", so the
+            // English voice doesn't read it as a month that doesn't exist.
+            (re(#"(?<![\d/])(?:0?[1-9]|[12]\d|3[01])/(?:0?[1-9]|1[0-2])/(?:\d{4}|\d{2})(?![\d/])"#), { d in
+                let p = d.split(separator: "/").map(String.init)
+                let months = ["January", "February", "March", "April", "May", "June", "July",
+                              "August", "September", "October", "November", "December"]
+                let year = p[2].count == 2 ? "20" + p[2] : p[2]
+                return "\(Int(p[0])!) \(months[Int(p[1])! - 1]) \(year)"
+            }),
+            // Money, amounts, dates, times, phone numbers, masks, codes with digits.
+            (re(#"(?:[$€£]\s?|\+\s?)?[*•]*[0-9A-Za-z]*\d(?:[0-9A-Za-z]|[.,:/\-º°ª](?=[0-9A-Za-z]))*(?:\s?(?:€|%))?"#), keep),
+            (re(#"[*•]{2,}"#), keep),
+        ]
+    }()
+
+    static func shieldLiterals(_ text: String) -> (String, [String]) {
+        var s = text
+        var held: [String] = []
+        for (re, transform) in literalPatterns {
+            let ns = s as NSString
+            var out = ""
+            var last = 0
+            for m in re.matches(in: s, range: NSRange(location: 0, length: ns.length)) {
+                out += ns.substring(with: NSRange(location: last, length: m.range.location - last))
+                // Only letters, so the tokenizer keeps it whole and no rule
+                // pack (several match on digits) can touch it.
+                out += " qzlit" + letterIndex(held.count) + "qz "
+                held.append(transform(ns.substring(with: m.range)))
+                last = m.range.location + m.range.length
+            }
+            out += ns.substring(from: last)
+            s = out
+        }
+        return (s, held)
+    }
+
+    static func restoreLiterals(_ text: String, _ held: [String]) -> String {
+        guard !held.isEmpty else { return text }
+        var s = text
+        for (i, value) in held.enumerated().reversed() {
+            s = s.replacingOccurrences(of: "qzlit" + letterIndex(i) + "qz", with: value, options: .caseInsensitive)
+        }
+        return s.replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: #"\s+([,.;:!?)])"#, with: "$1", options: .regularExpression)
+            .replacingOccurrences(of: #"\(\s+"#, with: "(", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
+    }
+
+    /// 0 -> "a", 25 -> "z", 26 -> "ba": a placeholder id with no digits in it.
+    private static func letterIndex(_ n: Int) -> String {
+        let letters = Array("abcdefghijklmnopqrstuvwxyz")
+        var n = n, out = ""
+        repeat { out = String(letters[n % 26]) + out; n /= 26 } while n > 0
+        return out
     }
 
     func isReady() -> Bool {
@@ -442,7 +528,13 @@ final class FixedSpanishEngine {
             from: reorderNounAdjective(phraseApplied),
             unknowns: &unknowns, total: &total, translated: &translated
         )
-        var out = englishPieces.joined(separator: " ")
+        // Words the dictionary doesn't know (names, brands) pass through as they
+        // were printed, not lowercased: "dulce", "López" keep their capitals.
+        var printed: [String: String] = [:]
+        for t in tokens where t != t.lowercased() { printed[t.lowercased()] = printed[t.lowercased()] ?? t }
+        let unknownSet = Set(unknowns)
+        var out = englishPieces.map { unknownSet.contains($0) ? (printed[$0] ?? $0) : $0 }
+            .joined(separator: " ")
 
         // Fast reflexive pack for menus/signage/general
         if domain == .restaurant || domain == .signage || domain == .general {
@@ -572,6 +664,8 @@ final class FixedSpanishEngine {
         out = out.replacingOccurrences(of: "¿", with: "")
         out = out.replacingOccurrences(of: "¡", with: "")
         out = out.replacingOccurrences(of: #"\s+([,\.!\?:;)\]\}])"#, with: "$1", options: NSString.CompareOptions.regularExpression)
+        // "Dr." comes back from the dictionary with its own dot: "Dr. ." -> "Dr."
+        out = out.replacingOccurrences(of: #"(?<!\.)\.\.(?!\.)"#, with: ".", options: NSString.CompareOptions.regularExpression)
         out = out.replacingOccurrences(of: #"([,\.!\?:;])([^\s\)\]\}])"#, with: "$1 $2", options: NSString.CompareOptions.regularExpression)
         out = out.replacingOccurrences(of: #"([\(\[\{])\s+"#, with: "$1", options: NSString.CompareOptions.regularExpression)
         out = out.replacingOccurrences(of: #"\s+"#, with: " ", options: NSString.CompareOptions.regularExpression)
