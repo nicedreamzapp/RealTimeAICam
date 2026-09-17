@@ -359,6 +359,7 @@ final class HelpMeAimController: ObservableObject {
     func choosePage() { begin(.page) }
 
     func chooseSomethingElse() {
+        isTyping = false
         phase = .asking
         statusText = "What are you looking for?"
         voice.warmRoute()
@@ -368,19 +369,31 @@ final class HelpMeAimController: ObservableObject {
             guard let self else { return }
             voice.say(AimPhrases.askWhat) { [weak self] in
                 DispatchQueue.main.asyncAfter(deadline: .now() + AimListening.afterPrompt) {
-                    guard let self, self.phase == .asking, !self.paused, !self.listener.isRunning else { return }
+                    guard let self, self.phase == .asking, !self.paused, !self.isTyping,
+                          !self.listener.isRunning else { return }
                     self.listen()
                 }
             }
         }
         if UIAccessibility.isVoiceOverRunning {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak self] in
-                guard let self, phase == .asking, !paused else { return }
+                guard let self, phase == .asking, !paused, !isTyping else { return }
                 ask()
             }
         } else {
             ask()
         }
+    }
+
+    /// The person went for the text field instead: stop asking and don't
+    /// open the mic ("After the beep…" used to play over the typing).
+    private var isTyping = false
+    func typingStarted() {
+        guard phase == .asking else { return }
+        AimDevLog.note("[typing]")
+        isTyping = true
+        voice.stop()
+        if listener.isRunning { listener.stop(deliver: false) }
     }
 
     func backToChoices() {
@@ -392,6 +405,7 @@ final class HelpMeAimController: ObservableObject {
     }
 
     func listen() {
+        isTyping = false
         if listener.isRunning {
             listener.stop(deliver: true)
             return
@@ -770,6 +784,7 @@ struct HelpMeAimView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AccessibilityFocusState private var cameraFocused: Bool
     @State private var typed = ""
+    @FocusState private var typing: Bool
 
     var body: some View {
         ZStack {
@@ -843,6 +858,8 @@ struct HelpMeAimView: View {
                     .submitLabel(.search)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
+                    .focused($typing)
+                    .onChange(of: typing) { _, now in if now { controller.typingStarted() } }
                     .onSubmit { controller.submit(typed) }
                     .accessibilityLabel("Or type what you're looking for")
                 Button("Find") { controller.submit(typed) }
@@ -861,7 +878,10 @@ struct HelpMeAimView: View {
             AimCameraPreview(controller: controller)
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
-                .onTapGesture(count: 2) { controller.shootNow() }
+                .onTapGesture(count: 2) {
+                    AimDevLog.note("[tap] double")
+                    controller.shootNow()
+                }
                 .accessibilityElement()
                 .accessibilityLabel("Camera, looking for \(controller.subject?.spokenName ?? "your subject")")
                 .accessibilityHint("Double tap to take the picture now")
@@ -922,7 +942,10 @@ struct HelpMeAimView: View {
                 .accessibilityHidden(true)
             }
         }
-        .accessibilityAction(.magicTap) { controller.shootNow() }
+        .accessibilityAction(.magicTap) {
+            AimDevLog.note("[tap] magic")
+            controller.shootNow()
+        }
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { cameraFocused = true }
         }
@@ -1055,9 +1078,10 @@ private struct AimListenButton: View {
 enum AimShotProcessor {
     /// The single photo kept from a burst.
     struct Kept {
-        /// What goes to Photos: the cropped JPEG, or the winner as shot.
+        /// What goes to Photos: the winner (cropped or not) with its pixels
+        /// turned upright, so no viewer can show it sideways.
         var photo: Data
-        /// The winner as shot (only differs from `photo` when cropped).
+        /// The winner as shot (sensor-landscape pixels plus an EXIF turn).
         var original: Data
         var cropped: Bool
         var info: ShotInfo
@@ -1117,15 +1141,21 @@ enum AimShotProcessor {
         var crop: CGRect?
         var photo = original
         var shown: UIImage?
-        if let box = scored[winner].box,
-           let rect = AimBurst.crop(box: box, imageSize: size, framing: framing),
-           let full = uprightImage(original, maxSide: max(size.width, size.height)),
-           let cut = full.cropping(to: rect) {
-            let image = UIImage(cgImage: cut)
-            if let jpeg = image.jpegData(compressionQuality: 0.92) {
+        // Walkaround 2026-09-16: shots were read as sideways because the
+        // pixels were landscape with only an EXIF turn. Bake the turn in.
+        if let full = uprightImage(original, maxSide: max(size.width, size.height)) {
+            var image = full
+            if let box = scored[winner].box,
+               let rect = AimBurst.crop(box: box, imageSize: size, framing: framing),
+               let cut = full.cropping(to: rect) {
+                image = cut
                 crop = rect
+            }
+            if let jpeg = uprightJPEG(image, metadataFrom: original) {
                 photo = jpeg
-                shown = image
+                shown = UIImage(cgImage: image)
+            } else {
+                crop = nil
             }
         }
         if shown == nil { shown = UIImage(data: original) }
@@ -1149,6 +1179,36 @@ enum AimShotProcessor {
             kCGImageSourceShouldCacheImmediately: true,
         ]
         return CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary)
+    }
+
+    /// JPEG of an already-upright image, keeping the shot's camera metadata
+    /// but with the orientation reset to "up".
+    static func uprightJPEG(_ image: CGImage, metadataFrom data: Data) -> Data? {
+        var props: [CFString: Any] = [:]
+        if let src = CGImageSourceCreateWithData(data as CFData, nil),
+           let p = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any] {
+            props = p
+        }
+        for key in [kCGImagePropertyPixelWidth, kCGImagePropertyPixelHeight, kCGImagePropertyDepth,
+                    kCGImagePropertyColorModel, kCGImagePropertyProfileName] {
+            props.removeValue(forKey: key)
+        }
+        props[kCGImagePropertyOrientation] = 1
+        if var tiff = props[kCGImagePropertyTIFFDictionary] as? [CFString: Any] {
+            tiff[kCGImagePropertyTIFFOrientation] = 1
+            props[kCGImagePropertyTIFFDictionary] = tiff
+        }
+        if var exif = props[kCGImagePropertyExifDictionary] as? [CFString: Any] {
+            exif[kCGImagePropertyExifPixelXDimension] = image.width
+            exif[kCGImagePropertyExifPixelYDimension] = image.height
+            props[kCGImagePropertyExifDictionary] = exif
+        }
+        props[kCGImageDestinationLossyCompressionQuality] = 0.92
+        let out = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(out, "public.jpeg" as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(dest, image, props as CFDictionary)
+        guard CGImageDestinationFinalize(dest) else { return nil }
+        return out as Data
     }
 
     /// Pixel size after the EXIF rotation.
@@ -1181,9 +1241,8 @@ enum TestShotLog {
         f.dateFormat = "yyyyMMdd-HHmmss"
         let stamp = f.string(from: Date())
         try? kept.original.write(to: dir.appendingPathComponent("\(stamp)-winner.jpg"))
-        if kept.cropped {
-            try? kept.photo.write(to: dir.appendingPathComponent("\(stamp)-saved-cropped.jpg"))
-        }
+        let saved = kept.cropped ? "saved-cropped" : "saved"
+        try? kept.photo.write(to: dir.appendingPathComponent("\(stamp)-\(saved).jpg"))
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         if let json = try? enc.encode(kept.info) {

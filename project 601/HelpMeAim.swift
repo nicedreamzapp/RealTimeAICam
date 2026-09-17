@@ -34,7 +34,11 @@ enum AimSubject: Equatable {
     }
 
     var framing: AimSteering.Framing {
-        self == .face ? .person : .whole
+        switch self {
+        case .face: .person
+        case .page: .page
+        case .object: .whole
+        }
     }
 }
 
@@ -43,6 +47,8 @@ enum AimInstruction: Equatable {
     case notFound
     case moveLeft, moveRight, moveUp, moveDown
     case moveCloser, backUp
+    /// Back up because the subject runs off two or more edges (pages).
+    case backUpCutOff
     case framed
 }
 
@@ -55,8 +61,12 @@ enum AimSteering {
         /// on AppleVis ("Taking professional photos", 2023): "centered" is the
         /// wrong target for a person.
         case person
-        /// Objects, pictures and pages: centered and not cut off at any edge.
+        /// Objects: centered and not cut off at any edge.
         case whole
+        /// Pictures and pages: like `whole`, but all four corners have to be
+        /// clearly inside before "got it" (walkaround 2026-09-16: a page cut
+        /// off at the edge was called framed).
+        case page
     }
 
     // Round 2 (Matt's field test, 2026-09-16: shot about 1 in 30 tries and
@@ -87,6 +97,12 @@ enum AimSteering {
     static let wholeTooSmall: CGFloat = 0.10
     static let wholeLooseTooSmall: CGFloat = 0.08
     static let wholeTooBig: CGFloat = 0.97
+    /// Covering more of the frame than this: back up (walkaround 2026-09-16,
+    /// a wall map bigger than the frame bounced up/right/down/left for 15 s).
+    static let tooMuchOfFrame: CGFloat = 0.85
+    /// Pages: every corner at least this far inside.
+    static let pageEdgeMargin: CGFloat = 0.02
+    static let pageLooseEdgeMargin: CGFloat = 0.01
 
     /// What to tell the person for this box. `loose` is the much wider zone
     /// used once "got it" has been said and while the countdown runs, so a
@@ -95,7 +111,8 @@ enum AimSteering {
         guard let b = box, b.width > 0, b.height > 0 else { return .notFound }
         switch framing {
         case .person: return personInstruction(b, loose: loose)
-        case .whole: return wholeInstruction(b, loose: loose)
+        case .whole: return wholeInstruction(b, loose: loose, page: false)
+        case .page: return wholeInstruction(b, loose: loose, page: true)
         }
     }
 
@@ -147,11 +164,17 @@ enum AimSteering {
         return .framed
     }
 
-    private static func wholeInstruction(_ b: CGRect, loose: Bool) -> AimInstruction {
-        let m = loose ? looseEdgeMargin : edgeMargin
+    private static func wholeInstruction(_ b: CGRect, loose: Bool, page: Bool) -> AimInstruction {
+        let m = page ? (loose ? pageLooseEdgeMargin : pageEdgeMargin) : (loose ? looseEdgeMargin : edgeMargin)
         let cutL = b.minX < m, cutR = b.maxX > 1 - m
         let cutT = b.minY < m, cutB = b.maxY > 1 - m
-        if (cutL && cutR) || (cutT && cutB) || b.width > wholeTooBig || b.height > wholeTooBig {
+        let edgesCut = [cutL, cutR, cutT, cutB].filter { $0 }.count
+        // Touching two or more edges means it's bigger than the frame (or
+        // nearly): moving toward one edge only pushes another out.
+        if edgesCut >= 2 {
+            return page ? .backUpCutOff : .backUp
+        }
+        if b.width > wholeTooBig || b.height > wholeTooBig || b.width * b.height > tooMuchOfFrame {
             return .backUp
         }
         // One edge cut off: move toward it and the rest comes into the picture.
@@ -204,6 +227,7 @@ enum AimPhrases {
         case .moveDown: "move the phone down"
         case .moveCloser: "move closer"
         case .backUp: "back up"
+        case .backUpCutOff: subject == .page ? "back up, the page is cut off" : "back up"
         case .framed:
             if subject == .face, faceCount > 1 {
                 "got it, \(countWord(faceCount)) faces, hold still"
@@ -376,6 +400,18 @@ struct AimCoach {
     var leaveAfter: TimeInterval = 0.7
     /// Boxes in the median.
     var smoothingWindow = 5
+    /// Reversing the last direction (left after right) within `flipWindow`
+    /// has to hold this long instead of `settle`.
+    var flipSettle: TimeInterval = 1.2
+    var flipWindow: TimeInterval = 3.0
+    /// Pages: this many direction lines, at least `bounceKinds` different,
+    /// inside `bounceWindow` means it's too big or too close: say "back up"
+    /// instead of another direction (walkaround 2026-09-16, a wall map).
+    var bounceLines = 4
+    var bounceKinds = 3
+    var bounceWindow: TimeInterval = 8.0
+    /// After that "back up", no direction lines for this long.
+    var bounceQuiet: TimeInterval = 2.5
 
     private(set) var isCountingDown = false
     private(set) var isLocked = false
@@ -393,6 +429,8 @@ struct AimCoach {
     private var lockedAt = Date.distantPast
     private var anchor: CGPoint?
     private var outSince: Date?
+    private var directions: [(at: Date, what: AimInstruction)] = []
+    private var bouncedAt = Date.distantPast
 
     init(subject: AimSubject) {
         self.subject = subject
@@ -409,6 +447,8 @@ struct AimCoach {
         lastSpokenAt = .distantPast
         lastMissAt = .distantPast
         lastElsewhereAt = .distantPast
+        directions = []
+        bouncedAt = .distantPast
     }
 
     /// The controller cancelled or finished the countdown itself. "Got it"
@@ -491,7 +531,11 @@ struct AimCoach {
             lastSpokenAt = now
             return [.say(text, .none)]
         } else {
-            let wait = instruction == .framed ? framedSettle : settle
+            var wait = instruction == .framed ? framedSettle : settle
+            if let last = directions.last, Self.isReversal(last.what, instruction),
+               now.timeIntervalSince(last.at) < flipWindow {
+                wait = flipSettle
+            }
             guard now.timeIntervalSince(candidateSince) + 1e-6 >= wait else { return [] }
         }
 
@@ -509,8 +553,20 @@ struct AimCoach {
             return [.say(text, .success)]
         }
 
-        let text = AimPhrases.phrase(for: instruction, subject: subject, faceCount: faceCount)
+        var spoken = instruction
+        if Self.isDirection(instruction) {
+            if now.timeIntervalSince(bouncedAt) < bounceQuiet { return [] }
+            directions.removeAll { now.timeIntervalSince($0.at) > bounceWindow }
+            if subject.framing == .page, directions.count + 1 >= bounceLines,
+               Set(directions.map(\.what) + [instruction]).count >= bounceKinds {
+                spoken = .backUp
+                directions = []
+                bouncedAt = now
+            }
+        }
+        let text = AimPhrases.phrase(for: spoken, subject: subject, faceCount: faceCount)
         if text == lastPhrase, quiet < repeatInterval { return [] }
+        if Self.isDirection(spoken) { directions.append((now, spoken)) }
         lastPhrase = text
         lastSpokenAt = now
         return [.say(text, .tick)]
@@ -533,6 +589,17 @@ struct AimCoach {
         recent = []
         smoothedBox = nil
         return nil
+    }
+
+    static func isDirection(_ i: AimInstruction) -> Bool {
+        [.moveLeft, .moveRight, .moveUp, .moveDown].contains(i)
+    }
+
+    static func isReversal(_ a: AimInstruction, _ b: AimInstruction) -> Bool {
+        switch (a, b) {
+        case (.moveLeft, .moveRight), (.moveRight, .moveLeft), (.moveUp, .moveDown), (.moveDown, .moveUp): true
+        default: false
+        }
     }
 
     static func median(_ boxes: [CGRect]) -> CGRect? {
@@ -582,7 +649,11 @@ enum AimBurst {
     /// the subject is in none of them. Nil only for an empty burst.
     static func pick(_ frames: [Frame], framing: AimSteering.Framing) -> Int? {
         guard !frames.isEmpty else { return nil }
-        let scored = frames.enumerated().compactMap { i, f in score(f, framing: framing).map { (i, $0) } }
+        let sharpest = frames.filter { $0.box.map { !AimSteering.isCutOff($0) } ?? false }.map(\.sharpness).max() ?? 0
+        let scored = frames.enumerated().compactMap { i, f -> (Int, Double)? in
+            if let b = f.box, !AimSteering.isCutOff(b), f.sharpness < sharpest * minRelativeSharpness { return nil }
+            return score(f, framing: framing).map { (i, $0) }
+        }
         if let best = scored.max(by: { $0.1 < $1.1 }) { return best.0 }
         return frames.enumerated().max { $0.element.sharpness < $1.element.sharpness }?.offset
     }
@@ -597,6 +668,12 @@ enum AimBurst {
     /// Already this close to the target and at least this big: leave it.
     static let wellFramedDistance: CGFloat = 0.08
     static let wellFramedSize: CGFloat = 0.4
+    /// The largest crop (share of each side) used to lift a big face.
+    static let maxFaceCropShare: CGFloat = 0.85
+    /// A framed frame this much softer than the sharpest framed one in the
+    /// burst is dropped (walkaround 2026-09-16: a motion-blurred page shot
+    /// won because the sharpness credit caps far below real values).
+    static let minRelativeSharpness: Double = 0.7
 
     /// The crop rectangle in pixels (top-left origin), or nil to keep the
     /// whole photo. Same aspect ratio as the photo.
@@ -620,7 +697,15 @@ enum AimBurst {
             let k = minLongSide / long
             cw *= k; ch *= k
         }
-        guard cw < W * 0.98, ch < H * 0.98 else { return nil }
+        if cw >= W * 0.98 || ch >= H * 0.98 {
+            // A face too big for the usual padding (walkaround 2026-09-16:
+            // a selfie face at 35% of the width was never cropped and stayed
+            // mid-frame). Still trim a little to lift it toward the upper
+            // third, but only if that really moves it closer.
+            guard framing == .person else { return nil }
+            cw = W * maxFaceCropShare
+            ch = H * maxFaceCropShare
+        }
 
         // Put the subject's middle at the target point, then keep inside the photo.
         var x = box.midX * W - t.x * cw
@@ -631,7 +716,89 @@ enum AimBurst {
             .intersection(CGRect(x: 0, y: 0, width: W, height: H))
         let subject = CGRect(x: box.minX * W, y: box.minY * H, width: bw, height: bh)
         guard rect.contains(subject.insetBy(dx: 1, dy: 1)) else { return nil }
+        if framing == .person, cw >= W * maxFaceCropShare - 1 {
+            let before = hypot(box.midX - t.x, box.midY - t.y)
+            let after = hypot((subject.midX - rect.minX) / rect.width - t.x, (subject.midY - rect.minY) / rect.height - t.y)
+            guard after < before - 0.03 else { return nil }
+        }
         return rect
+    }
+}
+
+// MARK: - Which rectangle is the page
+
+/// Picture or Page picks its box here (walkaround 2026-09-16: it locked onto a
+/// small white box on a table next to a moving cat, and onto bits of a wall
+/// map). Apple's document finder wins when it is sure; otherwise a rectangle
+/// only counts if it looks like paper (bright, not colourful) or YOLOE agrees
+/// there is a page, picture or poster in the same place.
+enum AimPage {
+    struct Candidate: Equatable {
+        /// Normalized, top-left origin.
+        var box: CGRect
+        var documentLike: Bool
+    }
+
+    static let minDocumentConfidence: Float = 0.6
+    static let minDocumentArea: CGFloat = 0.03
+    static let minBrightness: CGFloat = 0.40
+    static let maxSaturation: CGFloat = 0.25
+
+    /// Average colour of the rectangle, 0...1 per channel.
+    static func isDocumentLike(red: CGFloat, green: CGFloat, blue: CGFloat) -> Bool {
+        let luma = 0.299 * red + 0.587 * green + 0.114 * blue
+        let saturation = max(red, green, blue) - min(red, green, blue)
+        return luma >= minBrightness && saturation <= maxSaturation
+    }
+
+    static func area(_ r: CGRect) -> CGFloat { r.width * r.height }
+
+    /// Same thing: they overlap by a third, or one holds the other's middle.
+    static func sameThing(_ a: CGRect, _ b: CGRect) -> Bool {
+        let i = a.intersection(b)
+        guard !i.isNull, i.width > 0, i.height > 0 else { return false }
+        let iou = area(i) / (area(a) + area(b) - area(i))
+        return iou >= 0.3 || a.contains(CGPoint(x: b.midX, y: b.midY)) || b.contains(CGPoint(x: a.midX, y: a.midY))
+    }
+
+    static func choose(document: CGRect?, rectangles: [Candidate], backup: CGRect?) -> CGRect? {
+        if let document { return document }
+        let supported = rectangles.filter { c in
+            c.documentLike || backup.map { sameThing(c.box, $0) } == true
+        }
+        guard let best = supported.max(by: { area($0.box) < area($1.box) })?.box else { return backup }
+        // The rectangle finder misses a page that runs off the edge; the
+        // model still sees that one, so take the model's bigger box then.
+        if let backup, sameThing(best, backup), area(backup) > area(best) { return backup }
+        return best
+    }
+}
+
+// MARK: - How the phone is held
+
+/// Which way the still is turned (walkaround 2026-09-16: with the phone flat
+/// over a table the level-shot angle is a guess). The app is portrait-only,
+/// so portrait unless gravity clearly says the phone is on its side.
+enum AimHold {
+    static let portraitAngle: CGFloat = 90
+    /// |z| above this: lying flat (face up or down).
+    static let flatZ: Double = 0.75
+    /// |x| above this, and clearly more than |y|: on its side.
+    static let sidewaysX: Double = 0.6
+    static let sidewaysLead: Double = 0.25
+
+    static func isClearlyLandscape(x: Double, y: Double, z: Double) -> Bool {
+        abs(z) < flatZ && abs(x) > sidewaysX && abs(x) > abs(y) + sidewaysLead
+    }
+
+    /// `levelAngle` from the rotation coordinator; gravity in g, nil if unknown.
+    static func captureAngle(levelAngle: CGFloat?, gravity: (x: Double, y: Double, z: Double)?) -> CGFloat {
+        guard let levelAngle, let g = gravity, isClearlyLandscape(x: g.x, y: g.y, z: g.z) else {
+            return portraitAngle
+        }
+        let a = levelAngle.truncatingRemainder(dividingBy: 360)
+        // Only a landscape answer is trusted here.
+        return abs(a) < 1 || abs(a - 180) < 1 ? a : portraitAngle
     }
 }
 

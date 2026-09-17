@@ -1,6 +1,7 @@
 import AVFoundation
 import CoreImage
 import CoreML
+import CoreMotion
 import UIKit
 import Vision
 
@@ -28,6 +29,7 @@ final class AimCameraView: UIView {
     private var rotation: AVCaptureDevice.RotationCoordinator?
     private var position: AVCaptureDevice.Position = .back
     private var configured = false
+    private let motion = CMMotionManager()
 
     override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
     private var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
@@ -57,17 +59,30 @@ final class AimCameraView: UIView {
 
     var hasTorch: Bool { device?.hasTorch ?? false }
 
+    /// Portrait unless the phone is clearly on its side (see AimHold).
+    private var holdAngle: CGFloat {
+        let g = motion.deviceMotion?.gravity
+        return AimHold.captureAngle(levelAngle: rotation?.videoRotationAngleForHorizonLevelCapture,
+                                    gravity: g.map { ($0.x, $0.y, $0.z) })
+    }
+
     /// Dev diagnostics.
     func debugInfo() -> String {
         let angle = rotation?.videoRotationAngleForHorizonLevelCapture ?? -1
+        let g = motion.deviceMotion?.gravity
         let conn = videoOutput.connection(with: .video)
         return "cam \(position == .front ? "front" : "back") running=\(session.isRunning) interrupted=\(session.isInterrupted) "
             + "levelAngle=\(Int(angle)) connAngle=\(Int(conn?.videoRotationAngle ?? -1)) mirrored=\(conn?.isVideoMirrored ?? false) "
-            + "connActive=\(conn?.isActive ?? false) configured=\(configured)"
+            + "connActive=\(conn?.isActive ?? false) configured=\(configured) holdAngle=\(Int(holdAngle)) "
+            + String(format: "g=(%.2f,%.2f,%.2f)", g?.x ?? 0, g?.y ?? 0, g?.z ?? 0)
     }
 
     /// Configure (or switch) the camera and start it.
     func start(position newPosition: AVCaptureDevice.Position) {
+        if motion.isDeviceMotionAvailable, !motion.isDeviceMotionActive {
+            motion.deviceMotionUpdateInterval = 0.1
+            motion.startDeviceMotionUpdates()
+        }
         sessionQueue.async { [weak self] in
             guard let self else { return }
             if !configured || newPosition != position {
@@ -80,6 +95,7 @@ final class AimCameraView: UIView {
 
     func stop() {
         setTorch(false)
+        motion.stopDeviceMotionUpdates()
         sessionQueue.async { [weak self] in
             guard let self, session.isRunning else { return }
             session.stopRunning()
@@ -165,9 +181,14 @@ final class AimCameraView: UIView {
                 DispatchQueue.main.async { completion([]) }
                 return
             }
-            if let angle = rotation?.videoRotationAngleForHorizonLevelCapture,
-               connection.isVideoRotationAngleSupported(angle) {
+            let angle = holdAngle
+            if connection.isVideoRotationAngleSupported(angle) {
                 connection.videoRotationAngle = angle
+            }
+            // Saved un-mirrored, like the Camera app's default.
+            if connection.isVideoMirroringSupported {
+                connection.automaticallyAdjustsVideoMirroring = false
+                connection.isVideoMirrored = false
             }
             let group = DispatchGroup()
             let lock = NSLock()
@@ -217,8 +238,8 @@ extension AimCameraView: AVCaptureVideoDataOutputSampleBufferDelegate {
         // Landscape steering is only worked out for the back camera; the
         // front (selfie) camera is treated as held upright.
         var turns = 0
-        if position == .back, let angle = rotation?.videoRotationAngleForHorizonLevelCapture {
-            turns = AimSteering.quarterTurns(levelAngle: angle)
+        if position == .back {
+            turns = AimSteering.quarterTurns(levelAngle: holdAngle)
         }
         onFrame?(buffer, turns)
     }
@@ -600,26 +621,43 @@ final class AimFrameAnalyzer: @unchecked Sendable {
 
     private static func page(_ handler: VNImageRequestHandler, image: CIImage,
                              finder: AimObjectFinder?, ids: Set<Int32>) -> AimObservation {
+        let document = VNDetectDocumentSegmentationRequest()
         let request = VNDetectRectanglesRequest()
         request.minimumSize = 0.15
         request.maximumObservations = 4
         request.minimumConfidence = 0.7
         request.minimumAspectRatio = 0.25
         request.quadratureTolerance = 25
-        try? handler.perform([request])
-        let rect = (request.results ?? [])
+        try? handler.perform([document, request])
+        let doc = (document.results ?? [])
+            .filter { $0.confidence >= AimPage.minDocumentConfidence }
             .map { topLeft($0.boundingBox) }
-            .max { $0.width * $0.height < $1.width * $1.height }
-        let scanned = finder?.scan(in: image, classIDs: ids)
-        let backup = scanned?.best?.box
-        // The rectangle finder is tighter, but misses a page that runs off
-        // the edge; the model still sees that one, so take the bigger.
-        let best: CGRect? = switch (rect, backup) {
-        case let (r?, b?): r.width * r.height >= b.width * b.height ? r : b
-        case let (r?, nil): r
-        case let (nil, b?): b
-        default: nil
+            .filter { AimPage.area($0) >= AimPage.minDocumentArea }
+            .max { AimPage.area($0) < AimPage.area($1) }
+        let rects = (request.results ?? []).map {
+            AimPage.Candidate(box: topLeft($0.boundingBox), documentLike: documentLike(image, $0.boundingBox))
         }
+        let scanned = finder?.scan(in: image, classIDs: ids)
+        let best = AimPage.choose(document: doc, rectangles: rects, backup: scanned?.best?.box)
         return AimObservation(box: best, count: best == nil ? 0 : 1, others: scanned?.others)
+    }
+
+    private static let colorContext = CIContext(options: [.workingColorSpace: NSNull(), .useSoftwareRenderer: false])
+
+    /// Bright and not colourful inside `bottomLeftBox` (Vision's normalized box).
+    private static func documentLike(_ image: CIImage, _ bottomLeftBox: CGRect) -> Bool {
+        let e = image.extent
+        let region = CGRect(x: e.minX + bottomLeftBox.minX * e.width, y: e.minY + bottomLeftBox.minY * e.height,
+                            width: bottomLeftBox.width * e.width, height: bottomLeftBox.height * e.height)
+            .insetBy(dx: bottomLeftBox.width * e.width * 0.1, dy: bottomLeftBox.height * e.height * 0.1)
+        guard region.width >= 1, region.height >= 1,
+              let average = CIFilter(name: "CIAreaAverage", parameters: [
+                  kCIInputImageKey: image, kCIInputExtentKey: CIVector(cgRect: region),
+              ])?.outputImage
+        else { return false }
+        var px = [UInt8](repeating: 0, count: 4)
+        colorContext.render(average, toBitmap: &px, rowBytes: 4, bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+                            format: .RGBA8, colorSpace: nil)
+        return AimPage.isDocumentLike(red: CGFloat(px[0]) / 255, green: CGFloat(px[1]) / 255, blue: CGFloat(px[2]) / 255)
     }
 }

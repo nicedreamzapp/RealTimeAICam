@@ -17,9 +17,9 @@ private func close(_ a: CGRect, _ b: CGRect, _ eps: CGFloat = 1e-9) -> Bool {
 // MARK: - Subject
 
 struct AimSubjectTests {
-    @Test func faceUsesPersonFramingEverythingElseWhole() {
+    @Test func faceUsesPersonFramingPagesPageEverythingElseWhole() {
         #expect(AimSubject.face.framing == .person)
-        #expect(AimSubject.page.framing == .whole)
+        #expect(AimSubject.page.framing == .page)
         let key = AimVocabulary.Match(spokenName: "key", classNames: ["key"], classIDs: [0])
         #expect(AimSubject.object(key).framing == .whole)
     }

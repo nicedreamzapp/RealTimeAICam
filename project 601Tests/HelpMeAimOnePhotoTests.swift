@@ -40,15 +40,15 @@ struct HelpMeAimOnePhotoTests {
         let result = AimShotProcessor.keepOne(frames, scored: scored, framing: .whole, subjectName: "a dog")
         let kept = try #require(result.keep)
         #expect(kept.info.winner == 2)
-        #expect(kept.photo == frames[2])
+        #expect(kept.original == frames[2])
         #expect(kept.cropped == false)
         // Nothing from the four other frames is anywhere in what is kept.
         let carried = allData(in: result)
         for (i, frame) in frames.enumerated() where i != 2 {
             #expect(!carried.contains(frame), "frame \(i) leaked into the result")
         }
-        // One distinct photo.
-        #expect(Set(carried).count == 1)
+        // One photo: the winner as shot plus its upright copy for Photos.
+        #expect(Set(carried).count == 2)
         // Scores for every frame, pixels for none of the losers.
         #expect(kept.info.frames.count == 5)
     }
