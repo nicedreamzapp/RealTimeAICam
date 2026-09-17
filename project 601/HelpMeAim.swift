@@ -827,6 +827,17 @@ enum AimVocabulary {
         "myself": ["person", "face"],
     ]
 
+    static let lookAlikeTargets = ["dog", "cat"]
+
+    /// Breed names (from AimElsewhere.collapse) that count as `animal`,
+    /// sorted; "pet" is not a breed and is left out.
+    static func lookAlikes(of animal: String) -> [String] {
+        AimElsewhere.collapse
+            .filter { $0.value == animal && $0.key != "pet" && $0.key != animal }
+            .map(\.key)
+            .sorted()
+    }
+
     private static let prepositions: Set<String> = [
         "to", "of", "for", "on", "in", "with", "from", "at", "by", "near", "under", "behind",
     ]
@@ -875,6 +886,14 @@ enum AimVocabulary {
                 if !names.contains(candidate) { names.append(candidate) }
             }
             if !names.isEmpty {
+                // Look-alikes: YOLOE often names the breed instead of the
+                // animal (a samoyed, a persian cat), so looking for a dog or a
+                // cat also finds its breeds.
+                for animal in lookAlikeTargets where names.contains(animal) {
+                    for breed in lookAlikes(of: animal) where index[breed] != nil && !names.contains(breed) {
+                        names.append(breed)
+                    }
+                }
                 let ids = names.flatMap { index[$0] ?? [] }
                 return Match(spokenName: word, classNames: names, classIDs: ids)
             }
