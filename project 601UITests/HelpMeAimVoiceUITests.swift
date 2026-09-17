@@ -184,6 +184,21 @@ final class HelpMeAimVoiceUITests: XCTestCase {
         _ = waitForShot(30)
     }
 
+    // I) Face, front camera, pointed at Matt: expect a real shot.
+    @MainActor
+    func testI_faceMattFrontCamera() throws {
+        openHelpMeAim()
+        let face = app.buttons["Face"].firstMatch
+        XCTAssertTrue(face.waitForExistence(timeout: 10))
+        face.tap()
+        XCTAssertTrue(waitFor(camera("a face"), 10))
+        let flip = app.buttons["Switch to front camera"].firstMatch
+        if waitFor(flip, 5) { flip.tap(); log("switched to front camera") } else { log("no camera switch button") }
+        let shot = waitForShot(35)
+        XCTAssertTrue(shot, "no picture taken in 35 s")
+        idle(4) // let "picture taken, saved…" finish and the files land
+    }
+
     // H) Background and back mid-steering.
     @MainActor
     func testH_backgroundAndBack() throws {

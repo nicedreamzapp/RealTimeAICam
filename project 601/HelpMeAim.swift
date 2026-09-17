@@ -648,8 +648,10 @@ enum AimElsewhere {
         var box: CGRect
     }
 
-    static let minConf: Float = 0.60
-    static let minFrames = 2
+    // Round 2 (live runs 2026-09-16 still named a boiler and an origami at
+    // 0.60): a higher bar, and seen in most of the recent frames.
+    static let minConf: Float = 0.70
+    static let minFrames = 3
     static let window = 5
     static let maxThings = 3
 
@@ -667,6 +669,16 @@ enum AimElsewhere {
         "animation film", "science fiction film", "firework display", "light show", "wedding reception",
         "art exhibition", "street scene", "hairstyle", "manicure", "pigtail", "braid", "toe", "waist",
         "ear", "hand", "face", "beard", "tail", "claw", "flash", "pad", "capsule", "recycling",
+        "boiler", "origami", "waistband", "frame",
+    ]
+
+    /// Occupations and roles: YOLOE's guesses about a person, said plainly.
+    static let roleWords: Set<String> = [
+        "artist", "student", "teacher", "doctor", "nurse", "chef", "worker", "player", "singer",
+        "musician", "actor", "actress", "engineer", "scientist", "designer", "technician",
+        "researcher", "hacker", "historian", "dentist", "patient", "barber", "photographer",
+        "pilot", "officer", "soldier", "farmer", "businessman", "businesswoman", "programmer",
+        "writer", "painter", "athlete", "model", "blogger", "gamer", "surgeon", "librarian",
     ]
 
     /// Parts of names that mean a place, a genre or a scene.
@@ -707,6 +719,7 @@ enum AimElsewhere {
         let name = cls.lowercased().trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty, !denylist.contains(name) else { return nil }
         if let plain = collapse[name] { return plain }
+        if let last = name.split(separator: " ").last, roleWords.contains(String(last)) { return "person" }
         if deniedFragments.contains(where: { name.contains($0) }) { return nil }
         return name
     }

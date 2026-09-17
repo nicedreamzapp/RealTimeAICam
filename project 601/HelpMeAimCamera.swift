@@ -42,11 +42,29 @@ final class AimCameraView: UIView {
         previewLayer.videoGravity = .resizeAspect
         previewLayer.session = session
         cachedPreviewLayer = previewLayer
+        for name in [AVCaptureSession.wasInterruptedNotification, AVCaptureSession.interruptionEndedNotification,
+                     AVCaptureSession.runtimeErrorNotification, AVCaptureSession.didStopRunningNotification,
+                     AVCaptureSession.didStartRunningNotification] {
+            NotificationCenter.default.addObserver(forName: name, object: session, queue: .main) { note in
+                let reason = (note.userInfo?[AVCaptureSessionInterruptionReasonKey] as? Int).map { " reason=\($0)" } ?? ""
+                let err = (note.userInfo?[AVCaptureSessionErrorKey] as? Error).map { " error=\($0.localizedDescription)" } ?? ""
+                AimDevLog.note("[camera] \(name.rawValue)\(reason)\(err)")
+            }
+        }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     var hasTorch: Bool { device?.hasTorch ?? false }
+
+    /// Dev diagnostics.
+    func debugInfo() -> String {
+        let angle = rotation?.videoRotationAngleForHorizonLevelCapture ?? -1
+        let conn = videoOutput.connection(with: .video)
+        return "cam \(position == .front ? "front" : "back") running=\(session.isRunning) interrupted=\(session.isInterrupted) "
+            + "levelAngle=\(Int(angle)) connAngle=\(Int(conn?.videoRotationAngle ?? -1)) mirrored=\(conn?.isVideoMirrored ?? false) "
+            + "connActive=\(conn?.isActive ?? false) configured=\(configured)"
+    }
 
     /// Configure (or switch) the camera and start it.
     func start(position newPosition: AVCaptureDevice.Position) {
@@ -426,13 +444,43 @@ final class AimFrameAnalyzer: @unchecked Sendable {
         lock.unlock()
     }
 
+    // Dev diagnostics (read by the controller once a second).
+    struct Stats {
+        var offered = 0
+        var analyzed = 0
+        var bufferSize = CGSize.zero
+        var quarterTurns = 0
+        var lastSummary = "none"
+        var paused = true
+        var kind = "nil"
+    }
+    private var stats = Stats()
+    private var lastDebugSave = Date.distantPast
+
+    func snapshotStats() -> Stats {
+        lock.lock()
+        defer { lock.unlock() }
+        var s = stats
+        s.paused = paused
+        s.kind = kind.map { "\($0)" } ?? "nil"
+        return s
+    }
+
     func offer(_ buffer: CVPixelBuffer, quarterTurns: Int) {
         let now = Date()
         lock.lock()
+        stats.offered += 1
+        stats.bufferSize = CGSize(width: CVPixelBufferGetWidth(buffer), height: CVPixelBufferGetHeight(buffer))
+        stats.quarterTurns = quarterTurns
         guard !paused, let kind, now.timeIntervalSince(lastRun) >= interval else {
             lock.unlock()
             return
         }
+        stats.analyzed += 1
+        #if HELP_ME_AIM_SHOT_LOG
+        let saveDebug = now.timeIntervalSince(lastDebugSave) >= 3
+        if saveDebug { lastDebugSave = now }
+        #endif
         lastRun = now
         let ids = classIDs
         let finder = finder
@@ -447,8 +495,21 @@ final class AimFrameAnalyzer: @unchecked Sendable {
             if let box = result.box, quarterTurns != 0 {
                 result.box = AimSteering.rotateClockwise(box, quarterTurns: quarterTurns)
             }
+            #if HELP_ME_AIM_SHOT_LOG
+            if saveDebug { Self.saveDebugFrame(buffer, note: "\(kind)-n\(result.count)") }
+            #endif
             return result
         }
+
+        let summary: String = {
+            let box = observation.box.map { String(format: "box(%.2f,%.2f,%.2f,%.2f)", $0.minX, $0.minY, $0.width, $0.height) } ?? "no box"
+            let others = (observation.others ?? []).sorted { $0.conf > $1.conf }.prefix(3)
+                .map { String(format: "%@ %.2f", $0.name, $0.conf) }.joined(separator: ", ")
+            return "count \(observation.count) \(box) others[\(others)]"
+        }()
+        lock.lock()
+        stats.lastSummary = summary
+        lock.unlock()
 
         lock.lock()
         let stillWanted = !paused && self.kind == kind
@@ -457,6 +518,25 @@ final class AimFrameAnalyzer: @unchecked Sendable {
         let deliver = onObservation
         DispatchQueue.main.async { deliver?(observation) }
     }
+
+    #if HELP_ME_AIM_SHOT_LOG
+    private static let debugContext = CIContext(options: [.useSoftwareRenderer: false])
+    /// DEV ONLY: the exact buffer handed to Vision/YOLOE, as a JPEG.
+    private static func saveDebugFrame(_ buffer: CVPixelBuffer, note: String) {
+        guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
+        let dir = docs.appendingPathComponent("HelpMeAimShots/debug", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "HHmmss"
+        let image = CIImage(cvPixelBuffer: buffer)
+        let s = min(1, 800 / max(image.extent.width, image.extent.height))
+        let small = image.transformed(by: CGAffineTransform(scaleX: s, y: s))
+        if let jpeg = debugContext.jpegRepresentation(of: small, colorSpace: CGColorSpaceCreateDeviceRGB()) {
+            try? jpeg.write(to: dir.appendingPathComponent("\(f.string(from: Date()))-\(note).jpg"))
+        }
+    }
+    #endif
 
     /// Vision's box has its origin at the bottom-left; ours is top-left.
     static func topLeft(_ r: CGRect) -> CGRect {

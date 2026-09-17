@@ -337,6 +337,8 @@ final class HelpMeAimController: ObservableObject {
     private var classIndex: [String: [Int32]] = [:]
     private var finder: AimObjectFinder?
     private var paused = false
+    /// The camera view asks this before (re)starting on a SwiftUI refresh.
+    var isPaused: Bool { paused }
     private let tick = UIImpactFeedbackGenerator(style: .light)
     private let beat = UIImpactFeedbackGenerator(style: .medium)
     private let notify = UINotificationFeedbackGenerator()
@@ -440,8 +442,28 @@ final class HelpMeAimController: ObservableObject {
 
     // MARK: Aiming
 
+    private var diagTimer: Timer?
+
+    /// DEV: once a second, what the analyser and camera are doing.
+    private func startDiagnostics() {
+        #if HELP_ME_AIM_SHOT_LOG
+        diagTimer?.invalidate()
+        diagTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let st = self.analyzer.snapshotStats()
+                AimDevLog.note("[diag] phase=\(self.phase) ctlPaused=\(self.paused) kind=\(st.kind) anPaused=\(st.paused) "
+                    + "offered=\(st.offered) analyzed=\(st.analyzed) buf=\(Int(st.bufferSize.width))x\(Int(st.bufferSize.height)) "
+                    + "turns=\(st.quarterTurns) camPos=\(self.cameraPosition == .front ? "front" : "back") "
+                    + "\(self.camera?.debugInfo() ?? "no camera view") last: \(st.lastSummary)")
+            }
+        }
+        #endif
+    }
+
     private func begin(_ newSubject: AimSubject) {
         AimDevLog.note("[aim] \(newSubject.spokenName)")
+        startDiagnostics()
         subject = newSubject
         phase = .aiming
         paused = false
@@ -698,6 +720,7 @@ final class HelpMeAimController: ObservableObject {
 
     /// Leaving the screen: everything off and the model released.
     func shutdown() {
+        diagTimer?.invalidate(); diagTimer = nil
         paused = true
         stopAiming()
         loadTask?.cancel(); loadTask = nil
@@ -724,6 +747,10 @@ struct AimCameraPreview: UIViewRepresentable {
     }
 
     func updateUIView(_ view: AimCameraView, context _: Context) {
+        // Every SwiftUI refresh lands here (a status line changing is
+        // enough). Never restart a camera the controller paused for the
+        // background or Control Center; resume() starts it again.
+        guard !controller.isPaused else { return }
         view.start(position: controller.cameraPosition)
     }
 

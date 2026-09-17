@@ -74,6 +74,8 @@ struct AimElsewhereSentenceTests {
              seen("home interior", 0.95, x: 0.0, y: 0.6), seen("extinguisher", 0.99, x: 0.3, y: 0.6)],
             [seen("samoyed", 0.95, x: 0.0), seen("laptop", 0.75, x: 0.3), seen("mirror", 0.72, x: 0.6),
              seen("tv genre", 0.9, x: 0.3, y: 0.6)],
+            [seen("dog", 0.85, x: 0.0), seen("laptop", 0.78, x: 0.3), seen("mirror", 0.71, x: 0.6),
+             seen("boiler", 0.99, x: 0.3, y: 0.6)],
         ]
         let things = AimElsewhere.pick(frames, excluding: AimElsewhere.targetNames(for: key))
         #expect(things == ["dog", "laptop", "mirror"])
@@ -92,20 +94,36 @@ struct AimElsewhereSentenceTests {
             == "I don't see a picture or page. I can see a cup.")
     }
 
-    @Test func needsTwoFramesAndSixtyPercent() {
+    @Test func needsThreeFramesAndSeventyPercent() {
+        #expect(AimElsewhere.minConf == 0.70)
+        #expect(AimElsewhere.minFrames == 3)
         let frames: [[AimElsewhere.Seen]] = [
-            [seen("cup", 0.9), seen("lamp", 0.59, x: 0.5)],
-            [seen("lamp", 0.59, x: 0.5), seen("bottle", 0.8, x: 0.7)],
-            [seen("lamp", 0.59, x: 0.5)],
+            [seen("cup", 0.9), seen("lamp", 0.69, x: 0.5)],
+            [seen("cup", 0.9), seen("lamp", 0.69, x: 0.5), seen("bottle", 0.8, x: 0.7)],
+            [seen("lamp", 0.69, x: 0.5), seen("bottle", 0.8, x: 0.7)],
         ]
         #expect(AimElsewhere.pick(frames, excluding: []).isEmpty)
+        let three = frames + [[seen("cup", 0.7)]]
+        #expect(AimElsewhere.pick(three, excluding: []) == ["cup"])
+    }
+
+    @Test func junkAndRolesFromTheLiveRuns() {
+        for junk in ["boiler", "origami", "waistband", "frame"] {
+            #expect(AimElsewhere.spokenName(junk) == nil, "\(junk)")
+        }
+        for role in ["tattoo artist", "rock artist", "college student", "hockey player",
+                     "construction worker", "fashion designer", "police officer", "engineer"] {
+            #expect(AimElsewhere.spokenName(role) == "person", "\(role)")
+        }
+        #expect(AimElsewhere.spokenName("keyboard player") == "person")
+        #expect(AimElsewhere.spokenName("paint") == "paint")
     }
 
     @Test func onlyTheLastFiveFramesCount() {
         let old = [seen("cup", 0.9)]
-        let frames: [[AimElsewhere.Seen]] = [old, old, [], [], [], [], []]
+        let frames: [[AimElsewhere.Seen]] = [old, old, old, [], [], [], [], []]
         #expect(AimElsewhere.pick(frames, excluding: []).isEmpty)
-        let recent: [[AimElsewhere.Seen]] = [[], [], [], [], [], old, old]
+        let recent: [[AimElsewhere.Seen]] = [[], [], [], [], old, old, old]
         #expect(AimElsewhere.pick(recent, excluding: []) == ["cup"])
     }
 
@@ -123,7 +141,8 @@ struct AimElsewhereSentenceTests {
         #expect(AimElsewhere.spokenName("power plugs and sockets") == "power outlet")
         #expect(AimElsewhere.sentence(subject: key, things: ["power outlet", "person"])
             == "I don't see a key. I can see a power outlet and a person.")
-        let frames = [[seen("samoyed", 0.9), seen("cup", 0.8, x: 0.6)], [seen("poodle", 0.9), seen("cup", 0.8, x: 0.6)]]
+        let f = [seen("samoyed", 0.9), seen("cup", 0.8, x: 0.6)]
+        let frames = [f, [seen("poodle", 0.9), seen("cup", 0.8, x: 0.6)], f]
         #expect(AimElsewhere.pick(frames, excluding: AimElsewhere.targetNames(for: dog)) == ["cup"])
     }
 
@@ -138,6 +157,6 @@ struct AimElsewhereSentenceTests {
 
     @Test func tiesAreAlphabeticalAndCappedAtThree() {
         let f = [seen("a1", 0.8, x: 0), seen("c1", 0.8, x: 0.3), seen("b1", 0.8, x: 0.6), seen("d1", 0.8, y: 0.6)]
-        #expect(AimElsewhere.pick([f, f], excluding: []) == ["a1", "b1", "c1"])
+        #expect(AimElsewhere.pick([f, f, f], excluding: []) == ["a1", "b1", "c1"])
     }
 }
