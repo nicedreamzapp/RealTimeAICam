@@ -100,7 +100,7 @@ struct AimPhrasesTests {
 
     @Test func cantLookFor() {
         #expect(AimPhrases.cantLookFor("  unicorn ") == "I can't look for unicorn yet")
-        #expect(AimPhrases.cantLookFor("   ") == "I didn't catch that. Tap Speak to try again.")
+        #expect(AimPhrases.cantLookFor("   ") == "I didn't catch that. Tap to Speak to try again.")
     }
 
     @Test func capitalizedAndCountdown() {

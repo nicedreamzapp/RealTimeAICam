@@ -957,9 +957,9 @@ private struct AimListenButton: View {
     var body: some View {
         VStack(spacing: 10) {
             AimBigButton(emoji: listener.isRunning ? "👂" : "🎙️",
-                         title: listener.isRunning ? "Listening… tap to stop" : "Speak",
+                         title: listener.isRunning ? "Listening… tap to stop" : AimPhrases.speakTitle,
                          color: listener.isRunning ? .red : .purple,
-                         hint: listener.isRunning ? "Stops listening now" : "",
+                         hint: listener.isRunning ? "Stops listening now" : AimPhrases.speakHint,
                          label: listener.isRunning ? "Listening, tap to stop" : AimPhrases.speakLabel,
                          action: action)
             if !listener.transcript.isEmpty {

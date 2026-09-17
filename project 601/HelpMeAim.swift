@@ -226,9 +226,12 @@ enum AimPhrases {
     // need to press the button, or hold it"). The app asks, beeps, and
     // listens by itself; Speak is a single tap for a retry.
     static let askWhat = "After the beep, say what you're looking for."
-    static let heardNothing = "I didn't hear anything. Tap Speak to try again, or type it."
-    static let didntCatch = "I didn't catch that. Tap Speak to try again."
-    static let speakLabel = "Speak, tap once, then say what you're looking for after the beep"
+    static let heardNothing = "I didn't hear anything. Tap to Speak to try again, or type it."
+    static let didntCatch = "I didn't catch that. Tap to Speak to try again."
+    /// The retry button: one tap, nothing to hold.
+    static let speakTitle = "Tap to Speak"
+    static let speakLabel = "Tap to speak"
+    static let speakHint = "Then say what you're looking for after the beep"
     static let countdown = ["3", "2", "1"]
 
     static func cantLookFor(_ word: String) -> String {
