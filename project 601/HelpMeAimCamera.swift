@@ -31,6 +31,9 @@ final class AimCameraView: UIView {
 
     override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
     private var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
+    /// Same layer, captured on the main thread so the session queue never
+    /// asks UIView for it (Main Thread Checker, first live run).
+    private var cachedPreviewLayer: AVCaptureVideoPreviewLayer?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -38,6 +41,7 @@ final class AimCameraView: UIView {
         // Aspect-fit: what is on screen is exactly what is being analysed.
         previewLayer.videoGravity = .resizeAspect
         previewLayer.session = session
+        cachedPreviewLayer = previewLayer
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -108,8 +112,10 @@ final class AimCameraView: UIView {
                 connection.isVideoMirrored = position == .front
             }
         }
-        if let preview = previewLayer.connection {
-            if preview.isVideoRotationAngleSupported(90) { preview.videoRotationAngle = 90 }
+        DispatchQueue.main.async { [weak self] in
+            if let preview = self?.cachedPreviewLayer?.connection, preview.isVideoRotationAngleSupported(90) {
+                preview.videoRotationAngle = 90
+            }
         }
         // 12 MP, not 48: a burst of five 48 MP frames is slow and huge, and
         // 12 MP leaves plenty to crop from.
@@ -260,7 +266,15 @@ final class AimObjectFinder {
         else { return nil }
 
         let n = conf.count
-        guard cls.count == n, boxes.count == 4 * n else { return nil }
+        guard cls.count == n, boxes.count == 4 * n, boxes.shape.count == 3, boxes.strides.count == 3 else { return nil }
+        // The arrays are NOT laid out contiguously: on device the boxes come
+        // back with strides [33664, 8416, 1] (rows padded to 8416), so every
+        // read goes through the strides. Reading row c at c * 8400 + i took
+        // y/width/height from a neighbouring anchor (boxes 2-4x too tall,
+        // found in the first live run 2026-09-16).
+        let rowStride = boxes.strides[1].intValue, colStride = boxes.strides[2].intValue
+        let lastStride = { (a: MLMultiArray) in a.strides.last?.intValue ?? 1 }
+        let confStride = lastStride(conf), clsStride = lastStride(cls)
         func value(_ a: MLMultiArray, _ i: Int) -> Float {
             switch a.dataType {
             case .float16: Float(a.dataPointer.assumingMemoryBound(to: Float16.self)[i])
@@ -270,19 +284,20 @@ final class AimObjectFinder {
         }
         func classID(_ i: Int) -> Int32 {
             switch cls.dataType {
-            case .int32: cls.dataPointer.assumingMemoryBound(to: Int32.self)[i]
-            default: Int32(value(cls, i))
+            case .int32: cls.dataPointer.assumingMemoryBound(to: Int32.self)[i * clsStride]
+            default: Int32(value(cls, i * clsStride))
             }
         }
 
         var best: (box: CGRect, score: Float)?
         for i in 0 ..< n where classIDs.contains(classID(i)) {
-            let score = value(conf, i)
+            let score = value(conf, i * confStride)
             guard score >= Self.confidenceFloor, score > (best?.score ?? 0) else { continue }
-            let cx = (value(boxes, i) - padX) / scale
-            let cy = (value(boxes, n + i) - padY) / scale
-            let bw = value(boxes, 2 * n + i) / scale
-            let bh = value(boxes, 3 * n + i) / scale
+            let at = i * colStride
+            let cx = (value(boxes, at) - padX) / scale
+            let cy = (value(boxes, rowStride + at) - padY) / scale
+            let bw = value(boxes, 2 * rowStride + at) / scale
+            let bh = value(boxes, 3 * rowStride + at) / scale
             var rect = CGRect(
                 x: CGFloat((cx - bw / 2) / Float(w)), y: CGFloat((cy - bh / 2) / Float(h)),
                 width: CGFloat(bw / Float(w)), height: CGFloat(bh / Float(h)))

@@ -446,7 +446,11 @@ final class HelpMeAimController: ObservableObject {
                 lastPhoto = result.image
                 phase = .taken
                 statusText = "Picture taken"
-                guard let jpeg = result.savedJPEG else {
+                #if HELP_ME_AIM_SHOT_LOG
+                if let keep = result.keep { TestShotLog.write(keep) }
+                #endif
+                // Exactly one photo per burst reaches the library.
+                guard let jpeg = result.keep?.photo else {
                     voice.say(AimPhrases.captureFailed)
                     statusText = AimPhrases.capitalized(AimPhrases.captureFailed)
                     return
@@ -863,12 +867,39 @@ private struct AimListenButton: View {
 // MARK: Burst processing
 
 /// Runs off the main thread: finds the subject in every burst frame, keeps
-/// the best-framed one, crops it, and (test build only) writes the shots and
-/// the scores to Documents/HelpMeAimShots so they can be pulled over Wi-Fi.
+/// the ONE best-framed, sharpest frame (Matt's rule: one photo per burst, the
+/// rest are dropped here and never written anywhere), and crops it.
 enum AimShotProcessor {
+    /// The single photo kept from a burst.
+    struct Kept {
+        /// What goes to Photos: the cropped JPEG, or the winner as shot.
+        var photo: Data
+        /// The winner as shot (only differs from `photo` when cropped).
+        var original: Data
+        var cropped: Bool
+        var info: ShotInfo
+    }
+
     struct Result {
         var image: UIImage?
-        var savedJPEG: Data?
+        var keep: Kept?
+    }
+
+    struct FrameInfo: Codable, Equatable {
+        var index: Int
+        var box: [CGFloat]?
+        var sharpness: Double
+        var score: Double?
+    }
+
+    /// Scores only; no pixels of the discarded frames.
+    struct ShotInfo: Codable, Equatable {
+        var subject: String
+        var winner: Int
+        var imageWidth: CGFloat
+        var imageHeight: CGFloat
+        var crop: [CGFloat]?
+        var frames: [FrameInfo]
     }
 
     /// Long side of the copy the detector looks at.
@@ -877,31 +908,32 @@ enum AimShotProcessor {
     static func process(_ frames: [Data],
                         snapshot: (kind: AimFrameAnalyzer.Kind, ids: Set<Int32>, finder: AimObjectFinder?)?,
                         framing: AimSteering.Framing, subjectName: String) -> Result {
-        var scored: [AimBurst.Frame] = []
-        var sizes: [CGSize] = []
-        for data in frames {
+        let scored: [AimBurst.Frame] = frames.map { data in
             autoreleasepool {
                 guard let small = uprightImage(data, maxSide: analysisSide) else {
-                    scored.append(AimBurst.Frame(box: nil, sharpness: 0))
-                    sizes.append(.zero)
-                    return
+                    return AimBurst.Frame(box: nil, sharpness: 0)
                 }
                 if let snapshot {
-                    scored.append(AimFrameAnalyzer.analyzeStill(
-                        small, kind: snapshot.kind, finder: snapshot.finder, ids: snapshot.ids))
-                } else {
-                    scored.append(AimBurst.Frame(
-                        box: nil, sharpness: FrameQualityGate.check(small, checkDocumentEdges: false).sharpness))
+                    return AimFrameAnalyzer.analyzeStill(
+                        small, kind: snapshot.kind, finder: snapshot.finder, ids: snapshot.ids)
                 }
-                sizes.append(pixelSize(data))
+                return AimBurst.Frame(box: nil, sharpness: FrameQualityGate.check(small, checkDocumentEdges: false).sharpness)
             }
         }
-        guard let winner = AimBurst.pick(scored, framing: framing) else { return Result() }
+        return keepOne(frames, scored: scored, framing: framing, subjectName: subjectName)
+    }
+
+    /// Picks the winner and builds the one photo to keep. Separate from the
+    /// detector so the one-photo rule is unit tested.
+    static func keepOne(_ frames: [Data], scored: [AimBurst.Frame],
+                        framing: AimSteering.Framing, subjectName: String) -> Result {
+        guard frames.count == scored.count,
+              let winner = AimBurst.pick(scored, framing: framing) else { return Result() }
         let original = frames[winner]
-        let size = sizes[winner]
+        let size = pixelSize(original)
         var crop: CGRect?
-        var saved = original
-        var shown = UIImage(data: original)
+        var photo = original
+        var shown: UIImage?
         if let box = scored[winner].box,
            let rect = AimBurst.crop(box: box, imageSize: size, framing: framing),
            let full = uprightImage(original, maxSide: max(size.width, size.height)),
@@ -909,24 +941,19 @@ enum AimShotProcessor {
             let image = UIImage(cgImage: cut)
             if let jpeg = image.jpegData(compressionQuality: 0.92) {
                 crop = rect
-                saved = jpeg
+                photo = jpeg
                 shown = image
             }
         }
-
-        TestShotLog.write(
-            winnerOriginal: original, saved: saved, cropped: crop != nil,
-            info: TestShotLog.Info(
-                subject: subjectName, winner: winner, imageWidth: size.width, imageHeight: size.height,
-                crop: crop.map { [$0.minX, $0.minY, $0.width, $0.height] },
-                frames: scored.enumerated().map { i, f in
-                    TestShotLog.FrameInfo(
-                        index: i,
-                        box: f.box.map { [$0.minX, $0.minY, $0.width, $0.height] },
-                        sharpness: f.sharpness,
-                        score: AimBurst.score(f, framing: framing))
-                }))
-        return Result(image: shown, savedJPEG: saved)
+        if shown == nil { shown = UIImage(data: original) }
+        let info = ShotInfo(
+            subject: subjectName, winner: winner, imageWidth: size.width, imageHeight: size.height,
+            crop: crop.map { [$0.minX, $0.minY, $0.width, $0.height] },
+            frames: scored.enumerated().map { i, f in
+                FrameInfo(index: i, box: f.box.map { [$0.minX, $0.minY, $0.width, $0.height] },
+                          sharpness: f.sharpness, score: AimBurst.score(f, framing: framing))
+            })
+        return Result(image: shown, keep: Kept(photo: photo, original: original, cropped: crop != nil, info: info))
     }
 
     /// The still, turned upright (EXIF applied), no bigger than `maxSide`.
@@ -953,48 +980,32 @@ enum AimShotProcessor {
     }
 }
 
+#if HELP_ME_AIM_SHOT_LOG
 // MARK: TEST-ONLY shot log
 
-/// TEST BUILD AID ONLY (Help Me Aim round 2, 2026-09-16): keeps a copy of each
-/// shot and the burst scores in Documents/HelpMeAimShots so Matt's field
-/// tests can be pulled from the Mac with devicectl. Remove before shipping.
+/// DEV-INSTALL AID ONLY. Compiled in only when HELP_ME_AIM_SHOT_LOG is passed
+/// on the xcodebuild command line for Matt's dev install; it is never set in
+/// the project file, so a TestFlight/App Store archive cannot contain it.
+/// Writes the kept photo (and the uncropped winner when it was cropped) plus
+/// the burst scores to Documents/HelpMeAimShots. Never the other frames.
 enum TestShotLog {
-    static let enabled = true
-
-    struct FrameInfo: Codable {
-        var index: Int
-        var box: [CGFloat]?
-        var sharpness: Double
-        var score: Double?
-    }
-
-    struct Info: Codable {
-        var subject: String
-        var winner: Int
-        var imageWidth: CGFloat
-        var imageHeight: CGFloat
-        var crop: [CGFloat]?
-        var frames: [FrameInfo]
-    }
-
-    static func write(winnerOriginal: Data, saved: Data, cropped: Bool, info: Info) {
-        guard enabled,
-              let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
-        else { return }
+    static func write(_ kept: AimShotProcessor.Kept) {
+        guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
         let dir = docs.appendingPathComponent("HelpMeAimShots", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyyMMdd-HHmmss"
         let stamp = f.string(from: Date())
-        try? winnerOriginal.write(to: dir.appendingPathComponent("\(stamp)-winner.jpg"))
-        if cropped {
-            try? saved.write(to: dir.appendingPathComponent("\(stamp)-saved-cropped.jpg"))
+        try? kept.original.write(to: dir.appendingPathComponent("\(stamp)-winner.jpg"))
+        if kept.cropped {
+            try? kept.photo.write(to: dir.appendingPathComponent("\(stamp)-saved-cropped.jpg"))
         }
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
-        if let json = try? enc.encode(info) {
+        if let json = try? enc.encode(kept.info) {
             try? json.write(to: dir.appendingPathComponent("\(stamp)-info.json"))
         }
     }
 }
+#endif
