@@ -9,9 +9,23 @@ struct project_601App: App {
         _ = MemoryManager.shared
     }
 
+    @ViewBuilder
+    private var rootView: some View {
+        #if HELP_ME_AIM_SHOT_LOG
+        // Dev-install test aid only: `-roomScan N` opens the room census.
+        if RoomScan.requestedSeconds > 0 {
+            RoomScanView()
+        } else {
+            ContentView()
+        }
+        #else
+        ContentView()
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            rootView
                 .preferredColorScheme(.dark)
                 .statusBarHidden(true)
         }
