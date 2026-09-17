@@ -84,8 +84,11 @@ final class HelpMeAimVoiceUITests: XCTestCase {
         return steering
     }
 
+    /// AIM_WAIT (set as TEST_RUNNER_AIM_WAIT on the xcodebuild line) caps waits.
+    private var capSeconds: Int? { ProcessInfo.processInfo.environment["AIM_WAIT"].flatMap(Int.init) }
+
     private func waitForShot(_ seconds: Int) -> Bool {
-        let shot = waitFor(takeAnother, seconds)
+        let shot = waitFor(takeAnother, capSeconds ?? seconds)
         snap("end")
         log("shot taken = \(shot)")
         return shot
@@ -96,7 +99,8 @@ final class HelpMeAimVoiceUITests: XCTestCase {
     func testA_sayDog() throws {
         openSomethingElse()
         XCTAssertTrue(expectSteering(for: "a dog"), "no steering for a dog")
-        _ = waitForShot(60)
+        let shot = waitForShot(60)
+        if shot { idle(4) }
         XCTAssertEqual(app.state, .runningForeground)
     }
 
@@ -197,6 +201,124 @@ final class HelpMeAimVoiceUITests: XCTestCase {
         let shot = waitForShot(35)
         XCTAssertTrue(shot, "no picture taken in 35 s")
         idle(4) // let "picture taken, saved…" finish and the files land
+    }
+
+    // J) Face, BACK camera, pointed at a portrait photo on the Mac screen.
+    @MainActor
+    func testJ_faceBackCameraPhoto() throws {
+        openHelpMeAim()
+        let face = app.buttons["Face"].firstMatch
+        XCTAssertTrue(face.waitForExistence(timeout: 10))
+        face.tap()
+        XCTAssertTrue(waitFor(camera("a face"), 10))
+        log("face mode, back camera")
+        let shot = waitForShot(30)
+        if shot { idle(4) }
+        XCTAssertTrue(shot, "no picture taken in 30 s")
+    }
+
+    // K) Picture or Page, back camera.
+    @MainActor
+    func testK_pictureOrPage() throws {
+        openHelpMeAim()
+        let page = app.buttons["Picture or Page"].firstMatch
+        XCTAssertTrue(page.waitForExistence(timeout: 10))
+        page.tap()
+        XCTAssertTrue(waitFor(camera("a picture or page"), 10))
+        log("picture or page mode")
+        let shot = waitForShot(30)
+        if shot { idle(4) }
+        XCTAssertTrue(shot, "no picture taken")
+    }
+
+    // L) Something Else, typed word from AIM_WORD (TEST_RUNNER_AIM_WORD).
+    // AIM_EXPECT = shot (default), steer (no shot needed) or refuse.
+    @MainActor
+    func testL_typedWord() throws {
+        let env = ProcessInfo.processInfo.environment
+        let word = env["AIM_WORD"] ?? "cup"
+        let expect = env["AIM_EXPECT"] ?? "shot"
+        openSomethingElse()
+        let field = app.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        sleep(1)
+        field.tap()
+        field.typeText(word)
+        app.buttons["Find"].firstMatch.tap()
+        log("typed \(word), expecting \(expect)")
+        let steering = app.descendants(matching: .any).matching(
+            NSPredicate(format: "label BEGINSWITH 'Camera, looking for'")).firstMatch
+        let steers = waitFor(steering, 8)
+        log("steering = \(steers)")
+        switch expect {
+        case "refuse":
+            idle(4)
+            snap("refused")
+            XCTAssertFalse(steers, "should not steer for \(word)")
+        case "steer":
+            XCTAssertTrue(steers)
+            idle(capSeconds ?? 25)
+            snap("end")
+            log("shot taken = \(takeAnother.exists)")
+        default:
+            XCTAssertTrue(steers)
+            let shot = waitForShot(30)
+            if shot { idle(4) }
+            XCTAssertTrue(shot, "no picture taken for \(word)")
+        }
+    }
+
+    // M) Generic driver for walk-around runs (aim_run.sh). Environment, set as
+    // TEST_RUNNER_<name> on the xcodebuild line: AIM_MODE face|page|word,
+    // AIM_WORD (typed, word mode), AIM_SECONDS (wait), AIM_CAMERA front|back.
+    @MainActor
+    func testM_drive() throws {
+        let env = ProcessInfo.processInfo.environment
+        let mode = env["AIM_MODE"] ?? "face"
+        let word = env["AIM_WORD"] ?? ""
+        let seconds = Int(env["AIM_SECONDS"] ?? "") ?? 30
+        let front = env["AIM_CAMERA"] == "front"
+        log("drive mode=\(mode) word=\(word) seconds=\(seconds) camera=\(front ? "front" : "back")")
+        openHelpMeAim()
+        switch mode {
+        case "page":
+            let b = app.buttons["Picture or Page"].firstMatch
+            XCTAssertTrue(b.waitForExistence(timeout: 10)); b.tap()
+        case "word":
+            let b = app.buttons["Something Else"].firstMatch
+            XCTAssertTrue(b.waitForExistence(timeout: 10)); b.tap()
+            let field = app.textFields.firstMatch
+            XCTAssertTrue(field.waitForExistence(timeout: 10))
+            sleep(1)
+            field.tap()
+            field.typeText(word)
+            app.buttons["Find"].firstMatch.tap()
+        default:
+            let b = app.buttons["Face"].firstMatch
+            XCTAssertTrue(b.waitForExistence(timeout: 10)); b.tap()
+        }
+        let steering = app.descendants(matching: .any).matching(
+            NSPredicate(format: "label BEGINSWITH 'Camera, looking for'")).firstMatch
+        let steers = waitFor(steering, 8)
+        log("steering = \(steers)")
+        if front, mode == "face" {
+            let flip = app.buttons["Switch to front camera"].firstMatch
+            if waitFor(flip, 3) { flip.tap(); log("switched to front camera") }
+        }
+        var shots = 0
+        let end = Date().addingTimeInterval(TimeInterval(seconds))
+        while Date() < end {
+            allowAlerts()
+            if takeAnother.exists {
+                shots += 1
+                log("shot \(shots) taken")
+                sleep(4)
+                if Date() < end { takeAnother.tap(); log("tapped Take Another") }
+            }
+            sleep(1)
+        }
+        snap("end")
+        log("drive done, shots = \(shots)")
     }
 
     // H) Background and back mid-steering.

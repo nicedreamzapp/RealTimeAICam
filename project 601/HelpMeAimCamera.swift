@@ -331,8 +331,19 @@ final class AimObjectFinder {
 
         var best: (box: CGRect, score: Float)?
         var others: [AimElsewhere.Seen] = []
+        #if HELP_ME_AIM_SHOT_LOG
+        var targetRaw: Float = 0
+        var rawTop: [Int32: Float] = [:]
+        #endif
         for i in 0 ..< n {
             let score = value(conf, i * confStride)
+            #if HELP_ME_AIM_SHOT_LOG
+            if score >= 0.10 {
+                let rid = classID(i)
+                if classIDs.contains(rid) { targetRaw = max(targetRaw, score) }
+                rawTop[rid] = max(rawTop[rid] ?? 0, score)
+            }
+            #endif
             guard score >= Self.confidenceFloor else { continue }
             let id = classID(i)
             if classIDs.contains(id) {
@@ -343,8 +354,18 @@ final class AimObjectFinder {
                 others.append(AimElsewhere.Seen(name: name, conf: score, box: r))
             }
         }
+        #if HELP_ME_AIM_SHOT_LOG
+        // DEV: what YOLOE saw at any confidence (per-anchor best class).
+        let top = rawTop.sorted { $0.value > $1.value }.prefix(6).map { id, v in
+            String(format: "%@ %.2f", Int(id) < classNames.count ? classNames[Int(id)] : "?", v)
+        }.joined(separator: ", ")
+        lastRawSummary = String(format: "target %.2f; top: %@", targetRaw, top)
+        #endif
         return (best, AimElsewhere.dedupe(others))
     }
+
+    /// DEV: set by the last scan (only with HELP_ME_AIM_SHOT_LOG).
+    var lastRawSummary = ""
 
     private func letterbox(_ source: CIImage, width w: Int, height h: Int) -> CVPixelBuffer? {
         let side = Self.inputSize
@@ -478,7 +499,7 @@ final class AimFrameAnalyzer: @unchecked Sendable {
         }
         stats.analyzed += 1
         #if HELP_ME_AIM_SHOT_LOG
-        let saveDebug = now.timeIntervalSince(lastDebugSave) >= 3
+        let saveDebug = now.timeIntervalSince(lastDebugSave) >= 2
         if saveDebug { lastDebugSave = now }
         #endif
         lastRun = now
@@ -505,7 +526,7 @@ final class AimFrameAnalyzer: @unchecked Sendable {
             let box = observation.box.map { String(format: "box(%.2f,%.2f,%.2f,%.2f)", $0.minX, $0.minY, $0.width, $0.height) } ?? "no box"
             let others = (observation.others ?? []).sorted { $0.conf > $1.conf }.prefix(3)
                 .map { String(format: "%@ %.2f", $0.name, $0.conf) }.joined(separator: ", ")
-            return "count \(observation.count) \(box) others[\(others)]"
+            return "count \(observation.count) \(box) others[\(others)] raw[\(finder?.lastRawSummary ?? "")]"
         }()
         lock.lock()
         stats.lastSummary = summary
@@ -534,6 +555,8 @@ final class AimFrameAnalyzer: @unchecked Sendable {
         let small = image.transformed(by: CGAffineTransform(scaleX: s, y: s))
         if let jpeg = debugContext.jpegRepresentation(of: small, colorSpace: CGColorSpaceCreateDeviceRGB()) {
             try? jpeg.write(to: dir.appendingPathComponent("\(f.string(from: Date()))-\(note).jpg"))
+            // Fixed name so the Mac can peek at the newest frame cheaply.
+            try? jpeg.write(to: dir.appendingPathComponent("latest.jpg"), options: .atomic)
         }
     }
     #endif
