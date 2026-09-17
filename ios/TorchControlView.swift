@@ -7,10 +7,12 @@ import SwiftUI
 // flicks at the exact moment they cannot see, and nobody wants a dim flashlight.
 struct TorchButton: View {
     @State private var torchLevel: Float = 0.0
+    let initialTorchLevel: Float
     let onLevelChanged: ((Float) -> Void)?
 
     init(initialTorchLevel: Float = 0.0, onLevelChanged: ((Float) -> Void)? = nil) {
         _torchLevel = State(initialValue: initialTorchLevel)
+        self.initialTorchLevel = initialTorchLevel
         self.onLevelChanged = onLevelChanged
     }
 
@@ -39,5 +41,10 @@ struct TorchButton: View {
         .accessibilityLabel("Flashlight")
         .accessibilityValue(isOn ? "On" : "Off")
         .accessibilityAddTraits(.isButton)
+        // The app turns the light off on its own when you leave; never let the
+        // button (or VoiceOver) keep saying "On" after that.
+        .onChange(of: initialTorchLevel) { _, level in
+            torchLevel = level
+        }
     }
 }

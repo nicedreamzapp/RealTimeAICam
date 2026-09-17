@@ -212,6 +212,7 @@ struct TranslationActionsPopup: View {
 struct LiveOCRView: View {
     @Binding var mode: AppMode
     @StateObject private var viewModel = LiveOCRViewModel()
+    @Environment(\.scenePhase) private var scenePhase
     let ocrMode: OCRMode
     let selectedVoiceIdentifier: String
 
@@ -943,6 +944,9 @@ struct LiveOCRView: View {
             }
         }
         .onDisappear {
+            // Straight to the hardware: onChange(of: torchLevel) never fires on a
+            // view that is already going away.
+            cameraPreviewRef?.setTorchLevel(0)
             cancelCountdown()
             viewModel.stopSession()
             viewModel.clearText()
@@ -953,6 +957,12 @@ struct LiveOCRView: View {
         .preferredColorScheme(.dark)
         .onChange(of: viewModel.torchLevel) { newLevel in
             cameraPreviewRef?.setTorchLevel(newLevel)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active {
+                cameraPreviewRef?.setTorchLevel(0)
+                viewModel.handleToggleTorch(level: 0)
+            }
         }
         .appleSpanishTranslation(viewModel: viewModel, enabled: ocrMode == .spanishToEnglish)
     }

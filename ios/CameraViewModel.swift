@@ -689,6 +689,14 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
         } catch {}
     }
 
+    /// Leaving a camera screen or the app always leaves the light off, and the
+    /// button with it. Not gated on the session, which may already be stopping.
+    func turnOffTorch() {
+        savedTorchLevel = 0.0
+        currentTorchLevel = 0.0
+        setTorchLevel(0)
+    }
+
     func toggleCameraZoom() {
         // Save torch state before reconfiguring
         savedTorchLevel = currentTorchLevel
