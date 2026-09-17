@@ -1,5 +1,6 @@
 import AVFoundation
 import Combine
+import ImageIO
 import Photos
 import Speech
 import SwiftUI
@@ -415,16 +416,18 @@ final class HelpMeAimController: ObservableObject {
     }
 
     private func capture() {
-        guard phase == .aiming, let camera else { return }
+        guard phase == .aiming, let camera, let subject else { return }
         countdownTask?.cancel(); countdownTask = nil
         countdownWord = nil
         analyzer.setPaused(true)
         phase = .capturing
         statusText = "Taking the picture"
-        camera.capture { [weak self] data in
-            guard let self else { return }
-            guard phase == .capturing else { return }
-            guard let data else {
+        let snapshot = analyzer.snapshot()
+        let framing = subject.framing
+        let subjectName = subject.spokenName
+        camera.captureBurst(count: Self.burstCount, interval: Self.burstInterval) { [weak self] frames in
+            guard let self, phase == .capturing else { return }
+            guard !frames.isEmpty else {
                 voice.say(AimPhrases.captureFailed)
                 statusText = AimPhrases.capitalized(AimPhrases.captureFailed)
                 phase = .aiming
@@ -433,18 +436,33 @@ final class HelpMeAimController: ObservableObject {
                 return
             }
             setTorch(false)
-            lastPhoto = UIImage(data: data)
-            phase = .taken
-            statusText = "Picture taken"
             notify.notificationOccurred(.success)
-            Self.save(data) { [weak self] saved in
-                guard let self else { return }
-                let line = AimPhrases.pictureTaken + (saved ? AimPhrases.savedSuffix : AimPhrases.notSavedSuffix)
-                statusText = AimPhrases.capitalized(line)
-                voice.say(line)
+            statusText = "Picking the best one"
+            Task { [weak self] in
+                let result = await Task.detached(priority: .userInitiated) {
+                    AimShotProcessor.process(frames, snapshot: snapshot, framing: framing, subjectName: subjectName)
+                }.value
+                guard let self, phase == .capturing else { return }
+                lastPhoto = result.image
+                phase = .taken
+                statusText = "Picture taken"
+                guard let jpeg = result.savedJPEG else {
+                    voice.say(AimPhrases.captureFailed)
+                    statusText = AimPhrases.capitalized(AimPhrases.captureFailed)
+                    return
+                }
+                Self.save(jpeg) { [weak self] saved in
+                    guard let self else { return }
+                    let line = AimPhrases.pictureTaken + (saved ? AimPhrases.savedSuffix : AimPhrases.notSavedSuffix)
+                    statusText = AimPhrases.capitalized(line)
+                    voice.say(line)
+                }
             }
         }
     }
+
+    static let burstCount = 5
+    static let burstInterval: TimeInterval = 0.18
 
     func takeAnother() {
         guard let subject else { backToChoices(); return }
@@ -838,6 +856,145 @@ private struct AimListenButton: View {
                     .foregroundColor(.white)
                     .accessibilityHidden(true)
             }
+        }
+    }
+}
+
+// MARK: Burst processing
+
+/// Runs off the main thread: finds the subject in every burst frame, keeps
+/// the best-framed one, crops it, and (test build only) writes the shots and
+/// the scores to Documents/HelpMeAimShots so they can be pulled over Wi-Fi.
+enum AimShotProcessor {
+    struct Result {
+        var image: UIImage?
+        var savedJPEG: Data?
+    }
+
+    /// Long side of the copy the detector looks at.
+    static let analysisSide: CGFloat = 1024
+
+    static func process(_ frames: [Data],
+                        snapshot: (kind: AimFrameAnalyzer.Kind, ids: Set<Int32>, finder: AimObjectFinder?)?,
+                        framing: AimSteering.Framing, subjectName: String) -> Result {
+        var scored: [AimBurst.Frame] = []
+        var sizes: [CGSize] = []
+        for data in frames {
+            autoreleasepool {
+                guard let small = uprightImage(data, maxSide: analysisSide) else {
+                    scored.append(AimBurst.Frame(box: nil, sharpness: 0))
+                    sizes.append(.zero)
+                    return
+                }
+                if let snapshot {
+                    scored.append(AimFrameAnalyzer.analyzeStill(
+                        small, kind: snapshot.kind, finder: snapshot.finder, ids: snapshot.ids))
+                } else {
+                    scored.append(AimBurst.Frame(
+                        box: nil, sharpness: FrameQualityGate.check(small, checkDocumentEdges: false).sharpness))
+                }
+                sizes.append(pixelSize(data))
+            }
+        }
+        guard let winner = AimBurst.pick(scored, framing: framing) else { return Result() }
+        let original = frames[winner]
+        let size = sizes[winner]
+        var crop: CGRect?
+        var saved = original
+        var shown = UIImage(data: original)
+        if let box = scored[winner].box,
+           let rect = AimBurst.crop(box: box, imageSize: size, framing: framing),
+           let full = uprightImage(original, maxSide: max(size.width, size.height)),
+           let cut = full.cropping(to: rect) {
+            let image = UIImage(cgImage: cut)
+            if let jpeg = image.jpegData(compressionQuality: 0.92) {
+                crop = rect
+                saved = jpeg
+                shown = image
+            }
+        }
+
+        TestShotLog.write(
+            winnerOriginal: original, saved: saved, cropped: crop != nil,
+            info: TestShotLog.Info(
+                subject: subjectName, winner: winner, imageWidth: size.width, imageHeight: size.height,
+                crop: crop.map { [$0.minX, $0.minY, $0.width, $0.height] },
+                frames: scored.enumerated().map { i, f in
+                    TestShotLog.FrameInfo(
+                        index: i,
+                        box: f.box.map { [$0.minX, $0.minY, $0.width, $0.height] },
+                        sharpness: f.sharpness,
+                        score: AimBurst.score(f, framing: framing))
+                }))
+        return Result(image: shown, savedJPEG: saved)
+    }
+
+    /// The still, turned upright (EXIF applied), no bigger than `maxSide`.
+    static func uprightImage(_ data: Data, maxSide: CGFloat) -> CGImage? {
+        guard let src = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let opts: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: Int(maxSide),
+            kCGImageSourceShouldCacheImmediately: true,
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary)
+    }
+
+    /// Pixel size after the EXIF rotation.
+    static func pixelSize(_ data: Data) -> CGSize {
+        guard let src = CGImageSourceCreateWithData(data as CFData, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
+              let w = props[kCGImagePropertyPixelWidth] as? CGFloat,
+              let h = props[kCGImagePropertyPixelHeight] as? CGFloat
+        else { return .zero }
+        let orientation = props[kCGImagePropertyOrientation] as? Int ?? 1
+        return orientation >= 5 ? CGSize(width: h, height: w) : CGSize(width: w, height: h)
+    }
+}
+
+// MARK: TEST-ONLY shot log
+
+/// TEST BUILD AID ONLY (Help Me Aim round 2, 2026-09-16): keeps a copy of each
+/// shot and the burst scores in Documents/HelpMeAimShots so Matt's field
+/// tests can be pulled from the Mac with devicectl. Remove before shipping.
+enum TestShotLog {
+    static let enabled = true
+
+    struct FrameInfo: Codable {
+        var index: Int
+        var box: [CGFloat]?
+        var sharpness: Double
+        var score: Double?
+    }
+
+    struct Info: Codable {
+        var subject: String
+        var winner: Int
+        var imageWidth: CGFloat
+        var imageHeight: CGFloat
+        var crop: [CGFloat]?
+        var frames: [FrameInfo]
+    }
+
+    static func write(winnerOriginal: Data, saved: Data, cropped: Bool, info: Info) {
+        guard enabled,
+              let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        else { return }
+        let dir = docs.appendingPathComponent("HelpMeAimShots", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyyMMdd-HHmmss"
+        let stamp = f.string(from: Date())
+        try? winnerOriginal.write(to: dir.appendingPathComponent("\(stamp)-winner.jpg"))
+        if cropped {
+            try? saved.write(to: dir.appendingPathComponent("\(stamp)-saved-cropped.jpg"))
+        }
+        let enc = JSONEncoder()
+        enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+        if let json = try? enc.encode(info) {
+            try? json.write(to: dir.appendingPathComponent("\(stamp)-info.json"))
         }
     }
 }

@@ -27,7 +27,6 @@ final class AimCameraView: UIView {
     private var device: AVCaptureDevice?
     private var rotation: AVCaptureDevice.RotationCoordinator?
     private var position: AVCaptureDevice.Position = .back
-    private var photoDelegate: PhotoDelegate?
     private var configured = false
 
     override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
@@ -112,9 +111,11 @@ final class AimCameraView: UIView {
         if let preview = previewLayer.connection {
             if preview.isVideoRotationAngleSupported(90) { preview.videoRotationAngle = 90 }
         }
-        if let largest = camera.activeFormat.supportedMaxPhotoDimensions.last,
-           largest.width > 0, largest.height > 0 {
-            photoOutput.maxPhotoDimensions = largest
+        // 12 MP, not 48: a burst of five 48 MP frames is slow and huge, and
+        // 12 MP leaves plenty to crop from.
+        let sizes = camera.activeFormat.supportedMaxPhotoDimensions.filter { $0.width > 0 && $0.height > 0 }
+        if let pick = sizes.filter({ max($0.width, $0.height) <= 4032 }).max(by: { $0.width < $1.width }) ?? sizes.first {
+            photoOutput.maxPhotoDimensions = pick
         }
     }
 
@@ -128,36 +129,52 @@ final class AimCameraView: UIView {
         device.unlockForConfiguration()
     }
 
-    /// One full-resolution still, upright the way the phone is held.
-    /// `completion` runs on the main queue with the file data (nil on failure).
-    func capture(completion: @escaping (Data?) -> Void) {
+    /// A short burst of JPEG stills, `interval` apart, upright the way the
+    /// phone is held (EXIF orientation). `completion` runs on the main queue
+    /// with the frames that came back, in order (empty on failure).
+    /// Round 2 of Help Me Aim: shoot a few and keep the best-framed one.
+    func captureBurst(count: Int, interval: TimeInterval, completion: @escaping ([Data]) -> Void) {
         sessionQueue.async { [weak self] in
             guard let self, session.isRunning,
                   let connection = photoOutput.connection(with: .video), connection.isActive
             else {
-                DispatchQueue.main.async { completion(nil) }
+                DispatchQueue.main.async { completion([]) }
                 return
             }
             if let angle = rotation?.videoRotationAngleForHorizonLevelCapture,
                connection.isVideoRotationAngleSupported(angle) {
                 connection.videoRotationAngle = angle
             }
-            let settings = AVCapturePhotoSettings()
-            settings.maxPhotoDimensions = photoOutput.maxPhotoDimensions
-            // Night mode when it is genuinely dark, instant shutter otherwise
-            // (same test the What's this? capture uses).
-            let iso = device?.iso ?? 0
-            let exposure = device.map { CMTimeGetSeconds($0.exposureDuration) } ?? 0
-            settings.photoQualityPrioritization = (iso > 1000 || exposure > 0.08) ? .quality : .balanced
-            if photoOutput.supportedFlashModes.contains(.off) { settings.flashMode = .off }
-            let delegate = PhotoDelegate { [weak self] data in
-                DispatchQueue.main.async {
-                    self?.photoDelegate = nil
-                    completion(data)
+            let group = DispatchGroup()
+            let lock = NSLock()
+            var results = [Data?](repeating: nil, count: count)
+            var delegates: [PhotoDelegate] = []
+            for i in 0 ..< count {
+                group.enter()
+                sessionQueue.asyncAfter(deadline: .now() + interval * Double(i)) { [weak self] in
+                    guard let self, session.isRunning else { group.leave(); return }
+                    let settings: AVCapturePhotoSettings
+                    if photoOutput.availablePhotoCodecTypes.contains(.jpeg) {
+                        settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
+                    } else {
+                        settings = AVCapturePhotoSettings()
+                    }
+                    settings.maxPhotoDimensions = photoOutput.maxPhotoDimensions
+                    // Speed: the frames are taken close together on purpose.
+                    settings.photoQualityPrioritization = .speed
+                    if photoOutput.supportedFlashModes.contains(.off) { settings.flashMode = .off }
+                    let delegate = PhotoDelegate { data in
+                        lock.lock(); results[i] = data; lock.unlock()
+                        group.leave()
+                    }
+                    delegates.append(delegate)
+                    photoOutput.capturePhoto(with: settings, delegate: delegate)
                 }
             }
-            photoDelegate = delegate
-            photoOutput.capturePhoto(with: settings, delegate: delegate)
+            group.notify(queue: .main) {
+                _ = delegates.count // keep the delegates alive until every frame is back
+                completion(results.compactMap { $0 })
+            }
         }
     }
 
@@ -223,9 +240,13 @@ final class AimObjectFinder {
     /// Best box (top-left origin, normalized to `buffer`) among the wanted
     /// classes, or nil.
     func find(in buffer: CVPixelBuffer, classIDs: Set<Int32>) -> (box: CGRect, score: Float)? {
+        find(in: CIImage(cvPixelBuffer: buffer), classIDs: classIDs)
+    }
+
+    func find(in image: CIImage, classIDs: Set<Int32>) -> (box: CGRect, score: Float)? {
         guard !classIDs.isEmpty else { return nil }
-        let w = CVPixelBufferGetWidth(buffer), h = CVPixelBufferGetHeight(buffer)
-        guard w > 0, h > 0, let input = letterbox(buffer, width: w, height: h) else { return nil }
+        let w = Int(image.extent.width), h = Int(image.extent.height)
+        guard w > 0, h > 0, let input = letterbox(image, width: w, height: h) else { return nil }
         let side = Float(Self.inputSize)
         let scale = min(side / Float(w), side / Float(h))
         let padX = (side - Float(w) * scale) / 2
@@ -272,7 +293,7 @@ final class AimObjectFinder {
         return best
     }
 
-    private func letterbox(_ buffer: CVPixelBuffer, width w: Int, height h: Int) -> CVPixelBuffer? {
+    private func letterbox(_ source: CIImage, width w: Int, height h: Int) -> CVPixelBuffer? {
         let side = Self.inputSize
         if pool == nil {
             let attrs: [String: Any] = [
@@ -293,7 +314,8 @@ final class AimObjectFinder {
         let padY = (CGFloat(side) - CGFloat(h) * scale) / 2
         let canvas = CGRect(x: 0, y: 0, width: side, height: side)
         let gray = CIImage(color: CIColor(red: 114 / 255, green: 114 / 255, blue: 114 / 255)).cropped(to: canvas)
-        let image = CIImage(cvPixelBuffer: buffer)
+        let image = source
+            .transformed(by: CGAffineTransform(translationX: -source.extent.minX, y: -source.extent.minY))
             .transformed(by: CGAffineTransform(scaleX: scale, y: scale))
             .transformed(by: CGAffineTransform(translationX: padX, y: padY))
             .composited(over: gray)
@@ -343,6 +365,14 @@ final class AimFrameAnalyzer: @unchecked Sendable {
         lock.unlock()
     }
 
+    /// What the analyser is currently looking for (for the burst pass).
+    func snapshot() -> (kind: Kind, ids: Set<Int32>, finder: AimObjectFinder?)? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let kind else { return nil }
+        return (kind, classIDs, finder)
+    }
+
     func setPaused(_ value: Bool) {
         lock.lock()
         paused = value
@@ -373,13 +403,10 @@ final class AimFrameAnalyzer: @unchecked Sendable {
 
         let observation: AimObservation = autoreleasepool {
             var result: AimObservation
-            switch kind {
-            case .face: result = Self.faces(in: buffer)
-            case .page: result = Self.page(in: buffer, finder: finder, ids: ids)
-            case .object:
-                let found = finder?.find(in: buffer, classIDs: ids)
-                result = AimObservation(box: found?.box, count: found == nil ? 0 : 1)
-            }
+            result = Self.detect(
+                kind: kind,
+                handler: VNImageRequestHandler(cvPixelBuffer: buffer, orientation: .up, options: [:]),
+                image: CIImage(cvPixelBuffer: buffer), finder: finder, ids: ids)
             if let box = result.box, quarterTurns != 0 {
                 result.box = AimSteering.rotateClockwise(box, quarterTurns: quarterTurns)
             }
@@ -399,9 +426,28 @@ final class AimFrameAnalyzer: @unchecked Sendable {
         CGRect(x: r.minX, y: 1 - r.maxY, width: r.width, height: r.height)
     }
 
-    private static func faces(in buffer: CVPixelBuffer) -> AimObservation {
+    /// One detection pass on an upright image (a live frame or a burst still).
+    static func detect(kind: Kind, handler: VNImageRequestHandler, image: CIImage,
+                       finder: AimObjectFinder?, ids: Set<Int32>) -> AimObservation {
+        switch kind {
+        case .face: return faces(handler)
+        case .page: return page(handler, image: image, finder: finder, ids: ids)
+        case .object:
+            let found = finder?.find(in: image, classIDs: ids)
+            return AimObservation(box: found?.box, count: found == nil ? 0 : 1)
+        }
+    }
+
+    /// Detection plus sharpness on an upright still (burst frame).
+    static func analyzeStill(_ cg: CGImage, kind: Kind, finder: AimObjectFinder?, ids: Set<Int32>) -> AimBurst.Frame {
+        let handler = VNImageRequestHandler(cgImage: cg, orientation: .up, options: [:])
+        let obs = detect(kind: kind, handler: handler, image: CIImage(cgImage: cg), finder: finder, ids: ids)
+        let sharp = FrameQualityGate.check(cg, checkDocumentEdges: false).sharpness
+        return AimBurst.Frame(box: obs.box, sharpness: sharp)
+    }
+
+    private static func faces(_ handler: VNImageRequestHandler) -> AimObservation {
         let request = VNDetectFaceRectanglesRequest()
-        let handler = VNImageRequestHandler(cvPixelBuffer: buffer, orientation: .up, options: [:])
         try? handler.perform([request])
         // Tiny faces are a poster or a crowd in the distance.
         let faces = (request.results ?? []).map(\.boundingBox).filter { $0.height >= 0.04 }
@@ -411,19 +457,19 @@ final class AimFrameAnalyzer: @unchecked Sendable {
         return AimObservation(box: topLeft(group), count: faces.count)
     }
 
-    private static func page(in buffer: CVPixelBuffer, finder: AimObjectFinder?, ids: Set<Int32>) -> AimObservation {
+    private static func page(_ handler: VNImageRequestHandler, image: CIImage,
+                             finder: AimObjectFinder?, ids: Set<Int32>) -> AimObservation {
         let request = VNDetectRectanglesRequest()
         request.minimumSize = 0.15
         request.maximumObservations = 4
         request.minimumConfidence = 0.7
         request.minimumAspectRatio = 0.25
         request.quadratureTolerance = 25
-        let handler = VNImageRequestHandler(cvPixelBuffer: buffer, orientation: .up, options: [:])
         try? handler.perform([request])
         let rect = (request.results ?? [])
             .map { topLeft($0.boundingBox) }
             .max { $0.width * $0.height < $1.width * $1.height }
-        let backup = finder?.find(in: buffer, classIDs: ids)?.box
+        let backup = finder?.find(in: image, classIDs: ids)?.box
         // The rectangle finder is tighter, but misses a page that runs off
         // the edge; the model still sees that one, so take the bigger.
         let best: CGRect? = switch (rect, backup) {

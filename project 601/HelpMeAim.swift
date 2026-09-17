@@ -59,31 +59,38 @@ enum AimSteering {
         case whole
     }
 
-    // Person framing. First guesses; tune on a phone.
-    static let personTolerance: CGFloat = 0.12
-    static let personLooseTolerance: CGFloat = 0.18
+    // Round 2 (Matt's field test, 2026-09-16: shot about 1 in 30 tries and
+    // chattered): the good-enough zone is roughly the middle half of the
+    // frame, "cut off" means really touching the edge, and "move closer" is
+    // only for a subject that is tiny. The shot is taken wide and cropped
+    // afterwards (AimBurst.crop), so the live framing can be generous.
+
+    // Person framing.
+    static let personTolerance: CGFloat = 0.22
+    static let personLooseTolerance: CGFloat = 0.32
     static let upperThird: CGFloat = 1.0 / 3.0
     /// Below this face height the face goes in the upper third...
     static let closeUpStart: CGFloat = 0.30
     /// ...above this it is a close-up and goes in the middle.
     static let closeUpFull: CGFloat = 0.40
-    static let personTooSmall: CGFloat = 0.15
-    static let personTooBig: CGFloat = 0.65
-    /// A face box this close to the top means the forehead is already gone.
-    static let headroom: CGFloat = 0.04
-    static let personSideMargin: CGFloat = 0.02
+    static let personTooSmall: CGFloat = 0.08
+    static let personLooseTooSmall: CGFloat = 0.06
+    static let personTooBig: CGFloat = 0.75
+    static let personLooseTooBig: CGFloat = 0.85
 
     // Whole-object framing.
-    static let wholeTolerance: CGFloat = 0.15
-    static let wholeLooseTolerance: CGFloat = 0.22
-    static let edgeMargin: CGFloat = 0.02
-    static let looseEdgeMargin: CGFloat = 0.005
-    static let wholeTooSmall: CGFloat = 0.25
-    static let wholeLooseTooSmall: CGFloat = 0.20
-    static let wholeTooBig: CGFloat = 0.95
+    static let wholeTolerance: CGFloat = 0.25
+    static let wholeLooseTolerance: CGFloat = 0.33
+    /// A box edge this close to the frame edge is cut off.
+    static let edgeMargin: CGFloat = 0.005
+    static let looseEdgeMargin: CGFloat = 0.001
+    static let wholeTooSmall: CGFloat = 0.10
+    static let wholeLooseTooSmall: CGFloat = 0.08
+    static let wholeTooBig: CGFloat = 0.97
 
-    /// What to tell the person for this box. `loose` is used while the
-    /// countdown runs, so a hand's normal wobble does not cancel it.
+    /// What to tell the person for this box. `loose` is the much wider zone
+    /// used once "got it" has been said and while the countdown runs, so a
+    /// hand's normal wobble does not undo it.
     static func instruction(for box: CGRect?, framing: Framing, loose: Bool = false) -> AimInstruction {
         guard let b = box, b.width > 0, b.height > 0 else { return .notFound }
         switch framing {
@@ -92,19 +99,34 @@ enum AimSteering {
         }
     }
 
+    /// Where the middle of the subject belongs.
+    static func target(for box: CGRect, framing: Framing) -> CGPoint {
+        guard framing == .person else { return CGPoint(x: 0.5, y: 0.5) }
+        if box.height > closeUpFull { return CGPoint(x: 0.5, y: 0.5) }
+        if box.height < closeUpStart { return CGPoint(x: 0.5, y: upperThird) }
+        // In between: slide from the upper third to the middle.
+        let t = (box.height - closeUpStart) / (closeUpFull - closeUpStart)
+        return CGPoint(x: 0.5, y: upperThird + (0.5 - upperThird) * t)
+    }
+
+    static func isCutOff(_ b: CGRect, margin: CGFloat = edgeMargin) -> Bool {
+        b.minX < margin || b.minY < margin || b.maxX > 1 - margin || b.maxY > 1 - margin
+    }
+
     private static func personInstruction(_ b: CGRect, loose: Bool) -> AimInstruction {
         let tol = loose ? personLooseTolerance : personTolerance
         let size = max(b.width, b.height)
-        if size > (loose ? personTooBig + 0.07 : personTooBig) { return .backUp }
+        if size > (loose ? personLooseTooBig : personTooBig) { return .backUp }
 
-        // Part of the face already out of the picture: fix that first.
-        let slack: CGFloat = loose ? 0.02 : 0
-        if b.minY < headroom - slack { return .moveUp }
-        if b.maxY > 1 - personSideMargin + slack { return .moveDown }
-        if b.minX < personSideMargin - slack { return .moveLeft }
-        if b.maxX > 1 - personSideMargin + slack { return .moveRight }
+        // Face really running off an edge: fix that first.
+        let m = loose ? looseEdgeMargin : edgeMargin
+        if b.minY < m { return .moveUp }
+        if b.maxY > 1 - m { return .moveDown }
+        if b.minX < m { return .moveLeft }
+        if b.maxX > 1 - m { return .moveRight }
 
-        // Where the middle of the face belongs, top to bottom.
+        // Top-to-bottom: upper third for a small face, middle for a close-up,
+        // either in between.
         let low: CGFloat
         let high: CGFloat
         if b.height < closeUpStart {
@@ -121,7 +143,7 @@ enum AimSteering {
             if xOff >= yOff { return dx < 0 ? .moveLeft : .moveRight }
             return b.midY < low ? .moveUp : .moveDown
         }
-        if size < (loose ? personTooSmall - 0.03 : personTooSmall) { return .moveCloser }
+        if size < (loose ? personLooseTooSmall : personTooSmall) { return .moveCloser }
         return .framed
     }
 
@@ -224,6 +246,13 @@ enum AimPhrases {
 /// Fed one observation per analysed frame; decides what to say, when the
 /// countdown starts and when it is cancelled. No clocks or speech inside, so
 /// the whole behaviour is testable.
+///
+/// Round 2 rules (Matt's field test): judge a median of the last few boxes,
+/// not the raw jittery one; a new steering instruction must hold for half a
+/// second before it is spoken (no left/right flip-flop); once "got it" is
+/// said the subject stays framed until it has been outside a much looser
+/// zone for 0.7 s; and the countdown starts after the zone has simply been
+/// held for 0.4 s (the old 5% drift rule was smaller than detector jitter).
 struct AimCoach {
     enum Haptic: Equatable { case none, tick, success, warning }
 
@@ -236,7 +265,7 @@ struct AimCoach {
     let subject: AimSubject
 
     /// Same sentence again no sooner than this.
-    var repeatInterval: TimeInterval = 2.0
+    var repeatInterval: TimeInterval = 2.5
     /// Gap after any sentence before a different one.
     var minGap: TimeInterval = 0.8
     /// "I don't see it yet" after this long with nothing found...
@@ -244,24 +273,33 @@ struct AimCoach {
     /// ...and then no more often than this.
     var notFoundRepeat: TimeInterval = 6.0
     /// A box that blinks out for less than this still counts as there.
-    var holdLastBox: TimeInterval = 0.5
-    /// Framed and steady this long starts the countdown.
-    var steadyFor: TimeInterval = 0.5
-    /// The subject moving more than this (share of the frame) is not steady.
-    var steadyDrift: CGFloat = 0.05
+    var holdLastBox: TimeInterval = 0.6
+    /// A new steering instruction must stay the same this long to be spoken.
+    var settle: TimeInterval = 0.5
+    /// Framed must hold this long before "got it".
+    var framedSettle: TimeInterval = 0.3
+    /// After "got it", the zone held this long starts the countdown.
+    var steadyFor: TimeInterval = 0.4
+    /// Moving more than this (share of the frame) restarts the steady clock.
+    var steadyDrift: CGFloat = 0.15
+    /// Outside the loose zone this long undoes "got it" / cancels the countdown.
+    var leaveAfter: TimeInterval = 0.7
+    /// Boxes in the median.
+    var smoothingWindow = 5
 
     private(set) var isCountingDown = false
+    private(set) var isLocked = false
     private(set) var smoothedBox: CGRect?
+    private var recent: [(at: Date, box: CGRect)] = []
     private var lastSeen: Date?
     private var startedAt: Date?
     private var lastPhrase: String?
     private var lastSpokenAt = Date.distantPast
     private var candidate: AimInstruction?
-    private var candidateCount = 0
-    private var framedSince: Date?
-    private var framedAnchor: CGPoint?
-    private var framedAnnounced = false
-    private var countdownMisses = 0
+    private var candidateSince = Date.distantPast
+    private var lockedAt = Date.distantPast
+    private var anchor: CGPoint?
+    private var outSince: Date?
 
     init(subject: AimSubject) {
         self.subject = subject
@@ -269,129 +307,216 @@ struct AimCoach {
 
     /// Start over (a new aim, or back from the background).
     mutating func reset(now: Date) {
-        isCountingDown = false
+        countdownEnded()
         smoothedBox = nil
+        recent = []
         lastSeen = nil
         startedAt = now
         lastPhrase = nil
         lastSpokenAt = .distantPast
-        candidate = nil
-        candidateCount = 0
-        framedSince = nil
-        framedAnchor = nil
-        framedAnnounced = false
-        countdownMisses = 0
     }
 
-    /// The controller cancelled or finished the countdown itself.
+    /// The controller cancelled or finished the countdown itself. "Got it"
+    /// has to be earned again, not said on the very next frame.
     mutating func countdownEnded() {
         isCountingDown = false
-        // A fresh round: "got it" has to be earned again, not said on the
-        // very next frame after "picture taken" or "lost it".
+        isLocked = false
+        anchor = nil
+        outSince = nil
         candidate = nil
-        candidateCount = 0
-        framedSince = nil
-        framedAnchor = nil
-        framedAnnounced = false
-        countdownMisses = 0
+        candidateSince = .distantPast
     }
 
     mutating func observe(box raw: CGRect?, faceCount: Int = 1, now: Date, voiceBusy: Bool) -> [Action] {
         if startedAt == nil { startedAt = now }
         let box = track(raw, now: now)
+        let inLooseZone = AimSteering.instruction(for: box, framing: subject.framing, loose: true) == .framed
 
         if isCountingDown {
-            let still = AimSteering.instruction(for: box, framing: subject.framing, loose: true) == .framed
-            countdownMisses = still ? 0 : countdownMisses + 1
-            guard countdownMisses >= 2 else { return [] }
+            if inLooseZone { outSince = nil; return [] }
+            let since = outSince ?? now
+            outSince = since
+            guard now.timeIntervalSince(since) + 1e-6 >= leaveAfter else { return [] }
             countdownEnded()
             lastPhrase = AimPhrases.lostIt
             lastSpokenAt = now
             return [.cancelCountdown, .say(AimPhrases.lostIt, .warning)]
         }
 
+        if isLocked {
+            if inLooseZone, let b = box {
+                outSince = nil
+                let center = CGPoint(x: b.midX, y: b.midY)
+                if let a = anchor, hypot(center.x - a.x, center.y - a.y) <= steadyDrift {
+                    if raw != nil, !voiceBusy, now.timeIntervalSince(lockedAt) + 1e-6 >= steadyFor {
+                        isCountingDown = true
+                        return [.startCountdown]
+                    }
+                } else {
+                    anchor = center
+                    lockedAt = now
+                }
+                return []
+            }
+            let since = outSince ?? now
+            outSince = since
+            guard now.timeIntervalSince(since) + 1e-6 >= leaveAfter else { return [] }
+            // Really gone: back to steering.
+            countdownEnded()
+        }
+
         let instruction = AimSteering.instruction(for: box, framing: subject.framing)
+        if instruction != candidate {
+            candidate = instruction
+            candidateSince = now
+        }
+
         if instruction == .notFound {
             let since = lastSeen ?? startedAt ?? now
-            if now.timeIntervalSince(since) < notFoundAfter { return [] }
-        }
-
-        // Debounce: a new instruction has to show up twice in a row.
-        if instruction == candidate {
-            candidateCount += 1
+            guard now.timeIntervalSince(since) + 1e-6 >= notFoundAfter else { return [] }
         } else {
-            candidate = instruction
-            candidateCount = 1
+            let wait = instruction == .framed ? framedSettle : settle
+            guard now.timeIntervalSince(candidateSince) + 1e-6 >= wait else { return [] }
         }
 
-        var actions: [Action] = []
+        let quiet = now.timeIntervalSince(lastSpokenAt) + 1e-6
+        if voiceBusy || quiet < minGap { return [] }
 
         if instruction == .framed, let b = box {
-            let center = CGPoint(x: b.midX, y: b.midY)
-            if let anchor = framedAnchor,
-               hypot(center.x - anchor.x, center.y - anchor.y) <= steadyDrift,
-               let since = framedSince {
-                if framedAnnounced, raw != nil, !voiceBusy, now.timeIntervalSince(since) >= steadyFor {
-                    isCountingDown = true
-                    countdownMisses = 0
-                    actions.append(.startCountdown)
-                    return actions
-                }
-            } else {
-                framedAnchor = center
-                framedSince = now
-            }
-            if !framedAnnounced, !voiceBusy, candidateCount >= 2,
-               now.timeIntervalSince(lastSpokenAt) >= minGap {
-                let text = AimPhrases.phrase(for: .framed, subject: subject, faceCount: faceCount)
-                framedAnnounced = true
-                lastPhrase = text
-                lastSpokenAt = now
-                // The steady clock starts after the sentence, not during it.
-                framedSince = now
-                actions.append(.say(text, .success))
-            }
-            return actions
+            let text = AimPhrases.phrase(for: .framed, subject: subject, faceCount: faceCount)
+            isLocked = true
+            lockedAt = now // the steady clock starts after the sentence begins
+            anchor = CGPoint(x: b.midX, y: b.midY)
+            outSince = nil
+            lastPhrase = text
+            lastSpokenAt = now
+            return [.say(text, .success)]
         }
 
-        framedSince = nil
-        framedAnchor = nil
-        framedAnnounced = false
-
-        guard candidateCount >= 2 || instruction == .notFound else { return [] }
         let text = AimPhrases.phrase(for: instruction, subject: subject, faceCount: faceCount)
-        let quiet = now.timeIntervalSince(lastSpokenAt)
         let again = instruction == .notFound ? notFoundRepeat : repeatInterval
-        if voiceBusy { return [] }
         if text == lastPhrase, quiet < again { return [] }
-        if quiet < minGap { return [] }
         lastPhrase = text
         lastSpokenAt = now
         return [.say(text, instruction == .notFound ? .none : .tick)]
     }
 
-    /// Light smoothing so a box that jitters a few pixels does not flip the
-    /// instruction, and a one-frame dropout does not count as lost.
+    /// Median of the last few boxes (per edge), so detector jitter and hand
+    /// shake do not flip the instruction; a short dropout keeps the last box.
     private mutating func track(_ raw: CGRect?, now: Date) -> CGRect? {
         if let raw {
             lastSeen = now
-            if let old = smoothedBox {
-                let a: CGFloat = 0.6
-                smoothedBox = CGRect(
-                    x: old.minX + (raw.minX - old.minX) * a,
-                    y: old.minY + (raw.minY - old.minY) * a,
-                    width: old.width + (raw.width - old.width) * a,
-                    height: old.height + (raw.height - old.height) * a)
-            } else {
-                smoothedBox = raw
-            }
+            recent.append((now, raw))
+            recent.removeAll { now.timeIntervalSince($0.at) > 1.0 }
+            if recent.count > smoothingWindow { recent.removeFirst(recent.count - smoothingWindow) }
+            smoothedBox = AimCoach.median(recent.map(\.box))
             return smoothedBox
         }
-        if let seen = lastSeen, now.timeIntervalSince(seen) <= holdLastBox {
+        if let seen = lastSeen, now.timeIntervalSince(seen) <= holdLastBox + 1e-6 {
             return smoothedBox
         }
+        recent = []
         smoothedBox = nil
         return nil
+    }
+
+    static func median(_ boxes: [CGRect]) -> CGRect? {
+        guard !boxes.isEmpty else { return nil }
+        func mid(_ values: [CGFloat]) -> CGFloat {
+            let s = values.sorted()
+            return s.count % 2 == 1 ? s[s.count / 2] : (s[s.count / 2 - 1] + s[s.count / 2]) / 2
+        }
+        let minX = mid(boxes.map(\.minX)), minY = mid(boxes.map(\.minY))
+        let maxX = mid(boxes.map(\.maxX)), maxY = mid(boxes.map(\.maxY))
+        return CGRect(x: minX, y: minY, width: max(0, maxX - minX), height: max(0, maxY - minY))
+    }
+}
+
+// MARK: - Burst pick and crop
+
+/// Round 2: the countdown ends in a short burst; the detector runs on every
+/// frame and the best-framed one is kept, then cropped so the subject sits
+/// where a photographer would put it ("shoot wide, crop after").
+enum AimBurst {
+    struct Frame: Equatable {
+        /// Subject box, normalized, top-left origin, upright photo.
+        var box: CGRect?
+        /// Variance of Laplacian from FrameQualityGate (higher is sharper).
+        var sharpness: Double
+    }
+
+    /// Sharpness above this earns no more credit.
+    static let sharpnessCap: Double = 300
+    static let sharpnessWeight: Double = 0.3
+    static let cutOffPenalty: Double = 1.0
+
+    /// Higher is better; nil when the subject is not in the frame.
+    /// 1 − 2 × (distance from the framing target) − 1 if cut off
+    ///   + 0.3 × min(sharpness, 300) / 300.
+    static func score(_ f: Frame, framing: AimSteering.Framing) -> Double? {
+        guard let b = f.box, b.width > 0, b.height > 0 else { return nil }
+        let t = AimSteering.target(for: b, framing: framing)
+        let distance = Double(hypot(b.midX - t.x, b.midY - t.y))
+        var s = 1 - 2 * distance
+        if AimSteering.isCutOff(b) { s -= cutOffPenalty }
+        s += sharpnessWeight * min(max(f.sharpness, 0), sharpnessCap) / sharpnessCap
+        return s
+    }
+
+    /// Index of the frame to keep: the best score, or the sharpest frame if
+    /// the subject is in none of them. Nil only for an empty burst.
+    static func pick(_ frames: [Frame], framing: AimSteering.Framing) -> Int? {
+        guard !frames.isEmpty else { return nil }
+        let scored = frames.enumerated().compactMap { i, f in score(f, framing: framing).map { (i, $0) } }
+        if let best = scored.max(by: { $0.1 < $1.1 }) { return best.0 }
+        return frames.enumerated().max { $0.element.sharpness < $1.element.sharpness }?.offset
+    }
+
+    /// Never crop to less than this on the long side.
+    static let minLongSide: CGFloat = 2000
+    /// Share of the crop the subject should fill (its bigger dimension):
+    /// objects about half (25% padding each side), a face about a third so
+    /// there is room for shoulders.
+    static let objectFill: CGFloat = 0.5
+    static let faceFill: CGFloat = 0.35
+    /// Already this close to the target and at least this big: leave it.
+    static let wellFramedDistance: CGFloat = 0.08
+    static let wellFramedSize: CGFloat = 0.4
+
+    /// The crop rectangle in pixels (top-left origin), or nil to keep the
+    /// whole photo. Same aspect ratio as the photo.
+    static func crop(box: CGRect, imageSize: CGSize, framing: AimSteering.Framing) -> CGRect? {
+        let W = imageSize.width, H = imageSize.height
+        guard W > 0, H > 0, box.width > 0, box.height > 0, max(W, H) > minLongSide else { return nil }
+        // Subject cut off in the photo: cropping cannot bring it back.
+        guard !AimSteering.isCutOff(box) else { return nil }
+        let t = AimSteering.target(for: box, framing: framing)
+        let size = max(box.width, box.height)
+        if hypot(box.midX - t.x, box.midY - t.y) <= wellFramedDistance, size >= wellFramedSize { return nil }
+
+        let fill = framing == .person && box.height < AimSteering.closeUpFull ? faceFill : objectFill
+        let aspect = W / H
+        let bw = box.width * W, bh = box.height * H
+        var cw = max(bw / fill, (bh / fill) * aspect)
+        var ch = cw / aspect
+        // Keep enough pixels.
+        let long = max(cw, ch)
+        if long < minLongSide {
+            let k = minLongSide / long
+            cw *= k; ch *= k
+        }
+        guard cw < W * 0.98, ch < H * 0.98 else { return nil }
+
+        // Put the subject's middle at the target point, then keep inside the photo.
+        var x = box.midX * W - t.x * cw
+        var y = box.midY * H - t.y * ch
+        x = min(max(0, x), W - cw)
+        y = min(max(0, y), H - ch)
+        let rect = CGRect(x: x, y: y, width: cw, height: ch).integral
+            .intersection(CGRect(x: 0, y: 0, width: W, height: H))
+        let subject = CGRect(x: box.minX * W, y: box.minY * H, width: bw, height: bh)
+        guard rect.contains(subject.insetBy(dx: 1, dy: 1)) else { return nil }
+        return rect
     }
 }
 
