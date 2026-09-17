@@ -223,6 +223,7 @@ final class AimObjectFinder {
     private let pixelFormat: OSType
     private let context = CIContext(options: [.useSoftwareRenderer: false])
     private var pool: CVPixelBufferPool?
+    private let classNames = AimObjectFinder.loadClassNames()
 
     static func loadClassNames() -> [String] {
         guard let url = Bundle.main.url(forResource: "yoloe_classes", withExtension: "json"),
@@ -250,9 +251,17 @@ final class AimObjectFinder {
     }
 
     func find(in image: CIImage, classIDs: Set<Int32>) -> (box: CGRect, score: Float)? {
-        guard !classIDs.isEmpty else { return nil }
+        scan(in: image, classIDs: classIDs).best
+    }
+
+    /// The best box among the wanted classes, plus every other confident
+    /// detection (for "I can see …" when the target is not found).
+    func scan(in image: CIImage, classIDs: Set<Int32>)
+        -> (best: (box: CGRect, score: Float)?, others: [AimElsewhere.Seen]) {
+        let none: (best: (box: CGRect, score: Float)?, others: [AimElsewhere.Seen]) = (nil, [])
+        guard !classIDs.isEmpty else { return none }
         let w = Int(image.extent.width), h = Int(image.extent.height)
-        guard w > 0, h > 0, let input = letterbox(image, width: w, height: h) else { return nil }
+        guard w > 0, h > 0, let input = letterbox(image, width: w, height: h) else { return none }
         let side = Float(Self.inputSize)
         let scale = min(side / Float(w), side / Float(h))
         let padX = (side - Float(w) * scale) / 2
@@ -263,10 +272,10 @@ final class AimObjectFinder {
               let conf = out.featureValue(for: "confidence")?.multiArrayValue,
               let cls = out.featureValue(for: "class_id")?.multiArrayValue,
               let boxes = out.featureValue(for: "boxes")?.multiArrayValue
-        else { return nil }
+        else { return none }
 
         let n = conf.count
-        guard cls.count == n, boxes.count == 4 * n, boxes.shape.count == 3, boxes.strides.count == 3 else { return nil }
+        guard cls.count == n, boxes.count == 4 * n, boxes.shape.count == 3, boxes.strides.count == 3 else { return none }
         // The arrays are NOT laid out contiguously: on device the boxes come
         // back with strides [33664, 8416, 1] (rows padded to 8416), so every
         // read goes through the strides. Reading row c at c * 8400 + i took
@@ -289,23 +298,34 @@ final class AimObjectFinder {
             }
         }
 
-        var best: (box: CGRect, score: Float)?
-        for i in 0 ..< n where classIDs.contains(classID(i)) {
-            let score = value(conf, i * confStride)
-            guard score >= Self.confidenceFloor, score > (best?.score ?? 0) else { continue }
+        func rect(_ i: Int) -> CGRect? {
             let at = i * colStride
             let cx = (value(boxes, at) - padX) / scale
             let cy = (value(boxes, rowStride + at) - padY) / scale
             let bw = value(boxes, 2 * rowStride + at) / scale
             let bh = value(boxes, 3 * rowStride + at) / scale
-            var rect = CGRect(
+            let r = CGRect(
                 x: CGFloat((cx - bw / 2) / Float(w)), y: CGFloat((cy - bh / 2) / Float(h)),
                 width: CGFloat(bw / Float(w)), height: CGFloat(bh / Float(h)))
-            rect = rect.intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
-            guard !rect.isNull, rect.width > 0.01, rect.height > 0.01 else { continue }
-            best = (rect, score)
+                .intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
+            return r.isNull || r.width <= 0.01 || r.height <= 0.01 ? nil : r
         }
-        return best
+
+        var best: (box: CGRect, score: Float)?
+        var others: [AimElsewhere.Seen] = []
+        for i in 0 ..< n {
+            let score = value(conf, i * confStride)
+            guard score >= Self.confidenceFloor else { continue }
+            let id = classID(i)
+            if classIDs.contains(id) {
+                guard score > (best?.score ?? 0), let r = rect(i) else { continue }
+                best = (r, score)
+            } else if score >= AimElsewhere.minConf, others.count < 200, let r = rect(i) {
+                let name = Int(id) < classNames.count && id >= 0 ? classNames[Int(id)] : ""
+                others.append(AimElsewhere.Seen(name: name, conf: score, box: r))
+            }
+        }
+        return (best, AimElsewhere.dedupe(others))
     }
 
     private func letterbox(_ source: CIImage, width w: Int, height h: Int) -> CVPixelBuffer? {
@@ -346,6 +366,8 @@ final class AimObjectFinder {
 struct AimObservation {
     var box: CGRect?
     var count: Int
+    /// Other confident things in view; nil when nothing else was looked for.
+    var others: [AimElsewhere.Seen]? = nil
 }
 
 /// Runs the right detector for the subject on the camera's video queue, a
@@ -448,8 +470,9 @@ final class AimFrameAnalyzer: @unchecked Sendable {
         case .face: return faces(handler)
         case .page: return page(handler, image: image, finder: finder, ids: ids)
         case .object:
-            let found = finder?.find(in: image, classIDs: ids)
-            return AimObservation(box: found?.box, count: found == nil ? 0 : 1)
+            guard let finder else { return AimObservation(box: nil, count: 0) }
+            let found = finder.scan(in: image, classIDs: ids)
+            return AimObservation(box: found.best?.box, count: found.best == nil ? 0 : 1, others: found.others)
         }
     }
 
@@ -484,7 +507,8 @@ final class AimFrameAnalyzer: @unchecked Sendable {
         let rect = (request.results ?? [])
             .map { topLeft($0.boundingBox) }
             .max { $0.width * $0.height < $1.width * $1.height }
-        let backup = finder?.find(in: image, classIDs: ids)?.box
+        let scanned = finder?.scan(in: image, classIDs: ids)
+        let backup = scanned?.best?.box
         // The rectangle finder is tighter, but misses a page that runs off
         // the edge; the model still sees that one, so take the bigger.
         let best: CGRect? = switch (rect, backup) {
@@ -493,6 +517,6 @@ final class AimFrameAnalyzer: @unchecked Sendable {
         case let (nil, b?): b
         default: nil
         }
-        return AimObservation(box: best, count: best == nil ? 0 : 1)
+        return AimObservation(box: best, count: best == nil ? 0 : 1, others: scanned?.others)
     }
 }

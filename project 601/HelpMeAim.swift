@@ -268,10 +268,18 @@ struct AimCoach {
     var repeatInterval: TimeInterval = 2.5
     /// Gap after any sentence before a different one.
     var minGap: TimeInterval = 0.8
-    /// "I don't see it yet" after this long with nothing found...
-    var notFoundAfter: TimeInterval = 3.0
+    /// "I don't see it yet" after this long with nothing found (Matt: 5 s,
+    /// 3 s was too eager)...
+    var notFoundAfter: TimeInterval = 5.0
     /// ...and then no more often than this.
     var notFoundRepeat: TimeInterval = 6.0
+    /// After this long still not found, say what IS in view instead
+    /// ("I don't see a key. I can see a dog and a laptop.")...
+    var elsewhereAfter: TimeInterval = 15.0
+    /// ...at most this often...
+    var elsewhereRepeat: TimeInterval = 20.0
+    /// ...and not closer than this to the previous "I don't see" line.
+    var elsewhereGap: TimeInterval = 3.0
     /// A box that blinks out for less than this still counts as there.
     var holdLastBox: TimeInterval = 0.6
     /// A new steering instruction must stay the same this long to be spoken.
@@ -295,6 +303,9 @@ struct AimCoach {
     private var startedAt: Date?
     private var lastPhrase: String?
     private var lastSpokenAt = Date.distantPast
+    /// Last "I don't see…" line of either kind, and of the long kind.
+    private var lastMissAt = Date.distantPast
+    private var lastElsewhereAt = Date.distantPast
     private var candidate: AimInstruction?
     private var candidateSince = Date.distantPast
     private var lockedAt = Date.distantPast
@@ -314,6 +325,8 @@ struct AimCoach {
         startedAt = now
         lastPhrase = nil
         lastSpokenAt = .distantPast
+        lastMissAt = .distantPast
+        lastElsewhereAt = .distantPast
     }
 
     /// The controller cancelled or finished the countdown itself. "Got it"
@@ -327,7 +340,10 @@ struct AimCoach {
         candidateSince = .distantPast
     }
 
-    mutating func observe(box raw: CGRect?, faceCount: Int = 1, now: Date, voiceBusy: Bool) -> [Action] {
+    /// `elsewhere` is the ready "I don't see X. I can see …" sentence for this
+    /// frame, or nil when nothing else was looked for (faces).
+    mutating func observe(box raw: CGRect?, faceCount: Int = 1, now: Date, voiceBusy: Bool,
+                          elsewhere: String? = nil) -> [Action] {
         if startedAt == nil { startedAt = now }
         let box = track(raw, now: now)
         let inLooseZone = AimSteering.instruction(for: box, framing: subject.framing, loose: true) == .framed
@@ -373,7 +389,25 @@ struct AimCoach {
 
         if instruction == .notFound {
             let since = lastSeen ?? startedAt ?? now
-            guard now.timeIntervalSince(since) + 1e-6 >= notFoundAfter else { return [] }
+            let lost = now.timeIntervalSince(since) + 1e-6
+            guard lost >= notFoundAfter else { return [] }
+            let quiet = now.timeIntervalSince(lastSpokenAt) + 1e-6
+            if voiceBusy || quiet < minGap { return [] }
+            let sinceMiss = now.timeIntervalSince(lastMissAt) + 1e-6
+            let text: String
+            if let elsewhere, lost >= elsewhereAfter, sinceMiss >= elsewhereGap,
+               now.timeIntervalSince(lastElsewhereAt) + 1e-6 >= elsewhereRepeat {
+                text = elsewhere
+                lastElsewhereAt = now
+            } else if sinceMiss >= notFoundRepeat {
+                text = AimPhrases.phrase(for: .notFound, subject: subject)
+            } else {
+                return []
+            }
+            lastMissAt = now
+            lastPhrase = text
+            lastSpokenAt = now
+            return [.say(text, .none)]
         } else {
             let wait = instruction == .framed ? framedSettle : settle
             guard now.timeIntervalSince(candidateSince) + 1e-6 >= wait else { return [] }
@@ -394,11 +428,10 @@ struct AimCoach {
         }
 
         let text = AimPhrases.phrase(for: instruction, subject: subject, faceCount: faceCount)
-        let again = instruction == .notFound ? notFoundRepeat : repeatInterval
-        if text == lastPhrase, quiet < again { return [] }
+        if text == lastPhrase, quiet < repeatInterval { return [] }
         lastPhrase = text
         lastSpokenAt = now
-        return [.say(text, instruction == .notFound ? .none : .tick)]
+        return [.say(text, .tick)]
     }
 
     /// Median of the last few boxes (per edge), so detector jitter and hand
@@ -517,6 +550,144 @@ enum AimBurst {
         let subject = CGRect(x: box.minX * W, y: box.minY * H, width: bw, height: bh)
         guard rect.contains(subject.insetBy(dx: 1, dy: 1)) else { return nil }
         return rect
+    }
+}
+
+// MARK: - What else is in view
+
+/// Builds "I don't see a key. I can see a dog, a laptop and a mirror." from
+/// the YOLOE detections already running on each frame (Matt, 2026-09-16).
+/// The room scan showed YOLOE also names rooms and genres with high
+/// confidence ("home interior", "tv genre"), so those are filtered out.
+enum AimElsewhere {
+    struct Seen: Equatable {
+        var name: String
+        var conf: Float
+        var box: CGRect
+    }
+
+    static let minConf: Float = 0.60
+    static let minFrames = 2
+    static let window = 5
+    static let maxThings = 3
+
+    /// Whole names never worth saying.
+    static let denylist: Set<String> = [
+        "home interior", "playroom", "veterinarians office", "hospital room", "tv genre", "waste",
+        "garment", "organization", "floor", "ceiling", "wall", "doorway", "mess", "indoor", "decor",
+        "home decor", "collection", "lighting", "comfort", "clothe", "electronic", "fixture", "touch",
+        "control", "electricity", "type on", "navratri", "quote", "news", "poetry", "illustration",
+        "icon", "oval", "grid", "cube", "swirl", "shadow", "twist", "contain", "bundle", "stack",
+        "article", "publication", "character sculpture", "fashion illustration", "line art",
+        "studio shot", "car logo", "inscription", "plaid", "velvet", "cotton", "khaki", "granite",
+        "beam", "navy", "hospital", "laboratory", "salon", "workplace", "pantry", "alcove", "mantle",
+        "entrance hall", "living space", "dressing room", "childs room", "recreation room", "embellishment",
+        "animation film", "science fiction film", "firework display", "light show", "wedding reception",
+        "art exhibition", "street scene", "hairstyle", "manicure", "pigtail", "braid", "toe", "waist",
+        "ear", "hand", "face", "beard", "tail", "claw", "flash", "pad", "capsule", "recycling",
+    ]
+
+    /// Parts of names that mean a place, a genre or a scene.
+    static let deniedFragments = [
+        "room", "interior", "office", "genre", "scene", "film", "drama", "studio", "classroom",
+        "gym", "shop", "store", "parlor", "mall", "library", "corridor", "hallway", "alley", "hall",
+    ]
+
+    /// Breeds and people-words said plainly.
+    static let collapse: [String: String] = [
+        "samoyed": "dog", "poodle": "dog", "bichon": "dog", "golden retriever": "dog",
+        "german shepherd": "dog", "rottweiler": "dog", "chihuahua": "dog", "sheepdog": "dog",
+        "pomeranian": "dog", "street dog": "dog", "labrador retriever": "dog", "labrador": "dog",
+        "beagle": "dog", "pug": "dog", "dachshund": "dog", "husky": "dog", "puppy": "dog",
+        "guide dog": "dog", "pet": "dog",
+        "persian cat": "cat", "american shorthair": "cat", "siamese cat": "cat", "kitten": "cat",
+        "tabby cat": "cat", "ragdoll": "cat", "maine coon": "cat",
+        "man": "person", "woman": "person", "girl": "person", "boy": "person",
+        "grandfather": "person", "grandmother": "person", "cousin": "person", "daughter": "person",
+        "son": "person", "newlywed": "person", "college student": "person", "patient": "person",
+        "researcher": "person", "hacker": "person", "technician": "person", "historian": "person",
+        "dentist": "person", "fashion designer": "person", "child": "person", "baby": "person",
+        "shelve": "shelf", "clothe": "clothes",
+    ]
+
+    /// Names said without "a"/"an".
+    static let noArticle: Set<String> = [
+        "glasses", "sunglasses", "jeans", "shorts", "goggles", "scissors", "headphones", "pants",
+        "underdrawers", "clothes", "money", "laundry", "bedding", "linen", "detergent", "duct tape",
+    ]
+
+    /// The name to say, or nil if the class should never be mentioned.
+    static func spokenName(_ cls: String) -> String? {
+        let name = cls.lowercased().trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty, !denylist.contains(name) else { return nil }
+        if let plain = collapse[name] { return plain }
+        if deniedFragments.contains(where: { name.contains($0) }) { return nil }
+        return name
+    }
+
+    static func article(_ name: String) -> String {
+        noArticle.contains(name) ? name : AimVocabulary.withArticle(name)
+    }
+
+    /// Overlapping boxes (IoU > 0.5) keep only the most confident one.
+    static func dedupe(_ frame: [Seen]) -> [Seen] {
+        var kept: [Seen] = []
+        for s in frame.sorted(by: { $0.conf > $1.conf }) where !kept.contains(where: { iou($0.box, s.box) > 0.5 }) {
+            kept.append(s)
+        }
+        return kept
+    }
+
+    /// Up to three things, most confident first: said name, confidence at
+    /// least 0.60, in at least two of the recent frames, not the target.
+    static func pick(_ frames: [[Seen]], excluding target: Set<String>) -> [String] {
+        var best: [String: Float] = [:]
+        var count: [String: Int] = [:]
+        for frame in frames.suffix(window) {
+            var inFrame: Set<String> = []
+            for s in dedupe(frame.filter { $0.conf >= minConf }) {
+                guard let name = spokenName(s.name), !target.contains(name) else { continue }
+                best[name] = max(best[name] ?? 0, s.conf)
+                inFrame.insert(name)
+            }
+            for name in inFrame { count[name, default: 0] += 1 }
+        }
+        return best.filter { (count[$0.key] ?? 0) >= minFrames }
+            .sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
+            .prefix(maxThings)
+            .map(\.key)
+    }
+
+    static func sentence(subject: AimSubject, things: [String]) -> String {
+        let missing = subject.spokenName
+        guard !things.isEmpty else {
+            return "I don't see \(missing), and nothing else stands out. Try another direction."
+        }
+        let said = things.map(article)
+        let list: String = switch said.count {
+        case 1: said[0]
+        case 2: "\(said[0]) and \(said[1])"
+        default: said.dropLast().joined(separator: ", ") + " and " + said[said.count - 1]
+        }
+        return "I don't see \(missing). I can see \(list)."
+    }
+
+    /// Names that count as the target itself (so a dog is not offered when
+    /// looking for a dog).
+    static func targetNames(for subject: AimSubject) -> Set<String> {
+        switch subject {
+        case .face: return ["person", "face"]
+        case .page: return ["document", "paper", "picture", "photo", "picture frame", "photo frame", "poster"]
+        case let .object(m):
+            return Set(([m.spokenName] + m.classNames).map { spokenName($0) ?? $0.lowercased() })
+        }
+    }
+
+    private static func iou(_ a: CGRect, _ b: CGRect) -> CGFloat {
+        let i = a.intersection(b)
+        guard !i.isNull, i.width > 0, i.height > 0 else { return 0 }
+        let inter = i.width * i.height
+        return inter / (a.width * a.height + b.width * b.height - inter)
     }
 }
 

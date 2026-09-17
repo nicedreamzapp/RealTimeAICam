@@ -217,6 +217,8 @@ final class HelpMeAimController: ObservableObject {
     weak var camera: AimCameraView?
 
     private var coach: AimCoach?
+    /// Other things YOLOE saw in the last few frames.
+    private var recentOthers: [[AimElsewhere.Seen]] = []
     private var countdownTask: Task<Void, Never>?
     private var loadTask: Task<Void, Never>?
     private var classNames: [String]?
@@ -305,6 +307,7 @@ final class HelpMeAimController: ObservableObject {
         paused = false
         coach = AimCoach(subject: newSubject)
         coach?.reset(now: Date())
+        recentOthers = []
         statusText = "Looking for \(newSubject.spokenName)"
         if newSubject != .face { cameraPosition = .back }
         voice.warmRoute()
@@ -367,9 +370,16 @@ final class HelpMeAimController: ObservableObject {
     }
 
     private func handle(_ observation: AimObservation) {
-        guard phase == .aiming, !paused, var coach else { return }
+        guard phase == .aiming, !paused, var coach, let subject else { return }
+        var elsewhere: String?
+        if let others = observation.others {
+            recentOthers.append(others)
+            if recentOthers.count > AimElsewhere.window { recentOthers.removeFirst() }
+            let things = AimElsewhere.pick(recentOthers, excluding: AimElsewhere.targetNames(for: subject))
+            elsewhere = AimElsewhere.sentence(subject: subject, things: things)
+        }
         let actions = coach.observe(box: observation.box, faceCount: observation.count,
-                                    now: Date(), voiceBusy: voice.isBusy)
+                                    now: Date(), voiceBusy: voice.isBusy, elsewhere: elsewhere)
         self.coach = coach
         for action in actions {
             switch action {

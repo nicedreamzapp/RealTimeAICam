@@ -204,13 +204,13 @@ struct AimRound2CoachTests {
         #expect(says(feed(&c, { _ in framed }, from: 5.3, to: 5.3)) == ["got it, hold still"])
     }
 
-    @Test func notFoundAfterThreeSecondsThenEverySix() {
+    @Test func notFoundAfterFiveSecondsThenEverySix() {
         var c = coach()
-        let out = feed(&c, { _ in nil }, from: 0, to: 10.0)
+        let out = feed(&c, { _ in nil }, from: 0, to: 12.0)
         let times = out.map(\.t)
         #expect(times.count == 2)
-        #expect(abs((times.first ?? 0) - 3.0) < 1e-6)
-        #expect(abs((times.last ?? 0) - 9.0) < 1e-6)
+        #expect(abs((times.first ?? 0) - 5.0) < 1e-6)
+        #expect(abs((times.last ?? 0) - 11.0) < 1e-6)
     }
 
     @Test func samePhraseNotRepeatedWithin2_5s() {
