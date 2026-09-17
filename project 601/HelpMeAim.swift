@@ -690,6 +690,10 @@ enum AimElsewhere {
         "researcher": "person", "hacker": "person", "technician": "person", "historian": "person",
         "dentist": "person", "fashion designer": "person", "child": "person", "baby": "person",
         "shelve": "shelf", "clothe": "clothes",
+        // Live runs 2026-09-16: YOLOE calls a person these, and the plural
+        // class name reads badly in a list.
+        "tattoo artist": "person", "rock artist": "person", "blue artist": "person",
+        "power plugs and sockets": "power outlet",
     ]
 
     /// Names said without "a"/"an".

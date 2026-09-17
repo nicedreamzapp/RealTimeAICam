@@ -56,6 +56,7 @@ final class AimVoice: NSObject, AVSpeechSynthesizerDelegate {
 
     func say(_ text: String, then done: (() -> Void)? = nil) {
         let line = AimPhrases.capitalized(text)
+        AimDevLog.note((usesVoiceOver ? "SAY(voiceover) " : "SAY ") + line)
         token += 1
         let mine = token
         finished = done
@@ -109,6 +110,43 @@ final class AimVoice: NSObject, AVSpeechSynthesizerDelegate {
             self.current = nil
             complete()
         }
+    }
+}
+
+// MARK: Dev speech log
+
+/// DEV-INSTALL AID ONLY: with HELP_ME_AIM_SHOT_LOG on the xcodebuild command
+/// line, every line the app says (and listening events) is appended with a
+/// timestamp to Documents/HelpMeAimShots/speech-log.txt so field runs can be
+/// checked afterwards. Without the flag this does nothing.
+enum AimDevLog {
+    #if HELP_ME_AIM_SHOT_LOG
+    private static let queue = DispatchQueue(label: "aim.devlog")
+    private static let formatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
+        return f
+    }()
+    #endif
+
+    static func note(_ text: String) {
+        #if HELP_ME_AIM_SHOT_LOG
+        let line = "\(formatter.string(from: Date()))  \(text)\n"
+        queue.async {
+            guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
+            let dir = docs.appendingPathComponent("HelpMeAimShots", isDirectory: true)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let url = dir.appendingPathComponent("speech-log.txt")
+            if let h = try? FileHandle(forWritingTo: url) {
+                h.seekToEndOfFile()
+                h.write(Data(line.utf8))
+                try? h.close()
+            } else {
+                try? Data(line.utf8).write(to: url)
+            }
+        }
+        #endif
     }
 }
 
@@ -172,6 +210,7 @@ final class AimWordListener: ObservableObject {
         } catch { done(.unavailable); return }
 
         AimTonePlayer.shared.play(start: true)
+        AimDevLog.note("[beep start]")
         try? await Task.sleep(nanoseconds: UInt64((AimTones.duration + 0.08) * 1_000_000_000))
 
         let req = SFSpeechAudioBufferRecognitionRequest()
@@ -212,6 +251,7 @@ final class AimWordListener: ObservableObject {
             return
         }
         isRunning = true
+        AimDevLog.note("[listening]")
         startedAt = Date()
         lastChange = Date()
         watchdog = Task { @MainActor [weak self] in
@@ -236,6 +276,7 @@ final class AimWordListener: ObservableObject {
         let done = finish
         finish = nil
         cleanup()
+        AimDevLog.note("[listen end] \(result) deliver=\(deliver)")
         guard deliver else { return }
         AimTonePlayer.shared.play(start: false)
         DispatchQueue.main.asyncAfter(deadline: .now() + AimTones.duration + 0.1) {
@@ -376,6 +417,9 @@ final class HelpMeAimController: ObservableObject {
     }
 
     func submit(_ text: String) {
+        // Typed while the mic was open: close it now, or it hears the app's
+        // own "Looking for…" line (seen in the 2026-09-16 live runs).
+        if listener.isRunning { listener.stop(deliver: false) }
         let names = vocabulary()
         guard let match = AimVocabulary.match(text, index: classIndex), !names.isEmpty else {
             let said = AimVocabulary.normalize(text)
@@ -397,6 +441,7 @@ final class HelpMeAimController: ObservableObject {
     // MARK: Aiming
 
     private func begin(_ newSubject: AimSubject) {
+        AimDevLog.note("[aim] \(newSubject.spokenName)")
         subject = newSubject
         phase = .aiming
         paused = false
@@ -554,6 +599,7 @@ final class HelpMeAimController: ObservableObject {
                 #if HELP_ME_AIM_SHOT_LOG
                 if let keep = result.keep { TestShotLog.write(keep) }
                 #endif
+                AimDevLog.note("[shot] winner=\(result.keep?.info.winner ?? -1) cropped=\(result.keep?.cropped ?? false)")
                 // Exactly one photo per burst reaches the library.
                 guard let jpeg = result.keep?.photo else {
                     voice.say(AimPhrases.captureFailed)
@@ -626,6 +672,7 @@ final class HelpMeAimController: ObservableObject {
     /// Leaving for the background (or Control Center): torch off, camera
     /// off, countdown cancelled. The screen and the subject are kept.
     func pause() {
+        AimDevLog.note("[pause] phase=\(phase)")
         paused = true
         stopAiming()
         listener.stop(deliver: false)
@@ -636,6 +683,7 @@ final class HelpMeAimController: ObservableObject {
     /// Back in the app: pick the steering up where it was.
     func resume() {
         guard paused else { return }
+        AimDevLog.note("[resume] phase=\(phase)")
         paused = false
         guard phase == .aiming, let subject else { return }
         camera?.start(position: cameraPosition)

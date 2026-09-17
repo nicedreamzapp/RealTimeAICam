@@ -119,6 +119,10 @@ struct AimElsewhereSentenceTests {
         #expect(AimElsewhere.spokenName("Persian Cat") == "cat")
         #expect(AimElsewhere.spokenName("golden retriever") == "dog")
         #expect(AimElsewhere.spokenName("grandfather") == "person")
+        #expect(AimElsewhere.spokenName("tattoo artist") == "person")
+        #expect(AimElsewhere.spokenName("power plugs and sockets") == "power outlet")
+        #expect(AimElsewhere.sentence(subject: key, things: ["power outlet", "person"])
+            == "I don't see a key. I can see a power outlet and a person.")
         let frames = [[seen("samoyed", 0.9), seen("cup", 0.8, x: 0.6)], [seen("poodle", 0.9), seen("cup", 0.8, x: 0.6)]]
         #expect(AimElsewhere.pick(frames, excluding: AimElsewhere.targetNames(for: dog)) == ["cup"])
     }
