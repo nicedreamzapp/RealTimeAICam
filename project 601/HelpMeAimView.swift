@@ -25,7 +25,11 @@ import UIKit
 final class AimVoice: NSObject, AVSpeechSynthesizerDelegate {
     private let synth = AVSpeechSynthesizer()
     private var announcementPending = false
-    private var announcementToken = 0
+    private var token = 0
+    /// Runs once when the current line has fully finished (not when it is
+    /// cut off by a newer line).
+    private var finished: (() -> Void)?
+    private var current: AVSpeechUtterance?
     var voiceIdentifier: String = ""
 
     override init() {
@@ -50,45 +54,90 @@ final class AimVoice: NSObject, AVSpeechSynthesizerDelegate {
         try? audio.overrideOutputAudioPort(.speaker)
     }
 
-    func say(_ text: String) {
+    func say(_ text: String, then done: (() -> Void)? = nil) {
         let line = AimPhrases.capitalized(text)
+        token += 1
+        let mine = token
+        finished = done
         if usesVoiceOver {
+            if synth.isSpeaking { synth.stopSpeaking(at: .immediate) }
             announcementPending = true
-            announcementToken += 1
-            let token = announcementToken
             UIAccessibility.post(notification: .announcement, argument: line)
-            // If VoiceOver drops the announcement it never reports back.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
-                guard let self, announcementToken == token else { return }
-                announcementPending = false
+            // If VoiceOver drops the announcement it never reports back;
+            // allow roughly the time it takes to say the line.
+            let limit = max(2.5, Double(line.count) * 0.08)
+            DispatchQueue.main.asyncAfter(deadline: .now() + limit) { [weak self] in
+                guard let self, token == mine else { return }
+                complete()
             }
             return
         }
-        if synth.isSpeaking { synth.stopSpeaking(at: .immediate) }
+        announcementPending = false
         let utterance = AVSpeechUtterance(string: line)
         utterance.voice = AVSpeechSynthesisVoice(identifier: voiceIdentifier) ?? AVSpeechSynthesisVoice(language: "en-US")
         utterance.rate = 0.52
         utterance.volume = 1.0
+        current = utterance
+        if synth.isSpeaking { synth.stopSpeaking(at: .immediate) }
         synth.speak(utterance)
     }
 
     func stop() {
+        finished = nil
+        token += 1
         if synth.isSpeaking { synth.stopSpeaking(at: .immediate) }
         announcementPending = false
     }
 
-    @objc private func announcementFinished() {
+    private func complete() {
         announcementPending = false
+        let done = finished
+        finished = nil
+        done?()
+    }
+
+    @objc private func announcementFinished() {
+        guard announcementPending else { return }
+        token += 1
+        complete()
+    }
+
+    nonisolated func speechSynthesizer(_: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        let id = ObjectIdentifier(utterance)
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let current, ObjectIdentifier(current) == id else { return }
+            self.current = nil
+            complete()
+        }
+    }
+}
+
+// MARK: Tones
+
+@MainActor
+final class AimTonePlayer {
+    static let shared = AimTonePlayer()
+    private var player: AVAudioPlayer?
+    private let startData = AimTones.wav(AimTones.start)
+    private let endData = AimTones.wav(AimTones.end)
+
+    /// Plays on whatever route the session has now (speaker is forced).
+    func play(start: Bool) {
+        player?.stop()
+        player = try? AVAudioPlayer(data: start ? startData : endData)
+        player?.volume = 1.0
+        player?.prepareToPlay()
+        player?.play()
     }
 }
 
 // MARK: Listening for the word
 
-/// Hears one word or short phrase, on the phone only, and stops by itself
-/// after a short silence.
+/// Hears one word or short phrase, on the phone only. Beeps, listens by
+/// itself, stops after a short silence, beeps again. Nothing to hold.
 @MainActor
 final class AimWordListener: ObservableObject {
-    enum Outcome { case heard(String), notAllowed, unavailable }
+    enum Outcome { case result(AimListening.Result), notAllowed, unavailable }
 
     @Published private(set) var isRunning = false
     @Published private(set) var transcript = ""
@@ -99,50 +148,66 @@ final class AimWordListener: ObservableObject {
     private var task: SFSpeechRecognitionTask?
     private var lastChange = Date()
     private var startedAt = Date()
+    private var failed = false
     private var watchdog: Task<Void, Never>?
     private var finish: ((Outcome) -> Void)?
+    private var starting = false
 
     func start(_ done: @escaping (Outcome) -> Void) async {
-        guard !isRunning else { return }
+        guard !isRunning, !starting else { return }
+        starting = true
+        defer { starting = false }
         guard await Self.authorize() else { done(.notAllowed); return }
         guard let recognizer, recognizer.isAvailable, recognizer.supportsOnDeviceRecognition else {
             done(.unavailable); return
         }
+        // Record and play on one session: the beep must be heard on the
+        // loudspeaker and the mic must be live, VoiceOver on or off.
+        let s = AVAudioSession.sharedInstance()
+        do {
+            try s.setCategory(.playAndRecord, mode: .default,
+                              options: [.duckOthers, .defaultToSpeaker, .allowBluetoothHFP])
+            try s.setActive(true, options: .notifyOthersOnDeactivation)
+            try? s.overrideOutputAudioPort(.speaker)
+        } catch { done(.unavailable); return }
+
+        AimTonePlayer.shared.play(start: true)
+        try? await Task.sleep(nanoseconds: UInt64((AimTones.duration + 0.08) * 1_000_000_000))
+
         let req = SFSpeechAudioBufferRecognitionRequest()
         req.shouldReportPartialResults = true
         // Offline only: the word never leaves the phone.
         req.requiresOnDeviceRecognition = true
         req.contextualStrings = ["keys", "wallet", "phone", "cup", "dog", "cat", "painting", "remote", "glasses", "door"]
         request = req
-        do {
-            let s = AVAudioSession.sharedInstance()
-            try s.setCategory(.playAndRecord, mode: .measurement, options: [.duckOthers, .defaultToSpeaker])
-            try s.setActive(true, options: .notifyOthersOnDeactivation)
-        } catch { done(.unavailable); return }
-
         transcript = ""
+        failed = false
         finish = done
         let node = engine.inputNode
         node.removeTap(onBus: 0)
-        node.installTap(onBus: 0, bufferSize: 1024, format: node.outputFormat(forBus: 0)) { [weak req] buf, _ in
+        let format = node.outputFormat(forBus: 0)
+        guard format.sampleRate > 0 else { cleanup(); done(.unavailable); return }
+        node.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak req] buf, _ in
             req?.append(buf)
         }
         task = recognizer.recognitionTask(with: req) { [weak self] result, error in
             let text = result?.bestTranscription.formattedString
             let final = result?.isFinal ?? false
-            let failed = error != nil
+            let bad = error != nil
             Task { @MainActor in
                 guard let self, self.isRunning else { return }
                 if let text, text != self.transcript {
                     self.transcript = text
                     self.lastChange = Date()
                 }
-                if final || failed { self.stop(deliver: true) }
+                if bad { self.failed = true }
+                if final || bad { self.stop(deliver: true) }
             }
         }
         engine.prepare()
         do { try engine.start() } catch {
             cleanup()
+            finish = nil
             done(.unavailable)
             return
         }
@@ -153,24 +218,29 @@ final class AimWordListener: ObservableObject {
             while let self, self.isRunning {
                 try? await Task.sleep(nanoseconds: 150_000_000)
                 let now = Date()
-                let quiet = now.timeIntervalSince(self.lastChange)
-                let total = now.timeIntervalSince(self.startedAt)
-                if (!self.transcript.isEmpty && quiet > 1.3) || total > 7 || (self.transcript.isEmpty && total > 5) {
+                if AimListening.shouldStop(heardSomething: !self.transcript.isEmpty,
+                                           quiet: now.timeIntervalSince(self.lastChange),
+                                           total: now.timeIntervalSince(self.startedAt)) {
                     self.stop(deliver: true)
                 }
             }
         }
     }
 
-    /// Stop listening. `deliver` false means the result is thrown away.
+    /// Stop listening. `deliver` false means the result is thrown away
+    /// (leaving the screen); otherwise the end beep plays first.
     func stop(deliver: Bool) {
         guard isRunning else { return }
         isRunning = false
-        let heard = transcript
+        let result = AimListening.result(transcript: transcript, failed: failed)
         let done = finish
         finish = nil
         cleanup()
-        if deliver { done?(.heard(heard)) }
+        guard deliver else { return }
+        AimTonePlayer.shared.play(start: false)
+        DispatchQueue.main.asyncAfter(deadline: .now() + AimTones.duration + 0.1) {
+            done?(.result(result))
+        }
     }
 
     private func cleanup() {
@@ -179,10 +249,11 @@ final class AimWordListener: ObservableObject {
         engine.inputNode.removeTap(onBus: 0)
         request?.endAudio()
         task?.cancel(); task = nil; request = nil
-        // Hand the audio back to the loudspeaker for the steering voice.
+        // Hand the audio back to plain playback for the steering voice.
         let s = AVAudioSession.sharedInstance()
         try? s.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
         try? s.setActive(true)
+        try? s.overrideOutputAudioPort(.speaker)
     }
 
     private static func authorize() async -> Bool {
@@ -248,7 +319,25 @@ final class HelpMeAimController: ObservableObject {
         phase = .asking
         statusText = "What are you looking for?"
         voice.warmRoute()
-        sayAfterVoiceOver(AimPhrases.askWhat)
+        // Ask, wait for the sentence to finish completely, then beep and
+        // listen on our own. Nothing to press or hold (Matt, 2026-09-16).
+        let ask = { [weak self] in
+            guard let self else { return }
+            voice.say(AimPhrases.askWhat) { [weak self] in
+                DispatchQueue.main.asyncAfter(deadline: .now() + AimListening.afterPrompt) {
+                    guard let self, self.phase == .asking, !self.paused, !self.listener.isRunning else { return }
+                    self.listen()
+                }
+            }
+        }
+        if UIAccessibility.isVoiceOverRunning {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak self] in
+                guard let self, phase == .asking, !paused else { return }
+                ask()
+            }
+        } else {
+            ask()
+        }
     }
 
     func backToChoices() {
@@ -268,9 +357,15 @@ final class HelpMeAimController: ObservableObject {
         tick.impactOccurred()
         let listener = listener
         let handle: (AimWordListener.Outcome) -> Void = { [weak self] outcome in
-            guard let self else { return }
+            guard let self, phase == .asking else { return }
             switch outcome {
-            case let .heard(text): submit(text)
+            case let .result(.heard(text)):
+                submit(text)
+            case let .result(other):
+                if let line = AimListening.reply(for: other) {
+                    statusText = AimPhrases.capitalized(line)
+                    voice.say(line)
+                }
             case .notAllowed:
                 voice.say("I can't use the microphone. Allow it in Settings, or type the word.")
             case .unavailable:
@@ -827,6 +922,8 @@ struct AimBigButton: View {
     let title: String
     let color: Color
     let hint: String
+    /// VoiceOver label when it should say more than the visible title.
+    var label: String? = nil
     let action: () -> Void
 
     var body: some View {
@@ -847,7 +944,7 @@ struct AimBigButton: View {
             )
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(title)
+        .accessibilityLabel(label ?? title)
         .accessibilityHint(hint)
         .accessibilityAddTraits(.isButton)
     }
@@ -862,7 +959,8 @@ private struct AimListenButton: View {
             AimBigButton(emoji: listener.isRunning ? "👂" : "🎙️",
                          title: listener.isRunning ? "Listening… tap to stop" : "Speak",
                          color: listener.isRunning ? .red : .purple,
-                         hint: listener.isRunning ? "Stops listening" : "Tap, then say what you're looking for",
+                         hint: listener.isRunning ? "Stops listening now" : "",
+                         label: listener.isRunning ? "Listening, tap to stop" : AimPhrases.speakLabel,
                          action: action)
             if !listener.transcript.isEmpty {
                 // Shown for sighted helpers; the spoken reply covers VoiceOver.

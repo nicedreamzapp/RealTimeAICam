@@ -222,12 +222,18 @@ enum AimPhrases {
     static let savedSuffix = ", saved to your photos"
     static let notSavedSuffix = ", but I couldn't save it. Allow adding photos in Settings"
     static let captureFailed = "I couldn't take the picture, try again"
-    static let askWhat = "What are you looking for? Tap Speak, then say it, or type it."
+    // Something Else, round 2 (Matt: "you don't know when to speak, if you
+    // need to press the button, or hold it"). The app asks, beeps, and
+    // listens by itself; Speak is a single tap for a retry.
+    static let askWhat = "After the beep, say what you're looking for."
+    static let heardNothing = "I didn't hear anything. Tap Speak to try again, or type it."
+    static let didntCatch = "I didn't catch that. Tap Speak to try again."
+    static let speakLabel = "Speak, tap once, then say what you're looking for after the beep"
     static let countdown = ["3", "2", "1"]
 
     static func cantLookFor(_ word: String) -> String {
         let w = word.trimmingCharacters(in: .whitespacesAndNewlines)
-        return w.isEmpty ? "I didn't catch that, try again" : "I can't look for \(w) yet"
+        return w.isEmpty ? didntCatch : "I can't look for \(w) yet"
     }
 
     static func countWord(_ n: Int) -> String {
@@ -238,6 +244,79 @@ enum AimPhrases {
     static func capitalized(_ s: String) -> String {
         guard let head = s.first else { return s }
         return head.uppercased() + s.dropFirst()
+    }
+}
+
+// MARK: - Listening timing and tones
+
+enum AimListening {
+    /// Wait this long after the prompt has finished before the beep, so the
+    /// microphone does not catch the tail of the sentence.
+    static let afterPrompt: TimeInterval = 0.4
+    /// Stop this long after the last new word.
+    static let silence: TimeInterval = 1.3
+    /// Nothing heard at all by then: give up.
+    static let noSpeech: TimeInterval = 6.0
+    /// Hard stop.
+    static let maxTotal: TimeInterval = 9.0
+
+    enum Result: Equatable { case heard(String), silence, notUnderstood }
+
+    static func shouldStop(heardSomething: Bool, quiet: TimeInterval, total: TimeInterval) -> Bool {
+        if total >= maxTotal { return true }
+        return heardSomething ? quiet >= silence : total >= noSpeech
+    }
+
+    static func result(transcript: String, failed: Bool) -> Result {
+        let t = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !t.isEmpty { return .heard(t) }
+        return failed ? .notUnderstood : .silence
+    }
+
+    /// What to say for a listening result that did not become a search.
+    static func reply(for result: Result) -> String? {
+        switch result {
+        case .heard: nil
+        case .silence: AimPhrases.heardNothing
+        case .notUnderstood: AimPhrases.didntCatch
+        }
+    }
+}
+
+/// Short generated beeps, so there is no doubt when to talk: two rising
+/// notes to start, two falling notes when listening stops.
+enum AimTones {
+    static let start: [Double] = [660, 990]
+    static let end: [Double] = [990, 660]
+    static let noteSeconds = 0.09
+    static let sampleRate = 44_100
+
+    static var duration: TimeInterval { noteSeconds * Double(start.count) }
+
+    /// 16-bit mono PCM WAV with a short fade on every note (no clicks).
+    static func wav(_ notes: [Double], noteSeconds: Double = noteSeconds, volume: Double = 0.6) -> Data {
+        let perNote = Int(Double(sampleRate) * noteSeconds)
+        let fade = max(1, perNote / 8)
+        var samples: [Int16] = []
+        samples.reserveCapacity(perNote * notes.count)
+        for f in notes {
+            for i in 0 ..< perNote {
+                let env = min(1, Double(min(i, perNote - 1 - i)) / Double(fade))
+                let v = sin(2 * Double.pi * f * Double(i) / Double(sampleRate)) * volume * env
+                samples.append(Int16(max(-1, min(1, v)) * Double(Int16.max)))
+            }
+        }
+        var d = Data()
+        func u32(_ v: UInt32) { withUnsafeBytes(of: v.littleEndian) { d.append(contentsOf: $0) } }
+        func u16(_ v: UInt16) { withUnsafeBytes(of: v.littleEndian) { d.append(contentsOf: $0) } }
+        let dataBytes = UInt32(samples.count * 2)
+        d.append(contentsOf: Array("RIFF".utf8)); u32(36 + dataBytes)
+        d.append(contentsOf: Array("WAVE".utf8))
+        d.append(contentsOf: Array("fmt ".utf8)); u32(16); u16(1); u16(1)
+        u32(UInt32(sampleRate)); u32(UInt32(sampleRate * 2)); u16(2); u16(16)
+        d.append(contentsOf: Array("data".utf8)); u32(dataBytes)
+        for s in samples { u16(UInt16(bitPattern: s)) }
+        return d
     }
 }
 
