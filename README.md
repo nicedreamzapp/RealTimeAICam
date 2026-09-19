@@ -21,7 +21,7 @@ Press one button and it describes the whole room in a sentence you can act on.
 ![Frame Rate](https://img.shields.io/badge/Frame_Rate-~10_FPS-success?style=for-the-badge)
 ![LiDAR](https://img.shields.io/badge/LiDAR-Supported-cyan?style=for-the-badge)
 ![On Device AI](https://img.shields.io/badge/AI-100%25_On_Device-purple?style=for-the-badge)
-![License](https://img.shields.io/badge/License-GPL--3.0-blue?style=for-the-badge)
+![License](https://img.shields.io/badge/License-AGPL--3.0-blue?style=for-the-badge)
 
 </div>
 
@@ -321,25 +321,22 @@ open "RealTime Ai Cam.xcodeproj"
 
 ## 📄 License & credits
 
-### ⚖️ **Dual license**
+### ⚖️ **License**
 
-- **🔓 GPL-3.0** — for open source development and learning
-- **💼 Commercial license** — required for App Store, TestFlight, or commercial distribution
+The code is licensed under **AGPL-3.0**, the same license as the YOLOv8 detector it is built on. You can use, study, change and share it, as long as you share your changes under the same terms. The "RealTime AI Cam" name and app icon are not licensed, so a build you publish needs its own name and icon.
 
-**📧 Commercial licensing:** [info@nicedreamzwholesale.com](mailto:info@nicedreamzwholesale.com)
-
-See [LICENSE](LICENSE) for the full text.
+See [LICENSE](LICENSE) for the full text and [NOTICE.md](NOTICE.md) for the name, icon and third-party notices.
 
 ### 🙏 **Acknowledgments**
 
 | Component | Creator | License |
 |---|---|---|
-| 🤖 **YOLOv8** | © Ultralytics | GPL-3.0 |
+| 🤖 **YOLOv8** | © Ultralytics | AGPL-3.0 |
 | 📊 **Open Images V7** | © Google | CC BY 4.0 |
 | 🍎 **CoreML, Metal, SwiftUI, ARKit** | © Apple Inc. | Apple Developer Agreement |
 | 🤖 **TensorFlow Lite, Jetpack Compose** | © Google | Apache 2.0 |
 | ♿ **Feature requests & testing** | The [AppleVis](https://www.applevis.com/) community | with thanks |
-| 🎨 **App design & development** | © NiceDreamzApps | GPL-3.0 |
+| 🎨 **App design & development** | © NiceDreamzApps | AGPL-3.0 |
 
 ---
 
