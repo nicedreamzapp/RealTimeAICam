@@ -43,6 +43,7 @@ struct ContentView: View {
         var button2 = false
         var button3 = false
         var button4 = false
+        var button5 = false
         var picker = false
         var hasAnimatedOnce = false
 
@@ -53,6 +54,7 @@ struct ContentView: View {
             button2 = false
             button3 = false
             button4 = false
+            button5 = false
             picker = false
         }
 
@@ -62,6 +64,7 @@ struct ContentView: View {
             button2 = true
             button3 = true
             button4 = true
+            button5 = true
             picker = true
         }
     }
@@ -133,6 +136,12 @@ struct ContentView: View {
         case .mail:
             ocrView(mode: .mail)
 
+        case .helpMeAim:
+            HelpMeAimView(
+                voiceIdentifier: viewModel.selectedVoiceIdentifier,
+                onBack: switchToHome
+            )
+
         case .objectDetection:
             ObjectDetectionView(
                 viewModel: viewModel,
@@ -171,6 +180,9 @@ struct ContentView: View {
             },
             onReadMail: {
                 switchToMode(.mail)
+            },
+            onHelpMeAim: {
+                switchToMode(.helpMeAim)
             },
             onVoiceChange: playWelcomeMessage,
             speechSynthesizer: speechSynthesizer
@@ -251,6 +263,13 @@ struct ContentView: View {
     }
 
     private func handleScenePhaseChange(_ newPhase: ScenePhase) {
+        if mode == .helpMeAim {
+            // Help Me Aim pauses and resumes its own camera and steering
+            // (AppleVis: guidance in other apps died after leaving and
+            // coming back), so stay on that screen instead of going home.
+            if newPhase != .active { viewModel.turnOffTorch() }
+            return
+        }
         if newPhase == .background {
             viewModel.turnOffTorch()
             performReset()
@@ -279,6 +298,7 @@ struct ContentView: View {
         case .ocrEnglish: "English text reader"
         case .ocrSpanish: "Spanish to English translator"
         case .mail: "Mail reader"
+        case .helpMeAim: "Help me aim"
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {

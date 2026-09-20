@@ -16,6 +16,7 @@ struct HomeView: View {
     let onSpanishOCR: () -> Void
     let onObjectDetection: () -> Void
     let onReadMail: () -> Void
+    let onHelpMeAim: () -> Void
     let onVoiceChange: () -> Void
     let speechSynthesizer: AVSpeechSynthesizer
 
@@ -102,11 +103,12 @@ struct HomeView: View {
                             spanishOCRButton(scale: scale, screenWidth: screenWidth)
                             objectDetectionButton(scale: scale, screenWidth: screenWidth)
                             readMailButton(scale: scale, screenWidth: screenWidth)
+                            helpMeAimButton(scale: scale, screenWidth: screenWidth)
                         }
                         .frame(maxWidth: .infinity, alignment: .center)
                         // GeometryReader used for vertical spacing only
                     }
-                    .frame(height: 300)
+                    .frame(height: 300 + 80 * scale)
                     Spacer()
                     visionModelBanner
                     voicePicker
@@ -364,6 +366,54 @@ struct HomeView: View {
         .accessibilityAddTraits(.isButton)
     }
 
+    /// Help Me Aim: say what you want a picture of and the app talks you into
+    /// the shot, then takes it. Dennis Long asked for Pixel Guided Frame.
+    private func helpMeAimButton(scale: CGFloat, screenWidth: CGFloat) -> some View {
+        Button(action: {
+            guard buttonDebouncer.canPress("HomeView-8") else { return }
+            onHelpMeAim()
+        }) {
+            HStack(spacing: 4 * scale) {
+                Text("\u{1F3AF}").font(.system(size: 32 * scale))
+                OutlinedText(text: "Help Me Aim", fontSize: 20 * scale)
+            }
+            .padding(.vertical, 16 * scale)
+        }
+        .frame(maxWidth: min(340 * scale, screenWidth - 36), alignment: .center)
+        .padding(.horizontal, 8 * scale)
+        .background(
+            ZStack {
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.white.opacity(0.23), Color.teal.opacity(0.50)]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                Capsule()
+                    .fill(Color.white.opacity(0.13))
+                    .frame(height: 24 * scale)
+                    .offset(y: -18 * scale)
+                Capsule().stroke(Color.white.opacity(0.80), lineWidth: 4.8 * scale)
+                Capsule().stroke(Color.teal, lineWidth: 2.4 * scale)
+                Capsule()
+                    .fill(Color.black.opacity(0.12))
+                    .blur(radius: 7 * scale)
+                    .offset(y: 16 * scale)
+            }
+        )
+        .shadow(color: Color.black.opacity(0.38), radius: 15 * scale, y: 5 * scale)
+        .clipShape(Capsule())
+        .opacity(animationState.button5 ? 1 : 0)
+        .shadow(color: Color.teal.opacity(0.50), radius: 12 * scale)
+        .scaleEffect(animationState.button5 ? 1 : 0.7)
+        .animation(.easeOut(duration: 0.3), value: animationState.button5)
+        .accessibilityLabel("Help Me Aim")
+        .accessibilityHint("Tell the camera what you want a picture of. It talks you into the shot, then takes the photo")
+        .accessibilityAddTraits(.isButton)
+    }
+
     private var voicePicker: some View {
         AnimatedVoicePicker(
             viewModel: viewModel,
@@ -444,6 +494,9 @@ struct HomeView: View {
             animationState.button4 = true
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.70) {
+            animationState.button5 = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.20) {
             animationState.picker = true
         }
     }
