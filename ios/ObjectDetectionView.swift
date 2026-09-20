@@ -379,20 +379,27 @@ struct ObjectDetectionView: View {
                         .accessibilityHint("Switches between front and rear camera")
                         .accessibilityValue(viewModel.cameraPosition == .back ? "Using rear camera" : "Using front camera")
 
-                        controlButton(
-                            systemName: "rectangle.3.offgrid",
-                            foregroundColor: viewModel.isUltraWide ? .cyan : .primary,
-                            size: 22,
-                            frameSize: buttonSize,
-                            action: {
-                                guard buttonDebouncer.canPress("ObjectDetectionView-4") else { return }
-                                viewModel.handleToggleCameraZoom()
-                            }
-                        )
-                        .opacity(viewModel.cameraPosition == .back ? 1.0 : 0.0)
-                        .disabled(viewModel.cameraPosition == .front)
-                        .accessibilityLabel(viewModel.isUltraWide ? "Switch to normal camera" : "Switch to wide angle camera")
-                        .accessibilityHint("Changes camera field of view for wider or normal view")
+                        // Only phones with a second rear lens get this button at all.
+                        // Asked about by Matt on AppleVis (iPhone 16e, 2026-09-17):
+                        // on a single-rear-camera phone the tap changed the label
+                        // and nothing else.
+                        if viewModel.isUltraWideAvailable {
+                            controlButton(
+                                systemName: "rectangle.3.offgrid",
+                                foregroundColor: viewModel.isUltraWide ? .cyan : .primary,
+                                size: 22,
+                                frameSize: buttonSize,
+                                action: {
+                                    guard buttonDebouncer.canPress("ObjectDetectionView-4") else { return }
+                                    viewModel.handleToggleCameraZoom()
+                                }
+                            )
+                            .opacity(viewModel.cameraPosition == .back ? 1.0 : 0.0)
+                            .disabled(viewModel.cameraPosition == .front)
+                            .accessibilityHidden(viewModel.cameraPosition == .front)
+                            .accessibilityLabel(viewModel.isUltraWide ? "Switch to normal camera" : "Switch to wide angle camera")
+                            .accessibilityHint("Changes camera field of view for wider or normal view")
+                        }
 
                         TorchButton(
                             initialTorchLevel: viewModel.currentTorchLevel,
@@ -508,21 +515,25 @@ struct ObjectDetectionView: View {
             .accessibilityHint("Switches between front and rear camera")
             .accessibilityValue(viewModel.cameraPosition == .back ? "Using rear camera" : "Using front camera")
 
-            // Ultra-wide button - hidden but maintains space in front camera
-            controlButton(
-                systemName: "rectangle.3.offgrid",
-                foregroundColor: viewModel.isUltraWide ? .cyan : .primary,
-                size: 24,
-                frameSize: 48,
-                action: {
-                    guard buttonDebouncer.canPress("ObjectDetectionView-9") else { return }
-                    viewModel.handleToggleCameraZoom()
-                }
-            )
-            .opacity(viewModel.cameraPosition == .back ? 1.0 : 0.0)
-            .disabled(viewModel.cameraPosition == .front)
-            .accessibilityLabel(viewModel.isUltraWide ? "Switch to normal camera" : "Switch to wide angle camera")
-            .accessibilityHint("Changes camera field of view for wider or normal view")
+            // Ultra-wide button - hidden but maintains space in front camera,
+            // and absent entirely on phones with only one rear lens.
+            if viewModel.isUltraWideAvailable {
+                controlButton(
+                    systemName: "rectangle.3.offgrid",
+                    foregroundColor: viewModel.isUltraWide ? .cyan : .primary,
+                    size: 24,
+                    frameSize: 48,
+                    action: {
+                        guard buttonDebouncer.canPress("ObjectDetectionView-9") else { return }
+                        viewModel.handleToggleCameraZoom()
+                    }
+                )
+                .opacity(viewModel.cameraPosition == .back ? 1.0 : 0.0)
+                .disabled(viewModel.cameraPosition == .front)
+                .accessibilityHidden(viewModel.cameraPosition == .front)
+                .accessibilityLabel(viewModel.isUltraWide ? "Switch to normal camera" : "Switch to wide angle camera")
+                .accessibilityHint("Changes camera field of view for wider or normal view")
+            }
 
             // TorchButton properly connected to viewModel
             TorchButton(

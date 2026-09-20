@@ -102,6 +102,18 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
 
     @Published var currentOrientation: UIDeviceOrientation = .portrait
     @Published var isUltraWide = false
+
+    /// Whether this phone actually has a second rear lens to switch to.
+    ///
+    /// `selectCamera()` asks for `.builtInUltraWideCamera` and, on a phone that
+    /// has none, quietly falls back to the ordinary wide camera — so the wide
+    /// angle button changed its own label and nothing else. Matt on AppleVis
+    /// (iPhone 16e, 2026-09-17) asked whether it did anything on his phone; it
+    /// did not, so the views no longer show it when this is false.
+    /// Device *presence* does not depend on camera permission, so this is safe
+    /// to read before the user has granted access.
+    let isUltraWideAvailable: Bool =
+        AVCaptureDevice.default(.builtInUltraWideCamera, for: .video, position: .back) != nil
     @Published var detections: [YOLODetection] = []
     @Published var framesPerSecond: Double = 0
     @Published var filterMode = "all"
