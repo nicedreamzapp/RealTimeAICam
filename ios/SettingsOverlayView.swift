@@ -236,7 +236,11 @@ struct SettingsOverlayView: View {
                             }
                             Text("• 🗣️ Speak detected/translated text")
                             Text("• 🔦 Adjust flashlight")
-                            Text("• 🌎 Toggle wide/ultra-wide lens")
+                            // No lens line here: these screens have no lens
+                            // toggle at all — it lives in Object Detection, and
+                            // only on phones with a second rear lens. Listing it
+                            // here sent Matt on AppleVis hunting for a control
+                            // that was never on this screen (2026-09-17).
                             Text("• ⚙️ Open settings/history")
                         }
                         .font(.footnote)

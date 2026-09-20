@@ -167,7 +167,10 @@ struct AppInstructionsView: View {
                             .font(.headline)
                             .padding(.top, 6)
                         Text("🔄 Switch Camera — Front / Rear")
-                        Text("🌐 Lens Toggle — Wide ↔ Ultra-wide")
+                        // Only phones with a second rear lens have this button.
+                        if CameraCapabilities.hasUltraWideRear {
+                            Text("🌐 Lens Toggle — Wide ↔ Ultra-wide")
+                        }
                         Text("🔦 Torch — 25% / 50% / 75% / 100%")
                         Text("🤏 Pinch to Zoom")
                         HStack {
@@ -222,7 +225,12 @@ struct AppInstructionsView: View {
         }
         lines.append("English O C R reads printed English aloud, and you can copy the text to history.")
         lines.append("Spanish to English Translate lets you point at printed Spanish and hear a natural English translation while also displaying it on screen.")
-        lines.append("You can switch cameras, toggle wide or ultra wide lenses, change torch brightness, and pinch to zoom. You can show or hide the on screen text, speak the text again, and copy it.")
+        if CameraCapabilities.hasUltraWideRear {
+            lines.append("You can switch cameras, toggle wide or ultra wide lenses, change torch brightness, and pinch to zoom. You can show or hide the on screen text, speak the text again, and copy it.")
+        } else {
+            // This phone has one rear lens, so never promise a lens toggle.
+            lines.append("You can switch cameras, change torch brightness, and pinch to zoom. You can show or hide the on screen text, speak the text again, and copy it.")
+        }
         lines.append("This app is built for iPhone and designed for privacy. Everything runs entirely offline. There is no data collection, no tracking, and no location access. It works perfectly in Airplane Mode.")
         return lines.joined(separator: " ")
     }

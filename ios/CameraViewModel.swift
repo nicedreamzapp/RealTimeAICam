@@ -4,6 +4,20 @@ import Foundation
 import SwiftUI
 import UIKit
 
+// MARK: - Camera capabilities
+
+/// What this particular phone can actually do, asked once.
+///
+/// A control that cannot change anything is worse than no control: Matt on
+/// AppleVis (iPhone 16e, 2026-09-17) tapped the wide angle button, heard the
+/// label change and got the same lens. Device *presence* does not depend on
+/// camera permission, so this is safe to read before access is granted, and
+/// every place that shows or describes the lens toggle asks here first.
+enum CameraCapabilities {
+    static let hasUltraWideRear: Bool =
+        AVCaptureDevice.default(.builtInUltraWideCamera, for: .video, position: .back) != nil
+}
+
 // MARK: - ThermalManager
 
 final class ThermalManager {
@@ -112,8 +126,7 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
     /// did not, so the views no longer show it when this is false.
     /// Device *presence* does not depend on camera permission, so this is safe
     /// to read before the user has granted access.
-    let isUltraWideAvailable: Bool =
-        AVCaptureDevice.default(.builtInUltraWideCamera, for: .video, position: .back) != nil
+    let isUltraWideAvailable: Bool = CameraCapabilities.hasUltraWideRear
     @Published var detections: [YOLODetection] = []
     @Published var framesPerSecond: Double = 0
     @Published var filterMode = "all"

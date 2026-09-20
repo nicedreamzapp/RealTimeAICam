@@ -309,9 +309,12 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
             )
         }
 
+        instructions.append("You can switch between front and back cameras.")
+        if CameraCapabilities.hasUltraWideRear {
+            instructions.append("Toggle wide and ultra-wide lenses.")
+        }
+
         instructions.append(contentsOf: [
-            "You can switch between front and back cameras.",
-            "Toggle wide and ultra-wide lenses.",
             "Adjust torch brightness between twenty five, fifty, seventy five, and one hundred percent.",
             "Pinch the screen to zoom in or out.",
             "Toggle text overlay on or off.",
