@@ -241,6 +241,26 @@ enum AimPhrases {
         "Looking for \(subject.spokenName). Move the phone slowly. Double tap anywhere to take the picture yourself."
     }
 
+    /// What to say while it still hasn't found the thing, in the order it is
+    /// said.
+    ///
+    /// Matt, 2026-09-20, hearing the old version: "it's not a lot to repeat
+    /// itself over and over like that. It has to be more informative and
+    /// user-friendly and nicer." It used to say ONE sentence every six seconds
+    /// forever, which reads as a stuck record when you cannot see the screen.
+    /// Now each turn says something different and adds a suggestion worth
+    /// acting on, and the last line settles into a calm, patient one rather
+    /// than nagging. Kept identical to Android's AimPhrases.searching.
+    static func searching(step: Int, for subject: AimSubject) -> String {
+        switch step {
+        case 0: "I don't see \(subject.spokenName) yet, move the phone slowly"
+        case 1: "still looking. try holding the phone a little further back"
+        case 2: "still looking. turn slowly, a bit at a time, and give me a moment to catch up"
+        case 3: "still looking. if the light is low, there's a flashlight button at the top of the screen"
+        default: "still looking for \(subject.spokenName). take your time, i'll say the moment i see it"
+        }
+    }
+
     static let lostIt = "lost it"
     static let pictureTaken = "picture taken"
     static let savedSuffix = ", saved to your photos"
@@ -380,10 +400,12 @@ struct AimCoach {
     /// ...and then no more often than this.
     var notFoundRepeat: TimeInterval = 6.0
     /// After this long still not found, say what IS in view instead
-    /// ("I don't see a key. I can see a dog and a laptop.")...
-    var elsewhereAfter: TimeInterval = 15.0
+    /// ("I don't see a key. I can see a dog and a laptop.") Brought in from
+    /// 15 s (Matt, 2026-09-20: six identical lines before anything useful was
+    /// said) so the informative sentence arrives on the second turn...
+    var elsewhereAfter: TimeInterval = 10.0
     /// ...at most this often...
-    var elsewhereRepeat: TimeInterval = 20.0
+    var elsewhereRepeat: TimeInterval = 12.0
     /// ...and not closer than this to the previous "I don't see" line.
     var elsewhereGap: TimeInterval = 3.0
     /// A box that blinks out for less than this still counts as there.
@@ -424,6 +446,8 @@ struct AimCoach {
     /// Last "I don't see…" line of either kind, and of the long kind.
     private var lastMissAt = Date.distantPast
     private var lastElsewhereAt = Date.distantPast
+    /// Which rung of the "still looking" ladder comes next.
+    private var missStep = 0
     private var candidate: AimInstruction?
     private var candidateSince = Date.distantPast
     private var lockedAt = Date.distantPast
@@ -447,6 +471,7 @@ struct AimCoach {
         lastSpokenAt = .distantPast
         lastMissAt = .distantPast
         lastElsewhereAt = .distantPast
+        missStep = 0
         directions = []
         bouncedAt = .distantPast
     }
@@ -522,7 +547,9 @@ struct AimCoach {
                 text = elsewhere
                 lastElsewhereAt = now
             } else if sinceMiss >= notFoundRepeat {
-                text = AimPhrases.phrase(for: .notFound, subject: subject)
+                // Never the same sentence twice in a row: walk the ladder.
+                text = AimPhrases.searching(step: missStep, for: subject)
+                missStep += 1
             } else {
                 return []
             }
