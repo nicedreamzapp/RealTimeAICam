@@ -26,6 +26,37 @@ class ZoomCameraManager: NSObject, ObservableObject {
     func setPinchGestureStartZoom() { initialZoomFactor = captureDevice?.videoZoomFactor ?? 1.0 }
 }
 
+// MARK: - Audio Route
+
+/// Where the app's voice should come out.
+///
+/// Every speaking path used to call `overrideOutputAudioPort(.speaker)` every
+/// time, to defeat the earpiece after the mic had been used. That is right with
+/// nothing connected and wrong with anything connected: it drags the sound off
+/// AirPods, headphones or a car stereo mid-sentence, and a route change is
+/// hundreds of milliseconds of silence. Matt asked on 2026-09-19 whether the
+/// app is smooth on AirPods throughout, and this is the one place that decides.
+enum AudioRoute {
+    /// True when nothing external is connected — no AirPods, no Bluetooth, no
+    /// headphones, no CarPlay, no AirPlay, no USB or line out.
+    static func outputIsBuiltIn(_ audio: AVAudioSession) -> Bool {
+        let external: Set<AVAudioSession.Port> = [
+            .bluetoothA2DP, .bluetoothLE, .bluetoothHFP, .headphones, .headsetMic,
+            .carAudio, .airPlay, .HDMI, .usbAudio, .lineOut,
+        ]
+        return !audio.currentRoute.outputs.contains { external.contains($0.portType) }
+    }
+
+    /// Point the voice at the loudspeaker only when there is nothing better.
+    static func preferLoudspeakerIfNothingConnected(_ audio: AVAudioSession) {
+        if outputIsBuiltIn(audio) {
+            try? audio.overrideOutputAudioPort(.speaker)
+        } else {
+            try? audio.overrideOutputAudioPort(.none)
+        }
+    }
+}
+
 // MARK: - Live OCR View Model (Updated for SimpleSpanishEngine)
 
 final class LiveOCRViewModel: NSObject, ObservableObject {
@@ -250,24 +281,116 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
         UIAccessibility.post(notification: .announcement, argument: text)
     }
 
+    /// Open the audio route and let the duck ramp settle, ideally long before
+    /// anything needs to be heard. Called when the mode appears as well as at
+    /// the shutter, so by the time the countdown starts the session is already
+    /// active and there is no ramp left to eat the front of "three".
     func warmAudioRoute() {
         let audio = AVAudioSession.sharedInstance()
         try? audio.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
         try? audio.setActive(true)
-        try? audio.overrideOutputAudioPort(.speaker)
+        // Only force the loudspeaker when the sound would otherwise come out of
+        // the earpiece. Overriding unconditionally fights AirPods, a car stereo
+        // or any other connected output — it yanks the route back to the phone
+        // mid-countdown, and a route change costs hundreds of milliseconds of
+        // silence right where a number should be.
+        AudioRoute.preferLoudspeakerIfNothingConnected(audio)
     }
 
-    /// One word of the countdown. Deliberately NOT `speak`: that call rebuilds
-    /// the audio session and waits 0.1s every time, which re-ducks between the
-    /// numbers and clips them. The route is already warm here, so just say it.
-    func speakCountdownWord(_ word: String, voiceIdentifier: String) {
-        if !Self.speaksAloud { announceInstead(word); return }
+
+    // MARK: - Spoken countdown
+    //
+    // The count is driven by the speech synthesizer itself, not by a timer.
+    //
+    // The old version spoke a word and then slept a flat second, so every gap
+    // was one second minus however long the synthesizer took to actually start
+    // — which varies, and is longest on the first word. It also called
+    // stopSpeaking before each number, so a late start meant "two" chopped the
+    // tail off "three", and it built a brand new haptic generator on every tick,
+    // which is cold every time, so the buzz landed after the word or not at all.
+    // Three separate sources of drift on the same second.
+    //
+    // Now all three numbers are handed to the synthesizer at once with a fixed
+    // pause between them. It paces them itself, nothing interrupts anything, the
+    // buzz fires from didStart so it lands on the word rather than near it, and
+    // one prepared generator is reused. Matt, 2026-09-19: it has to be clear, on
+    // time, and sound focused and controlled, on the speaker and on AirPods.
+
+    private let countdownHaptic = UIImpactFeedbackGenerator(style: .medium)
+    private var countdownUtterances: [AVSpeechUtterance] = []
+    private var countdownTask: Task<Void, Never>?
+    private var onCountdownFinished: (() -> Void)?
+
+    /// Silence held after each number. The synthesizer owns this pause, so the
+    /// spacing no longer depends on how fast it can start speaking.
+    private static let countdownGap: TimeInterval = 0.45
+
+    /// The number showing on the button, or nil when no count is running.
+    @Published var countdownRemaining: Int?
+
+    private static let countdownWords = [(3, "three"), (2, "two"), (1, "one")]
+
+    /// Count down out loud, then call `onFire` on the main actor. Cancelling
+    /// before it finishes never fires.
+    func startCountdown(voiceIdentifier: String, onFire: @escaping () -> Void) {
+        cancelCountdown()
+        onCountdownFinished = onFire
+        countdownHaptic.prepare()
+        warmAudioRoute()
+
+        // When the person has handed the talking to VoiceOver, the synthesizer
+        // is not involved and there is nothing to pace against, so the count is
+        // posted as announcements on a timer. VoiceOver decides the voice and
+        // the rate; all we own here is the interval and the buzz.
+        guard Self.speaksAloud else {
+            countdownTask = Task { @MainActor [weak self] in
+                for (number, word) in Self.countdownWords {
+                    guard let self, !Task.isCancelled else { return }
+                    countdownRemaining = number
+                    countdownHaptic.impactOccurred()
+                    countdownHaptic.prepare()
+                    announceInstead(word)
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                }
+                guard let self, !Task.isCancelled else { return }
+                countdownRemaining = nil
+                countdownTask = nil
+                let fire = onCountdownFinished
+                onCountdownFinished = nil
+                fire?()
+            }
+            return
+        }
+
         if speechSynthesizer.isSpeaking { speechSynthesizer.stopSpeaking(at: .immediate) }
-        let utterance = AVSpeechUtterance(string: word)
-        if let voice = AVSpeechSynthesisVoice(identifier: voiceIdentifier) { utterance.voice = voice }
-        utterance.rate = 0.5
-        utterance.volume = 1.0
-        speechSynthesizer.speak(utterance)
+        let voice = AVSpeechSynthesisVoice(identifier: voiceIdentifier)
+        countdownUtterances = Self.countdownWords.map { _, word in
+            let utterance = AVSpeechUtterance(string: word)
+            if let voice { utterance.voice = voice }
+            utterance.rate = 0.5
+            utterance.volume = 1.0
+            utterance.postUtteranceDelay = Self.countdownGap
+            return utterance
+        }
+        countdownRemaining = 3
+        countdownUtterances.forEach { speechSynthesizer.speak($0) }
+    }
+
+    /// Back out of the count without taking the picture.
+    func cancelCountdown() {
+        countdownTask?.cancel()
+        countdownTask = nil
+        onCountdownFinished = nil
+        if !countdownUtterances.isEmpty {
+            countdownUtterances = []
+            speechSynthesizer.stopSpeaking(at: .immediate)
+        }
+        countdownRemaining = nil
+    }
+
+    /// Which number an utterance is, or nil when it is ordinary speech.
+    private func countdownIndex(of utterance: AVSpeechUtterance) -> Int? {
+        countdownUtterances.firstIndex { $0 === utterance }
     }
 
     func speak(text: String, voiceIdentifier: String, completion: @escaping () -> Void) {
@@ -282,7 +405,7 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
         let audio = AVAudioSession.sharedInstance()
         try? audio.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
         try? audio.setActive(true)
-        try? audio.overrideOutputAudioPort(.speaker)
+        AudioRoute.preferLoudspeakerIfNothingConnected(audio)
         if speechSynthesizer.isSpeaking { speechSynthesizer.stopSpeaking(at: .immediate) }
         speechCompletionHandler = completion
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -361,11 +484,40 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
 // MARK: - AVSpeechSynthesizerDelegate
 
 extension LiveOCRViewModel: AVSpeechSynthesizerDelegate {
-    func speechSynthesizer(_: AVSpeechSynthesizer, didFinish _: AVSpeechUtterance) {
-        DispatchQueue.main.async { self.speechCompletionHandler?(); self.speechCompletionHandler = nil }
+    /// The buzz rides on this, not on a timer — didStart is the moment the
+    /// sound actually begins, so the number and the tap land together.
+    func speechSynthesizer(_: AVSpeechSynthesizer, didStart utterance: AVSpeechUtterance) {
+        DispatchQueue.main.async {
+            guard let i = self.countdownIndex(of: utterance) else { return }
+            self.countdownRemaining = Self.countdownWords[i].0
+            self.countdownHaptic.impactOccurred()
+            self.countdownHaptic.prepare()
+        }
     }
 
-    func speechSynthesizer(_: AVSpeechSynthesizer, didCancel _: AVSpeechUtterance) {
-        DispatchQueue.main.async { self.speechCompletionHandler?(); self.speechCompletionHandler = nil }
+    func speechSynthesizer(_: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        DispatchQueue.main.async {
+            if let i = self.countdownIndex(of: utterance) {
+                // Only the last number fires the shutter; the others just pass.
+                guard i == self.countdownUtterances.count - 1 else { return }
+                self.countdownUtterances = []
+                self.countdownRemaining = nil
+                let fire = self.onCountdownFinished
+                self.onCountdownFinished = nil
+                fire?()
+                return
+            }
+            self.speechCompletionHandler?()
+            self.speechCompletionHandler = nil
+        }
+    }
+
+    func speechSynthesizer(_: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        DispatchQueue.main.async {
+            // A cancelled countdown never takes the picture.
+            guard self.countdownIndex(of: utterance) == nil else { return }
+            self.speechCompletionHandler?()
+            self.speechCompletionHandler = nil
+        }
     }
 }

@@ -232,8 +232,10 @@ struct LiveOCRView: View {
 
     /// A picture already on the phone, chosen instead of taking a new one.
     @State private var pickedItem: PhotosPickerItem?
-    @State private var countdownRemaining: Int?
-    @State private var countdownTask: Task<Void, Never>?
+
+    /// The count lives in the view model now, because it is paced by the speech
+    /// synthesizer's own callbacks rather than by a timer in the view.
+    private var countdownRemaining: Int? { viewModel.countdownRemaining }
 
     /// What the last capture read. Mail mode is aim-then-capture: stitching live
     /// video frames was compensating for reading a page at 720p, and no amount of
@@ -287,25 +289,9 @@ struct LiveOCRView: View {
         viewModel.stopSpeaking()
         isSpeaking = false
         scannedSummary = ""
-        countdownRemaining = 3
-        // Open the audio route first and give it a beat to settle, otherwise the
-        // duck ramp eats the front of "three".
-        viewModel.warmAudioRoute()
-        countdownTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 350_000_000)
-            if Task.isCancelled { return }
-            for (number, word) in [(3, "three"), (2, "two"), (1, "one")] {
-                if Task.isCancelled { return }
-                countdownRemaining = number
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                // The app says the count in its own voice rather than leaving it
-                // to VoiceOver, so it is heard the same way with VoiceOver off.
-                viewModel.speakCountdownWord(word, voiceIdentifier: selectedVoiceIdentifier)
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-            }
-            if Task.isCancelled { return }
-            countdownRemaining = nil
-            countdownTask = nil
+        // The view model paces the count off the synthesizer's own callbacks, so
+        // the numbers are evenly spaced however long the voice takes to start.
+        viewModel.startCountdown(voiceIdentifier: selectedVoiceIdentifier) {
             // A shutter you can feel, since you can't see the screen flash.
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             scanPage()
@@ -314,10 +300,7 @@ struct LiveOCRView: View {
 
     /// Tapping the button mid-count backs out instead of firing.
     private func cancelCountdown() {
-        countdownTask?.cancel()
-        countdownTask = nil
-        countdownRemaining = nil
-        viewModel.stopSpeaking()
+        viewModel.cancelCountdown()
         isSpeaking = false
     }
 
@@ -822,10 +805,15 @@ struct LiveOCRView: View {
                             .disabled(isScanning)
                             .padding(.horizontal, 20)
                             .padding(.bottom, 14)
-                            .accessibilityLabel(isScanning ? "Looking"
-                                    : (countdownRemaining != nil ? "Cancel countdown" : "What's this?"))
+                            // The label deliberately does NOT change to "Cancel
+                            // countdown" while counting. VoiceOver re-announces a
+                            // focused element whenever its label changes, and it
+                            // was doing that on top of the app speaking "three".
+                            // The hint carries the cancel affordance instead —
+                            // hints are not re-announced on change.
+                            .accessibilityLabel(isScanning ? "Looking" : "What's this?")
                             .accessibilityHint(countdownRemaining != nil
-                                    ? "Stops the countdown without taking the picture"
+                                    ? "Double tap to stop the countdown without taking the picture"
                                     : "Takes a picture and says what it is: a letter, a bill, a label, or whatever is in front of you")
                         }
                     }
@@ -951,6 +939,12 @@ struct LiveOCRView: View {
         }
         .onAppear {
             viewModel.startSession()
+            // Open the audio route the moment the mode opens, not at the
+            // shutter. Activating the session and ducking whatever else is
+            // playing costs real time — hundreds of milliseconds on Bluetooth —
+            // and paying it here means the countdown starts into a route that is
+            // already awake instead of talking through the ramp.
+            viewModel.warmAudioRoute()
         }
         .onChange(of: pickedItem) { item in
             guard let item else { return }

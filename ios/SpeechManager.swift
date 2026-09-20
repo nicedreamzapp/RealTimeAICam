@@ -74,7 +74,16 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
             // .playback already prefers the speaker, but force it so a prior
             // record route (the mic for a follow-up question) can never leave
             // the voice stuck on the earpiece.
-            try? audioSession.overrideOutputAudioPort(.speaker)
+            //
+            // Only when nothing is plugged in or paired, though. Forcing the
+            // speaker unconditionally drags the audio off AirPods, a car stereo
+            // or headphones every time the app speaks, and each of those route
+            // changes costs hundreds of milliseconds of silence. Matt, 2026-09-19.
+            if AudioRoute.outputIsBuiltIn(audioSession) {
+                try? audioSession.overrideOutputAudioPort(.speaker)
+            } else {
+                try? audioSession.overrideOutputAudioPort(.none)
+            }
         } catch {
             // Audio session setup failed - silently ignore
         }
