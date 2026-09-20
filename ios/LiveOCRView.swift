@@ -415,7 +415,11 @@ struct LiveOCRView: View {
                         uiImage, gate: gate.logValue, hint: gate.qualityHint)
                 }
                 await MainActor.run {
-                    if let said { say(said) } else { readWithOCR(image) }
+                    if let said {
+                        say(Self.cutOffPrefix(looksLikePage ? gate.cutOffEdge : nil) + said)
+                    } else {
+                        readWithOCR(image)
+                    }
                 }
             }
             return
@@ -443,6 +447,28 @@ struct LiveOCRView: View {
                     await MainActor.run { say(said ?? fallback) }
                 }
             }
+        }
+    }
+
+    /// One plain sentence when the page runs off the edge of the frame, said
+    /// ahead of the answer.
+    ///
+    /// The gate has always measured this, but `narratePage` throws `cutOff`
+    /// away on purpose: telling the model the shot is cut off is exactly what
+    /// made it refuse perfectly readable photos. So the app says it in its own
+    /// words instead of priming the model with it, and the answer still comes.
+    ///
+    /// Matt's call, 2026-09-19: say it once and stop there. What's this? stays
+    /// one shot and every bit of talking-you-into-position belongs to Help Me
+    /// Aim, so the two modes never speak over each other — the complaint
+    /// AppleVis already has about Black Lens.
+    private static func cutOffPrefix(_ edge: String?) -> String {
+        switch edge {
+        case "top": "Cut off at the top. "
+        case "bottom": "Cut off at the bottom. "
+        case "left": "Cut off on the left. "
+        case "right": "Cut off on the right. "
+        default: ""
         }
     }
 
