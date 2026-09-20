@@ -348,7 +348,22 @@ class CameraPreviewView: UIView {
             guard let self else { return }
             if let previewLayer = layer as? AVCaptureVideoPreviewLayer {
                 previewLayer.session = session
-                previewLayer.videoGravity = .resizeAspectFill
+                // Show the WHOLE frame that will be captured, letterboxed, rather
+                // than cropping it to fill a tall screen.
+                //
+                // The still is taken at the .photo preset, which is the sensor's
+                // full 4:3 frame. resizeAspectFill was throwing away the left and
+                // right of that frame on screen, so the photo always came back
+                // noticeably wider than what was framed. Matt, 2026-09-19: "the
+                // picture I'm taking and what I'm seeing on the screen are totally
+                // different... I wish it was just showing exactly what it's going
+                // to give."
+                //
+                // It matters more than it looks. The quality gate measures the
+                // PHOTO, so "cut off on the right" was being judged against a
+                // frame the person was never shown. Help Me Aim already uses
+                // .resizeAspect for the same reason (HelpMeAimCamera.swift).
+                previewLayer.videoGravity = .resizeAspect
             }
         }
 
