@@ -1219,7 +1219,7 @@ final class SpeechRecognizer: ObservableObject {
         request = req
         do {
             let s = AVAudioSession.sharedInstance()
-            try s.setCategory(.playAndRecord, mode: .measurement, options: [.duckOthers, .defaultToSpeaker])
+            try s.setCategory(.playAndRecord, mode: .measurement, options: [.duckOthers, .defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP])
             try s.setActive(true, options: .notifyOthersOnDeactivation)
         } catch { return }
         let node = engine.inputNode

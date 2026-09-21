@@ -51,7 +51,7 @@ final class AimVoice: NSObject, AVSpeechSynthesizerDelegate {
         let audio = AVAudioSession.sharedInstance()
         try? audio.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
         try? audio.setActive(true)
-        try? audio.overrideOutputAudioPort(.speaker)
+        AudioRoute.preferLoudspeakerIfNothingConnected(audio)
     }
 
     func say(_ text: String, then done: (() -> Void)? = nil) {
@@ -204,9 +204,9 @@ final class AimWordListener: ObservableObject {
         let s = AVAudioSession.sharedInstance()
         do {
             try s.setCategory(.playAndRecord, mode: .default,
-                              options: [.duckOthers, .defaultToSpeaker, .allowBluetoothHFP])
+                              options: [.duckOthers, .defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP])
             try s.setActive(true, options: .notifyOthersOnDeactivation)
-            try? s.overrideOutputAudioPort(.speaker)
+            AudioRoute.preferLoudspeakerIfNothingConnected(s)
         } catch { done(.unavailable); return }
 
         AimTonePlayer.shared.play(start: true)
@@ -294,7 +294,10 @@ final class AimWordListener: ObservableObject {
         let s = AVAudioSession.sharedInstance()
         try? s.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
         try? s.setActive(true)
-        try? s.overrideOutputAudioPort(.speaker)
+        // Loudspeaker only when nothing is connected. Forcing it here pulled
+        // Help Me Aim off Dennis's Bluetooth headset (email, 2026-09-20); the
+        // 9/19 AirPods fix covered every other screen but missed this one.
+        AudioRoute.preferLoudspeakerIfNothingConnected(s)
     }
 
     private static func authorize() async -> Bool {
