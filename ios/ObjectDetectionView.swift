@@ -341,6 +341,7 @@ struct ObjectDetectionView: View {
                             }
                             .pickerStyle(SegmentedPickerStyle())
                             .frame(width: segmentWidth, height: 36)
+                            .filterModeAdjustable($viewModel.filterMode)
                             Spacer()
                         }
                     }
@@ -633,6 +634,7 @@ struct ObjectDetectionView: View {
             }
             .pickerStyle(SegmentedPickerStyle())
             .frame(width: 200)
+            .filterModeAdjustable($viewModel.filterMode)
 
             Spacer()
         }
@@ -724,5 +726,29 @@ private extension CameraViewModel {
         SpeechManager.shared.stopSpeech()
         SpeechManager.shared.resetSpeechState()
         onBack()
+    }
+}
+
+
+// Ernesto Melendez on AppleVis (2026-09-21): with VoiceOver the All / Indoor / Outdoor
+// switch was three separate stops to find and double tap. Make it one control you
+// swipe up or down on, the same way VoiceOver handles any other adjustable setting.
+private extension View {
+    func filterModeAdjustable(_ mode: Binding<String>) -> some View {
+        let modes = ["all", "indoor", "outdoor"]
+        let names = ["all": "All objects", "indoor": "Indoor", "outdoor": "Outdoor"]
+        return self
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("What to look for")
+            .accessibilityValue(names[mode.wrappedValue] ?? "All objects")
+            .accessibilityHint("Swipe up or down to change")
+            .accessibilityAdjustableAction { direction in
+                let i = modes.firstIndex(of: mode.wrappedValue) ?? 0
+                switch direction {
+                case .increment: mode.wrappedValue = modes[min(i + 1, modes.count - 1)]
+                case .decrement: mode.wrappedValue = modes[max(i - 1, 0)]
+                @unknown default: break
+                }
+            }
     }
 }
