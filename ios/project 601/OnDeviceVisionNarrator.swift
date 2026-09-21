@@ -93,6 +93,16 @@ actor OnDeviceVisionNarrator {
                     "Answer this question as best you can from the photo, even if it is unclear. "
                     + "Do not refuse. Question: \(question)", 0.3)
             }
+            // The retry was never re-checked, so a second refusal was read out
+            // as-is: "too blurry and dark... move closer, turn on a light and
+            // take another shot" (Matt, Keurig Add Water light, 2026-09-20).
+            // That instruction is useless to someone who cannot see where the
+            // camera points. Keep what it did see, or say plainly it can't tell.
+            if Self.looksLikeRefusal(said) {
+                let seen = said.flatMap(Self.describedPart)
+                said = "I can't tell that for sure from this photo."
+                    + (seen.map { " What I can see: " + $0 } ?? "")
+            }
             OnDeviceNarrator.log(read: "[ask: \(question)]", said: said,
                                  extra: ["kind": "ask",
                                          "seconds": (Date().timeIntervalSince(started) * 100).rounded() / 100])
@@ -342,6 +352,8 @@ actor OnDeviceVisionNarrator {
                        "retake", "hold the camera still", "hold the phone still",
                        "turn on a light", "turn on the flash", "add some light",
                        "move closer", "take the picture again", "take it again",
+                       "take another", "hold it steady", "too blurry and dark",
+                       "too dark and blurry",
                        "try again", "not clear enough", "no details are visible"]
         return markers.contains { s.contains($0) }
     }
@@ -402,6 +414,15 @@ actor OnDeviceVisionNarrator {
         }
         text = text.trimmingCharacters(in: CharacterSet(charactersIn: " \n\"'"))
         return text.isEmpty ? nil : text
+    }
+
+    /// The sentences of an answer that are not excuses, or nil if none are.
+    private static func describedPart(_ answer: String) -> String? {
+        let kept = answer
+            .split(whereSeparator: { $0 == "." || $0 == "!" || $0 == "?" || $0 == ";" })
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && !looksLikeRefusal($0) }
+        return kept.isEmpty ? nil : kept.joined(separator: ". ") + "."
     }
 
     private static func strippingExcuses(_ sentence: String) -> String? {
