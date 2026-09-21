@@ -32,6 +32,14 @@ actor OnDeviceVisionNarrator {
     You are the eyes of a blind person. Look at the photo and say what matters in one to three short spoken sentences. If it is a page of mail, a bill, a label or a receipt: lead with what the page is and who sent it, then the number that matters, then the deadline, then what happens if it is ignored. Money owed to the person is money coming to them, never a bill. Use only what is printed. An issue date is not a deadline. A number is only money if a dollar sign or the word dollars is printed with it. Not every page is a bill; an advertisement owes nothing. If it is a place or a thing: say where they are, then what is nearby and where it is relative to them, then people and anything moving, then hazards. Plain words, no lists, no markdown. Never guess at names or senders that are not printed. Never refuse, never say you cannot see it, and never ask for another photo. If the shot is dark, blurry or cut off, say in a few words that it is hard to see and then describe whatever you can make out anyway: the shapes, the colours, where things are, and any words you can read.
     """
 
+    /// Hold-to-ask. Word for word ASK_SYSTEM in ~/vision-narrator/prompts.py,
+    /// which the v09 model was trained on (2026-09-21) to answer follow-ups
+    /// answer-first. The describe instructions above made it re-describe the
+    /// whole photo instead of answering.
+    private static let askInstructions = """
+    You are the eyes of a blind person. They are asking a question about this photo. Answer it in one short spoken sentence, and start with the answer itself: yes or no, a number, a colour, a name, or the words that are printed. Then, only if it helps, a few words about where or why. If the photo does not show the answer, say you can't tell for sure and say what you can see. Plain words, no lists, no markdown.
+    """
+
     /// The stripped-back instruction for the last-resort pass: describe, full
     /// stop. No page rules, no money rules, nothing that can be read as grounds
     /// to bounce the shot back at the person holding the camera.
@@ -76,32 +84,21 @@ actor OnDeviceVisionNarrator {
         guard let photo = Self.downscaled(image, longSide: 1024) else { return nil }
         do {
             let model = try await loaded()
-            func run(_ q: String, _ temp: Float) async throws -> String? {
-                let session = ChatSession(
-                    model, instructions: Self.instructions,
-                    generateParameters: GenerateParameters(maxTokens: 160, temperature: temp,
-                                                           repetitionPenalty: 1.1),
-                    processing: UserInput.Processing(resize: nil),
-                    additionalContext: ["enable_thinking": false]
-                )
-                return Self.tidy(try await session.respond(to: q, image: .ciImage(photo)))
-            }
+            let session = ChatSession(
+                model, instructions: Self.askInstructions,
+                generateParameters: GenerateParameters(maxTokens: 120, temperature: 0,
+                                                       repetitionPenalty: 1.1),
+                processing: UserInput.Processing(resize: nil),
+                additionalContext: ["enable_thinking": false]
+            )
             let started = Date()
-            var said = try await run(question, 0.2)
-            if Self.looksLikeRefusal(said) {
-                said = try await run(
-                    "Answer this question as best you can from the photo, even if it is unclear. "
-                    + "Do not refuse. Question: \(question)", 0.3)
-            }
-            // The retry was never re-checked, so a second refusal was read out
-            // as-is: "too blurry and dark... move closer, turn on a light and
-            // take another shot" (Matt, Keurig Add Water light, 2026-09-20).
-            // That instruction is useless to someone who cannot see where the
-            // camera points. Keep what it did see, or say plainly it can't tell.
-            if Self.looksLikeRefusal(said) {
-                let seen = said.flatMap(Self.describedPart)
-                said = "I can't tell that for sure from this photo."
-                    + (seen.map { " What I can see: " + $0 } ?? "")
+            var said = Self.tidyKeepingShort(try await session.respond(to: question, image: .ciImage(photo)))
+            // "I can't tell for sure, but I can see..." is the trained honest
+            // answer, so no refusal retry here. Only instructions a blind person
+            // cannot act on get cut: "move closer, turn on a light, take another"
+            // (Matt, Keurig Add Water light, 2026-09-20).
+            if let s = said, Self.tellsThemToRetake(s) {
+                said = Self.withoutRetakeAdvice(s) ?? "I can't tell that for sure from this photo."
             }
             OnDeviceNarrator.log(read: "[ask: \(question)]", said: said,
                                  extra: ["kind": "ask",
@@ -416,13 +413,24 @@ actor OnDeviceVisionNarrator {
         return text.isEmpty ? nil : text
     }
 
-    /// The sentences of an answer that are not excuses, or nil if none are.
-    private static func describedPart(_ answer: String) -> String? {
-        let kept = answer
-            .split(whereSeparator: { $0 == "." || $0 == "!" || $0 == "?" || $0 == ";" })
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty && !looksLikeRefusal($0) }
-        return kept.isEmpty ? nil : kept.joined(separator: ". ") + "."
+    private static let retakeAdvice = ["move closer", "move the phone", "move the camera", "hold the camera",
+                                       "hold the phone", "hold it steady", "turn on a light", "turn on the flash",
+                                       "add some light", "retake", "take another", "take the picture again",
+                                       "take it again", "try again", "take a new photo"]
+
+    private static func tellsThemToRetake(_ answer: String) -> Bool {
+        let s = answer.lowercased()
+        return retakeAdvice.contains { s.contains($0) }
+    }
+
+    /// The answer minus any sentence that tells them to reshoot, or nil if nothing else is left.
+    private static func withoutRetakeAdvice(_ answer: String) -> String? {
+        var kept: [String] = []
+        answer.enumerateSubstrings(in: answer.startIndex..., options: .bySentences) { s, _, _, _ in
+            if let s, !tellsThemToRetake(s) { kept.append(s.trimmingCharacters(in: .whitespaces)) }
+        }
+        let joined = kept.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        return joined.isEmpty ? nil : joined
     }
 
     private static func strippingExcuses(_ sentence: String) -> String? {
