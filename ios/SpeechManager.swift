@@ -296,7 +296,7 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
             "Welcome to the RealTime AI Camera.",
             "Object Detection mode detects and labels up to six hundred and one objects in real time.",
             "English OCR mode reads printed English text aloud.",
-            "Spanish to English mode translates printed Spanish text into English and reads it aloud.",
+            "The translator turns printed Spanish into English and reads it aloud. On iOS 18 and later it can translate other languages too, after a one-time download from Apple.",
         ]
 
         if supportsLiDAR {

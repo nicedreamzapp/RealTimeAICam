@@ -296,7 +296,7 @@ struct ContentView: View {
         case .home: "Home screen"
         case .objectDetection: "Object detection camera"
         case .ocrEnglish: "English text reader"
-        case .ocrSpanish: "Spanish to English translator"
+        case .ocrSpanish: "Translator"
         case .mail: "Mail reader"
         case .helpMeAim: "Help me aim"
         }

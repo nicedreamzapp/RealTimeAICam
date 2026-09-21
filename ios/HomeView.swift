@@ -268,8 +268,8 @@ struct HomeView: View {
         .shadow(color: Color.green.opacity(0.50), radius: 12 * scale)
         .scaleEffect(animationState.button2 ? 1 : 0.7)
         .animation(.easeOut(duration: 0.3), value: animationState.button2)
-        .accessibilityLabel("Spanish to English Translator")
-        .accessibilityHint("Point camera at Spanish text to translate and speak in English")
+        .accessibilityLabel("Translator")
+        .accessibilityHint("Point the camera at text in Spanish or another language to hear it in English")
         .accessibilityAddTraits(.isButton)
     }
 

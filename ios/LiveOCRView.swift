@@ -513,7 +513,7 @@ struct LiveOCRView: View {
         switch ocrMode {
         case .english: "Detected"
         case .mail: "Summary"
-        case .spanishToEnglish: viewModel.isTranslated ? "Translation" : "Spanish Text"
+        case .spanishToEnglish: viewModel.isTranslated ? "Translation" : "\(viewModel.sourceLanguage.name) Text"
         }
     }
 
@@ -631,9 +631,15 @@ struct LiveOCRView: View {
 
                         Spacer()
 
+                        if ocrMode == .spanishToEnglish, TranslateLanguage.available.count > 1 {
+                            translateFromControl
+                        }
+
                         // Mode indicator (right side)
                         Text(ocrMode == .english ? "English"
-                             : (ocrMode == .mail ? "What's this?" : "Span → Eng"))
+                             : (ocrMode == .mail ? "What's this?"
+                                : (viewModel.sourceLanguage == .spanish ? "Span → Eng"
+                                   : "\(viewModel.sourceLanguage.name) → Eng")))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 12)
@@ -648,7 +654,7 @@ struct LiveOCRView: View {
                             .accessibilityValue(
                                 ocrMode == .english ? "Reading English text"
                                 : (ocrMode == .mail ? "Summarizing what you point at"
-                                   : "Translating Spanish to English"))
+                                   : "Translating \(viewModel.sourceLanguage.name) to English"))
                     }
                     .padding(.horizontal, max(geometry.safeAreaInsets.leading, geometry.safeAreaInsets.trailing) + 20)
                     .padding(.top, geometry.safeAreaInsets.top + 15)
@@ -987,6 +993,44 @@ struct LiveOCRView: View {
         .appleSpanishTranslation(viewModel: viewModel, enabled: ocrMode == .spanishToEnglish)
     }
 
+    /// Which language the translator reads. A menu for sighted users; for
+    /// VoiceOver one adjustable control, swipe up or down to change, the same
+    /// pattern as What to look for on the detection screen.
+    private var translateFromControl: some View {
+        let languages = TranslateLanguage.available
+        return Menu {
+            ForEach(languages, id: \.code) { language in
+                Button(language.name) { viewModel.setSourceLanguage(language) }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "globe")
+                Text(viewModel.sourceLanguage.name)
+            }
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(.ultraThinMaterial)
+                    .opacity(0.85)
+            )
+            .fixedSize()
+        }
+        .accessibilityLabel("Translate from")
+        .accessibilityValue(viewModel.sourceLanguage.name)
+        .accessibilityHint("Swipe up or down to change, or double tap for the list")
+        .accessibilityAdjustableAction { direction in
+            let i = languages.firstIndex(of: viewModel.sourceLanguage) ?? 0
+            switch direction {
+            case .increment: viewModel.setSourceLanguage(languages[min(i + 1, languages.count - 1)])
+            case .decrement: viewModel.setSourceLanguage(languages[max(i - 1, 0)])
+            @unknown default: break
+            }
+        }
+    }
+
     // Helper views to break up complex expressions
     @ViewBuilder
     private func translateOrCopyButton(buttonSize: CGFloat) -> some View {
@@ -1019,7 +1063,7 @@ struct LiveOCRView: View {
                 .disabled(isTranslating)
                 .opacity(isTranslating ? 0.6 : 1)
                 .accessibilityLabel("Translate")
-                .accessibilityHint("Translates the Spanish text on screen into English")
+                .accessibilityHint("Translates the \(viewModel.sourceLanguage.name) text on screen into English")
                 .accessibilityValue(isTranslating ? "Translating" : "")
             } else {
                 Button(action: {
@@ -1164,9 +1208,10 @@ private struct AppleSpanishTranslationModifier: ViewModifier {
         content
             .onChange(of: viewModel.appleTranslationRequest) { _, request in
                 guard request != nil else { return }
-                if configuration == nil {
+                let source = Locale.Language(identifier: viewModel.sourceLanguage.code)
+                if configuration == nil || configuration?.source != source {
                     configuration = TranslationSession.Configuration(
-                        source: Locale.Language(identifier: "es"),
+                        source: source,
                         target: Locale.Language(identifier: "en")
                     )
                 } else {
@@ -1176,13 +1221,21 @@ private struct AppleSpanishTranslationModifier: ViewModifier {
             }
             .translationTask(configuration) { session in
                 guard let text = viewModel.appleTranslationRequest else { return }
+                let language = viewModel.sourceLanguage
+                let status = await LanguageAvailability().status(
+                    from: Locale.Language(identifier: language.code),
+                    to: Locale.Language(identifier: "en"))
                 do {
+                    // First use of a language: Apple shows its own "Download
+                    // French?" sheet here. After that it is offline for good.
+                    if status == .supported { try await session.prepareTranslation() }
                     let response = try await session.translate(text)
                     viewModel.completeAppleTranslation(response.targetText)
                 } catch {
-                    // Model not downloaded / translation failed → nil result
-                    // makes the view model fall back to the offline engine.
-                    viewModel.completeAppleTranslation(nil)
+                    // Spanish falls back to the offline engine; other languages
+                    // say why, most often a first download attempted offline.
+                    viewModel.completeAppleTranslation(nil, failure: status == .installed ? nil
+                        : "\(language.name) needs a one-time download from Apple. Connect to the internet once, then it works offline.")
                 }
             }
     }

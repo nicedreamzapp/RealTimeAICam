@@ -57,6 +57,53 @@ enum AudioRoute {
     }
 }
 
+// MARK: - Translate-from languages
+
+/// A language the reader can translate into English. Spanish runs on Matt's own
+/// offline engine with nothing to download. Everything else (Enes Deniz on
+/// AppleVis, 2026-09-21) goes through Apple's translator, which needs a one-time
+/// download of that language from Apple and then works offline. Matt approved
+/// that download for non-Spanish languages on 2026-09-21; Spanish stays zero-download.
+struct TranslateLanguage: Equatable {
+    let code: String      // Locale.Language identifier for Apple's translator
+    let name: String
+    let vision: [String]  // Vision recognitionLanguages
+
+    static let spanish = TranslateLanguage(code: "es", name: "Spanish", vision: ["es-ES", "es"])
+
+    /// Languages both Vision can read and Apple's translator can turn into English.
+    private static let appleCandidates: [TranslateLanguage] = [
+        .init(code: "fr", name: "French", vision: ["fr-FR"]),
+        .init(code: "de", name: "German", vision: ["de-DE"]),
+        .init(code: "it", name: "Italian", vision: ["it-IT"]),
+        .init(code: "pt", name: "Portuguese", vision: ["pt-BR"]),
+        .init(code: "nl", name: "Dutch", vision: ["nl-NL"]),
+        .init(code: "pl", name: "Polish", vision: ["pl-PL"]),
+        .init(code: "tr", name: "Turkish", vision: ["tr-TR"]),
+        .init(code: "id", name: "Indonesian", vision: ["id-ID"]),
+        .init(code: "vi", name: "Vietnamese", vision: ["vi-VT"]),
+        .init(code: "ru", name: "Russian", vision: ["ru-RU"]),
+        .init(code: "uk", name: "Ukrainian", vision: ["uk-UA"]),
+        .init(code: "zh-Hans", name: "Chinese", vision: ["zh-Hans"]),
+        .init(code: "ja", name: "Japanese", vision: ["ja-JP"]),
+        .init(code: "ko", name: "Korean", vision: ["ko-KR"]),
+        .init(code: "th", name: "Thai", vision: ["th-TH"]),
+        .init(code: "ar", name: "Arabic", vision: ["ar-SA"]),
+    ]
+
+    /// Spanish first, then whatever this phone can actually do. Apple's offline
+    /// translator is iOS 18+, so older phones only ever see Spanish.
+    static let available: [TranslateLanguage] = {
+        guard #available(iOS 18.0, *) else { return [spanish] }
+        let readable = Set((try? VNRecognizeTextRequest().supportedRecognitionLanguages()) ?? [])
+        return [spanish] + appleCandidates.filter { readable.contains($0.vision[0]) }
+    }()
+
+    static func named(_ code: String) -> TranslateLanguage {
+        available.first { $0.code == code } ?? spanish
+    }
+}
+
 // MARK: - Live OCR View Model (Updated for SimpleSpanishEngine)
 
 final class LiveOCRViewModel: NSObject, ObservableObject {
@@ -72,6 +119,8 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
     @Published var isFrozen: Bool = false
     @Published var torchLevel: Float = 0.0
     @Published var isTranslatorLoading: Bool = false
+    @Published private(set) var sourceLanguage = TranslateLanguage.named(
+        UserDefaults.standard.string(forKey: "translateFromLanguage") ?? "es")
 
     weak var cameraPreviewRef: CameraPreviewView?
     weak var cameraPreviewView: CameraPreviewView?
@@ -81,7 +130,12 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
     private let speechSynthesizer = AVSpeechSynthesizer()
     private var textRecognitionRequest: VNRecognizeTextRequest?
     private var lastProcessedTime = Date()
-    private var currentLanguage: String?
+    private var currentLanguage: [String]?
+    /// Copy of sourceLanguage.vision for the capture queue, which must not read
+    /// the main-thread @Published value directly.
+    private let visionLanguageLock = NSLock()
+    private var translateVisionLanguages = TranslateLanguage.named(
+        UserDefaults.standard.string(forKey: "translateFromLanguage") ?? "es").vision
     private var speechCompletionHandler: (() -> Void)?
 
     private var processInterval: TimeInterval {
@@ -152,10 +206,26 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
             guard now.timeIntervalSince(lastProcessedTime) >= processInterval else { return }
             lastProcessedTime = now
 
-            let targetLanguage = (mode == .spanishToEnglish) ? "es-ES" : "en-US"
-            if currentLanguage != targetLanguage {
-                currentLanguage = targetLanguage
-                textRecognitionRequest?.recognitionLanguages = (mode == .spanishToEnglish) ? ["es-ES", "es"] : ["en-US", "en"]
+            let targetLanguages: [String]
+            if mode == .spanishToEnglish {
+                visionLanguageLock.lock()
+                targetLanguages = translateVisionLanguages
+                visionLanguageLock.unlock()
+            } else {
+                targetLanguages = ["en-US", "en"]
+            }
+            if currentLanguage != targetLanguages {
+                currentLanguage = targetLanguages
+                textRecognitionRequest?.recognitionLanguages = targetLanguages
+                // Low-tier phones read with .fast, which only knows a handful of
+                // Latin-script languages. Chinese, Russian and the rest need .accurate.
+                if DevicePerf.shared.tier == .low {
+                    let fast = VNRecognizeTextRequest()
+                    fast.recognitionLevel = .fast
+                    let fastOK = (try? fast.supportedRecognitionLanguages()) ?? []
+                    textRecognitionRequest?.recognitionLevel =
+                        fastOK.contains(targetLanguages[0]) ? .fast : .accurate
+                }
             }
 
             guard let request = textRecognitionRequest else { return }
@@ -179,10 +249,33 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
     @Published var appleTranslationRequest: String?
     private var pendingAppleCompletion: ((Bool) -> Void)?
 
+    /// Pick the language to translate from. Clears what's on screen, since text
+    /// read as one language is meaningless once the reader switches to another.
+    func setSourceLanguage(_ language: TranslateLanguage) {
+        guard language != sourceLanguage else { return }
+        sourceLanguage = language
+        UserDefaults.standard.set(language.code, forKey: "translateFromLanguage")
+        visionLanguageLock.lock()
+        translateVisionLanguages = language.vision
+        visionLanguageLock.unlock()
+        clearText()
+    }
+
     func translateSpanishText(completion: @escaping (Bool) -> Void) {
         guard !recognizedText.isEmpty else { completion(false); return }
         isFrozen = true
         let text = recognizedText
+
+        // Every language except Spanish is Apple's translator, whatever the length.
+        if sourceLanguage != .spanish {
+            if #available(iOS 18.0, *) {
+                pendingAppleCompletion = completion
+                appleTranslationRequest = text
+            } else {
+                completeAppleTranslation(nil, failure: "\(sourceLanguage.name) needs iOS 18 or later.")
+            }
+            return
+        }
 
         if Self.useAppleTranslation, #available(iOS 18.0, *), text.count >= Self.appleTranslationMinChars {
             pendingAppleCompletion = completion
@@ -194,7 +287,7 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
 
     /// Called by the view when Apple's translator finishes (or fails — nil result
     /// falls back to the offline rule engine so translation always produces output).
-    func completeAppleTranslation(_ result: String?) {
+    func completeAppleTranslation(_ result: String?, failure: String? = nil) {
         let completion = pendingAppleCompletion
         pendingAppleCompletion = nil
         let requested = appleTranslationRequest
@@ -202,6 +295,13 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
 
         if let result, !result.isEmpty {
             translatedText = result
+            isTranslated = true
+            completion?(true)
+        } else if sourceLanguage != .spanish {
+            // No rule engine to fall back on for these. Put the reason where the
+            // translation would be, so the speak button says it out loud.
+            translatedText = failure
+                ?? "Couldn't translate this \(sourceLanguage.name) text. Try again."
             isTranslated = true
             completion?(true)
         } else if let requested {
