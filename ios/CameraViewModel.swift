@@ -355,11 +355,8 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
         }
 
         stopSpeech()
-        stopSession()
-
-        DispatchQueue.main.async {
-            self.detections = []
-        }
+        thermalResumeWork?.cancel()
+        Self.tearDown(session)
     }
 
     // MARK: - Orientation Handling
@@ -681,17 +678,22 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
         guard session.isRunning else {
             return
         }
-        Self.sessionQueue.async { [weak self] in
-            guard let self else { return }
-            if session.isRunning {
-                session.stopRunning()
-                DispatchQueue.main.async { self.detections = [] }
-                LiDARManager.shared.stop()
+        Self.tearDown(session)
+        DispatchQueue.main.async { [weak self] in
+            self?.detections = []
+        }
+    }
 
-                stopSpeech()
-                SpeechManager.shared.stopSpeech()
-                SpeechManager.shared.resetSpeechState()
-            }
+    // Stops the camera without touching self, so deinit can call it safely.
+    // Any closure that captures self from deinit outlives the object and
+    // crashes when it runs (TestFlight build 33, crash on closing the app).
+    private static func tearDown(_ session: AVCaptureSession) {
+        sessionQueue.async {
+            guard session.isRunning else { return }
+            session.stopRunning()
+            LiDARManager.shared.stop()
+            SpeechManager.shared.stopSpeech()
+            SpeechManager.shared.resetSpeechState()
         }
     }
 
