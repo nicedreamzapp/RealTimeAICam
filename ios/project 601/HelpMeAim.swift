@@ -265,6 +265,11 @@ enum AimPhrases {
     static let pictureTaken = "picture taken"
     static let savedSuffix = ", saved to your photos"
     static let notSavedSuffix = ", but I couldn't save it. Allow adding photos in Settings"
+    /// Said the moment the shot is kept, while the vision model looks at it.
+    static let describing = "picture taken. describing it"
+    /// After the description is read out: where the photo went, with its words.
+    static let savedWithDescription = "saved to your photos with that description"
+    static let notSavedWithDescription = "I couldn't save it. Allow adding photos in Settings"
     static let captureFailed = "I couldn't take the picture, try again"
     // Something Else, round 2 (Matt: "you don't know when to speak, if you
     // need to press the button, or hold it"). The app asks, beeps, and

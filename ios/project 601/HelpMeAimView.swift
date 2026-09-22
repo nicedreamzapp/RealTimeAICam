@@ -614,6 +614,7 @@ final class HelpMeAimController: ObservableObject {
         let snapshot = analyzer.snapshot()
         let framing = subject.framing
         let subjectName = subject.spokenName
+        let isPage = subject == .page
         camera.captureBurst(count: Self.burstCount, interval: Self.burstInterval) { [weak self] frames in
             guard let self, phase == .capturing else { return }
             guard !frames.isEmpty else {
@@ -645,10 +646,29 @@ final class HelpMeAimController: ObservableObject {
                     statusText = AimPhrases.capitalized(AimPhrases.captureFailed)
                     return
                 }
-                Self.save(jpeg) { [weak self] saved in
-                    guard let self else { return }
-                    let line = AimPhrases.pictureTaken + (saved ? AimPhrases.savedSuffix : AimPhrases.notSavedSuffix)
-                    statusText = AimPhrases.capitalized(line)
+                // The photo is saved with its description written into it
+                // (AppleVis user "Matt", 2026-09-15). No model on the phone,
+                // or nothing to say: the plain photo, as before.
+                var description: String?
+                if OnDeviceVisionNarrator.isBundled, let shot = result.image {
+                    statusText = "Picture taken. Describing it"
+                    voice.say(AimPhrases.describing)
+                    description = await AimCaption.describe(shot, isPage: isPage)
+                }
+                let toSave = description.flatMap { AimCaption.embed($0, in: jpeg) } ?? jpeg
+                if toSave == jpeg { description = nil }
+                Self.save(toSave) { [weak self] saved in
+                    // Taking another or leaving must not be talked over.
+                    guard let self, phase == .taken else { return }
+                    let line: String
+                    if let description {
+                        line = description + " " + AimPhrases.capitalized(
+                            saved ? AimPhrases.savedWithDescription : AimPhrases.notSavedWithDescription) + "."
+                    } else {
+                        line = AimPhrases.capitalized(
+                            AimPhrases.pictureTaken + (saved ? AimPhrases.savedSuffix : AimPhrases.notSavedSuffix))
+                    }
+                    statusText = line
                     voice.say(line)
                 }
             }
