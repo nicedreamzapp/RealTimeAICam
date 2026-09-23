@@ -11,6 +11,7 @@ struct ContentView: View {
     @StateObject private var buttonDebouncer = ButtonPressDebouncer()
     // Correct singleton pattern: use @ObservedObject for ResourceManager.shared in SwiftUI views.
     @ObservedObject private var resourceManager = ResourceManager.shared
+    @ObservedObject private var shortcutRouter = ShortcutRouter.shared
 
     private var normalizedOrientation: UIDeviceOrientation {
         switch orientation {
@@ -103,6 +104,12 @@ struct ContentView: View {
             } else {
                 mode = .home
             }
+        }
+        .onReceive(shortcutRouter.$pendingMode) { requested in
+            guard requested != nil else { return }
+            // Next turn of the run loop, so on a cold launch onAppear has
+            // already settled on home before the shortcut moves us.
+            DispatchQueue.main.async { openFromShortcut() }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
             orientation = UIDevice.current.orientation
@@ -304,6 +311,21 @@ struct ContentView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             UIAccessibility.post(notification: .screenChanged, argument: name)
         }
+    }
+
+    /// Siri, Shortcuts or the Action Button asked for a screen. From another
+    /// camera screen, tear that one down first, the same as the back button does.
+    private func openFromShortcut() {
+        guard let requested = shortcutRouter.pendingMode else { return }
+        shortcutRouter.pendingMode = nil
+        guard requested != mode else {
+            announceScreenChange(to: requested)
+            return
+        }
+        if mode != .home {
+            performReset()
+        }
+        switchToMode(requested)
     }
 
     private func switchToMode(_ newMode: AppMode) {
