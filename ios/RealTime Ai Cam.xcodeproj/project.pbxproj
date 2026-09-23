@@ -615,6 +615,7 @@
 				ENABLE_STRICT_OBJC_MSGSEND = NO;
 				GCC_STRICT_ALIASING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "RealTimeAiCam-Info.plist";
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to detect objects in real-time, perform OCR text recognition, and translate text. No images are stored or transmitted";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Help Me Aim saves the pictures you take to your photo library. Nothing is uploaded.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "The mic is used only while you hold the ask button, to hear your question about the photo. Nothing is recorded or sent.";
@@ -656,6 +657,7 @@
 				ENABLE_STRICT_OBJC_MSGSEND = NO;
 				GCC_STRICT_ALIASING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "RealTimeAiCam-Info.plist";
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to detect objects in real-time, perform OCR text recognition, and translate text. No images are stored or transmitted";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Help Me Aim saves the pictures you take to your photo library. Nothing is uploaded.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "The mic is used only while you hold the ask button, to hear your question about the photo. Nothing is recorded or sent.";

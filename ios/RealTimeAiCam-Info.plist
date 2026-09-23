@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Other names Siri should hear as this app, so "what's this in real time cam" or
+	     "help me aim with AI Cam" still find it. Merged into the generated Info.plist. -->
+	<key>INAlternativeAppNames</key>
+	<array>
+		<dict>
+			<key>INAlternativeAppName</key>
+			<string>RealTime AI Cam</string>
+			<key>INAlternativeAppNamePronunciationHint</key>
+			<string>real time A I cam</string>
+		</dict>
+		<dict>
+			<key>INAlternativeAppName</key>
+			<string>Real Time Cam</string>
+		</dict>
+		<dict>
+			<key>INAlternativeAppName</key>
+			<string>AI Cam</string>
+			<key>INAlternativeAppNamePronunciationHint</key>
+			<string>A I cam</string>
+		</dict>
+	</array>
+</dict>
+</plist>
