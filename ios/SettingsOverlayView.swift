@@ -229,19 +229,24 @@ struct SettingsOverlayView: View {
 
                             // This overlay is only ever presented from the OCR screens
                             Text("• 🤏 Pinch to zoom the camera")
+                                .voiceOverWords("• 🤏 Pinch to zoom the camera")
                             Text("• 📋 Copy detected/translated text")
+                                .voiceOverWords("• 📋 Copy detected/translated text")
                             HStack {
                                 Image(systemName: "arrow.clockwise")
                                 Text("Reset/Stop — Clears text, translation, and stops speaking")
                             }
                             Text("• 🗣️ Speak detected/translated text")
+                                .voiceOverWords("• 🗣️ Speak detected/translated text")
                             Text("• 🔦 Adjust flashlight")
+                                .voiceOverWords("• 🔦 Adjust flashlight")
                             // No lens line here: these screens have no lens
                             // toggle at all — it lives in Object Detection, and
                             // only on phones with a second rear lens. Listing it
                             // here sent Matt on AppleVis hunting for a control
                             // that was never on this screen (2026-09-17).
                             Text("• ⚙️ Open settings/history")
+                                .voiceOverWords("• ⚙️ Open settings/history")
                         }
                         .font(.footnote)
                         .foregroundStyle(.secondary)

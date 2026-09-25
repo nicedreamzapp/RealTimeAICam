@@ -103,6 +103,7 @@ struct AppInstructionsView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     // Title
                     Text("👋 Welcome to RealTime AI Camera!")
+                        .voiceOverWords("👋 Welcome to RealTime AI Camera!")
                         .font(.largeTitle.bold())
 
                     // Play / Stop toggle
@@ -133,20 +134,24 @@ struct AppInstructionsView: View {
                     // Modes (exact button names)
                     Group {
                         Text("✨ **Modes**")
+                            .voiceOverWords("✨ **Modes**")
                             .font(.headline)
 
                         // 🐕 Object Detection + 📏 LiDAR sub-feature
                         VStack(alignment: .leading, spacing: 6) {
                             Text("🐕 **Object Detection**")
+                                .voiceOverWords("🐕 **Object Detection**")
                                 .font(.title2).fontWeight(.semibold)
                             Text("Live identification of objects (up to 601 classes) — fast, private, and works offline.")
                             Text("📏 **LiDAR Distance Assist** — In Object Detection on supported devices, tap the white ruler (turns green when active) to add distance after detections, e.g., **“Dog — 3 ft.”**")
+                                .voiceOverWords("📏 **LiDAR Distance Assist** — In Object Detection on supported devices, tap the white ruler (turns green when active) to add distance after detections, e.g., **“Dog — 3 ft.”**")
                         }
                         .padding(.top, 4)
 
                         // 🔠 English OCR
                         VStack(alignment: .leading, spacing: 6) {
                             Text("🔠 **English OCR**")
+                                .voiceOverWords("🔠 **English OCR**")
                                 .font(.title2).fontWeight(.semibold)
                             Text("Scan printed English text and hear it read aloud or copy it to history.")
                         }
@@ -155,6 +160,7 @@ struct AppInstructionsView: View {
                         // 🇲🇽→🇺🇸 Spanish → English
                         VStack(alignment: .leading, spacing: 6) {
                             Text("🇲🇽→🇺🇸 **Spanish to English Translate**")
+                                .voiceOverWords("🇲🇽→🇺🇸 **Spanish to English Translate**")
                                 .font(.title2).fontWeight(.semibold)
                             Text("Point at printed Spanish to see instant English translation, spoken aloud and ready to copy. On iOS 18 and later, the globe button at the top picks another language, like French or German. Each one downloads once from Apple, then works offline.")
                         }
@@ -164,27 +170,36 @@ struct AppInstructionsView: View {
                     // Controls
                     Group {
                         Text("🎛️ **Controls**")
+                            .voiceOverWords("🎛️ **Controls**")
                             .font(.headline)
                             .padding(.top, 6)
                         Text("🔄 Switch Camera — Front / Rear")
+                            .voiceOverWords("🔄 Switch Camera — Front / Rear")
                         // Only phones with a second rear lens have this button.
                         if CameraCapabilities.hasUltraWideRear {
                             Text("🌐 Lens Toggle — Wide ↔ Ultra-wide")
+                                .voiceOverWords("🌐 Lens Toggle — Wide ↔ Ultra-wide")
                         }
                         Text("🔦 Torch — 25% / 50% / 75% / 100%")
+                            .voiceOverWords("🔦 Torch — 25% / 50% / 75% / 100%")
                         Text("🤏 Pinch to Zoom")
+                            .voiceOverWords("🤏 Pinch to Zoom")
                         HStack {
                             Image(systemName: "arrow.clockwise")
                             Text("Reset/Stop — Clears text, translation, and stops speaking")
                         }
                         Text("🗣️ Speak Detected / Translated Text")
+                            .voiceOverWords("🗣️ Speak Detected / Translated Text")
                         Text("📋 Copy to History")
+                            .voiceOverWords("📋 Copy to History")
                         Text("⚙️ Settings")
+                            .voiceOverWords("⚙️ Settings")
                     }
 
                     // Privacy
                     Group {
                         Text("🔒 **Privacy First**")
+                            .voiceOverWords("🔒 **Privacy First**")
                             .font(.headline)
                             .padding(.top, 6)
                         Text("Works 100% offline — no internet required.")

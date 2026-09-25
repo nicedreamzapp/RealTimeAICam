@@ -121,9 +121,9 @@ struct ObjectDetectionView: View {
                                 )
                                 .fixedSize()
                                 .layoutPriority(1)
-                                .accessibilityElement(children: .ignore)
-                                .accessibilityLabel("Speed")
-                                .accessibilityValue("\(Int(viewModel.framesPerSecond)) frames per second")
+                                // Hidden from VoiceOver: a number that changes every frame means
+                                // nothing to a blind user and restarts speech whenever it has focus.
+                                .accessibilityHidden(true)
                             }
                             .frame(maxWidth: .infinity, alignment: .trailing)
                         }

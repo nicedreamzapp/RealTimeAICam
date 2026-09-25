@@ -1,5 +1,6 @@
 import Foundation
 import ImageIO
+import Photos
 import UIKit
 
 /// The words that go with a Help Me Aim photo.
@@ -56,5 +57,21 @@ enum AimCaption {
               let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
               let iptc = props[kCGImagePropertyIPTCDictionary] as? [CFString: Any] else { return nil }
         return iptc[kCGImagePropertyIPTCCaptionAbstract] as? String
+    }
+
+    /// Adds `jpeg` to Photos (add-only permission). Shared by Help Me Aim and
+    /// What's this?'s Save Photo button.
+    static func saveToPhotos(_ jpeg: Data, done: @escaping @MainActor (Bool) -> Void) {
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+            guard status == .authorized || status == .limited else {
+                DispatchQueue.main.async { done(false) }
+                return
+            }
+            PHPhotoLibrary.shared().performChanges({
+                PHAssetCreationRequest.forAsset().addResource(with: .photo, data: jpeg, options: nil)
+            }, completionHandler: { ok, _ in
+                DispatchQueue.main.async { done(ok) }
+            })
+        }
     }
 }

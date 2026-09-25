@@ -5,6 +5,25 @@ import UIKit
 
 // MARK: - Speech Manager (CONSOLIDATED - ONLY SPEECH SYSTEM IN APP)
 
+/// Live Object Detection announcement rules (Android's SpeechAnnouncer follows
+/// the same rules with the same numbers):
+///
+///  - announcementInterval = 1.0s   minimum gap between announcement cycles
+///  - classCooldown        = 45.0s  per exact class name before it is said again
+///  - interObjectDelay     = 0.8s   pause between queued names
+///  - maxPerCycle          = 3      at most three names per cycle
+///  - a cycle never starts while speaking or while the queue is draining
+///  - the most central object is said first: distance of the box centre from
+///    the frame centre, nearest first; a tie goes to the bigger box
+///  - while draining, a queued name whose class is no longer in the latest
+///    frame is skipped, so the app stops naming things you already moved off
+///    (Warren, Blind Android Users, 2026-09-22)
+///  - with the app's own voice off, the whole cycle goes to VoiceOver as ONE
+///    announcement ("cup, laptop"), and no new cycle starts until it has had
+///    time to be heard: 400 ms + 70 ms per character. One announcement per
+///    frame is what cut Kareen off after the first letter (2026-09-25)
+///  - the spoken text is the lowercase class name only, no confidence
+///  - per-class entries older than 60s are cleaned up each cycle
 class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
     // MARK: - Singleton Pattern to Prevent Multiple Instances
 
@@ -17,12 +36,16 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
         static let classCooldown: TimeInterval = 45.0 // Back to 45 seconds as requested
         static let defaultVoiceKey = "selectedVoice"
         static let interObjectDelay: TimeInterval = 0.8 // Delay between objects in queue
+        static let maxPerCycle = 3
     }
 
     // MARK: - Properties
 
     private let speechSynthesizer = AVSpeechSynthesizer()
-    private var announcementQueue: [String] = []
+    /// Queued names with the class each one came from, so a stale one can be skipped.
+    private var announcementQueue: [(className: String, text: String)] = []
+    /// Every class in the most recent frame.
+    private var latestVisibleClasses: Set<String> = []
     private var isProcessingQueue = false
     private var announceGeneration = 0
     private var lastAnnouncementTime = Date.distantPast
@@ -94,6 +117,8 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
     func processDetectionsForSpeech(_ detections: [YOLODetection], lidarManager: LiDARManager) {
         guard isSpeechEnabled else { return }
 
+        latestVisibleClasses = Set(detections.map(\.className))
+
         let now = Date()
 
         // Check timing
@@ -103,32 +128,63 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
         // Don't interrupt current speech
         guard !isSpeaking, !isProcessingQueue else { return }
 
-        // Find new objects to announce - NO NORMALIZATION, USE EXACT NAMES
-        var objectsToAnnounce: [String] = []
+        // Most central first, at most three, each class only after its cooldown.
+        // NO NORMALIZATION, USE EXACT NAMES.
+        var objectsToAnnounce: [(className: String, text: String)] = []
 
-        for detection in detections {
-            let exactObjectName = detection.className // Use exact name, no normalization
+        for detection in Self.centralFirst(detections) {
+            guard objectsToAnnounce.count < Constants.maxPerCycle else { break }
+            let exactObjectName = detection.className
+            guard !objectsToAnnounce.contains(where: { $0.className == exactObjectName }) else { continue }
             let lastSpoken = lastSpokenByClass[exactObjectName] ?? .distantPast
-            let timeSinceSpoken = now.timeIntervalSince(lastSpoken)
-
-            // Only announce if this EXACT object name hasn't been spoken recently
-            if timeSinceSpoken >= Constants.classCooldown {
-                // BUILD SPEECH STRING BASED ON LIDAR STATUS
-                let speechText = buildSpeechText(for: detection, lidarManager: lidarManager)
-                objectsToAnnounce.append(speechText)
+            if now.timeIntervalSince(lastSpoken) >= Constants.classCooldown {
+                objectsToAnnounce.append((exactObjectName, buildSpeechText(for: detection, lidarManager: lidarManager)))
                 lastSpokenByClass[exactObjectName] = now
             }
         }
 
         lastAnnouncementTime = now
 
-        // Start queue if we have objects
         if !objectsToAnnounce.isEmpty {
-            announcementQueue = objectsToAnnounce
-            processNextInQueue()
+            if speaksAloud {
+                announcementQueue = objectsToAnnounce
+                processNextInQueue()
+            } else {
+                announceCycleToVoiceOver(objectsToAnnounce.map(\.text))
+            }
         }
 
         cleanupOldEntries(now: now)
+    }
+
+    /// Detections ordered by how close the box centre is to the frame centre,
+    /// nearest first; a tie goes to the bigger box. Boxes are normalised 0...1.
+    static func centralFirst(_ detections: [YOLODetection]) -> [YOLODetection] {
+        detections.sorted { a, b in
+            let da = hypot(a.rect.midX - 0.5, a.rect.midY - 0.5)
+            let db = hypot(b.rect.midX - 0.5, b.rect.midY - 0.5)
+            if abs(da - db) > 0.0001 { return da < db }
+            return a.rect.width * a.rect.height > b.rect.width * b.rect.height
+        }
+    }
+
+    /// How long VoiceOver needs for a line before the next cycle may start.
+    static func estimatedAnnouncementSeconds(_ text: String) -> TimeInterval {
+        0.4 + 0.07 * Double(text.count)
+    }
+
+    /// The app's own voice is off: one VoiceOver announcement for the whole
+    /// cycle, then hold the queue closed until it has had time to be heard.
+    private func announceCycleToVoiceOver(_ names: [String]) {
+        let line = names.joined(separator: ", ")
+        isProcessingQueue = true
+        UIAccessibility.post(notification: .announcement, argument: line)
+        announceGeneration += 1
+        let generation = announceGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.estimatedAnnouncementSeconds(line)) { [weak self] in
+            guard let self, announceGeneration == generation else { return }
+            isProcessingQueue = false
+        }
     }
 
     // MARK: - NEW: Build Speech Text Based on LiDAR Status
@@ -179,9 +235,17 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
         }
 
         isProcessingQueue = true
+        // Skip anything that has left the frame since the cycle was queued.
+        while let first = announcementQueue.first, !latestVisibleClasses.contains(first.className) {
+            announcementQueue.removeFirst()
+        }
+        guard !announcementQueue.isEmpty else {
+            isProcessingQueue = false
+            return
+        }
         let nextObject = announcementQueue.removeFirst()
 
-        announceObject(nextObject)
+        announceObject(nextObject.text)
     }
 
     // MARK: - Cleanup Old Entries

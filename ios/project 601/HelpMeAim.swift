@@ -1159,3 +1159,38 @@ enum AimVocabulary {
         return ("aeiou".contains(first) ? "an " : "a ") + word
     }
 }
+
+// MARK: - Recent things looked for
+
+/// The last few words in Something Else that ended in a saved photo, most
+/// recent first, so they can be picked again without saying or typing them.
+/// Kareen (Blind Android Users, 2026-09-25): a laptop that was found once is a
+/// laptop the app is known to find. Android keeps the same list under the same
+/// key.
+enum AimRecentTargets {
+    static let key = "aimRecentTargets"
+    static let limit = 6
+
+    static func all(_ defaults: UserDefaults = .standard) -> [String] {
+        defaults.stringArray(forKey: key) ?? []
+    }
+
+    /// Adds [word] at the front; an older copy (any case) is dropped.
+    static func remember(_ word: String, in defaults: UserDefaults = .standard) {
+        let clean = AimVocabulary.normalize(word)
+        guard !clean.isEmpty else { return }
+        var list = all(defaults).filter { $0.lowercased() != clean.lowercased() }
+        list.insert(clean, at: 0)
+        defaults.set(Array(list.prefix(limit)), forKey: key)
+    }
+
+    static func clear(_ defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: key)
+    }
+
+    /// "coffee mug" -> "Coffee mug", the button title.
+    static func title(_ word: String) -> String {
+        guard let first = word.first else { return word }
+        return first.uppercased() + word.dropFirst()
+    }
+}

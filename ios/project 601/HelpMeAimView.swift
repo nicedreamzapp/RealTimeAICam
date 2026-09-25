@@ -325,6 +325,10 @@ final class HelpMeAimController: ObservableObject {
     @Published private(set) var loadingModel = false
     @Published var cameraPosition: AVCaptureDevice.Position = .back
     @Published private(set) var torchOn = false
+    /// Words that found something before; buttons on the Something Else screen.
+    @Published private(set) var recentTargets: [String] = AimRecentTargets.all()
+    /// What the person asked for this time, kept until the photo is saved.
+    private var askedWord: String?
 
     let voice = AimVoice()
     let listener = AimWordListener()
@@ -358,8 +362,8 @@ final class HelpMeAimController: ObservableObject {
 
     // MARK: Choices
 
-    func chooseFace() { begin(.face) }
-    func choosePage() { begin(.page) }
+    func chooseFace() { askedWord = nil; begin(.face) }
+    func choosePage() { askedWord = nil; begin(.page) }
 
     func chooseSomethingElse() {
         isTyping = false
@@ -446,7 +450,13 @@ final class HelpMeAimController: ObservableObject {
             voice.say(AimPhrases.cantLookFor(said))
             return
         }
+        askedWord = AimVocabulary.normalize(text)
         begin(.object(match))
+    }
+
+    func clearRecentTargets() {
+        AimRecentTargets.clear()
+        recentTargets = []
     }
 
     private func vocabulary() -> [String] {
@@ -660,6 +670,10 @@ final class HelpMeAimController: ObservableObject {
                 Self.save(toSave) { [weak self] saved in
                     // Taking another or leaving must not be talked over.
                     guard let self, phase == .taken else { return }
+                    if saved, case .object = subject, let word = askedWord {
+                        AimRecentTargets.remember(word)
+                        recentTargets = AimRecentTargets.all()
+                    }
                     let line: String
                     if let description {
                         line = description + " " + AimPhrases.capitalized(
@@ -685,17 +699,7 @@ final class HelpMeAimController: ObservableObject {
     }
 
     private static func save(_ data: Data, done: @escaping @MainActor (Bool) -> Void) {
-        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
-            guard status == .authorized || status == .limited else {
-                DispatchQueue.main.async { done(false) }
-                return
-            }
-            PHPhotoLibrary.shared().performChanges({
-                PHAssetCreationRequest.forAsset().addResource(with: .photo, data: data, options: nil)
-            }, completionHandler: { ok, _ in
-                DispatchQueue.main.async { done(ok) }
-            })
-        }
+        AimCaption.saveToPhotos(data, done: done)
     }
 
     // MARK: Camera controls
@@ -868,6 +872,9 @@ struct HelpMeAimView: View {
                 .foregroundColor(.white)
                 .accessibilityAddTraits(.isHeader)
             AimListenButton(listener: controller.listener) { controller.listen() }
+            if !controller.recentTargets.isEmpty {
+                recentTargetButtons
+            }
             if !controller.statusText.isEmpty, controller.statusText != "What are you looking for?" {
                 Text(controller.statusText)
                     .font(.headline)
@@ -892,6 +899,32 @@ struct HelpMeAimView: View {
             Spacer()
         }
         .padding(.horizontal, 16)
+    }
+
+    /// Things found before, one tap to look again (Kareen, 2026-09-25).
+    private var recentTargetButtons: some View {
+        VStack(spacing: 10) {
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                ForEach(controller.recentTargets, id: \.self) { word in
+                    Button {
+                        controller.typingStarted()
+                        controller.submit(word)
+                    } label: {
+                        Text(AimRecentTargets.title(word))
+                            .font(.title3.weight(.semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                            .background(Capsule().fill(Color.black.opacity(0.6)))
+                            .overlay(Capsule().stroke(Color.white.opacity(0.7), lineWidth: 1.5))
+                    }
+                    .accessibilityLabel("Look for \(word)")
+                }
+            }
+            Button("Clear list") { controller.clearRecentTargets() }
+                .font(.subheadline)
+                .foregroundColor(.white.opacity(0.8))
+                .accessibilityLabel("Clear recent items")
+        }
     }
 
     // MARK: Aiming

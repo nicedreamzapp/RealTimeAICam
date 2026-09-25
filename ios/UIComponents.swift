@@ -1,6 +1,49 @@
 import AVFoundation
 import SwiftUI
 
+// MARK: - Plain words for VoiceOver
+
+/// The same line with its emoji taken out, for VoiceOver. The pictures stay on
+/// screen; a screen reader user should hear "Switch Camera", not "counter-
+/// clockwise arrows button, Switch Camera". Asked for by Kareen (Blind Android
+/// Users, 2026-09-25); Android strips the same characters.
+enum SpokenLabel {
+    static func withoutEmoji(_ text: String) -> String {
+        // An arrow between words is a word ("Wide ↔ Ultra-wide"); an arrow
+        // between two flags is part of the picture and goes with them.
+        var worded = ""
+        for ch in text.replacingOccurrences(of: "**", with: "") {
+            if ch == "↔" || ch == "→" {
+                let before = worded.last(where: { $0 != " " })
+                if let before, before.isLetter || before.isNumber {
+                    worded += ch == "↔" ? " or " : " to "
+                }
+                continue
+            }
+            worded.append(ch)
+        }
+        var out = ""
+        for scalar in worded.unicodeScalars {
+            let p = scalar.properties
+            let isPicture = (p.isEmoji && scalar.value > 0x238C) || p.isEmojiPresentation
+            let isJoiner = scalar.value == 0xFE0F || scalar.value == 0x200D
+                || (0x1F1E6 ... 0x1F1FF).contains(scalar.value)
+            if isPicture || isJoiner { continue }
+            out.unicodeScalars.append(scalar)
+        }
+        return out
+            .replacingOccurrences(of: "•", with: "")
+            .components(separatedBy: .whitespaces).filter { !$0.isEmpty }.joined(separator: " ")
+    }
+}
+
+extension View {
+    /// VoiceOver reads [text] without its emoji.
+    func voiceOverWords(_ text: String) -> some View {
+        accessibilityLabel(Text(SpokenLabel.withoutEmoji(text)))
+    }
+}
+
 // MARK: - Basic UI Components
 
 struct ShadedEmoji: View {
@@ -282,6 +325,8 @@ struct AnimatedVoicePicker: View {
             RoundedRectangle(cornerRadius: 8)
                 .fill(isSelected ? Color.purple.opacity(0.5) : Color.black.opacity(0.6))
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(gridLabel)
     }
 
     private func qualityTag(for voice: AVSpeechSynthesisVoice) -> String {
@@ -341,6 +386,9 @@ struct AnimatedVoicePicker: View {
             .padding(.vertical, 6)
             .background(Capsule().fill(Color.purple.opacity(0.24)))
             .overlay(Capsule().stroke(Color.black, lineWidth: 1.1))
+            // Same words as Android's pill; the face emoji is left out.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Voice, " + cleanedName + (voice != nil && !tag.isEmpty ? " \(tag)" : ""))
         }
         .opacity(animateIn ? 1 : 0)
         .scaleEffect(animateIn ? 1 : 0.7)

@@ -88,9 +88,9 @@ struct PerformanceOverlayView: View {
                     .shadow(color: fpsColor.opacity(0.3), radius: 4, x: 0, y: 2)
                     .shadow(color: .black.opacity(0.5), radius: 8, x: 0, y: 4)
             )
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Speed")
-            .accessibilityValue("\(Int(fps)) frames per second")
+            // Hidden from VoiceOver: a number that changes every frame means
+            // nothing to a blind user and restarts speech whenever it has focus.
+            .accessibilityHidden(true)
         }
     }
 }

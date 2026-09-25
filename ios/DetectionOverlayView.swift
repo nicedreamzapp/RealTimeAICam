@@ -86,12 +86,15 @@ struct DetectionOverlayView: View {
         }
     }
 
-    /// Everything currently detected, most confident first, as one sentence.
+    /// Everything currently detected, as one sentence: names only, each once,
+    /// alphabetical. No percents and no distances, so the value only changes
+    /// when a different set of things comes into view. Kareen (Blind Android
+    /// Users, 2026-09-25) could only hear the first letter of each line because
+    /// the value used to change every frame and the screen reader restarted it.
     private var spokenSummary: String {
         if detectedObjects.isEmpty { return "Nothing detected yet" }
-        return detectedObjects
-            .sorted { $0.score > $1.score }
-            .map { buildEnhancedLabel(for: $0) }
+        return Set(detectedObjects.map { $0.className.lowercased() })
+            .sorted()
             .joined(separator: ", ")
     }
 

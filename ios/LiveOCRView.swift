@@ -249,6 +249,13 @@ struct LiveOCRView: View {
     @State private var isListening = false
     @State private var isAsking = false
     @StateObject private var listener = SpeechRecognizer()
+    /// A question typed instead of spoken (Kareen, 2026-09-25).
+    @State private var typedQuestion = ""
+    @FocusState private var typingQuestion: Bool
+    /// The frozen shot came from the camera, not the photo library, so it is
+    /// worth offering to save. Cleared once saved.
+    @State private var canSavePhoto = false
+    @State private var isSavingPhoto = false
 
     @StateObject private var buttonDebouncer = ButtonPressDebouncer() // Debouncer to avoid rapid multiple presses
 
@@ -323,7 +330,7 @@ struct LiveOCRView: View {
             }
             // Hold this exact frame on screen — it's what the model is looking at.
             let captured = UIImage(cgImage: image)
-            DispatchQueue.main.async { frozenPhoto = captured }
+            DispatchQueue.main.async { frozenPhoto = captured; canSavePhoto = true }
             // Save the exact frame so it can be pulled and inspected when a shot
             // is questioned -- his eyes are ground truth, but I need to see it too.
             if let jpg = captured.jpegData(compressionQuality: 0.9),
@@ -349,6 +356,7 @@ struct LiveOCRView: View {
         scannedText = ""
         scannedSummary = "Working it out…"
         frozenPhoto = picked
+        canSavePhoto = false  // already in the library
         // The live camera has nothing to do with this one, so it stays running
         // only until the model needs the memory.
         analyze(cg, pauseCamera: true)
@@ -475,6 +483,8 @@ struct LiveOCRView: View {
         scannedText = ""
         scannedSummary = ""
         frozenPhoto = nil
+        canSavePhoto = false
+        typedQuestion = ""
         cameraPreviewRef?.resumeSession()
     }
 
@@ -495,16 +505,50 @@ struct LiveOCRView: View {
         Task {
             let heard = await listener.stopAndTranscribe()
             let q = heard.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let photo = frozenPhoto, !q.isEmpty else {
+            guard frozenPhoto != nil, !q.isEmpty else {
                 await MainActor.run { scannedSummary = "I didn't catch that. Hold the button and ask again." }
                 return
             }
-            await MainActor.run { isAsking = true; scannedSummary = "Thinking…" }
-            let answer = await OnDeviceVisionNarrator.shared.ask(q, about: photo)
-            await MainActor.run {
-                isAsking = false
-                say(answer ?? "Sorry, I couldn't work that out. Try asking again.")
-            }
+            await answer(q)
+        }
+    }
+
+    /// A typed question goes the same way as a spoken one.
+    private func askTyped() {
+        let q = typedQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard frozenPhoto != nil, !q.isEmpty, !isAsking, !isListening else { return }
+        typingQuestion = false
+        typedQuestion = ""
+        viewModel.stopSpeaking()
+        isSpeaking = false
+        Task { await answer(q) }
+    }
+
+    private func answer(_ q: String) async {
+        guard let photo = frozenPhoto else { return }
+        await MainActor.run { isAsking = true; scannedSummary = "Thinking…" }
+        let answer = await OnDeviceVisionNarrator.shared.ask(q, about: photo)
+        await MainActor.run {
+            isAsking = false
+            say(answer ?? "Sorry, I couldn't work that out. Try asking again.")
+        }
+    }
+
+    /// Save the shot on screen to Photos with what was said about it written
+    /// in as the caption — the same file Help Me Aim saves (Kareen, 2026-09-25).
+    private func savePhoto() {
+        guard let photo = frozenPhoto, canSavePhoto, !isSavingPhoto,
+              let jpeg = photo.jpegData(compressionQuality: 0.92) else { return }
+        isSavingPhoto = true
+        let description = scannedSummary
+        let toSave = AimCaption.embed(description, in: jpeg) ?? jpeg
+        AimCaption.saveToPhotos(toSave) { saved in
+            isSavingPhoto = false
+            if saved { canSavePhoto = false }
+            let line = saved ? "Saved to your photos with that description."
+                : "I couldn't save it. Allow adding photos in Settings."
+            viewModel.speak(text: line, voiceIdentifier: selectedVoiceIdentifier) { isSpeaking = false }
+            isSpeaking = true
         }
     }
 
@@ -765,6 +809,41 @@ struct LiveOCRView: View {
                                 )
                                 .accessibilityLabel("Ask about this photo")
                                 .accessibilityHint("Hold, speak your question, then let go to hear the answer")
+
+                                // Or type the question.
+                                HStack(spacing: 8) {
+                                    TextField("Or type a question", text: $typedQuestion)
+                                        .textFieldStyle(.roundedBorder)
+                                        .submitLabel(.send)
+                                        .focused($typingQuestion)
+                                        .onSubmit { askTyped() }
+                                        .accessibilityLabel("Or type a question about this photo")
+                                    Button("Ask") { askTyped() }
+                                        .buttonStyle(.borderedProminent)
+                                        .disabled(isAsking || typedQuestion.trimmingCharacters(in: .whitespaces).isEmpty)
+                                        .accessibilityLabel("Ask")
+                                }
+
+                                if canSavePhoto, !isAsking {
+                                    Button(action: { savePhoto() }) {
+                                        HStack(spacing: 10) {
+                                            Image(systemName: isSavingPhoto ? "hourglass" : "square.and.arrow.down")
+                                                .font(.system(size: 22, weight: .semibold))
+                                            Text("Save Photo")
+                                                .font(.system(size: 19, weight: .semibold))
+                                        }
+                                        .foregroundStyle(.white)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 16)
+                                        .background(
+                                            Capsule()
+                                                .fill(Color.green.opacity(0.7))
+                                                .overlay(Capsule().stroke(Color.white.opacity(0.5), lineWidth: 1.5))
+                                        )
+                                    }
+                                    .disabled(isSavingPhoto)
+                                    .accessibilityLabel("Save photo with this description")
+                                }
 
                                 Button(action: { nextShot() }) {
                                     HStack(spacing: 10) {
