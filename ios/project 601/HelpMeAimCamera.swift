@@ -428,6 +428,8 @@ struct AimObservation {
     var count: Int
     /// Other confident things in view; nil when nothing else was looked for.
     var others: [AimElsewhere.Seen]? = nil
+    /// Picture or Page found by its corners: the four corners of `box`.
+    var quad: AimQuad? = nil
 }
 
 /// Runs the right detector for the subject on the camera's video queue, a
@@ -605,7 +607,7 @@ final class AimFrameAnalyzer: @unchecked Sendable {
         let handler = VNImageRequestHandler(cgImage: cg, orientation: .up, options: [:])
         let obs = detect(kind: kind, handler: handler, image: CIImage(cgImage: cg), finder: finder, ids: ids)
         let sharp = FrameQualityGate.check(cg, checkDocumentEdges: false).sharpness
-        return AimBurst.Frame(box: obs.box, sharpness: sharp)
+        return AimBurst.Frame(box: obs.box, sharpness: sharp, quad: obs.quad)
     }
 
     private static func faces(_ handler: VNImageRequestHandler) -> AimObservation {
@@ -629,17 +631,33 @@ final class AimFrameAnalyzer: @unchecked Sendable {
         request.minimumAspectRatio = 0.25
         request.quadratureTolerance = 25
         try? handler.perform([document, request])
-        let doc = (document.results ?? [])
+        let docObs = (document.results ?? [])
             .filter { $0.confidence >= AimPage.minDocumentConfidence }
-            .map { topLeft($0.boundingBox) }
-            .filter { AimPage.area($0) >= AimPage.minDocumentArea }
-            .max { AimPage.area($0) < AimPage.area($1) }
-        let rects = (request.results ?? []).map {
+            .filter { AimPage.area(topLeft($0.boundingBox)) >= AimPage.minDocumentArea }
+            .max { AimPage.area($0.boundingBox) < AimPage.area($1.boundingBox) }
+        let doc = docObs.map { topLeft($0.boundingBox) }
+        let rectObs = request.results ?? []
+        let rects = rectObs.map {
             AimPage.Candidate(box: topLeft($0.boundingBox), documentLike: documentLike(image, $0.boundingBox))
         }
         let scanned = finder?.scan(in: image, classIDs: ids)
         let best = AimPage.choose(document: doc, rectangles: rects, backup: scanned?.best?.box)
-        return AimObservation(box: best, count: best == nil ? 0 : 1, others: scanned?.others)
+        // The corners of whichever finder the box came from, for squaring the
+        // photo up (Kareen, 2026-09-25). The model's backup box has none.
+        var quad: AimQuad?
+        if let best {
+            let source: VNRectangleObservation? = doc == best ? docObs
+                : rectObs.first { topLeft($0.boundingBox) == best }
+            quad = source.map(Self.quad)
+        }
+        return AimObservation(box: best, count: best == nil ? 0 : 1, others: scanned?.others, quad: quad)
+    }
+
+    /// Vision's corners (bottom-left origin) as ours (top-left origin).
+    static func quad(_ o: VNRectangleObservation) -> AimQuad {
+        func flip(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x, y: 1 - p.y) }
+        return AimQuad(topLeft: flip(o.topLeft), topRight: flip(o.topRight),
+                       bottomRight: flip(o.bottomRight), bottomLeft: flip(o.bottomLeft))
     }
 
     private static let colorContext = CIContext(options: [.workingColorSpace: NSNull(), .useSoftwareRenderer: false])

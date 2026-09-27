@@ -124,8 +124,15 @@ struct AimBigFaceCropTests {
                               imageSize: portrait, framing: .person) == nil)
     }
 
-    @Test func bigObjectsStillAreNotCropped() {
-        #expect(AimBurst.crop(box: rect(midX: 0.4, midY: 0.5, w: 0.6, h: 0.4),
+    @Test func bigObjectsAreMovedToTheMiddleWithLessPadding() throws {
+        // Was left alone before Kareen's report (2026-09-25).
+        let box = rect(midX: 0.4, midY: 0.5, w: 0.6, h: 0.4)
+        let c = try #require(AimBurst.crop(box: box, imageSize: portrait, framing: .whole))
+        #expect(abs((box.midX * portrait.width - c.minX) / c.width - 0.5) < 0.01)
+    }
+
+    @Test func objectsFillingTheFrameAreNotCropped() {
+        #expect(AimBurst.crop(box: rect(midX: 0.47, midY: 0.5, w: 0.9, h: 0.5),
                               imageSize: portrait, framing: .whole) == nil)
     }
 }
@@ -160,7 +167,8 @@ struct AimTooBigTests {
     @Test func pageNeedsAllFourCornersClearlyInside() {
         // 1% from the left edge: fine for an object, cut off for a page.
         let nearEdge = CGRect(x: 0.01, y: 0.25, width: 0.55, height: 0.5)
-        #expect(say(nearEdge, .whole) != .moveLeft)
+        #expect(!AimSteering.isCutOff(nearEdge))
+        #expect(AimSteering.isCutOff(nearEdge, margin: AimSteering.pageEdgeMargin))
         #expect(say(nearEdge, .page) == .moveLeft)
         #expect(say(rect(midX: 0.5, midY: 0.5, w: 0.6, h: 0.7), .page) == .framed)
         #expect(AimSubject.page.framing == .page)

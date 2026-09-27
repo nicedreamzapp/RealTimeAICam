@@ -104,6 +104,29 @@ enum AimSteering {
     static let pageEdgeMargin: CGFloat = 0.02
     static let pageLooseEdgeMargin: CGFloat = 0.01
 
+    // Big subjects (Kareen, Blind Android Users, 2026-09-25: "the subjects
+    // were usually not in the centre of the photo", a picture frame came out
+    // off to one side). The after-shot crop can only slide a subject to the
+    // middle while the crop still fits in the photo, and a subject that fills
+    // most of the frame leaves no room to slide. So "got it" for a big subject
+    // waits until it is close enough that the crop can finish the job; a small
+    // subject keeps the wide middle-half zone from round 2.
+    /// Never tighter than this, so a big subject is still easy to land.
+    static let bigSubjectMinTolerance: CGFloat = 0.08
+    /// The loose (countdown) zone is this much wider than the tight one.
+    static let bigSubjectLooseExtra: CGFloat = 0.08
+
+    /// How far the middle of an object may sit from the middle of the frame
+    /// and still count as framed. `size` is the subject's bigger side.
+    static func centerTolerance(size: CGFloat, loose: Bool) -> CGFloat {
+        let base = loose ? wholeLooseTolerance : wholeTolerance
+        // The crop is `size / bigObjectFill` wide, so it can recentre a
+        // subject that is at most half the leftover room off the middle.
+        let fixable = (1 - size / AimBurst.bigObjectFill) / 2
+        let tight = max(bigSubjectMinTolerance, fixable) + (loose ? bigSubjectLooseExtra : 0)
+        return min(base, tight)
+    }
+
     /// What to tell the person for this box. `loose` is the much wider zone
     /// used once "got it" has been said and while the countdown runs, so a
     /// hand's normal wobble does not undo it.
@@ -183,7 +206,7 @@ enum AimSteering {
         if cutT { return .moveUp }
         if cutB { return .moveDown }
 
-        let tol = loose ? wholeLooseTolerance : wholeTolerance
+        let tol = centerTolerance(size: max(b.width, b.height), loose: loose)
         let dx = b.midX - 0.5, dy = b.midY - 0.5
         let xOff = max(0, abs(dx) - tol), yOff = max(0, abs(dy) - tol)
         if xOff > 0 || yOff > 0 {
@@ -657,6 +680,9 @@ enum AimBurst {
         var box: CGRect?
         /// Variance of Laplacian from FrameQualityGate (higher is sharper).
         var sharpness: Double
+        /// The page's four corners when a picture or page was found by its
+        /// corners (not just a box), so the photo can be squared up.
+        var quad: AimQuad? = nil
     }
 
     /// Sharpness above this earns no more credit.
@@ -697,6 +723,9 @@ enum AimBurst {
     /// there is room for shoulders.
     static let objectFill: CGFloat = 0.5
     static let faceFill: CGFloat = 0.35
+    /// An object too big for the usual padding still gets moved to the middle
+    /// with this much less padding (Kareen, 2026-09-25).
+    static let bigObjectFill: CGFloat = 0.9
     /// Already this close to the target and at least this big: leave it.
     static let wellFramedDistance: CGFloat = 0.08
     static let wellFramedSize: CGFloat = 0.4
@@ -718,7 +747,16 @@ enum AimBurst {
         let size = max(box.width, box.height)
         if hypot(box.midX - t.x, box.midY - t.y) <= wellFramedDistance, size >= wellFramedSize { return nil }
 
-        let fill = framing == .person && box.height < AimSteering.closeUpFull ? faceFill : objectFill
+        var fill = framing == .person && box.height < AimSteering.closeUpFull ? faceFill : objectFill
+        if framing != .person {
+            // Kareen, 2026-09-25: a big or far-off-centre subject stayed off
+            // to one side because the usual padding left no room to slide it.
+            // Use just enough less padding (down to `bigObjectFill`) for the
+            // crop to put it in the middle.
+            let room = 1 - 2 * max(abs(box.midX - 0.5), abs(box.midY - 0.5))
+            let needed = room > 0 ? max(box.width, box.height) / room : bigObjectFill
+            fill = min(bigObjectFill, max(fill, needed))
+        }
         let aspect = W / H
         let bw = box.width * W, bh = box.height * H
         var cw = max(bw / fill, (bh / fill) * aspect)
@@ -729,14 +767,20 @@ enum AimBurst {
             let k = minLongSide / long
             cw *= k; ch *= k
         }
+        var mustImprove = false
         if cw >= W * 0.98 || ch >= H * 0.98 {
-            // A face too big for the usual padding (walkaround 2026-09-16:
-            // a selfie face at 35% of the width was never cropped and stayed
-            // mid-frame). Still trim a little to lift it toward the upper
-            // third, but only if that really moves it closer.
-            guard framing == .person else { return nil }
-            cw = W * maxFaceCropShare
-            ch = H * maxFaceCropShare
+            if framing == .person {
+                // A face too big for the usual padding (walkaround 2026-09-16:
+                // a selfie face at 35% of the width was never cropped and stayed
+                // mid-frame). Still trim a little to lift it toward the upper
+                // third, but only if that really moves it closer.
+                cw = W * maxFaceCropShare
+                ch = H * maxFaceCropShare
+            } else {
+                // Already at the least padding: nothing left to slide.
+                return nil
+            }
+            mustImprove = true
         }
 
         // Put the subject's middle at the target point, then keep inside the photo.
@@ -748,12 +792,100 @@ enum AimBurst {
             .intersection(CGRect(x: 0, y: 0, width: W, height: H))
         let subject = CGRect(x: box.minX * W, y: box.minY * H, width: bw, height: bh)
         guard rect.contains(subject.insetBy(dx: 1, dy: 1)) else { return nil }
-        if framing == .person, cw >= W * maxFaceCropShare - 1 {
+        if mustImprove || (framing == .person && cw >= W * maxFaceCropShare - 1) {
             let before = hypot(box.midX - t.x, box.midY - t.y)
             let after = hypot((subject.midX - rect.minX) / rect.width - t.x, (subject.midY - rect.minY) / rect.height - t.y)
             guard after < before - 0.03 else { return nil }
         }
         return rect
+    }
+}
+
+// MARK: - Squaring up a picture or page
+
+/// Four corners of a picture or page, normalized, top-left origin, upright
+/// photo. Clockwise from the top-left.
+struct AimQuad: Equatable {
+    var topLeft: CGPoint
+    var topRight: CGPoint
+    var bottomRight: CGPoint
+    var bottomLeft: CGPoint
+
+    var corners: [CGPoint] { [topLeft, topRight, bottomRight, bottomLeft] }
+}
+
+/// Kareen (Blind Android Users, 2026-09-25): "a photo frame was taken at an
+/// angle instead of being in the centre of the photo." When Picture or Page
+/// found the page by its four corners, the kept photo is the page itself,
+/// squared up, instead of a tilted page in a wider shot. Only when the corners
+/// make a believable page; otherwise the normal crop runs.
+enum AimStraighten {
+    /// Smaller than this share of the photo: too small to be the page asked for.
+    static let minArea: CGFloat = 0.04
+    /// A corner this close to the photo edge may be cut off.
+    static let cornerMargin: CGFloat = 0.005
+    /// Every corner angle inside this range (degrees); outside it the corners
+    /// are not a page seen at a normal angle.
+    static let minAngle: CGFloat = 45
+    static let maxAngle: CGFloat = 135
+    /// Opposite sides this different in length: too steep to square up well.
+    static let maxSideRatio: CGFloat = 2.5
+
+    static func area(_ q: AimQuad) -> CGFloat {
+        let p = q.corners
+        var a: CGFloat = 0
+        for i in 0 ..< 4 {
+            let j = (i + 1) % 4
+            a += p[i].x * p[j].y - p[j].x * p[i].y
+        }
+        return abs(a) / 2
+    }
+
+    static func distance(_ a: CGPoint, _ b: CGPoint, _ size: CGSize) -> CGFloat {
+        hypot((a.x - b.x) * size.width, (a.y - b.y) * size.height)
+    }
+
+    /// True when the corners are a page worth squaring up in a photo of `imageSize`.
+    static func usable(_ q: AimQuad?, imageSize: CGSize) -> Bool {
+        guard let q, imageSize.width > 0, imageSize.height > 0 else { return false }
+        let p = q.corners
+        for c in p where c.x < cornerMargin || c.y < cornerMargin || c.x > 1 - cornerMargin || c.y > 1 - cornerMargin {
+            return false
+        }
+        guard area(q) >= minArea else { return false }
+        // Convex, and clockwise on screen (y down): every turn the same way.
+        var sign: CGFloat = 0
+        for i in 0 ..< 4 {
+            let a = p[i], b = p[(i + 1) % 4], c = p[(i + 2) % 4]
+            let cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x)
+            if abs(cross) < 1e-9 { return false }
+            if sign == 0 { sign = cross > 0 ? 1 : -1 } else if (cross > 0 ? 1 : -1) != sign { return false }
+        }
+        guard sign > 0 else { return false }
+        // Corner angles, measured in pixels so a portrait photo is not skewed.
+        for i in 0 ..< 4 {
+            let prev = p[(i + 3) % 4], c = p[i], next = p[(i + 1) % 4]
+            let ux = (prev.x - c.x) * imageSize.width, uy = (prev.y - c.y) * imageSize.height
+            let vx = (next.x - c.x) * imageSize.width, vy = (next.y - c.y) * imageSize.height
+            let cosA = (ux * vx + uy * vy) / max(1e-9, hypot(ux, uy) * hypot(vx, vy))
+            let deg = acos(min(1, max(-1, cosA))) * 180 / .pi
+            if deg < minAngle || deg > maxAngle { return false }
+        }
+        let top = distance(q.topLeft, q.topRight, imageSize), bottom = distance(q.bottomLeft, q.bottomRight, imageSize)
+        let left = distance(q.topLeft, q.bottomLeft, imageSize), right = distance(q.topRight, q.bottomRight, imageSize)
+        guard min(top, bottom) > 0, min(left, right) > 0 else { return false }
+        return max(top, bottom) / min(top, bottom) <= maxSideRatio && max(left, right) / min(left, right) <= maxSideRatio
+    }
+
+    /// Pixel size of the squared-up page: its longest top/bottom side by its
+    /// longest left/right side, never bigger than the photo.
+    static func outputSize(_ q: AimQuad, imageSize: CGSize) -> CGSize {
+        var w = max(distance(q.topLeft, q.topRight, imageSize), distance(q.bottomLeft, q.bottomRight, imageSize))
+        var h = max(distance(q.topLeft, q.bottomLeft, imageSize), distance(q.topRight, q.bottomRight, imageSize))
+        let limit = max(imageSize.width, imageSize.height)
+        let k = min(1, limit / max(w, h, 1))
+        w *= k; h *= k
+        return CGSize(width: max(1, w.rounded()), height: max(1, h.rounded()))
     }
 }
 

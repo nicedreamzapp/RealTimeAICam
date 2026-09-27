@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreImage
 import Combine
 import ImageIO
 import Photos
@@ -1162,6 +1163,9 @@ enum AimShotProcessor {
         var imageWidth: CGFloat
         var imageHeight: CGFloat
         var crop: [CGFloat]?
+        /// Picture or Page squared up from these corners (x, y pairs,
+        /// normalized) instead of cropped.
+        var straightened: [CGFloat]? = nil
         var frames: [FrameInfo]
     }
 
@@ -1195,15 +1199,23 @@ enum AimShotProcessor {
         let original = frames[winner]
         let size = pixelSize(original)
         var crop: CGRect?
+        var straightened: AimQuad?
         var photo = original
         var shown: UIImage?
         // Walkaround 2026-09-16: shots were read as sideways because the
         // pixels were landscape with only an EXIF turn. Bake the turn in.
         if let full = uprightImage(original, maxSide: max(size.width, size.height)) {
             var image = full
-            if let box = scored[winner].box,
-               let rect = AimBurst.crop(box: box, imageSize: size, framing: framing),
-               let cut = full.cropping(to: rect) {
+            let fullSize = CGSize(width: full.width, height: full.height)
+            if framing == .page, let q = scored[winner].quad, AimStraighten.usable(q, imageSize: fullSize),
+               let flat = squareUp(full, quad: q) {
+                // Kareen, 2026-09-25: a picture shot at an angle is kept as
+                // the picture itself, squared up.
+                image = flat
+                straightened = q
+            } else if let box = scored[winner].box,
+                      let rect = AimBurst.crop(box: box, imageSize: size, framing: framing),
+                      let cut = full.cropping(to: rect) {
                 image = cut
                 crop = rect
             }
@@ -1212,17 +1224,41 @@ enum AimShotProcessor {
                 shown = UIImage(cgImage: image)
             } else {
                 crop = nil
+                straightened = nil
             }
         }
         if shown == nil { shown = UIImage(data: original) }
         let info = ShotInfo(
             subject: subjectName, winner: winner, imageWidth: size.width, imageHeight: size.height,
             crop: crop.map { [$0.minX, $0.minY, $0.width, $0.height] },
+            straightened: straightened.map { $0.corners.flatMap { [$0.x, $0.y] } },
             frames: scored.enumerated().map { i, f in
                 FrameInfo(index: i, box: f.box.map { [$0.minX, $0.minY, $0.width, $0.height] },
                           sharpness: f.sharpness, score: AimBurst.score(f, framing: framing))
             })
-        return Result(image: shown, keep: Kept(photo: photo, original: original, cropped: crop != nil, info: info))
+        return Result(image: shown, keep: Kept(photo: photo, original: original,
+                                               cropped: crop != nil || straightened != nil, info: info))
+    }
+
+    private static let squareUpContext = CIContext(options: [.useSoftwareRenderer: false])
+
+    /// The page inside `quad` (normalized, top-left origin) flattened to a
+    /// rectangle, at the size `AimStraighten.outputSize` gives.
+    static func squareUp(_ image: CGImage, quad: AimQuad) -> CGImage? {
+        let W = CGFloat(image.width), H = CGFloat(image.height)
+        // Core Image puts the origin at the bottom-left.
+        func ci(_ p: CGPoint) -> CIVector { CIVector(x: p.x * W, y: (1 - p.y) * H) }
+        guard let flat = CIFilter(name: "CIPerspectiveCorrection", parameters: [
+            kCIInputImageKey: CIImage(cgImage: image),
+            "inputTopLeft": ci(quad.topLeft), "inputTopRight": ci(quad.topRight),
+            "inputBottomRight": ci(quad.bottomRight), "inputBottomLeft": ci(quad.bottomLeft),
+        ])?.outputImage else { return nil }
+        let want = AimStraighten.outputSize(quad, imageSize: CGSize(width: W, height: H))
+        let e = flat.extent
+        guard e.width > 0, e.height > 0 else { return nil }
+        let scaled = flat.transformed(by: CGAffineTransform(translationX: -e.minX, y: -e.minY))
+            .transformed(by: CGAffineTransform(scaleX: want.width / e.width, y: want.height / e.height))
+        return squareUpContext.createCGImage(scaled, from: CGRect(origin: .zero, size: want))
     }
 
     /// The still, turned upright (EXIF applied), no bigger than `maxSide`.

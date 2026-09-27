@@ -42,8 +42,10 @@ struct AimRound2SteeringTests {
     }
 
     @Test func cutOffOnlyWhenReallyTouchingTheEdge() {
-        #expect(whole(CGRect(x: 0.01, y: 0.2, width: 0.6, height: 0.5)) == .framed)
-        #expect(whole(CGRect(x: 0.0, y: 0.2, width: 0.6, height: 0.5)) == .moveLeft)
+        // Loose zone: a big subject is steered to the middle in the tight one
+        // (Kareen, 2026-09-25), so only the loose zone isolates the edge rule.
+        #expect(whole(CGRect(x: 0.01, y: 0.2, width: 0.6, height: 0.5), loose: true) == .framed)
+        #expect(whole(CGRect(x: 0.0, y: 0.2, width: 0.6, height: 0.5), loose: true) == .moveLeft)
         #expect(whole(CGRect(x: 0.3, y: 0.2, width: 0.7, height: 0.5)) == .moveRight)
         #expect(whole(CGRect(x: 0.0, y: 0.2, width: 1.0, height: 0.5)) == .backUp)
     }
