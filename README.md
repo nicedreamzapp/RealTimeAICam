@@ -8,7 +8,7 @@ Point it at something and it names it. Hold it up to a bill and it reads the bil
 Press one button and it describes the whole room in a sentence you can act on.
 **No account. No signal. No server. Nothing ever leaves the phone.**
 
-### [![Download on the App Store](https://img.shields.io/badge/Download_on_the-App_Store-0D96F6?style=for-the-badge&logo=apple&logoColor=white)](https://apps.apple.com/us/app/id6751230739) [![Get it on Google Play](https://img.shields.io/badge/Get_it_on-Google_Play-01875f?style=for-the-badge&logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.mattmacosko.realtimeaicam)
+### [![Download on the App Store](https://img.shields.io/badge/Download_on_the-App_Store-0D96F6?style=for-the-badge&logo=apple&logoColor=white)](https://apps.apple.com/us/app/id6751230739) [![Get it on Google Play](https://img.shields.io/badge/Get_it_on-Google_Play-01875f?style=for-the-badge&logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.mattmacosko.realtimeaicam) [![Downloads, both stores](https://img.shields.io/endpoint?url=https%3A%2F%2Fnicedreamzwholesale.com%2Fsoftware%2Fbadge-realtime-ai-cam.json&style=for-the-badge&logo=appstore&logoColor=white&labelColor=1a7f37)](https://nicedreamzwholesale.com/software/#apps)
 
 **Free on [iPhone](https://apps.apple.com/us/app/id6751230739) and [Android](https://play.google.com/store/apps/details?id=com.mattmacosko.realtimeaicam) — no ads, no subscription, nothing to buy inside.**
 
