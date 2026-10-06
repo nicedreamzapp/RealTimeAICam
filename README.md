@@ -8,7 +8,12 @@ Point it at something and it names it. Hold it up to a bill and it reads the bil
 Press one button and it describes the whole room in a sentence you can act on.
 **No account. No signal. No server. Nothing ever leaves the phone.**
 
-### [![Download on the App Store](https://img.shields.io/badge/Download_on_the-App_Store-0D96F6?style=for-the-badge&logo=apple&logoColor=white)](https://apps.apple.com/us/app/id6751230739) [![Get it on Google Play](https://img.shields.io/badge/Get_it_on-Google_Play-01875f?style=for-the-badge&logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.mattmacosko.realtimeaicam)
+It is a native iPhone and Android app that runs object detection, text recognition and a
+fine-tuned vision-language model on the phone itself, and speaks what they find out loud.
+
+### [![Download on the App Store](https://img.shields.io/badge/Download_on_the-App_Store-0D96F6?style=for-the-badge&logo=apple&logoColor=white)](https://apps.apple.com/us/app/id6751230739) [![Get it on Google Play](https://img.shields.io/badge/Get_it_on-Google_Play-01875f?style=for-the-badge&logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.mattmacosko.realtimeaicam) [![Downloads, both stores](https://img.shields.io/endpoint?url=https%3A%2F%2Fnicedreamzwholesale.com%2Fsoftware%2Fbadge-realtime-ai-cam.json&style=for-the-badge&logo=appstore&logoColor=white&labelColor=1a7f37)](https://nicedreamzwholesale.com/software/#apps)
+
+[![38 active days, verified by Not a Cent](https://notacent.app/api/badge/realtimeaicam.svg?style=card&lang=en)](https://notacent.app/en/app/realtimeaicam)
 
 **Free on [iPhone](https://apps.apple.com/us/app/id6751230739) and [Android](https://play.google.com/store/apps/details?id=com.mattmacosko.realtimeaicam) — no ads, no subscription, nothing to buy inside.**
 
@@ -24,6 +29,34 @@ Press one button and it describes the whole room in a sentence you can act on.
 ![License](https://img.shields.io/badge/License-AGPL--3.0-blue?style=for-the-badge)
 
 </div>
+
+---
+
+## 📸 Screenshots
+
+<div align="center">
+
+| 🌎 **Translation** | 🐶 **Detection** | 🏠 **Home Screen** | 📱 **App Info** | 📏 **LiDAR Distance** |
+| --- | --- | --- | --- | --- |
+| <img src="./ios/IMG_2169.png" width="140" style="border-radius: 10px;"> | <img src="./ios/IMG_2208.png" width="140" style="border-radius: 10px;"> | <img src="./ios/HomeSCreen1.png" width="140" style="border-radius: 10px;"> | <img src="./ios/IMG_2224.jpeg" width="140" style="border-radius: 10px;"> | <img src="./ios/IMG_2247.png" width="140" style="border-radius: 10px;"> |
+| *Offline Spanish→English* | *601 object classes* | *Clean, native UI* | *Lightweight install* | *Pro model depth sensing* |
+
+</div>
+
+---
+
+## 🛠️ What I built
+
+Designed, written and shipped by **Matt Macosko** (NiceDreamzApps). The detector, the base
+language model and the inference runtimes are upstream work, credited below; the app around
+them is this repo.
+
+- 📱 **The iOS app**: SwiftUI screens ([`ContentView.swift`](ios/project%20601/ContentView.swift), [`HomeView.swift`](ios/HomeView.swift)) and the camera pipeline with thermal throttling ([`CameraViewModel.swift`](ios/CameraViewModel.swift))
+- 🎯 **Detection around upstream YOLOv8**: 601-class decoding and the indoor/outdoor filters ([`YOLOv8Processor.swift`](ios/YOLOv8Processor.swift)), tracking ([`ObjectTracker.swift`](ios/ObjectTracker.swift)), LiDAR distance ([`LiDARManager.swift`](ios/LiDARManager.swift))
+- 🗣️ **The on-device narrator**: running the fine-tuned model through upstream MLX Swift ([`OnDeviceVisionNarrator.swift`](ios/project%20601/OnDeviceVisionNarrator.swift)), a check that says what is wrong with a bad shot before the model runs ([`FrameQualityGate.swift`](ios/project%20601/FrameQualityGate.swift)), and model lookup with a size- and hash-checked install ([`VisionModelStore.swift`](ios/project%20601/VisionModelStore.swift), [`make_manifest.py`](tools/make_manifest.py)). The model itself is a LoRA fine-tune of upstream Qwen3.5-0.8B; its weights and training code are not in this repo
+- 📖 **Reading**: live OCR on Apple Vision ([`LiveOCRViewModel.swift`](ios/LiveOCRViewModel.swift)), careful single-page reads ([`PageScanner.swift`](ios/project%20601/PageScanner.swift)), mail and bill summaries in plain code with no model ([`MailSummarizer.swift`](ios/project%20601/MailSummarizer.swift)), a second check on dollar amounts ([`MoneyCrossCheck.swift`](ios/project%20601/MoneyCrossCheck.swift)), offline Spanish to English ([`SpanishTranslationEngine.swift`](ios/SpanishTranslationEngine.swift))
+- 📸 **Help Me Aim**: talks a blind photographer into the shot, then takes it ([`HelpMeAim.swift`](ios/project%20601/HelpMeAim.swift)), with unit tests in [`project 601Tests/`](ios/project%20601Tests/)
+- 🤖 **The Android port**: Jetpack Compose UI ([`ui/`](android/app/src/main/java/com/mattmacosko/realtimeaicam/ui/)), the TensorFlow Lite detector ([`YoloDetector.kt`](android/app/src/main/java/com/mattmacosko/realtimeaicam/detection/YoloDetector.kt)), a JNI bridge to upstream llama.cpp that probes the GPU before trusting it ([`narrator_jni.cpp`](android/app/src/main/cpp/narrator_jni.cpp), [`NarratorEngine.kt`](android/app/src/main/java/com/mattmacosko/realtimeaicam/narrator/NarratorEngine.kt)), and the model conversion tooling ([`android/tools/`](android/tools/))
 
 ---
 
@@ -121,6 +154,7 @@ order, or just not useful — say so, and it gets fixed.
 - 🐶 **Object detection** — YOLOv8, **601 classes** from Open Images V7
 - 🏠 **Indoor / outdoor modes** — swaps the whole list of things the detector may name, so your bathroom stops containing a skyscraper
 - 📏 **LiDAR distance** — per-object depth on Pro models
+- 📸 **Help Me Aim**: says where to move the phone until the subject is in frame, then takes the picture
 
 </td>
 <td width="50%">
@@ -146,7 +180,7 @@ graph TB
     A --> D[🗣️ Fine-tuned Vision-Language Narrator]
     A --> H[📏 ARKit LiDAR Depth]
 
-    B --> E[⚡ Metal Performance Shaders]
+    B --> E[⚡ Metal]
     C --> G[🌎 Offline Translation]
     E --> F[🧠 Neural Engine]
     D --> F
@@ -159,7 +193,7 @@ graph TB
 
 | Component | Technology | Purpose |
 |---|---|---|
-| 🗣️ **Narrator** | Fine-tuned vision-language model, 4-bit, bundled | Scene and page description |
+| 🗣️ **Narrator** | Fine-tuned vision-language model, 4-bit, bundled · MLX Swift (iOS) · llama.cpp (Android) | Scene and page description |
 | 🤖 **Detector** | YOLOv8 (Ultralytics) | 601-class object detection |
 | 🏗️ **UI** | SwiftUI (iOS) · Jetpack Compose (Android) | Native interface on both |
 | ⚡ **Acceleration** | CoreML + Metal + Neural Engine · TensorFlow Lite | Hardware-optimized inference |
@@ -182,26 +216,18 @@ graph TB
 | 📍 **Location Tracking** | ❌ **NEVER** | No GPS or location access |
 | 🏢 **Cloud Processing** | ❌ **NONE** | 100% on-device AI, model included |
 | 👤 **Account Required** | ❌ **NONE** | Install and use it |
-| 🔐 **Data Encryption** | ✅ **Built-in** | OS secure enclave protection |
 
 **🔐 Privacy is non-negotiable. Everything happens locally.**
 
 </div>
 
----
-
-## 📸 Screenshots
-
-<div align="center">
-
-| 🌎 **Translation** | 🐶 **Detection** | 🏠 **Home Screen** | 📱 **App Info** | 📏 **LiDAR Distance** |
-| --- | --- | --- | --- | --- |
-| <img src="./ios/IMG_2169.png" width="140" style="border-radius: 10px;"> | <img src="./ios/IMG_2208.png" width="140" style="border-radius: 10px;"> | <img src="./ios/HomeSCreen1.png" width="140" style="border-radius: 10px;"> | <img src="./ios/IMG_2224.jpeg" width="140" style="border-radius: 10px;"> | <img src="./ios/IMG_2247.png" width="140" style="border-radius: 10px;"> |
-| *Offline Spanish→English* | *601 object classes* | *Clean, native UI* | *Lightweight install* | *Pro model depth sensing* |
-
-</div>
+> The one network call in the code: if a build does not have the narrator model inside it,
+> the iPhone app offers a **Download** button and fetches it once, only when tapped
+> ([`VisionModelStore.swift`](ios/project%20601/VisionModelStore.swift)). App Store and
+> Google Play builds ship with the model, so they never make it.
 
 ---
+
 
 ## 📦 Both platforms, one repo
 
@@ -225,8 +251,9 @@ conversion tooling included.
 
 ### 📋 **Requirements**
 - **Device:** iPhone with **iOS 17+** — the download is around **700 MB** because the narrator model is inside the app
+- **Android:** Android 8+ for detection and reading; *What's this?* needs Android 9+ on a 64-bit (arm64) phone
 - **Optional:** a LiDAR-equipped iPhone for distance measurement
-- **Development:** macOS with Xcode 16+
+- **Development:** macOS with Xcode 16+ (the MLX Swift and swift-transformers packages resolve on first open), or Android Studio for `android/`
 
 ### ⚙️ **Quick setup**
 ```bash
@@ -242,10 +269,23 @@ open "RealTime Ai Cam.xcodeproj"
 # 4. Connect your iPhone and build!
 ```
 
+The narrator weights are too large for git and are not in this repo. A build from source
+works for detection, reading and translation straight away; *What's this?* shows a
+**Download** button on the home screen and fetches the model (about 622 MB) the first time.
+
+**Android:** the arm64 build links against prebuilt llama.cpp libraries and loads model files
+that are also not in git, so build those first by following [`android/NARRATOR.md`](android/NARRATOR.md),
+then open `android/` in Android Studio.
+
+### 🚧 **Known limits**
+- *What's this?* on Android works but is slow on budget phones: about 87 s on a Helio P35, the only phone timed so far ([`NARRATOR.md`](android/NARRATOR.md))
+- No *What's this?* on 32-bit Android phones; detection and reading still work there
+- LiDAR distance is iPhone Pro only
+
 ### 🔑 **Required permissions**
 - 📷 **Camera** — required, it's a camera
-- 🖼️ **Photo library** — optional, to describe pictures you already have
-- 📐 **Motion / Depth** — optional, for LiDAR distance
+- 🖼️ **Add to photo library**: optional, so Help Me Aim can save the pictures it takes (picking a photo to describe needs no permission)
+- 🎙️ **Microphone + speech recognition**: optional, only while you hold the button to ask a question about a photo, transcribed on the phone
 
 ---
 
@@ -258,12 +298,12 @@ open "RealTime Ai Cam.xcodeproj"
 
 1. **Replace the model file**
    ```
-   /Models/YOLOv8.mlpackage  →  YourCustomModel.mlpackage
+   ios/yolov8n_oiv7.mlpackage  →  YourCustomModel.mlpackage
    ```
 
 2. **Update the processor**
-   - Modify `YOLOv8Processor.swift` if input/output shapes differ
-   - Adjust the class labels in `class_names.txt`
+   - Modify `YOLOv8Processor.swift` if input/output shapes differ (it loads the generated `yolov8n_oiv7` class and expects 601 classes)
+   - Adjust the class labels in `ios/class_names.txt`
    - If you change the class list, update the indoor/outdoor sets in `YOLOv8Processor.swift` too, or the filters will drop classes that no longer exist
 
 3. **Large models**
