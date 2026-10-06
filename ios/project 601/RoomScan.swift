@@ -366,7 +366,7 @@ struct RoomScanView: View {
         let audio = AVAudioSession.sharedInstance()
         try? audio.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
         try? audio.setActive(true)
-        let u = AVSpeechUtterance(string: text)
+        let u = AVSpeechUtterance(string: SpeakableText.spoken(text))
         u.rate = 0.52
         synth.speak(u)
     }

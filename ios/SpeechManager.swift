@@ -176,7 +176,7 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
     /// The app's own voice is off: one VoiceOver announcement for the whole
     /// cycle, then hold the queue closed until it has had time to be heard.
     private func announceCycleToVoiceOver(_ names: [String]) {
-        let line = names.joined(separator: ", ")
+        let line = SpeakableText.spoken(names.joined(separator: ", "))
         isProcessingQueue = true
         UIAccessibility.post(notification: .announcement, argument: line)
         announceGeneration += 1
@@ -190,7 +190,8 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
     // MARK: - NEW: Build Speech Text Based on LiDAR Status
 
     private func buildSpeechText(for detection: YOLODetection, lidarManager: LiDARManager) -> String {
-        let objectName = detection.className.lowercased()
+        // "Bat (Animal)" was read out with its label note; say just "bat".
+        let objectName = SpeakableText.className(detection.className)
 
         // Check if LiDAR is active and enabled
         if lidarManager.isEnabled, lidarManager.isRunning {
@@ -205,7 +206,7 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
                 let positionWord = convertPositionToWord(position)
 
                 // Format: "bottle left 3 feet"
-                return "\(objectName) \(positionWord) \(distanceFeet) feet"
+                return "\(objectName) \(positionWord) \(distanceFeet) \(distanceFeet == 1 ? "foot" : "feet")"
             }
         }
 
@@ -294,7 +295,9 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
         UserDefaults.standard.object(forKey: "speakAnswersAloud") as? Bool ?? true
     }
 
-    func speak(_ text: String) {
+    func speak(_ rawText: String) {
+        let text = SpeakableText.spoken(rawText)
+        guard !text.isEmpty else { return }
         if !speaksAloud {
             UIAccessibility.post(notification: .announcement, argument: text)
             return
@@ -416,7 +419,9 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
     /// Speaks the given text by splitting it into segments based on punctuation marks,
     /// queuing each segment as a separate utterance with pauses after each segment depending on punctuation.
     /// - Parameter text: The input string to be spoken with pauses.
-    func speakWithPauses(_ text: String) {
+    func speakWithPauses(_ rawText: String) {
+        let text = SpeakableText.spoken(rawText)
+        guard !text.isEmpty else { return }
         if !speaksAloud {
             UIAccessibility.post(notification: .announcement, argument: text)
             return

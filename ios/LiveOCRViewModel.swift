@@ -493,7 +493,11 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
         countdownUtterances.firstIndex { $0 === utterance }
     }
 
-    func speak(text: String, voiceIdentifier: String, completion: @escaping () -> Void) {
+    func speak(text rawText: String, voiceIdentifier: String, completion: @escaping () -> Void) {
+        // Numbers, addresses and codes said the way a person would (SpeakableText).
+        // Only the spoken copy changes; the screen and the clipboard keep the text
+        // exactly as it was read.
+        let text = SpeakableText.spoken(rawText)
         guard !text.isEmpty else { completion(); return }
         if !Self.speaksAloud {
             announceInstead(text)

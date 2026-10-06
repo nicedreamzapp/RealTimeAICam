@@ -261,7 +261,7 @@ struct ContentView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             let selectedVoice = AVSpeechSynthesisVoice(identifier: viewModel.selectedVoiceIdentifier)
             let voiceName = selectedVoice?.name ?? "Selected"
-            let utterance = AVSpeechUtterance(string: "Welcome to the real-time AI. iOS Detection app. \(voiceName) voice chosen")
+            let utterance = AVSpeechUtterance(string: SpeakableText.spoken("Welcome to the real-time AI. iOS Detection app. \(voiceName) voice chosen"))
             utterance.voice = selectedVoice
             utterance.rate = 0.5
             utterance.volume = 0.9

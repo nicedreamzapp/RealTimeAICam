@@ -295,7 +295,7 @@ struct ObjectDetectionView: View {
             // These are on-screen toasts. Speak them so a VoiceOver user hears
             // why LiDAR just switched off instead of being left guessing.
             if let message = newValue, !message.isEmpty {
-                UIAccessibility.post(notification: .announcement, argument: message)
+                SpeakableText.announce(message)
             }
         }
         .onChange(of: lidar.isAvailable) { newValue in

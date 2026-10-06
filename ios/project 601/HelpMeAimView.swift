@@ -56,7 +56,7 @@ final class AimVoice: NSObject, AVSpeechSynthesizerDelegate {
     }
 
     func say(_ text: String, then done: (() -> Void)? = nil) {
-        let line = AimPhrases.capitalized(text)
+        let line = SpeakableText.spoken(AimPhrases.capitalized(text))
         AimDevLog.note((usesVoiceOver ? "SAY(voiceover) " : "SAY ") + line)
         token += 1
         let mine = token

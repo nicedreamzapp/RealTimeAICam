@@ -17,7 +17,7 @@ final class InstructionsSpeaker: NSObject, ObservableObject, AVSpeechSynthesizer
         // Stop anything already playing to avoid overlap
         stop()
 
-        let utterance = AVSpeechUtterance(string: script)
+        let utterance = AVSpeechUtterance(string: SpeakableText.spoken(script))
         utterance.rate = rate
         utterance.volume = 1.0
 
