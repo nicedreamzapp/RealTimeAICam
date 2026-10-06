@@ -1,5 +1,6 @@
 package com.mattmacosko.realtimeaicam.ui
 
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.speech.tts.Voice
@@ -255,7 +256,7 @@ fun VoiceGridPopup(
                                     onDismiss()
                                 }
                                 .padding(vertical = 6.dp, horizontal = 4.dp)
-                                .semantics(mergeDescendants = true) {
+                                .clearAndSetSemantics {
                                     contentDescription = option.display
                                     stateDescription = if (isSelected) "Selected" else "Not selected"
                                 },

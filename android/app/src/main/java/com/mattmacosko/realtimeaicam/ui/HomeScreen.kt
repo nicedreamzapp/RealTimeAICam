@@ -70,6 +70,7 @@ fun HomeScreen(
     onSpanishOcr: () -> Unit,
     onObjectDetection: () -> Unit,
     onWhatsThis: () -> Unit,
+    onHelpMeAim: () -> Unit,
     onInfo: () -> Unit,
     onVoicePicker: () -> Unit,
 ) {
@@ -133,8 +134,8 @@ fun HomeScreen(
                     ModeButton(
                         IosColors.Green, scale, screenWidth,
                         onClick = { if (debouncer.tryFire()) onSpanishOcr() },
-                        label = "Spanish to English translator",
-                        clickLabel = "Point the camera at Spanish text to hear it in English",
+                        label = "Translator",
+                        clickLabel = "Point the camera at text in Spanish or another language to hear it in English",
                     ) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -178,6 +179,25 @@ fun HomeScreen(
                         ) {
                             Text("\uD83D\uDCC4", fontSize = (32 * scale).sp)
                             OutlinedText("What's this?", (20 * scale).sp)
+                        }
+                    }
+                }
+                // Help Me Aim: its own button, exactly as on the iPhone. What's
+                // this? answers a question and throws the photo away; this one
+                // talks you into the shot and keeps it.
+                EntryAnimated(2100) {
+                    ModeButton(
+                        IosColors.Purple, scale, screenWidth,
+                        onClick = { if (debouncer.tryFire()) onHelpMeAim() },
+                        label = "Help Me Aim",
+                        clickLabel = "Say what you want a picture of and be talked into the shot",
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("\uD83C\uDFAF", fontSize = (32 * scale).sp)
+                            OutlinedText("Help Me Aim", (20 * scale).sp)
                         }
                     }
                 }
@@ -363,7 +383,8 @@ fun ModeButton(
                     onClickLabel = clickLabel,
                     onClick = onClick,
                 )
-                .semantics(mergeDescendants = true) {
+                // Only the words: the emoji drawn inside would be read by name.
+                .clearAndSetSemantics {
                     if (label.isNotEmpty()) contentDescription = label
                 },
             contentAlignment = Alignment.Center,
@@ -445,7 +466,7 @@ private fun InfoGuideButton(onClick: () -> Unit) {
                 onClickLabel = "Open the instructions and audio tutorial",
                 onClick = onClick,
             )
-            .semantics(mergeDescendants = true) { contentDescription = "Info and guide" },
+            .clearAndSetSemantics { contentDescription = "Info and guide" },
         contentAlignment = Alignment.Center,
     ) {
         Box(
@@ -489,7 +510,7 @@ private fun VoicePickerPill(
                 onClick = onClick,
             )
             .padding(horizontal = 12.dp, vertical = 6.dp)
-            .semantics(mergeDescendants = true) { contentDescription = "Voice, $label" },
+            .clearAndSetSemantics { contentDescription = "Voice, $label" },
     ) {
         Text(emoji, fontSize = (28 * scale).sp)
         Text(

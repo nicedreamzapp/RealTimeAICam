@@ -155,9 +155,11 @@ class DetectionPipeline(
     private val letterboxPaint = Paint(Paint.FILTER_BITMAP_FLAG)
     private val frameTimestamps = ArrayDeque<Long>()
 
-    init {
+    /** Loads the detector if it isn't in memory (it is released while other AI screens run). */
+    private fun loadModel() {
         // Load the model off the main thread; surface a friendly error if missing.
         analysisExecutor.execute {
+            if (detector != null) return@execute
             try {
                 val d = YoloDetector.create(appContext, config)
                 detector = d
@@ -176,6 +178,7 @@ class DetectionPipeline(
 
     /** Binds preview + analysis to [lifecycleOwner], rendering into [previewView]. */
     fun start(lifecycleOwner: LifecycleOwner, previewView: PreviewView) {
+        loadModel()
         _zoomRatio.value = 1f
         _torchOn.value = false
         boundLifecycleOwner = lifecycleOwner
@@ -242,6 +245,14 @@ class DetectionPipeline(
         _isUltraWide.value = false
         tracker.reset()
         _uiState.update { it.copy(detections = emptyList()) }
+    }
+
+    /** Give the detector's memory back while another AI screen is open; start() reloads it. */
+    fun releaseModel() {
+        analysisExecutor.execute {
+            detector?.close()
+            detector = null
+        }
     }
 
     fun shutdown() {

@@ -1,6 +1,7 @@
 package com.mattmacosko.realtimeaicam
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -67,6 +68,8 @@ class MainActivity : ComponentActivity() {
             permissionLauncher.launch(Manifest.permission.CAMERA)
         }
 
+        openFromShortcut(intent)
+
         setContent {
             MainScreen(
                 mode = appMode,
@@ -77,6 +80,19 @@ class MainActivity : ComponentActivity() {
                 versionLabel = versionLabel(),
             )
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        openFromShortcut(intent)
+    }
+
+    /** Assistant, Gemini or a long-press shortcut asked for a screen (see ShortcutFeature). */
+    private fun openFromShortcut(intent: Intent?) {
+        val requested = ShortcutFeature.modeFor(intent?.getStringExtra(ShortcutFeature.EXTRA)) ?: return
+        intent?.removeExtra(ShortcutFeature.EXTRA)
+        appMode = requested
     }
 
     override fun onStop() {

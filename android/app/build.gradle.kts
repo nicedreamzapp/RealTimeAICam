@@ -13,8 +13,8 @@ android {
         applicationId = "com.mattmacosko.realtimeaicam"
         minSdk = 26
         targetSdk = 36
-        versionCode = 11
-        versionName = "1.6"
+        versionCode = 22
+        versionName = "1.17"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         externalNativeBuild {
@@ -123,6 +123,12 @@ dependencies {
 
     // On-device OCR (bundled model, offline)
     implementation("com.google.mlkit:text-recognition:16.0.1")
+    // Help Me Aim finds faces with ML Kit here; the iPhone uses Apple's
+    // Vision framework for the same job. Same steering either way.
+    implementation("com.google.mlkit:face-detection:16.1.7")
+    // Translator: languages other than Spanish use Google's free on-device
+    // translation packs, downloaded once on first use, then offline (2026-09-21).
+    implementation("com.google.mlkit:translate:17.0.3")
 
     implementation("org.tensorflow:tensorflow-lite:2.17.0")
     implementation("org.tensorflow:tensorflow-lite-gpu:2.17.0")
@@ -132,6 +138,7 @@ dependencies {
         exclude(group = "org.tensorflow", module = "tensorflow-lite")
     }
 
+    testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
 }

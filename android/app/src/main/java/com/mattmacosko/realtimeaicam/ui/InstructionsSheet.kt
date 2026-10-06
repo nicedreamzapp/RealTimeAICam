@@ -1,5 +1,7 @@
 package com.mattmacosko.realtimeaicam.ui
 
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import androidx.activity.compose.BackHandler
@@ -55,7 +57,7 @@ private const val TUTORIAL_TEXT =
         "There are three modes. Object Detection identifies everyday objects in real time. " +
         "English Text to Speech reads printed English out loud. " +
         "Spanish to English translates printed Spanish instantly. " +
-        "Controls: switch camera, toggle the lens, use the flashlight at four brightness levels, " +
+        "Controls: switch camera, toggle the lens, turn the flashlight on or off with one tap, " +
         "pinch to zoom, reset or stop, speak results, copy text to history, and open settings. " +
         "Privacy first: everything runs on your device. No tracking, no accounts, no internet needed."
 
@@ -153,6 +155,7 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
             ) {
                 Text(
                     "👋 Welcome to RealTime AI Camera!",
+                    modifier = Modifier.semantics { contentDescription = "Welcome to RealTime AI Camera!" },
                     fontSize = 34.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
@@ -187,7 +190,7 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
                             }
                         }
                         .padding(16.dp)
-                        .semantics(mergeDescendants = true) {
+                        .clearAndSetSemantics {
                             contentDescription = if (speaking) {
                                 "Stop audio tutorial"
                             } else {
@@ -234,7 +237,7 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
                 SectionHeader("🎛️ Controls")
                 BodyLine("🔄 Switch Camera — flip between rear and front")
                 BodyLine("🌐 Lens Toggle — wide / ultra-wide (when available)")
-                BodyLine("🔦 Torch — 25% / 50% / 75% / 100%")
+                BodyLine("🔦 Flashlight — one tap on at full brightness, one tap off")
                 BodyLine("🤏 Pinch to Zoom")
                 BodyLine("🔁 Reset / Stop — clears text, translation, and stops speaking")
                 BodyLine("🗣️ Speak — hear detected or translated text")
@@ -255,13 +258,19 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
 
 @Composable
 private fun SectionHeader(text: String) {
-    Text(text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+    Text(
+        text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
+        modifier = Modifier.semantics { contentDescription = text.withoutEmoji(); heading() },
+    )
 }
 
 @Composable
 private fun ModeBlock(title: String, body: String) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(title, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+        Text(
+            title, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
+            modifier = Modifier.semantics { contentDescription = title.withoutEmoji() },
+        )
         Text(body, fontSize = 17.sp, color = Color.White.copy(alpha = 0.9f), lineHeight = 23.sp)
     }
 }
@@ -270,6 +279,7 @@ private fun ModeBlock(title: String, body: String) {
 private fun BodyLine(text: String, secondary: Boolean = false) {
     Text(
         "• $text",
+        modifier = Modifier.semantics { contentDescription = text.withoutEmoji() },
         fontSize = if (secondary) 15.sp else 17.sp,
         color = if (secondary) IosColors.Secondary else Color.White.copy(alpha = 0.9f),
         lineHeight = 22.sp,

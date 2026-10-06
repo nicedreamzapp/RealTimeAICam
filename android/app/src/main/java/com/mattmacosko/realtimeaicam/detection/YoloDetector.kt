@@ -75,6 +75,16 @@ class YoloDetector private constructor(
         private const val PERF_LOG_EVERY = 10
 
         /**
+         * Help Me Aim looks for one named thing. For those classes the score is
+         * read straight from the model, even when another class wins the box,
+         * and a lower bar applies: a book on a shelf scores higher as "bookcase",
+         * and a blind tester's book, plant and medicine box were never found
+         * while in view (2026-09-25). Only the wanted names get the lower bar,
+         * which keeps the over-detection the YOLOE experiment ran into away.
+         */
+        private const val FOCUS_THRESHOLD = 0.10f
+
+        /**
          * Creates the detector, or throws with a human-readable message when the
          * model asset is missing (the app shows the message instead of crashing).
          */
@@ -252,6 +262,7 @@ class YoloDetector private constructor(
         letterboxed: Bitmap,
         letterbox: LetterboxInfo,
         userConfidenceThreshold: Float = DEFAULT_USER_THRESHOLD,
+        focusClassIds: IntArray? = null,
     ): List<Detection> {
         val t0 = SystemClock.elapsedRealtime()
         fillInput(letterboxed)
@@ -259,7 +270,7 @@ class YoloDetector private constructor(
         outputBuffer.rewind()
         interpreter.run(inputBuffer, outputBuffer)
         val t2 = SystemClock.elapsedRealtime()
-        val result = decode(letterbox, userConfidenceThreshold)
+        val result = decode(letterbox, userConfidenceThreshold, focusClassIds?.filter { it in 0 until numClasses }?.toIntArray())
         val t3 = SystemClock.elapsedRealtime()
 
         if (++frameIndex % PERF_LOG_EVERY == 0) {
@@ -350,7 +361,7 @@ class YoloDetector private constructor(
         }
     }
 
-    private fun decode(letterbox: LetterboxInfo, userThreshold: Float): List<Detection> {
+    private fun decode(letterbox: LetterboxInfo, userThreshold: Float, focus: IntArray? = null): List<Detection> {
         val threshold = BASE_THRESHOLD * max(0.04f, userThreshold)
 
         // One bulk copy out of the direct buffer, then plain array math.
@@ -386,8 +397,21 @@ class YoloDetector private constructor(
         for (a in 0 until numAnchors) {
             if (candidates.size > MAX_RAW_DETECTIONS) break
 
-            val bestScore = bestScores[a]
-            if (bestScore <= threshold) continue
+            var bestScore = bestScores[a]
+            var bestClass = bestClasses[a]
+            if (focus != null && focus.isNotEmpty()) {
+                var fs = 0f
+                var fc = -1
+                for (c in focus) {
+                    val v = coord(4 + c, a)
+                    if (v > fs) { fs = v; fc = c }
+                }
+                if (fc >= 0 && fs > FOCUS_THRESHOLD) {
+                    bestScore = fs
+                    bestClass = fc
+                }
+            }
+            if (bestScore <= threshold && !(focus != null && focus.contains(bestClass) && bestScore > FOCUS_THRESHOLD)) continue
 
             val xc = coord(0, a) * coordScale
             val yc = coord(1, a) * coordScale
@@ -395,7 +419,6 @@ class YoloDetector private constructor(
             // Ignore anchors centered in the letterbox padding (matches iOS)
             if (xc < padX || xc > side - padX || yc < padY || yc > side - padY) continue
 
-            val bestClass = bestClasses[a]
             val w = coord(2, a) * coordScale
             val h = coord(3, a) * coordScale
 
@@ -431,7 +454,7 @@ class YoloDetector private constructor(
             )
         }
 
-        val deduplicated = removeDuplicates(candidates)
+        val deduplicated = removeDuplicates(candidates, focus)
         val nmsFiltered = applyNms(deduplicated)
         return nmsFiltered
             .sortedByDescending { it.score }
@@ -439,8 +462,11 @@ class YoloDetector private constructor(
     }
 
     /** Class-agnostic suppression of near-identical boxes (IoU > 0.90). */
-    private fun removeDuplicates(detections: List<Detection>): List<Detection> {
-        val sorted = detections.sortedByDescending { it.score }
+    private fun removeDuplicates(detections: List<Detection>, focus: IntArray? = null): List<Detection> {
+        // A wanted thing is never swallowed by a stronger box of another class.
+        val sorted = detections.sortedWith(
+            compareByDescending<Detection> { focus?.contains(it.classIndex) == true }.thenByDescending { it.score }
+        )
         val keep = ArrayList<Detection>(sorted.size)
         outer@ for (d in sorted) {
             for (k in keep) {

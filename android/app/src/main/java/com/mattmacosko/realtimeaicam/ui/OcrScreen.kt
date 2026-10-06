@@ -82,7 +82,12 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -92,6 +97,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.mattmacosko.realtimeaicam.camera.OcrPipeline
+import com.mattmacosko.realtimeaicam.translation.ReaderLanguages
 
 /** Copy history: last 5 unique strings, newest first (SharedPreferences). */
 object CopyHistory {
@@ -143,6 +149,8 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit) {
     val torchOn by pipeline.torchOn.collectAsState()
     val zoom by pipeline.zoomRatio.collectAsState()
     val isSpeaking by pipeline.isSpeaking.collectAsState()
+    val sourceLang by pipeline.sourceLanguage.collectAsState()
+    val notice by pipeline.notice.collectAsState()
 
     var showSettings by remember { mutableStateOf(false) }
     var showTorchPopup by remember { mutableStateOf(false) }
@@ -203,8 +211,14 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit) {
             verticalAlignment = Alignment.Top,
         ) {
             BackPill(onBack)
+            if (isSpanish) {
+                TranslateFromControl(
+                    languageIndex = ReaderLanguages.all.indexOf(sourceLang),
+                    onSelect = { pipeline.setSourceLanguage(ReaderLanguages.all[it]) },
+                )
+            }
             Text(
-                if (isSpanish) "Span → Eng" else "English",
+                if (isSpanish) "${sourceLang.tag} → Eng" else "English",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 color = Color.White,
@@ -214,7 +228,7 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit) {
                     .padding(horizontal = 12.dp, vertical = 10.dp)
                     .semantics {
                         contentDescription = if (isSpanish) {
-                            "Mode, translating Spanish to English"
+                            "Mode, translating ${sourceLang.name} to English"
                         } else {
                             "Mode, reading English text"
                         }
@@ -253,12 +267,13 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit) {
                 .navigationBarsPadding()
                 .padding(bottom = 122.dp, start = 20.dp, end = 20.dp),
         ) {
-            val displayText = translated ?: text
-            val isTranslationShown = translated != null
+            val displayText = notice ?: translated ?: text
+            val isTranslationShown = translated != null && notice == null
             val cardHeading = when {
                 !isSpanish -> "Detected"
+                notice != null -> "Language pack"
                 isTranslationShown -> "Translation"
-                else -> "Spanish text"
+                else -> "${sourceLang.name} text"
             }
             Column(
                 Modifier
@@ -294,8 +309,9 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit) {
                     Text(
                         when {
                             !isSpanish -> "Detected"
+                            notice != null -> "Language pack"
                             isTranslationShown -> "Translation"
-                            else -> "Spanish Text"
+                            else -> "${sourceLang.name} Text"
                         },
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
@@ -333,15 +349,15 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit) {
             ) {
                 Icon(Icons.Default.Settings, null, tint = Color.White, modifier = Modifier.size(22.dp))
             }
-            // 2. Torch
+            // 2. Torch — one tap on at full brightness, one tap off (same as What's This).
+            // The 25/50/75/100 menu is gone: picking a percentage before any light
+            // appears costs screen-reader flicks at the moment you cannot see.
             CircleControlButton(
                 ringColor = if (torchOn) IosColors.Yellow.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.2f),
-                label = if (torchOn) "Turn off flashlight" else "Turn on flashlight",
+                label = "Flashlight",
                 stateLabel = if (torchOn) "On" else "Off",
-                clickLabel = if (torchOn) "Turn the flashlight off" else "Open the brightness choices",
-                onClick = {
-                    if (torchOn) pipeline.setTorch(false) else showTorchPopup = !showTorchPopup
-                },
+                clickLabel = if (torchOn) "Turn the flashlight off" else "Turn the flashlight on",
+                onClick = { pipeline.setTorch(!torchOn) },
             ) {
                 Icon(
                     if (torchOn) Icons.Default.FlashlightOn else Icons.Default.FlashlightOff,
@@ -355,7 +371,7 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit) {
                 CircleControlButton(
                     label = "Translate",
                     stateLabel = if (translating) "Translating" else null,
-                    clickLabel = "Translate the Spanish text on screen into English",
+                    clickLabel = "Translate the ${sourceLang.name} text on screen into English",
                     onClick = { if (debouncer.tryFire()) pipeline.translate() },
                 ) {
                     Icon(
@@ -553,7 +569,7 @@ private fun PopupActionButton(
             .border(1.dp, accent.copy(alpha = 0.50f), RoundedCornerShape(14.dp))
             .clickable(role = Role.Button, onClick = onClick)
             .padding(vertical = 14.dp)
-            .semantics(mergeDescendants = true) { contentDescription = label },
+            .clearAndSetSemantics { contentDescription = label },
     ) {
         Spacer(Modifier.weight(1f))
         Icon(icon, null, tint = Color.White, modifier = Modifier.size(18.dp))
@@ -791,7 +807,7 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit) {
                 if (zoom < 0.95f || zoom > 1.05f) {
                     SettingsCard {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("🔍", fontSize = 18.sp)
+                            Text("🔍", fontSize = 18.sp, modifier = Modifier.clearAndSetSemantics { })
                             Text(
                                 "  Camera Zoom", fontSize = 17.sp,
                                 fontWeight = FontWeight.SemiBold, color = Color.White,
@@ -808,7 +824,7 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit) {
                 // Tips
                 SettingsCard {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("ℹ️", fontSize = 18.sp)
+                        Text("ℹ️", fontSize = 18.sp, modifier = Modifier.clearAndSetSemantics { })
                         Text(
                             "  Tips", fontSize = 17.sp,
                             fontWeight = FontWeight.SemiBold, color = Color.White,
@@ -825,7 +841,7 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit) {
                 // Private by Design
                 SettingsCard(extraStroke = true) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("🔒", fontSize = 18.sp)
+                        Text("🔒", fontSize = 18.sp, modifier = Modifier.clearAndSetSemantics { })
                         Text(
                             "  Private by Design", fontSize = 17.sp,
                             fontWeight = FontWeight.SemiBold, color = IosColors.Green,
@@ -859,5 +875,41 @@ private fun SettingsCard(extraStroke: Boolean = false, content: @Composable () -
 
 @Composable
 private fun TipLine(text: String) {
-    Text(text, fontSize = 13.sp, color = IosColors.Secondary, lineHeight = 19.sp)
+    Text(
+        text, fontSize = 13.sp, color = IosColors.Secondary, lineHeight = 19.sp,
+        modifier = Modifier.semantics { contentDescription = text.withoutEmoji() },
+    )
+}
+
+
+/**
+ * "Translate from" (2026-09-21): which language the page is in. A screen reader hears one
+ * control, "Translate from, Spanish", and adjusts it like a slider (volume keys or TalkBack's
+ * adjust gesture); a double tap or a sighted tap steps to the next language.
+ */
+@Composable
+private fun TranslateFromControl(languageIndex: Int, onSelect: (Int) -> Unit) {
+    val langs = ReaderLanguages.all
+    val i = languageIndex.coerceIn(0, langs.size - 1)
+    val next = { onSelect((i + 1) % langs.size) }
+    Text(
+        "From: ${langs[i].name}",
+        fontSize = 14.sp,
+        fontWeight = FontWeight.Medium,
+        color = Color.White,
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(IosColors.Material.copy(alpha = 0.85f), RoundedCornerShape(20.dp))
+            .clickable { next() }
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .clearAndSetSemantics {
+                contentDescription = "Translate from"
+                stateDescription = langs[i].name
+                progressBarRangeInfo = ProgressBarRangeInfo(
+                    i.toFloat(), 0f..(langs.size - 1).toFloat(), steps = langs.size - 2,
+                )
+                setProgress { v -> onSelect(Math.round(v).coerceIn(0, langs.size - 1)); true }
+                onClick(label = "Next language") { next(); true }
+            },
+    )
 }

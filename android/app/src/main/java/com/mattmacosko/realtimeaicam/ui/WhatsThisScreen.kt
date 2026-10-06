@@ -1,5 +1,7 @@
 package com.mattmacosko.realtimeaicam.ui
 
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -145,7 +147,10 @@ import kotlin.math.roundToInt
  * network.
  */
 @Composable
-fun WhatsThisScreen(onBack: () -> Unit) {
+fun WhatsThisScreen(
+    detection: com.mattmacosko.realtimeaicam.camera.DetectionPipeline,
+    onBack: () -> Unit,
+) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
@@ -155,14 +160,19 @@ fun WhatsThisScreen(onBack: () -> Unit) {
     val camera = remember { WhatsThisCamera(context) }
     val listener = remember { AskListener(context) }
     val previewView = remember {
-        PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
+        // Show the WHOLE frame that will be captured, letterboxed, instead of
+        // cropping it to fill a tall screen. FILL_CENTER threw away the sides on
+        // screen while the still kept them, so the photo always came back wider
+        // than what was framed. Matt, 2026-09-19, on the iPhone: "the picture
+        // I'm taking and what I'm seeing on the screen are totally different."
+        // Same fix as iOS CameraPreview.swift. Detection keeps FILL_CENTER on
+        // purpose — DetectionOverlay maps its boxes with that assumption.
+        PreviewView(context).apply { scaleType = PreviewView.ScaleType.FIT_CENTER }
     }
     val debouncer = rememberDebouncer(500)
 
     val torchOn by camera.torchOn.collectAsState()
     val zoom by camera.zoomRatio.collectAsState()
-    val hasUltraWide by camera.hasUltraWide.collectAsState()
-    val isUltraWide by camera.isUltraWide.collectAsState()
     val isSpeaking by speaker.speakingNow.collectAsState()
 
     var ready by remember { mutableStateOf(false) }
@@ -173,6 +183,10 @@ fun WhatsThisScreen(onBack: () -> Unit) {
     var isListening by remember { mutableStateOf(false) }
     var isAsking by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var typedQuestion by remember { mutableStateOf("") }
+    /** The description the photo would be saved with; questions don't replace it. */
+    var description by remember { mutableStateOf("") }
+    var saved by remember { mutableStateOf(false) }
     // Spoken countdown before the shutter, on by default. Asked for on AppleVis
     // (2026-09-12): pressing the button is itself what nudges the phone and blurs
     // the shot, and it is the only way to take a selfie you can't see to frame.
@@ -191,9 +205,16 @@ fun WhatsThisScreen(onBack: () -> Unit) {
     }
 
     DisposableEffect(lifecycleOwner) {
+        // Only one AI in memory at a time: the object detector and the Spanish
+        // dictionary give their RAM back while the narrator is on screen.
+        detection.releaseModel()
+        com.mattmacosko.realtimeaicam.camera.OcrPipeline.releaseSharedEngine()
         camera.start(lifecycleOwner, previewView)
         onDispose {
             camera.stop()
+            // ~730 MB model + working memory: hand it back when leaving this screen
+            // (reloading takes a few seconds, which the screen already shows).
+            Thread({ engine.release() }, "narrator-release").start()
             listener.destroy()
             speaker.stop()
             speaker.shutdown()
@@ -238,6 +259,10 @@ fun WhatsThisScreen(onBack: () -> Unit) {
                 return@launch
             }
             frozenPhoto = bitmap
+            // The picture is taken, so the light has done its job: turn it off and
+            // keep it off. Before, resume() switched it back on while the answer
+            // was being read, because the torch state still said "on".
+            camera.setTorch(false)
             // Free the camera while the model thinks; it comes back the moment
             // the answer is spoken.
             camera.pause()
@@ -258,6 +283,7 @@ fun WhatsThisScreen(onBack: () -> Unit) {
                 // No "get closer or add light" fallback: the person holding the
                 // camera cannot see where it is pointing, so that is not advice
                 // they can act on.
+                description = said.trim()
                 say(said.ifBlank { "It's hard to see clearly, and I couldn't make out enough to say." })
             } finally {
                 camera.resume(lifecycleOwner, previewView)
@@ -272,27 +298,45 @@ fun WhatsThisScreen(onBack: () -> Unit) {
         speaker.stop()
     }
 
+    /** Wait for the narrator model if the person tapped before it finished loading. */
+    suspend fun awaitNarrator() {
+        if (ready || modelMissing) return
+        summary = "One moment…"
+        speaker.speak("One moment")
+        while (!ready && !modelMissing) delay(100)
+        summary = ""
+    }
+
     /**
      * The shutter as the button sees it: count out loud first, then take the
      * picture, so the hand is off the phone when it fires. With the countdown
      * switched off this is just the old one-tap capture.
      */
     fun startCapture() {
-        if (isScanning || countdownRemaining != null) return
-        if (!countdownEnabled) { scanPage(); return }
+        if (isScanning || countdownRemaining != null || countdownJob != null || modelMissing) return
+        if (!countdownEnabled) {
+            if (ready) scanPage() else countdownJob = scope.launch { awaitNarrator(); countdownJob = null; scanPage() }
+            return
+        }
         speaker.stop()
         summary = ""
         countdownRemaining = 3
         countdownJob = scope.launch {
+            speaker.prepareToSpeak()
             for ((number, word) in listOf(3 to "three", 2 to "two", 1 to "one")) {
                 countdownRemaining = number
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 // The app says the count in its own voice rather than leaving it
                 // to TalkBack, so it is heard the same way with TalkBack off.
-                speaker.speak(word)
-                delay(1000)
+                // Each word is finished before the next starts, then the beat is
+                // padded to a second.
+                val beat = android.os.SystemClock.elapsedRealtime()
+                speaker.speakAndWait(word)
+                val left = 1000 - (android.os.SystemClock.elapsedRealtime() - beat)
+                if (left > 0) delay(left)
             }
             countdownRemaining = null
+            awaitNarrator()
             countdownJob = null
             scanPage()
         }
@@ -302,7 +346,47 @@ fun WhatsThisScreen(onBack: () -> Unit) {
     fun nextShot() {
         speaker.stop()
         summary = ""
+        description = ""
+        saved = false
+        typedQuestion = ""
         frozenPhoto = null
+    }
+
+    /** Answers [question] about the frozen photo, spoken or typed. */
+    fun askAbout(question: String) {
+        val photo = File(context.cacheDir, "whats-this.jpg")
+        if (question.isBlank() || frozenPhoto == null || !photo.isFile || isAsking) return
+        scope.launch {
+            isAsking = true
+            summary = "Thinking…"
+            val answer = withContext(Dispatchers.IO) {
+                // "I can't tell for sure, but I can see..." is the trained honest
+                // answer, so no refusal retry. Only advice a blind person cannot
+                // act on ("move closer, turn on a light") is cut.
+                val said = engine.describe(photo, question, NarratorPrompt.ASK)
+                if (tellsThemToRetake(said)) withoutRetakeAdvice(said) else said
+            }
+            isAsking = false
+            say(answer.ifBlank { "Sorry, I couldn't work that out. Try asking again." })
+        }
+    }
+
+    /** Saves the frozen photo with its description, the way Help Me Aim does. */
+    fun savePhoto() {
+        val photo = File(context.cacheDir, "whats-this.jpg")
+        if (frozenPhoto == null || !photo.isFile || saved) return
+        scope.launch {
+            val uri = withContext(Dispatchers.IO) {
+                com.mattmacosko.realtimeaicam.aim.AimCaption.saveWithCaption(context, photo, description.ifBlank { summary })
+            }
+            if (uri != null) {
+                saved = true
+                speaker.stop()
+                speaker.speak("Saved to your photos with that description.")
+            } else {
+                speaker.speak("Sorry, the photo could not be saved.")
+            }
+        }
     }
 
     /** Hold-to-ask: begins listening while the button is held. */
@@ -334,21 +418,7 @@ fun WhatsThisScreen(onBack: () -> Unit) {
                 summary = "I didn't catch that. Hold the button and ask again."
                 return@launch
             }
-            isAsking = true
-            summary = "Thinking…"
-            val answer = withContext(Dispatchers.IO) {
-                var said = engine.describe(photo, heard)
-                if (looksLikeRefusal(said)) {
-                    said = engine.describe(
-                        photo,
-                        "Answer this question as best you can from the photo, even if it is unclear. " +
-                            "Do not refuse. Question: $heard",
-                    )
-                }
-                said
-            }
-            isAsking = false
-            say(answer.ifBlank { "Sorry, I couldn't work that out. Try asking again." })
+            askAbout(heard)
         }
     }
 
@@ -489,7 +559,15 @@ fun WhatsThisScreen(onBack: () -> Unit) {
                             color = Color.White.copy(alpha = 0.9f),
                         )
                         Spacer(Modifier.weight(1f))
-                        if (isScanning || isAsking) AnimatedLoader(22.dp)
+                        // A still hourglass while the model thinks: the spinning loader redrew
+                        // the screen 60 times a second and took about one of the phone's eight
+                        // cores away from the answer (Helio P35, measured 2026-09-17).
+                        if (isAsking) AnimatedLoader(22.dp)
+                        else if (isScanning) Icon(
+                            Icons.Default.HourglassEmpty, null,
+                            tint = Color.White.copy(alpha = 0.9f),
+                            modifier = Modifier.size(22.dp),
+                        )
                     }
                     Text(
                         summary,
@@ -558,6 +636,72 @@ fun WhatsThisScreen(onBack: () -> Unit) {
                             color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
                         )
                     }
+                    // Typing a question instead of saying it: asked for by a
+                    // Blind Android Users tester (2026-09-25). Holding a button
+                    // to talk is also awkward under TalkBack.
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        androidx.compose.material3.OutlinedTextField(
+                            value = typedQuestion,
+                            onValueChange = { typedQuestion = it },
+                            placeholder = { Text("Type a question", color = Color.White.copy(alpha = 0.6f)) },
+                            singleLine = true,
+                            enabled = !isAsking && !isListening,
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                imeAction = androidx.compose.ui.text.input.ImeAction.Send,
+                            ),
+                            keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                                onSend = { askAbout(typedQuestion.trim()); typedQuestion = "" },
+                            ),
+                            textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 17.sp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(12.dp))
+                                .semantics { contentDescription = "Type a question about this photo" },
+                        )
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .clip(CapsuleShape)
+                                .background(IosColors.Blue.copy(alpha = if (typedQuestion.isBlank()) 0.35f else 0.8f), CapsuleShape)
+                                .border(1.5.dp, Color.White.copy(alpha = 0.5f), CapsuleShape)
+                                .clickable(
+                                    enabled = typedQuestion.isNotBlank() && !isAsking,
+                                    role = Role.Button,
+                                    onClickLabel = "Ask the typed question",
+                                ) { askAbout(typedQuestion.trim()); typedQuestion = "" }
+                                .padding(horizontal = 20.dp, vertical = 16.dp)
+                                .clearAndSetSemantics { contentDescription = "Ask" },
+                        ) {
+                            Text("Ask", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(CapsuleShape)
+                            .background(IosColors.Green.copy(alpha = if (saved) 0.35f else 0.75f), CapsuleShape)
+                            .border(1.5.dp, Color.White.copy(alpha = 0.5f), CapsuleShape)
+                            .clickable(
+                                enabled = !saved && !isAsking,
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                role = Role.Button,
+                                onClickLabel = "Save this picture to your photos with its description",
+                            ) { if (debouncer.tryFire()) savePhoto() }
+                            .padding(vertical = 16.dp)
+                            .clearAndSetSemantics {
+                                contentDescription = if (saved) "Photo saved" else "Save photo with this description"
+                            },
+                    ) {
+                        Icon(Icons.Default.Download, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                        Text(if (saved) "Saved" else "Save Photo", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
+                    }
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
                         verticalAlignment = Alignment.CenterVertically,
@@ -580,7 +724,10 @@ fun WhatsThisScreen(onBack: () -> Unit) {
                     }
                 }
             } else {
-                val enabled = ready && !isScanning
+                // Tappable while the narrator is still loading: the countdown covers the
+                // load, and the shot waits for it. Before, a tap in the first few seconds
+                // after opening the screen did nothing at all (found 2026-09-28).
+                val enabled = !isScanning && !modelMissing
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
                     verticalAlignment = Alignment.CenterVertically,
@@ -665,20 +812,11 @@ fun WhatsThisScreen(onBack: () -> Unit) {
                     modifier = Modifier.size(20.dp),
                 )
             }
-            // 3. Wide angle (hidden on phones whose camera can't go below 1x, like iOS)
-            if (hasUltraWide) {
-                CircleControlButton(
-                    label = if (isUltraWide) "Switch to normal camera" else "Switch to wide angle camera",
-                    clickLabel = "Change how much the camera can see at once",
-                    onClick = { if (debouncer.tryFire()) camera.toggleUltraWide() },
-                ) {
-                    Icon(
-                        Icons.Default.GridView, null,
-                        tint = if (isUltraWide) IosColors.Cyan else Color.White,
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
-            }
+            // No lens button here. The iPhone dropped it from this screen in
+            // 1.2.0 after the first AppleVis round, so Android carrying one was
+            // the odd man out (found 2026-09-20). The lens toggle lives in
+            // Object Detection on both phones, and only when there is a second
+            // rear lens to switch to.
             // 4. Copy the summary
             CircleControlButton(
                 label = "Copy summary",
@@ -738,7 +876,7 @@ private fun copySummary(context: Context, text: String) {
  * BRIGHTER copy of the photo — when the model says it is too dark, a brighter
  * picture is the useful answer, not a sterner question.
  */
-private fun describeNeverRefusing(
+internal fun describeNeverRefusing(
     context: Context,
     shot: File,
     question: String,
@@ -847,6 +985,20 @@ private fun strippingExcuses(sentence: String?): String? {
 }
 
 /** Same markers as the iPhone: an answer that only says to retake is a refusal. */
+private val RETAKE_ADVICE = listOf(
+    "move closer", "move the phone", "move the camera", "hold the camera", "hold the phone", "hold it steady",
+    "turn on a light", "turn on the flash", "add some light", "retake", "take another", "take the picture again",
+    "take it again", "try again", "take a new photo",
+)
+
+private fun tellsThemToRetake(s: String): Boolean = s.lowercase().let { t -> RETAKE_ADVICE.any { t.contains(it) } }
+
+/** The answer minus any sentence that tells them to reshoot. */
+private fun withoutRetakeAdvice(s: String): String {
+    val kept = s.split(Regex("(?<=[.!?])\\s+")).map { it.trim() }.filter { it.isNotEmpty() && !tellsThemToRetake(it) }
+    return if (kept.isEmpty()) "I can't tell that for sure from this photo." else kept.joinToString(" ")
+}
+
 private fun looksLikeRefusal(s: String?): Boolean {
     val t = s?.lowercase() ?: return true
     // These must be REFUSAL phrases, not description words. "make out" on its own
@@ -873,7 +1025,7 @@ private fun looksLikeRefusal(s: String?): Boolean {
  * for the frozen frame. llama.cpp's image loader ignores EXIF, so the model
  * MUST be given rotated pixels or a portrait bill arrives sideways.
  */
-private fun prepareShot(raw: File, out: File): Bitmap? = try {
+internal fun prepareShot(raw: File, out: File): Bitmap? = try {
     val decoded: Bitmap? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
         ImageDecoder.decodeBitmap(ImageDecoder.createSource(raw)) { decoder, info, _ ->
             decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
@@ -907,7 +1059,7 @@ private fun prepareShot(raw: File, out: File): Bitmap? = try {
 }
 
 /** ML Kit standing in for iOS document detection: a page is a shot with real printed text. */
-private suspend fun looksLikeAPage(context: Context, photo: File): Boolean =
+internal suspend fun looksLikeAPage(context: Context, photo: File): Boolean =
     suspendCancellableCoroutine { cont ->
         try {
             val image = InputImage.fromFilePath(context, android.net.Uri.fromFile(photo))

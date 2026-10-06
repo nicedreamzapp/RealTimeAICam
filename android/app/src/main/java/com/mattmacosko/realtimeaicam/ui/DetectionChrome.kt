@@ -64,6 +64,10 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -207,15 +211,17 @@ fun DetectionChrome(
                     .alpha(if (isFront) 0f else 1f)
                     .then(if (isFront) Modifier.clearAndSetSemantics { } else Modifier)
             ) {
+                // Torch — one tap on at full brightness, one tap off (same as What's This).
+                // The 25/50/75/100 menu is gone: picking a percentage before any light
+                // appears costs screen-reader flicks at the moment you cannot see.
                 CircleControlButton(
                     ringColor = if (torchOn) IosColors.Yellow.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.2f),
-                    label = if (torchOn) "Turn off flashlight" else "Turn on flashlight",
+                    label = "Flashlight",
                     stateLabel = if (torchOn) "On" else "Off",
-                    clickLabel = if (torchOn) "Turn the flashlight off" else "Open the brightness choices",
+                    clickLabel = if (torchOn) "Turn the flashlight off" else "Turn the flashlight on",
                     onClick = {
                         if (isFront) return@CircleControlButton
-                        if (torchOn) pipeline.setTorch(false)
-                        else showTorchPopup = !showTorchPopup
+                        pipeline.setTorch(!torchOn)
                     },
                 ) {
                     Icon(
@@ -299,7 +305,7 @@ fun DetectionChrome(
                     options = listOf("All", "Indoor", "Outdoor"),
                     selectedIndex = filterIndex,
                     onSelect = segmentedOnSelect,
-                    modifier = Modifier.width(200.dp),
+                    modifier = Modifier.width(200.dp).filterModeAdjustable(filterIndex, segmentedOnSelect),
                 )
             }
         } else {
@@ -319,7 +325,7 @@ fun DetectionChrome(
                     options = listOf("All", "Indoor", "Outdoor"),
                     selectedIndex = filterIndex,
                     onSelect = segmentedOnSelect,
-                    modifier = Modifier.width(minOf(fullWidth - 32.dp, 560.dp)),
+                    modifier = Modifier.width(minOf(fullWidth - 32.dp, 560.dp)).filterModeAdjustable(filterIndex, segmentedOnSelect),
                 )
                 Row(
                     horizontalArrangement = Arrangement.SpaceEvenly,
@@ -497,9 +503,9 @@ private fun FpsChip(fps: Float) {
             .background(IosColors.Material.copy(alpha = 0.55f), RoundedCornerShape(12.dp))
             .border(1.25.dp, fpsColor, RoundedCornerShape(12.dp))
             .padding(vertical = 8.dp, horizontal = 10.dp)
-            .semantics(mergeDescendants = true) {
-                contentDescription = "Speed, ${fps.roundToInt()} frames per second"
-            },
+            // Hidden from TalkBack: it changed every frame and TalkBack read
+            // every change, talking over the object names.
+            .clearAndSetSemantics { },
     ) {
         Icon(Icons.Default.Speed, null, tint = fpsColor, modifier = Modifier.size(12.dp))
         Text("%.2f".format(fps), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
@@ -562,10 +568,16 @@ fun CircleControlButton(
             )
             // These are icon-only circles. Without a label TalkBack announces
             // nothing but "button".
-            .semantics(mergeDescendants = true) {
-                if (label.isNotEmpty()) contentDescription = label
-                if (stateLabel != null) stateDescription = stateLabel
-            },
+            // A labelled circle speaks only its label: the emoji drawn in the
+            // announcements button was read by name.
+            .then(
+                if (label.isNotEmpty()) Modifier.clearAndSetSemantics {
+                    contentDescription = label
+                    if (stateLabel != null) stateDescription = stateLabel
+                } else Modifier.semantics(mergeDescendants = true) {
+                    if (stateLabel != null) stateDescription = stateLabel
+                }
+            ),
     ) { content() }
 }
 
@@ -622,5 +634,22 @@ fun IosSegmentedControl(
                 }
             }
         }
+    }
+}
+
+
+/**
+ * Ernesto Melendez on AppleVis (2026-09-21): the All / Indoor / Outdoor switch was three
+ * separate stops for a screen reader. Same as iOS build 36: one control, "What to look for",
+ * that TalkBack adjusts like a slider (volume keys or its adjust gesture). Double tap steps on.
+ */
+private fun Modifier.filterModeAdjustable(selectedIndex: Int, onSelect: (Int) -> Unit): Modifier {
+    val names = listOf("All objects", "Indoor", "Outdoor")
+    return clearAndSetSemantics {
+        contentDescription = "What to look for"
+        stateDescription = names[selectedIndex.coerceIn(0, 2)]
+        progressBarRangeInfo = ProgressBarRangeInfo(selectedIndex.toFloat(), 0f..2f, steps = 1)
+        setProgress { v -> onSelect(Math.round(v).coerceIn(0, 2)); true }
+        onClick(label = "Next setting") { onSelect((selectedIndex + 1) % 3); true }
     }
 }

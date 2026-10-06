@@ -4,7 +4,11 @@ import android.graphics.Typeface
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -16,7 +20,6 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mattmacosko.realtimeaicam.detection.Detection
@@ -50,21 +53,30 @@ fun DetectionOverlay(
     val chipPaint = remember { android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG) }
 
     // A canvas carries no semantics of its own, so everything drawn here is
-    // invisible to TalkBack. Expose the current list as one readable stop.
-    val spokenSummary = if (detections.isEmpty()) {
-        "Nothing detected yet"
-    } else {
-        detections
-            .sortedByDescending { it.score }
-            .joinToString(", ") { "${it.className} ${(it.score * 100).roundToInt()} percent" }
+    // invisible to TalkBack. Expose the current list as one readable stop:
+    // names only, in a fixed order, so it changes only when what is in view
+    // changes. Scores in here changed every frame and TalkBack re-read the
+    // stop each time, cutting itself off after a letter (Blind Android Users,
+    // 2026-09-25).
+    val names = detections
+        .map { try { com.mattmacosko.realtimeaicam.camera.SpeakableText.className(it.className) } catch (t: Throwable) { it.className.lowercase() } }
+        .distinct()
+        .sorted()
+    fun summaryOf(n: List<String>) =
+        if (n.isEmpty()) "Detected objects. Nothing detected yet" else "Detected objects. " + n.joinToString(", ")
+    // Settles for three seconds before the stop changes, so a name that
+    // flickers in and out does not make TalkBack re-read it.
+    var spokenSummary by remember { mutableStateOf(summaryOf(names)) }
+    LaunchedEffect(names) {
+        kotlinx.coroutines.delay(3000)
+        spokenSummary = summaryOf(names)
     }
 
     Canvas(
         modifier = modifier
             .fillMaxSize()
             .semantics {
-                contentDescription = "Detected objects"
-                stateDescription = spokenSummary
+                contentDescription = spokenSummary
             }
     ) {
         if (frameWidth <= 0 || frameHeight <= 0 || detections.isEmpty()) return@Canvas

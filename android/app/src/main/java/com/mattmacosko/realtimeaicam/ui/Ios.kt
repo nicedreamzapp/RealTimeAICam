@@ -92,3 +92,14 @@ class Debouncer(private val windowMs: Long = 500) {
 
 @Composable
 fun rememberDebouncer(windowMs: Long = 500): Debouncer = remember { Debouncer(windowMs) }
+
+
+/**
+ * The words of a label without its emoji, for screen readers. TalkBack reads
+ * an emoji by name ("dog Object Detection"), which a blind tester asked us to
+ * stop on 2026-09-25: the pictures stay on screen, the names are spoken plain.
+ */
+private val emojiPattern = Regex("[\\x{1F000}-\\x{1FAFF}\\x{2190}-\\x{21FF}\\x{2300}-\\x{23FF}\\x{2600}-\\x{27BF}\\x{2B00}-\\x{2BFF}\\x{2139}\\x{FE0F}\\x{200D}\\x{20E3}]")
+
+fun String.withoutEmoji(): String =
+    replace(emojiPattern, "").replace(Regex("^[•\\s]+"), "").replace(Regex("\\s{2,}"), " ").trim()

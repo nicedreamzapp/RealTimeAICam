@@ -110,10 +110,136 @@ class SpanishTranslationEngine {
     fun translate(text: String): String {
         if (!isLoaded) return text
         if (text.isEmpty()) return text
-        return interpretSpanishWithContext(text)
+        return try {
+            val (shielded, held) = shieldLiterals(text)
+            restoreLiterals(interpretSpanishWithContext(shielded), held)
+        } catch (t: Throwable) {
+            interpretSpanishWithContext(text)
+        }
     }
 
     companion object {
+        // ---- Things that must come through untouched ----
+
+        /**
+         * Numbers, prices, dates, times, codes and street names are not Spanish
+         * words. Run through the word engine they came back broken: "1.234,56 €"
+         * became "1. 234, 56 €", "9:00" became "9: 00", "IBAN" became "they were",
+         * "Col. Juárez" became "cabbage. Juarez", "Calle Mayor" became "Elderly
+         * street" (iOS, 2026-09-16). Each one is swapped for a placeholder word the
+         * engine can't translate, then put back afterwards exactly as printed.
+         */
+        private val literalPatterns: List<Pair<Pattern, (String) -> String>> by lazy {
+            fun re(p: String): Pattern =
+                Pattern.compile(p, com.mattmacosko.realtimeaicam.camera.SpeakableText.UNICODE_FLAGS)
+            fun sub(s: String, p: String, r: String): String = Pattern.compile(p).matcher(s).replaceFirst(r)
+            val keep: (String) -> String = { it }
+            val name = """(?:\s+(?:de\s+(?:la\s+|los\s+|las\s+)?|del\s+)?[A-ZÁÉÍÓÚÑ0-9][\wáéíóúñü]*)+"""
+            val months = listOf(
+                "January", "February", "March", "April", "May", "June", "July",
+                "August", "September", "October", "November", "December",
+            )
+            listOf(
+                // Street and neighborhood names stay in Spanish; they match the signs.
+                re("""\b(?:Av\.|Avda\.|Avenida|Calle|C/|Paseo|Plaza|Pza\.|Bulevar|Blvd\.|Callej[oó]n|Privada|Col\.|Colonia|Carretera|Ctra\.)""" + name) to { s: String ->
+                    var t = sub(s, """^(Av\.|Avda\.)""", "Avenida")
+                    t = sub(t, """^Col\.""", "Colonia")
+                    t = sub(t, """^Ctra\.""", "Carretera")
+                    sub(t, """^Pza\.""", "Plaza")
+                },
+                re("""\bC\.\s?P\.(?=\s*\d)""") to { _: String -> "postal code" },
+                // "a las 9:00" is a time, "at 9:00" (the digits are hidden from the engine).
+                re("""\b[Aa]\s+las?(?=\s+\d{1,2}(?::\d{2})?\b)""") to { _: String -> "at" },
+                // Medicine labels: "Receta No. 887612" is a prescription, not a recipe;
+                // "cada 8 horas" is every 8 hours.
+                re("""\b[Rr]eceta(?=\s+(?:No\.|n[úu]m|#|m[ée]dica\b|\d))""") to { _: String -> "Prescription" },
+                re("""\b[Cc]ada(?=\s+\d)""") to { _: String -> "every" },
+                re("""\b[Dd]e(?=\s+\d{1,2}(?::\d{2})?\s*(?:hrs?\.?\s+)?a\s+\d)""") to { _: String -> "from" },
+                re("""\bIVA\b""") to { _: String -> "VAT" },
+                re("""\b(?:IBAN|RFC|CURP|CDMX|NIF|DNI|CIF|NSS|CLABE)\b""") to keep,
+                // Spanish dates are day first: "16/09/2026" -> "16 September 2026", so the
+                // English voice doesn't read it as a month that doesn't exist.
+                re("""(?<![\d/])(?:0?[1-9]|[12]\d|3[01])/(?:0?[1-9]|1[0-2])/(?:\d{4}|\d{2})(?![\d/])""") to { d: String ->
+                    val p = d.split('/')
+                    val year = if (p[2].length == 2) "20" + p[2] else p[2]
+                    "${p[0].toInt()} ${months[p[1].toInt() - 1]} $year"
+                },
+                // Money, amounts, dates, times, phone numbers, masks, codes with digits.
+                re("""(?:[${'$'}€£]\s?|\+\s?)?[*•]*[0-9A-Za-z]*\d(?:[0-9A-Za-z]|[.,:/\-º°ª](?=[0-9A-Za-z]))*(?:\s?(?:€|%))?""") to keep,
+                re("""[*•]{2,}""") to keep,
+            )
+        }
+
+        fun shieldLiterals(text: String): Pair<String, List<String>> {
+            var s = text
+            val held = ArrayList<String>()
+            for ((pattern, transform) in literalPatterns) {
+                val m = pattern.matcher(s)
+                val out = StringBuilder()
+                var last = 0
+                while (m.find()) {
+                    out.append(s, last, m.start())
+                    // Only letters, so the tokenizer keeps it whole and no rule
+                    // pack (several match on digits) can touch it.
+                    out.append(" qzlit").append(letterIndex(held.size)).append("qz ")
+                    held.add(transform(m.group()))
+                    last = m.end()
+                }
+                out.append(s, last, s.length)
+                s = out.toString()
+            }
+            return s to held
+        }
+
+        private val restoreSpaces = Pattern.compile("""\s{2,}""")
+        private val restoreBeforePunct = Pattern.compile("""\s+([,.;:!?)])""")
+        private val restoreOpenParen = Pattern.compile("""\(\s+""")
+
+        fun restoreLiterals(text: String, held: List<String>): String {
+            if (held.isEmpty()) return text
+            var s = text
+            for (i in held.indices.reversed()) {
+                s = Pattern.compile(Pattern.quote("qzlit" + letterIndex(i) + "qz"), Pattern.CASE_INSENSITIVE)
+                    .matcher(s).replaceAll(Matcher.quoteReplacement(held[i]))
+            }
+            s = restoreSpaces.matcher(s).replaceAll(" ")
+            s = restoreBeforePunct.matcher(s).replaceAll("$1")
+            s = restoreOpenParen.matcher(s).replaceAll("(")
+            return s.trim { it == ' ' || it == '\t' }
+        }
+
+        /** 0 -> "a", 25 -> "z", 26 -> "ba": a placeholder id with no digits in it. */
+        private fun letterIndex(n: Int): String {
+            var k = n
+            val out = StringBuilder()
+            do {
+                out.insert(0, 'a' + (k % 26))
+                k /= 26
+            } while (k > 0)
+            return out.toString()
+        }
+
+        /**
+         * Translate a sign's lines separately, not as one run-on: they're separate
+         * phrases, and the engine reordered words across them. One unit per printed
+         * line, except a line that starts lowercase after a line with no ending
+         * punctuation: that's a sentence wrapping, keep it whole.
+         */
+        fun translationUnits(text: String): List<String> {
+            val units = ArrayList<String>()
+            for (line in text.split('\n', '\r', ' ', ' ')) {
+                val t = line.trim { it == ' ' || it == '\t' }
+                if (t.isEmpty()) continue
+                val prev = units.lastOrNull()
+                if (prev != null && t.first().isLowerCase() && !".!?:;".contains(prev.last())) {
+                    units[units.size - 1] = "$prev $t"
+                } else {
+                    units.add(t)
+                }
+            }
+            return units
+        }
+
         /** Convenience: construct + load in one call (blocking — background thread!). */
         fun load(input: InputStream, gzipped: Boolean = true): SpanishTranslationEngine {
             val e = SpanishTranslationEngine()
@@ -278,7 +404,10 @@ class SpanishTranslationEngine {
         return out
     }
 
-    private fun englishPieces(items: List<Pair<String, String?>>): List<String> {
+    private fun englishPieces(
+        items: List<Pair<String, String?>>,
+        unknowns: MutableSet<String>,
+    ): List<String> {
         val pieces = ArrayList<String>(items.size)
         var prevWasNoun = false
         var i = 0
@@ -315,6 +444,7 @@ class SpanishTranslationEngine {
                 pieces.add(if (pos == "VERB" && prevWasNoun) stripEmbeddedSubject(eng) else eng)
             } else {
                 pieces.add(surface) // unknown word falls through untranslated
+                unknowns.add(surface)
             }
             prevWasNoun = (pos == "NOUN")
             i += 1
@@ -327,7 +457,16 @@ class SpanishTranslationEngine {
         val lowered = tokens.map { it.lowercase() }
         val phraseApplied = phraseMatcher?.match(lowered) ?: lowered.map { it to null }
 
-        var out = englishPieces(reorderNounAdjective(phraseApplied)).joinToString(" ")
+        val unknowns = HashSet<String>()
+        val pieces = englishPieces(reorderNounAdjective(phraseApplied), unknowns)
+        // Words the dictionary doesn't know (names, brands) pass through as they
+        // were printed, not lowercased: "López" keeps its capital.
+        val printed = HashMap<String, String>()
+        for (t in tokens) {
+            val low = t.lowercase()
+            if (t != low && !printed.containsKey(low)) printed[low] = t
+        }
+        var out = pieces.joinToString(" ") { if (it in unknowns) printed[it] ?: it else it }
 
         // Fast reflexive pack for menus/signage/general
         if (domain == TextDomain.RESTAURANT || domain == TextDomain.SIGNAGE || domain == TextDomain.GENERAL) {
@@ -461,12 +600,15 @@ class SpanishTranslationEngine {
     private val spaceBeforePunct = Pattern.compile("\\s+([,\\.!\\?:;)\\]\\}])")
     private val punctNoSpace = Pattern.compile("([,\\.!\\?:;])([^\\s\\)\\]\\}])")
     private val openBracketSpace = Pattern.compile("([\\(\\[\\{])\\s+")
+    private val doubleDot = Pattern.compile("(?<!\\.)\\.\\.(?!\\.)")
 
     private fun finalize(s: String): String {
         var out = s
         // English doesn't use inverted punctuation
         out = out.replace("¿", "").replace("¡", "")
         out = spaceBeforePunct.matcher(out).replaceAll("$1")
+        // "Dr." comes back from the dictionary with its own dot: "Dr. ." -> "Dr."
+        out = doubleDot.matcher(out).replaceAll(".")
         out = punctNoSpace.matcher(out).replaceAll("$1 $2")
         out = openBracketSpace.matcher(out).replaceAll("$1")
         out = collapseWhitespace(out)

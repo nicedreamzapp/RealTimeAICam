@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Only for the one-time download of a Translator language pack; reading stays offline. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Hold-to-ask on the What's this? screen: the question is heard on the phone, never sent anywhere. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-feature
@@ -19,12 +23,30 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:configChanges="orientation|screenSize|keyboardHidden">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- The shortcuts below send a VIEW intent. Android enforces intent-filter matching
+                 on explicit intents from other apps, so without this the launcher and the
+                 assistant get "activity does not exist". -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <!-- Assistant / Gemini and long-press shortcuts into each camera screen -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
+        <!-- Matt 2026-09-21: the only thing that goes online is a language pack download.
+             ML Kit ships a usage-stats uploader (Google datatransport); removing its backend
+             means stats have nowhere to go and are dropped on the phone. -->
+        <service
+            android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery"
+            tools:node="remove" />
     </application>
 
 </manifest>

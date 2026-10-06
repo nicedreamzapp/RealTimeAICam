@@ -19,6 +19,9 @@ class NarratorEngine private constructor(private val appContext: Context) {
 
     val isAvailable: Boolean get() = handle != 0L
 
+    /** Whether the weights are on this phone at all, without loading them. */
+    fun hasModel(): Boolean = supportedDevice() && modelDirectory() != null
+
     /** Blocking: loads ~736 MB off storage. Call from a background thread. */
     @Synchronized
     fun ensureLoaded(): Boolean {
@@ -34,7 +37,9 @@ class NarratorEngine private constructor(private val appContext: Context) {
             return false
         }
 
-        val threads = Runtime.getRuntime().availableProcessors().coerceIn(2, 6)
+        // All cores: on the Helio P35 (8x Cortex-A53) 8 threads answered the same
+        // picture in 49 s against 57 s with 6 (llama-mtmd-cli on the phone, 2026-09-17).
+        val threads = Runtime.getRuntime().availableProcessors().coerceIn(2, 8)
         // Crash guard for odd GPU drivers: a marker file is left on disk while
         // the GPU path is being tried. If the app died inside the driver the
         // marker is still there next launch, and that phone stays on the CPU.
@@ -56,6 +61,7 @@ class NarratorEngine private constructor(private val appContext: Context) {
      * money rules entirely and ask for nothing but a description.
      */
     @JvmOverloads
+    @Synchronized
     fun describe(photo: File, question: String, system: String = NarratorPrompt.SYSTEM): String {
         if (!ensureLoaded()) return ""
         return try {

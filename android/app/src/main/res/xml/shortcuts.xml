@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Hey Google, open What's this on RealTime AI Cam". The same five screens the iPhone's
+     Siri shortcuts open. The static shortcuts also show on a long press of the app icon. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <capability android:name="actions.intent.OPEN_APP_FEATURE">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.mattmacosko.realtimeaicam"
+            android:targetClass="com.mattmacosko.realtimeaicam.MainActivity">
+            <parameter
+                android:name="feature"
+                android:key="feature" />
+        </intent>
+    </capability>
+
+    <shortcut
+        android:shortcutId="whats_this"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_whats_this"
+        android:shortcutLongLabel="@string/shortcut_whats_this">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.mattmacosko.realtimeaicam"
+            android:targetClass="com.mattmacosko.realtimeaicam.MainActivity">
+            <extra android:name="feature" android:value="whats_this" />
+        </intent>
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding
+                android:key="feature"
+                android:value="@array/feature_whats_this" />
+        </capability-binding>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="help_me_aim"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_help_me_aim"
+        android:shortcutLongLabel="@string/shortcut_help_me_aim">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.mattmacosko.realtimeaicam"
+            android:targetClass="com.mattmacosko.realtimeaicam.MainActivity">
+            <extra android:name="feature" android:value="help_me_aim" />
+        </intent>
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding
+                android:key="feature"
+                android:value="@array/feature_help_me_aim" />
+        </capability-binding>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="read_text"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_read_text"
+        android:shortcutLongLabel="@string/shortcut_read_text">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.mattmacosko.realtimeaicam"
+            android:targetClass="com.mattmacosko.realtimeaicam.MainActivity">
+            <extra android:name="feature" android:value="read_text" />
+        </intent>
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding
+                android:key="feature"
+                android:value="@array/feature_read_text" />
+        </capability-binding>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="translate"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_translate"
+        android:shortcutLongLabel="@string/shortcut_translate">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.mattmacosko.realtimeaicam"
+            android:targetClass="com.mattmacosko.realtimeaicam.MainActivity">
+            <extra android:name="feature" android:value="translate" />
+        </intent>
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding
+                android:key="feature"
+                android:value="@array/feature_translate" />
+        </capability-binding>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="object_detection"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_object_detection"
+        android:shortcutLongLabel="@string/shortcut_object_detection">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.mattmacosko.realtimeaicam"
+            android:targetClass="com.mattmacosko.realtimeaicam.MainActivity">
+            <extra android:name="feature" android:value="object_detection" />
+        </intent>
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding
+                android:key="feature"
+                android:value="@array/feature_object_detection" />
+        </capability-binding>
+    </shortcut>
+</shortcuts>

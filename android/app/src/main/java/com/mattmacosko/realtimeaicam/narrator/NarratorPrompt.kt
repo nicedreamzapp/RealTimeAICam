@@ -29,6 +29,13 @@ object NarratorPrompt {
         "Plain words, no lists, no markdown. If the photo is unclear, say so in a few words and then describe what " +
         "you can make out anyway. Never say you cannot see it and never ask for another photo."
 
+    /**
+     * Hold-to-ask. Word for word ASK_SYSTEM in vision-narrator/prompts.py and the
+     * iOS askInstructions: the v09 model was trained on it (2026-09-21) to answer
+     * follow-ups answer-first instead of describing the whole photo again.
+     */
+    const val ASK = "You are the eyes of a blind person. They are asking a question about this photo. Answer it in one short spoken sentence, and start with the answer itself: yes or no, a number, a colour, a name, or the words that are printed. Then, only if it helps, a few words about where or why. If the photo does not show the answer, say you can't tell for sure and say what you can see. Plain words, no lists, no markdown."
+
     const val PAGE_QUESTION = "What is this page?"
     const val SCENE_QUESTION = "What is in front of me?"
 

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcut_whats_this">What\'s this?</string>
+    <string name="shortcut_help_me_aim">Help Me Aim</string>
+    <string name="shortcut_read_text">Read text</string>
+    <string name="shortcut_translate">Translate</string>
+    <string name="shortcut_object_detection">Object Detection</string>
+
+    <!-- What the assistant may hear for each screen. -->
+    <string-array name="feature_whats_this">
+        <item>What\'s this</item>
+        <item>What is this</item>
+        <item>Describe this</item>
+        <item>What\'s in front of me</item>
+    </string-array>
+    <string-array name="feature_help_me_aim">
+        <item>Help Me Aim</item>
+        <item>Help me take a picture</item>
+    </string-array>
+    <string-array name="feature_read_text">
+        <item>Read text</item>
+        <item>Read this</item>
+        <item>Reader</item>
+    </string-array>
+    <string-array name="feature_translate">
+        <item>Translate</item>
+        <item>Translator</item>
+    </string-array>
+    <string-array name="feature_object_detection">
+        <item>Object Detection</item>
+        <item>What\'s around me</item>
+        <item>Find objects</item>
+    </string-array>
+</resources>

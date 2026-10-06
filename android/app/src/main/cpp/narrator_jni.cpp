@@ -108,9 +108,12 @@ Java_com_mattmacosko_realtimeaicam_narrator_NarratorNative_nativeInit(
     if (!model) { LOGE("failed to load %s", model_path.c_str()); return 0; }
 
     llama_context_params cparams = llama_context_default_params();
-    cparams.n_ctx     = 4096;
-    cparams.n_batch   = 2048;
-    cparams.n_ubatch  = 512;
+    // A turn is ~600 tokens (prompt + 192 image tokens + 120 answer). 4096/512
+    // reserved a 491 MB compute buffer on a 4 GB phone and pushed it into swap;
+    // 2048/256 still fits every pass and needs about half.
+    cparams.n_ctx     = 2048;
+    cparams.n_batch   = 512;
+    cparams.n_ubatch  = 256;
     cparams.n_threads = nThreads;
     cparams.n_threads_batch = nThreads;
     llama_context * lctx = llama_init_from_model(model, cparams);
@@ -172,7 +175,7 @@ Java_com_mattmacosko_realtimeaicam_narrator_NarratorNative_nativeDescribe(
 
     llama_pos n_past = 0;
     int32_t rc = mtmd_helper_eval_chunks(n->mctx, n->lctx, chunks, 0, 0,
-                                         2048, /* logits_last */ true, &n_past);
+                                         512, /* logits_last */ true, &n_past);
     mtmd_input_chunks_free(chunks);
     mtmd_bitmap_free(wrapper.bitmap);
     if (rc != 0) { LOGE("eval failed (%d)", rc); return env->NewStringUTF(""); }
