@@ -269,6 +269,8 @@ open "RealTime Ai Cam.xcodeproj"
 # 4. Connect your iPhone and build!
 ```
 
+In Xcode, pick your own signing team (and a bundle identifier of your own) under Signing & Capabilities before you run on a device.
+
 The narrator weights are too large for git and are not in this repo. A build from source
 works for detection, reading and translation straight away; *What's this?* shows a
 **Download** button on the home screen and fetches the model (about 622 MB) the first time.
@@ -382,9 +384,7 @@ See [LICENSE](LICENSE) for the full text and [NOTICE.md](NOTICE.md) for the name
 
 <div align="center">
 
-## 🌟 **Show your support** 🌟
-
-### If this project helped you, please give it a star ⭐
+## Get the app
 
 [![Download on App Store](https://img.shields.io/badge/Download-App%20Store-007AFF?style=for-the-badge&logo=apple&logoColor=white)](https://apps.apple.com/us/app/id6751230739)
 [![Get it on Google Play](https://img.shields.io/badge/Get_it_on-Google_Play-01875f?style=for-the-badge&logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.mattmacosko.realtimeaicam)
