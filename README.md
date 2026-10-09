@@ -359,6 +359,8 @@ then open `android/` in Android Studio.
 - Product page: https://nicedreamzwholesale.com/github-realtime-ai-camera/
 - Questions or bugs: **info@nicedreamzwholesale.com**
 
+The narrator here runs on MLX Swift on the phone. On the Mac I use MLX for [claude-code-local](https://github.com/nicedreamzapp/claude-code-local), which runs Claude Code with local models and no API key.
+
 ---
 
 ## 📄 License & credits
