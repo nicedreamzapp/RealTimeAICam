@@ -36,7 +36,7 @@ fine-tuned vision-language model on the phone itself, and speaks what they find 
 
 <div align="center">
 
-[![Watch the RealTime AI Cam demo on YouTube](https://img.youtube.com/vi/2BEYv-fv-gE/maxresdefault.jpg)](https://www.youtube.com/watch?v=2BEYv-fv-gE)
+<a href="https://www.youtube.com/watch?v=2BEYv-fv-gE"><img src="https://img.youtube.com/vi/2BEYv-fv-gE/maxresdefault.jpg" width="620" alt="Watch the RealTime AI Cam demo on YouTube"></a>
 
 **[▶ Watch on YouTube](https://www.youtube.com/watch?v=2BEYv-fv-gE)**: live detection at a concert, describing a scene, answering a question out loud, reading mail, and Help Me Aim talking you into a photo. All real screen recordings, all offline.
 
