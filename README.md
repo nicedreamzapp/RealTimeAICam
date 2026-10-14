@@ -32,6 +32,18 @@ fine-tuned vision-language model on the phone itself, and speaks what they find 
 
 ---
 
+## 🎬 Watch It Work (90 seconds)
+
+<div align="center">
+
+[![Watch the RealTime AI Cam demo on YouTube](https://img.youtube.com/vi/2BEYv-fv-gE/maxresdefault.jpg)](https://www.youtube.com/watch?v=2BEYv-fv-gE)
+
+**[▶ Watch on YouTube](https://www.youtube.com/watch?v=2BEYv-fv-gE)**: live detection at a concert, describing a scene, answering a question out loud, reading mail, and Help Me Aim talking you into a photo. All real screen recordings, all offline.
+
+</div>
+
+---
+
 ## 📸 Screenshots
 
 <div align="center">
