@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RealTime AI Cam</title>
+<meta name="description" content="A camera that tells you what it sees, out loud, offline, on your phone. Free on iPhone and Android. No account, no ads, nothing leaves the phone.">
+<!-- TODO-VERIFY: final public URL of this page. Placeholder below is Matt's software page. -->
+<link rel="canonical" href="https://nicedreamzwholesale.com/software/">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Nice Dreamz">
+<meta property="og:title" content="RealTime AI Cam: a camera that tells you what it sees">
+<meta property="og:description" content="Describes scenes and mail out loud, reads text, detects 601 kinds of objects and talks blind photographers into the shot. Runs on the phone, offline. Free on iPhone and Android.">
+<!-- TODO-VERIFY: same URL as canonical once the page has a home. -->
+<meta property="og:url" content="https://nicedreamzwholesale.com/software/">
+<!-- App icon from this repo (android/design/app-icon-1024.png). TODO-VERIFY: swap for a 1200x630 card image if Matt makes one. -->
+<meta property="og:image" content="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/android/design/app-icon-1024.png">
+<meta property="og:image:width" content="1024">
+<meta property="og:image:height" content="1024">
+<meta property="og:image:alt" content="RealTime AI Cam app icon">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="RealTime AI Cam: a camera that tells you what it sees">
+<meta name="twitter:description" content="Scene and mail descriptions, text reading, translation and object detection, spoken out loud and run on the phone. Free on iPhone and Android.">
+<meta name="twitter:image" content="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/android/design/app-icon-1024.png">
+<meta name="twitter:image:alt" content="RealTime AI Cam app icon">
+<meta name="theme-color" content="#0b2a3f">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "RealTime AI Cam",
+  "alternateName": "RealTime AI Camera",
+  "description": "A camera app that describes scenes and mail out loud, reads printed text, translates signs and labels into English, detects 601 kinds of objects, and talks blind and low-vision photographers into the shot. Everything runs on the phone, offline.",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "iOS 17 or later, Android 8 or later",
+  "softwareVersion": "iOS 1.3.4, Android 1.17",
+  "image": "https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/android/design/app-icon-1024.png",
+  "downloadUrl": [
+    "https://apps.apple.com/us/app/id6751230739",
+    "https://play.google.com/store/apps/details?id=com.mattmacosko.realtimeaicam"
+  ],
+  "installUrl": [
+    "https://apps.apple.com/us/app/id6751230739",
+    "https://play.google.com/store/apps/details?id=com.mattmacosko.realtimeaicam"
+  ],
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "isAccessibleForFree": true,
+  "accessibilityFeature": ["textToSpeech", "screenReaderSupport"],
+  "license": "https://www.gnu.org/licenses/agpl-3.0.html",
+  "codeRepository": "https://github.com/nicedreamzapp/RealTimeAICam",
+  "author": {
+    "@type": "Person",
+    "name": "Matt Macosko"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Nice Dreamz LLC",
+    "email": "info@nicedreamzwholesale.com",
+    "url": "https://nicedreamzwholesale.com/software/"
+  },
+  "sameAs": [
+    "https://github.com/nicedreamzapp/RealTimeAICam",
+    "https://www.youtube.com/watch?v=2BEYv-fv-gE",
+    "https://nicedreamzwholesale.com/github-realtime-ai-camera/"
+  ]
+}
+</script>
+
+<style>
+:root {
+  --bg: #f4f8fb;
+  --surface: #ffffff;
+  --surface-2: #e8f1f7;
+  --text: #0f1c26;
+  --muted: #4a5b68;
+  --line: #d3e0ea;
+  --accent: #0a6fb5;
+  --accent-ink: #ffffff;
+  --accent-soft: #dcecf8;
+  --ok: #1a7f37;
+  --radius: 16px;
+  --shadow: 0 1px 2px rgba(10, 40, 60, .06), 0 6px 24px rgba(10, 40, 60, .06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #071620;
+    --surface: #0d2231;
+    --surface-2: #10293b;
+    --text: #e8f1f7;
+    --muted: #9fb3c2;
+    --line: #1d3a4f;
+    --accent: #5cb4f2;
+    --accent-ink: #04121c;
+    --accent-soft: #123248;
+    --ok: #4ac26b;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #071620;
+  --surface: #0d2231;
+  --surface-2: #10293b;
+  --text: #e8f1f7;
+  --muted: #9fb3c2;
+  --line: #1d3a4f;
+  --accent: #5cb4f2;
+  --accent-ink: #04121c;
+  --accent-soft: #123248;
+  --ok: #4ac26b;
+  --shadow: none;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  overflow-wrap: anywhere;
+}
+img { max-width: 100%; height: auto; display: block; }
+a { color: var(--accent); }
+a:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+
+.skip { position: absolute; left: -9999px; }
+.skip:focus { left: 16px; top: 16px; background: var(--surface); padding: 8px 12px; z-index: 10; }
+
+.wrap { width: 100%; max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+section { padding: 40px 0; }
+section + section { border-top: 1px solid var(--line); }
+h1, h2, h3 { line-height: 1.2; margin: 0 0 12px; }
+h1 { font-size: clamp(30px, 8vw, 52px); letter-spacing: -.02em; }
+h2 { font-size: clamp(24px, 5.5vw, 34px); letter-spacing: -.01em; }
+h3 { font-size: 19px; }
+p { margin: 0 0 14px; }
+.muted { color: var(--muted); }
+.eyebrow { font-size: 14px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+
+/* Hero */
+.hero { padding: 32px 0 40px; }
+.hero-grid { display: grid; gap: 28px; align-items: center; }
+.brand { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.brand img { width: 56px; height: 56px; border-radius: 13px; box-shadow: var(--shadow); }
+.brand span { font-weight: 700; font-size: 18px; }
+.pitch { font-size: clamp(18px, 4.6vw, 22px); color: var(--muted); max-width: 36em; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; padding: 0; list-style: none; }
+.chips li { background: var(--accent-soft); color: var(--text); border-radius: 999px; padding: 4px 12px; font-size: 14px; }
+
+.stores { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+.store {
+  display: inline-flex; align-items: center; gap: 10px;
+  min-height: 52px; padding: 8px 18px; border-radius: 12px;
+  background: var(--text); color: var(--bg); text-decoration: none;
+  font-weight: 600; line-height: 1.2;
+}
+.store small { display: block; font-weight: 400; font-size: 12px; opacity: .85; }
+.store svg { width: 24px; height: 24px; flex: none; fill: currentColor; }
+.store:hover { opacity: .9; }
+.price { margin-top: 12px; font-size: 15px; color: var(--muted); }
+
+.hero-shot { justify-self: center; width: min(260px, 70vw); }
+.phone { border-radius: 28px; overflow: hidden; border: 6px solid var(--text); box-shadow: var(--shadow); background: #000; }
+
+/* Cards */
+.grid { display: grid; gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }
+.card p:last-child { margin-bottom: 0; }
+.tag { display: inline-block; font-size: 12px; font-weight: 600; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; margin-left: 6px; vertical-align: 2px; }
+
+/* Who */
+.who { display: grid; gap: 14px; }
+.who .card h3 { margin-bottom: 6px; }
+
+/* Screenshots */
+.shots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 0; padding: 0; list-style: none; }
+.shots figure { margin: 0; }
+.shots .phone { border-width: 4px; border-radius: 20px; }
+.shots figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; line-height: 1.4; }
+.video { display: block; margin-top: 20px; }
+
+/* Privacy */
+.privacy-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.privacy-list li { display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: start; }
+.privacy-list svg { width: 22px; height: 22px; margin-top: 3px; fill: var(--ok); }
+.note { background: var(--surface-2); border-radius: 12px; padding: 14px 16px; font-size: 15px; margin-top: 16px; }
+
+/* FAQ */
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 0 16px; }
+details + details { margin-top: 10px; }
+summary { cursor: pointer; font-weight: 600; padding: 14px 0; list-style-position: outside; }
+details[open] summary { border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+details > p { padding-bottom: 4px; }
+
+/* Credits + contact */
+.credits { margin: 0; padding-left: 20px; }
+.credits li { margin-bottom: 6px; }
+.contact { text-align: center; }
+.btn { display: inline-block; background: var(--accent); color: var(--accent-ink); text-decoration: none; font-weight: 600; padding: 12px 22px; border-radius: 12px; min-height: 48px; }
+footer { padding: 28px 0 40px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); }
+footer a { color: var(--muted); }
+
+@media (min-width: 700px) {
+  section { padding: 56px 0; }
+  .hero { padding: 56px 0; }
+  .hero-grid { grid-template-columns: 1.3fr 1fr; gap: 40px; }
+  .hero-shot { width: 280px; }
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .who { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .shots { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (min-width: 1000px) {
+  .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .shots { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<main id="main">
+
+<section class="hero" aria-labelledby="title">
+  <div class="wrap hero-grid">
+    <div>
+      <div class="brand">
+        <img src="../android/design/app-icon-1024.png" width="56" height="56" alt="">
+        <span>Nice Dreamz</span>
+      </div>
+      <h1 id="title">RealTime AI Cam</h1>
+      <p class="pitch">A camera that tells you what it sees, out loud, offline, on your phone.</p>
+      <ul class="chips" aria-label="At a glance">
+        <li>Free</li>
+        <li>No ads</li>
+        <li>No account</li>
+        <li>Works offline</li>
+        <li>VoiceOver and TalkBack</li>
+      </ul>
+      <div class="stores">
+        <a class="store" href="https://apps.apple.com/us/app/id6751230739" aria-label="Download RealTime AI Cam on the App Store">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.37 12.6c-.02-2.3 1.88-3.4 1.96-3.46-1.07-1.56-2.73-1.77-3.32-1.8-1.41-.14-2.76.83-3.48.83-.72 0-1.82-.81-3-.79-1.54.02-2.96.9-3.76 2.27-1.6 2.78-.41 6.9 1.15 9.16.76 1.1 1.67 2.34 2.86 2.3 1.15-.05 1.58-.74 2.97-.74 1.38 0 1.77.74 2.98.72 1.23-.02 2.01-1.12 2.76-2.23.87-1.27 1.23-2.51 1.25-2.58-.03-.01-2.4-.92-2.42-3.66zM14.1 5.86c.63-.77 1.06-1.83.94-2.89-.91.04-2.02.61-2.67 1.37-.58.67-1.1 1.76-.96 2.8 1.02.08 2.06-.52 2.69-1.28z"/></svg>
+          <span><small>Download on the</small>App Store</span>
+        </a>
+        <a class="store" href="https://play.google.com/store/apps/details?id=com.mattmacosko.realtimeaicam" aria-label="Get RealTime AI Cam on Google Play">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.6 2.2c-.3.3-.5.8-.5 1.4v16.8c0 .6.2 1.1.5 1.4l.1.1 9.4-9.4v-.2L4.7 2.1l-.1.1zM17.2 15.6l-3.1-3.1v-.2l3.1-3.1.1.1 3.7 2.1c1.1.6 1.1 1.6 0 2.2l-3.7 2.1-.1-.1zM17.3 15.5L14.1 12.3 4.6 21.8c.4.4.9.4 1.6.1l11.1-6.4M17.3 9.1L6.2 2.7c-.7-.4-1.2-.3-1.6.1l9.5 9.5 3.2-3.2z"/></svg>
+          <span><small>Get it on</small>Google Play</span>
+        </a>
+      </div>
+      <p class="price">Free on iPhone (iOS 17+) and Android (8+). Nothing to buy inside, no subscription.</p>
+    </div>
+    <div class="hero-shot">
+      <div class="phone">
+        <img src="../ios/HomeSCreen1.png" width="1290" height="2796" alt="The app's home screen with large buttons for text to speech, Spanish to English translation and object detection.">
+      </div>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="what">
+  <div class="wrap">
+    <p class="eyebrow">What it does</p>
+    <h2 id="what">Press What's this? and the phone talks back.</h2>
+    <p>It speaks one to three plain sentences about what the camera is looking at: where you are, what is near you and on which side, people, anything moving, hazards. Point it at a piece of mail and it leads with what the page is and who sent it, then the amount, then the deadline, then what happens if you ignore it.</p>
+    <p>That runs on a small vision-language model fine-tuned for this one job, bundled inside the app. No server answers it. It works in airplane mode, in a basement, or abroad without a data plan.</p>
+    <p>It never refuses a shot. If the photo is dark, blurry or cut off, it says so in a few words and then describes what it can make out anyway.</p>
+  </div>
+</section>
+
+<section aria-labelledby="who">
+  <div class="wrap">
+    <p class="eyebrow">Who it's for</p>
+    <h2 id="who">Built with blind and low-vision people</h2>
+    <div class="who">
+      <div class="card">
+        <h3>Screen reader users</h3>
+        <p>Every control is labelled with what it does. One switch hands every spoken line to VoiceOver or TalkBack so you hear your own voice at your own speed.</p>
+      </div>
+      <div class="card">
+        <h3>Anyone sorting mail</h3>
+        <p>Bills and letters get summarized as sender, amount and due date. On iPhone, dollar amounts get a second check before they are spoken.</p>
+      </div>
+      <div class="card">
+        <h3>Travellers and the curious</h3>
+        <p>Read a menu or sign in another language, or hold the phone up and hear what is around you, with no signal needed.</p>
+      </div>
+    </div>
+    <p class="muted" style="margin-top:16px">Many features came from requests by the <a href="https://www.applevis.com/">AppleVis</a> community and Blind Android Users testers, credited by name in the project's commit history.</p>
+  </div>
+</section>
+
+<section aria-labelledby="features">
+  <div class="wrap">
+    <p class="eyebrow">Features</p>
+    <h2 id="features">What's in the app</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>What's this?</h3>
+        <p>Scene, page and mail descriptions from the on-device model. Hold the button to ask a follow-up question by voice; the answer comes first, in one sentence.</p>
+      </div>
+      <div class="card">
+        <h3>Help Me Aim</h3>
+        <p>Say what you want a picture of: a face, a page, or a thing. It tells you which way to move the phone, then takes the shot and can save it with its description as the caption.</p>
+      </div>
+      <div class="card">
+        <h3>Read text</h3>
+        <p>Live reading of printed English, out loud, no shutter press. Numbers, phone numbers and street addresses are spoken the way a person says them.</p>
+      </div>
+      <div class="card">
+        <h3>Translate</h3>
+        <p>Spanish to English with a built-in offline engine. On iOS 18 and later, up to 16 more languages through Apple's translator. On Android, 9 more through Google's on-device packs. Each extra language downloads once, then works offline.</p>
+      </div>
+      <div class="card">
+        <h3>Object detection</h3>
+        <p>601 kinds of objects from the Open Images V7 set, with Indoor and Outdoor modes that change what the detector is allowed to name. Distance to each object on iPhones with LiDAR.</p>
+      </div>
+      <div class="card">
+        <h3>Made for hands-free use</h3>
+        <p>A spoken three, two, one countdown before the photo with a tap you can feel. One-tap flashlight. Any voice installed on the phone. Siri and Shortcuts on iPhone, app shortcuts on Android.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="shots">
+  <div class="wrap">
+    <p class="eyebrow">Screenshots</p>
+    <h2 id="shots">See it work</h2>
+    <!-- TODO-VERIFY: these screenshots come from the repo and show earlier versions of the app.
+         None show What's this? or Help Me Aim. Swap in current ones before sending. -->
+    <ul class="shots">
+      <li><figure>
+        <div class="phone"><img src="../ios/IMG_2208.png" width="1290" height="2796" loading="lazy" alt="Object detection on a person, with labelled boxes for face, eyes, nose and hair."></div>
+        <figcaption>Object detection, 601 classes</figcaption>
+      </figure></li>
+      <li><figure>
+        <div class="phone"><img src="../ios/IMG_2169.png" width="1290" height="2796" loading="lazy" alt="A handwritten Spanish chalkboard menu with an English translation underneath."></div>
+        <figcaption>Handwritten chalkboard, translated</figcaption>
+      </figure></li>
+      <li><figure>
+        <div class="phone"><img src="../android/design/appstore-screenshots/03_IMG_2875.png" width="1290" height="2796" loading="lazy" alt="A Spanish restaurant menu with the English translation shown at the bottom of the screen."></div>
+        <figcaption>Spanish menu read and translated</figcaption>
+      </figure></li>
+      <li><figure>
+        <div class="phone"><img src="../ios/IMG_2247.png" width="1290" height="2796" loading="lazy" alt="A bedroom with a door labelled 13 feet to the left and furniture 3 feet to the right."></div>
+        <figcaption>LiDAR distance on Pro iPhones</figcaption>
+      </figure></li>
+    </ul>
+    <a class="video" href="https://www.youtube.com/watch?v=2BEYv-fv-gE">Watch the 90-second demo on YouTube</a>
+    <p class="muted" style="font-size:15px">Real screen recordings: live detection at a concert, describing a scene, answering a question out loud, reading mail, and Help Me Aim. All offline.</p>
+  </div>
+</section>
+
+<section aria-labelledby="privacy">
+  <div class="wrap">
+    <p class="eyebrow">Privacy</p>
+    <h2 id="privacy">Nothing you point it at leaves the phone</h2>
+    <ul class="privacy-list">
+      <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg><span>No personal data collected, stored or shared.</span></li>
+      <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg><span>Camera frames are processed on the device and never recorded or sent.</span></li>
+      <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg><span>No accounts, no sign-up, no analytics, no ads, no trackers.</span></li>
+      <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg><span>Microphone and speech recognition are used only while you hold the ask button, and the question is transcribed on the phone.</span></li>
+      <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg><span>Photo library access is add-only, so Help Me Aim can save the pictures it takes.</span></li>
+    </ul>
+    <p class="note">When the internet is used at all: extra translation languages download once from Apple (iPhone) or Google (Android), then work offline. A build without the description model inside it offers a Download button for it; the App Store and Google Play builds ship with the model. <a href="https://github.com/nicedreamzapp/RealTimeAICam/blob/main/PRIVACY.md">Read the full privacy policy</a>.</p>
+  </div>
+</section>
+
+<section aria-labelledby="faq">
+  <div class="wrap">
+    <p class="eyebrow">FAQ</p>
+    <h2 id="faq">Questions</h2>
+    <details>
+      <summary>How much does it cost?</summary>
+      <p>Nothing. It is free on both stores, with no ads, no subscription and no in-app purchases.</p>
+    </details>
+    <details>
+      <summary>Does it need an internet connection?</summary>
+      <p>No. Detection, reading, Spanish translation and What's this? all run on the phone. The only downloads are optional extra translation languages, once each.</p>
+    </details>
+    <details>
+      <summary>Why is the iPhone download so big?</summary>
+      <p>The description model ships inside the app so it never has to call a server. On iPhone the download is around 700 MB.</p>
+    </details>
+    <details>
+      <summary>Which phones does it run on?</summary>
+      <p>iPhone with iOS 17 or later. Android 8 or later for detection and reading; What's this? needs Android 9 or later on a 64-bit phone. LiDAR distance needs an iPhone Pro with LiDAR. Extra translation languages on iPhone need iOS 18.</p>
+    </details>
+    <details>
+      <summary>How fast is What's this? on Android?</summary>
+      <p>It depends on the phone. The only budget phone timed so far, with a Helio P35 chip, took about 87 seconds per answer. No phone using the GPU path has been timed yet. TODO-VERIFY: add an iPhone timing if Matt has one.</p>
+    </details>
+    <details>
+      <summary>Does it work with VoiceOver and TalkBack?</summary>
+      <p>Yes. It was built around them. A setting hands all speech to your screen reader instead of the app's own voice.</p>
+    </details>
+    <details>
+      <summary>Is it open source?</summary>
+      <p>Yes, under AGPL-3.0, the same license as the YOLOv8 detector it uses. The full iOS and Android source is on <a href="https://github.com/nicedreamzapp/RealTimeAICam">GitHub</a>. The app name and icon are not licensed.</p>
+    </details>
+  </div>
+</section>
+
+<section aria-labelledby="credits">
+  <div class="wrap">
+    <p class="eyebrow">Built on</p>
+    <h2 id="credits">Upstream work, credited</h2>
+    <p>Matt Macosko designed and wrote the app. The models and runtimes it uses come from these projects:</p>
+    <ul class="credits">
+      <li>YOLOv8 and YOLOE by Ultralytics (object detection, Help Me Aim)</li>
+      <li>Open Images V7 by Google (the 601 object classes)</li>
+      <li>Qwen3.5 by the Qwen team (base of the fine-tuned description model)</li>
+      <li>MLX Swift and mlx-swift-lm by Apple's ml-explore team (runs the model on iPhone)</li>
+      <li>swift-transformers by Hugging Face (tokenizer on iPhone)</li>
+      <li>llama.cpp by ggml-org (runs the model on Android)</li>
+      <li>Core ML, Vision, ARKit and Apple Translation by Apple; TensorFlow Lite and ML Kit by Google</li>
+    </ul>
+  </div>
+</section>
+
+<section class="contact" aria-labelledby="contact">
+  <div class="wrap">
+    <h2 id="contact">Press and questions</h2>
+    <p class="muted">Review codes are not needed, the app is free. For screenshots, a demo or an interview, write to:</p>
+    <a class="btn" href="mailto:info@nicedreamzwholesale.com?subject=RealTime%20AI%20Cam">info@nicedreamzwholesale.com</a>
+    <p style="margin-top:18px"><a href="https://nicedreamzwholesale.com/software/">More software from Nice Dreamz</a></p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>RealTime AI Cam by Matt Macosko, Nice Dreamz LLC. Source code under AGPL-3.0. App Store is a service mark of Apple Inc. Google Play is a trademark of Google LLC.</p>
+  </div>
+</footer>
+</body>
+</html>
