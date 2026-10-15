@@ -23,7 +23,6 @@ fine-tuned vision-language model on the phone itself, and speaks what they find 
 ![Privacy First](https://img.shields.io/badge/Privacy-First-red?style=for-the-badge&logo=shield)
 ![VoiceOver](https://img.shields.io/badge/VoiceOver_%26_TalkBack-Built_In-8A2BE2?style=for-the-badge&logo=apple)
 ![YOLOv8 Classes](https://img.shields.io/badge/YOLOv8-601_Classes-yellow?style=for-the-badge)
-![Frame Rate](https://img.shields.io/badge/Frame_Rate-~10_FPS-success?style=for-the-badge)
 ![LiDAR](https://img.shields.io/badge/LiDAR-Supported-cyan?style=for-the-badge)
 ![On Device AI](https://img.shields.io/badge/AI-100%25_On_Device-purple?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-AGPL--3.0-blue?style=for-the-badge)
