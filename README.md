@@ -29,9 +29,10 @@ fine-tuned vision-language model on the phone itself, and speaks what they find 
 
 </div>
 
----
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s01-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s01-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s01-banner.svg" width="100%" alt="01. See it work. A 90-second demo and screenshots"></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s01-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s01-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s01-r1.svg" width="100%" alt="601 object classes, YOLOv8 on Open Images V7. 90 s demo video, all real screen recordings. ~700 MB iPhone download, because the narrator model is inside."></picture>
 
-## 🎬 Watch It Work (90 seconds)
+### 🎬 Watch It Work (90 seconds)
 
 <div align="center">
 
@@ -41,9 +42,7 @@ fine-tuned vision-language model on the phone itself, and speaks what they find 
 
 </div>
 
----
-
-## 📸 Screenshots
+### 📸 Screenshots
 
 <div align="center">
 
@@ -54,9 +53,12 @@ fine-tuned vision-language model on the phone itself, and speaks what they find 
 
 </div>
 
----
+<img src="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s01-rule.svg" width="100%" alt="">
 
-## 🛠️ What I built
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s02-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s02-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s02-banner.svg" width="100%" alt="02. What I built, and where it started. From a robot in a chicken coop to a phone"></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s02-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s02-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s02-r1.svg" width="100%" alt="The iOS app. SwiftUI screens and the camera pipeline with thermal throttling. Vision Narrator 0.8B. The on-device narrator, run through upstream MLX Swift. The Android port. Jetpack Compose UI and a TensorFlow Lite detector."></picture>
+
+### 🛠️ What I built
 
 Designed, written and shipped by **Matt Macosko** (NiceDreamzApps). The detector, the base
 language model and the inference runtimes are upstream work, credited below; the app around
@@ -69,9 +71,7 @@ them is this repo.
 - 📸 **Help Me Aim**: talks a blind photographer into the shot, then takes it ([`HelpMeAim.swift`](ios/project%20601/HelpMeAim.swift)), with unit tests in [`project 601Tests/`](ios/project%20601Tests/)
 - 🤖 **The Android port**: Jetpack Compose UI ([`ui/`](android/app/src/main/java/com/mattmacosko/realtimeaicam/ui/)), the TensorFlow Lite detector ([`YoloDetector.kt`](android/app/src/main/java/com/mattmacosko/realtimeaicam/detection/YoloDetector.kt)), a JNI bridge to upstream llama.cpp that probes the GPU before trusting it ([`narrator_jni.cpp`](android/app/src/main/cpp/narrator_jni.cpp), [`NarratorEngine.kt`](android/app/src/main/java/com/mattmacosko/realtimeaicam/narrator/NarratorEngine.kt)), and the model conversion tooling ([`android/tools/`](android/tools/))
 
----
-
-## 🐔 Where it started
+### 🐔 Where it started
 
 This began as the eyes of a **robot that watched a chicken coop**.
 
@@ -85,9 +85,14 @@ low-vision users found it, and told us what it was really for.
 
 > **Chicken is still class 109 of the 601.** So are Fox, Raccoon, Owl and Eagle.
 
----
+**Vision Narrator 0.8B** on Hugging Face: [divinetribe/Vision-Narrator-0.8B-4bit-mlx](https://huggingface.co/divinetribe/Vision-Narrator-0.8B-4bit-mlx)
 
-## 🗣️ The part that matters most
+<img src="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s02-rule.svg" width="100%" alt="">
+
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s03-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s03-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s03-banner.svg" width="100%" alt="03. What it does for you. Talks back, built for VoiceOver and TalkBack"></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s03-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s03-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s03-r1.svg" width="100%" alt="Press What&#x27;s this? The phone speaks one to three plain sentences about what the camera sees. Hands off the shutter. A spoken countdown, then it takes the picture for you. It never refuses a shot. Dark or blurry, it says so and describes what it can."></picture>
+
+### 🗣️ The part that matters most
 
 <div align="center">
 
@@ -109,9 +114,7 @@ country where your data plan doesn't.
 > describes whatever it can make out anyway. It will not hand the picture back and tell you
 > to take another one.
 
----
-
-## ♿ Built for VoiceOver and TalkBack
+### ♿ Built for VoiceOver and TalkBack
 
 This app is used every day by blind and low-vision people. The accessibility work isn't a
 checkbox at the end, it *is* the product.
@@ -152,9 +155,7 @@ Feature requests from the [AppleVis](https://www.applevis.com/) community are cr
 in the commit history and in the source comments. If something is unlabelled, read in the wrong
 order, or just not useful — say so, and it gets fixed.
 
----
-
-## ✨ Everything it does
+### ✨ Everything it does
 
 <table>
 <tr>
@@ -180,9 +181,12 @@ order, or just not useful — say so, and it gets fixed.
 </tr>
 </table>
 
----
+<img src="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s03-rule.svg" width="100%" alt="">
 
-## ⚡ How it's put together
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s04-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s04-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s04-banner.svg" width="100%" alt="04. How it works, and privacy. Everything stays on the phone"></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s04-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s04-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s04-r1.svg" width="100%" alt="No data collection. Zero telemetry or analytics. Airplane mode works. No internet required. No account. Install and use it."></picture>
+
+### ⚡ How it's put together
 
 ```mermaid
 graph TB
@@ -212,9 +216,7 @@ graph TB
 | 📏 **Depth** | ARKit LiDAR | Per-object distance |
 | 🔋 **Optimization** | Thermal & battery aware, adaptive frame rate | Runs all day |
 
----
-
-## 🔒 Privacy guarantee
+### 🔒 Privacy guarantee
 
 <div align="center">
 
@@ -237,10 +239,12 @@ graph TB
 > ([`VisionModelStore.swift`](ios/project%20601/VisionModelStore.swift)). App Store and
 > Google Play builds ship with the model, so they never make it.
 
----
+<img src="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s04-rule.svg" width="100%" alt="">
 
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s05-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s05-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s05-banner.svg" width="100%" alt="05. Both platforms, and getting started. iOS, Android, build from source"></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s05-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s05-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s05-r1.svg" width="100%" alt="iOS 17+. Live on the App Store, free. Android 8+. Live on Google Play, free. What&#x27;s this? needs Android 9+ on arm64. Xcode 16+. For building from source on macOS."></picture>
 
-## 📦 Both platforms, one repo
+### 📦 Both platforms, one repo
 
 ### 📱 iOS — [`ios/`](ios/)
 
@@ -256,9 +260,7 @@ conversion tooling included.
 
 **Status:** ✅ [Live on Google Play](https://play.google.com/store/apps/details?id=com.mattmacosko.realtimeaicam), free.
 
----
-
-## 🚀 Getting started
+### 🚀 Getting started
 
 ### 📋 **Requirements**
 - **Device:** iPhone with **iOS 17+** — the download is around **700 MB** because the narrator model is inside the app
@@ -300,9 +302,7 @@ then open `android/` in Android Studio.
 - 🖼️ **Add to photo library**: optional, so Help Me Aim can save the pictures it takes (picking a photo to describe needs no permission)
 - 🎙️ **Microphone + speech recognition**: optional, only while you hold the button to ask a question about a photo, transcribed on the phone
 
----
-
-## 🔧 Advanced customization
+### 🔧 Advanced customization
 
 <details>
 <summary>🤖 <strong>Swap the YOLOv8 model</strong> (click to expand)</summary>
@@ -330,9 +330,12 @@ then open `android/` in Android Studio.
 
 </details>
 
----
+<img src="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s05-rule.svg" width="100%" alt="">
 
-## 🤝 Contributing
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s06-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s06-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s06-banner.svg" width="100%" alt="06. Contributing, support and license. Credits and how to reach me"></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s06-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s06-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s06-r1.svg" width="100%" alt="AGPL-3.0. The same license as the YOLOv8 detector it is built on. Accessibility testing. With a real screen reader: the most valuable thing anyone can send. Support. info@nicedreamzwholesale.com."></picture>
+
+### 🤝 Contributing
 
 <div align="center">
 
@@ -354,9 +357,7 @@ then open `android/` in Android Studio.
 - ⚡ Performance optimization
 - 🐛 Bug fixes and stability
 
----
-
-## 📞 Support & contact
+### 📞 Support & contact
 
 <div align="center">
 
@@ -372,9 +373,7 @@ then open `android/` in Android Studio.
 
 The narrator here runs on MLX Swift on the phone. On the Mac I use MLX for [claude-code-local](https://github.com/nicedreamzapp/claude-code-local), which runs Claude Code with local models and no API key.
 
----
-
-## 📄 License & credits
+### 📄 License & credits
 
 ### ⚖️ **License**
 
@@ -393,11 +392,11 @@ See [LICENSE](LICENSE) for the full text and [NOTICE.md](NOTICE.md) for the name
 | ♿ **Feature requests & testing** | The [AppleVis](https://www.applevis.com/) community | with thanks |
 | 🎨 **App design & development** | © NiceDreamzApps | AGPL-3.0 |
 
----
+<img src="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/main/assets/readme/s06-rule.svg" width="100%" alt="">
 
 <div align="center">
 
-## Get the app
+### Get the app
 
 [![Download on App Store](https://img.shields.io/badge/Download-App%20Store-007AFF?style=for-the-badge&logo=apple&logoColor=white)](https://apps.apple.com/us/app/id6751230739)
 [![Get it on Google Play](https://img.shields.io/badge/Get_it_on-Google_Play-01875f?style=for-the-badge&logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.mattmacosko.realtimeaicam)
