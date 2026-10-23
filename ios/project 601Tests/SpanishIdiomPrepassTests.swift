@@ -32,3 +32,16 @@ struct SpanishIdiomPrepassTests {
         #expect(try await run("El perro come") == "[El perro come]")
     }
 }
+
+// Android found the camera wraps a saying across two lines. On iPhone the
+// Vision lines are joined with spaces before translation (LiveOCRViewModel), so
+// a two-line sign still reaches the pre-pass as one sentence. Proven end to end:
+struct WrappedIdiomTests {
+    @Test func twoLineSignStillMatches() async throws {
+        let image = TranslateLanguagesTests.sign("No hay mal que por bien\nno venga.")
+        let text = try TranslateLanguagesTests.read(image, languages: ["es-ES", "es"])
+        #expect(!text.contains("\n"))
+        let out = try await SpanishIdiomPrepass.translate(text) { "[\($0)]" }
+        #expect(out == "Every cloud has a silver lining.", "OCR gave: \(text)")
+    }
+}
