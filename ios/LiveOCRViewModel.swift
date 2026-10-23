@@ -352,6 +352,39 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
         isFrozen = false
     }
 
+    /// A picture from the photo library in Reading or Translate mode: read its
+    /// words with the same languages the live camera would use, and hold them on
+    /// screen (frozen) so the Translate, Copy and Speak buttons act on them.
+    /// Before this, a picked photo in these modes went to the What's this?
+    /// describer, which answered in English and never translated anything.
+    func readStill(_ image: CGImage, mode: OCRMode, completion: @escaping (Bool) -> Void) {
+        let languages: [String]
+        if mode == .spanishToEnglish {
+            visionLanguageLock.lock(); languages = translateVisionLanguages; visionLanguageLock.unlock()
+        } else {
+            languages = ["en-US", "en"]
+        }
+        isFrozen = true
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let request = VNRecognizeTextRequest()
+            request.recognitionLevel = .accurate
+            request.usesLanguageCorrection = true
+            request.recognitionLanguages = languages
+            try? VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
+            let text = (request.results ?? [])
+                .compactMap { $0.topCandidates(1).first?.string }
+                .joined(separator: " ")
+            await MainActor.run {
+                guard let self else { return }
+                self.recognizedText = text
+                self.translatedText = ""
+                self.isTranslated = false
+                if text.isEmpty { self.isFrozen = false }
+                completion(!text.isEmpty)
+            }
+        }
+    }
+
     /// Resume OCR processing after freezing for translation/copy
     func continueReading() {
         isFrozen = false

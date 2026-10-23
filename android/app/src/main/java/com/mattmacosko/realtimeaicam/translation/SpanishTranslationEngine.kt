@@ -640,6 +640,7 @@ class SpanishTranslationEngine {
         val newDict = HashMap<String, String>(300_000)
         val newPos = HashMap<String, String>(60_000)
         var rulesBag: Map<String, Any?> = emptyMap()
+        var topPhrases: Map<String, Any?> = emptyMap()
 
         reader.beginObject()
         while (reader.hasNext()) {
@@ -649,8 +650,13 @@ class SpanishTranslationEngine {
                     @Suppress("UNCHECKED_CAST")
                     rulesBag = (readAny(reader) as? Map<String, Any?>) ?: emptyMap()
                 }
-                // "version", "generated" and the top-level "phrases" key are ignored,
-                // matching the Swift decoder (ESMaster only reads _metadata/dictionary/rules).
+                // 6,056 curated idioms ("más vale tarde que nunca" -> "better late than
+                // never"). Shipped in the data file but never read until now, same as iOS.
+                "phrases" -> {
+                    @Suppress("UNCHECKED_CAST")
+                    topPhrases = (readAny(reader) as? Map<String, Any?>) ?: emptyMap()
+                }
+                // "version" and "generated" are ignored.
                 else -> reader.skipValue()
             }
         }
@@ -696,6 +702,13 @@ class SpanishTranslationEngine {
         // --- Phrase matcher: RULES buckets FIRST, then multiword dictionary entries fill gaps ---
         val phraseSource = HashMap<String, String>()
         phraseSource.putAll(collectRulePhrases(rulesBag)) // rules win on conflict (put first)
+        // Top-level idioms, three words and up only: single words skip the noun-adjective
+        // reorder and two-word entries misfire mid-sentence ("que no" -> "I don't think so").
+        for ((k, v) in topPhrases) {
+            val t = v as? String ?: continue
+            if (t.isNotEmpty() && k.trim().split(' ').filter { it.isNotEmpty() }.size >= 3 &&
+                !phraseSource.containsKey(k)) phraseSource[k] = t
+        }
         for ((k, v) in newDict) {
             if (k.contains(' ') && !phraseSource.containsKey(k)) phraseSource[k] = v
         }

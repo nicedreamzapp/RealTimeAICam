@@ -362,6 +362,55 @@ struct LiveOCRView: View {
         analyze(cg, pauseCamera: true)
     }
 
+    /// Reading and Translate modes: a library photo is a page to read, not a scene
+    /// to describe. Its words land where the camera's would, then Translate mode
+    /// translates and speaks them, Reading mode speaks them.
+    private func readPickedPhoto(_ picked: UIImage) {
+        scannedSummary = ""
+        guard let cg = picked.cgImage ?? ciBackedCGImage(picked) else {
+            viewModel.speak(text: "That picture couldn't be opened.", voiceIdentifier: selectedVoiceIdentifier) {}
+            return
+        }
+        viewModel.stopSpeaking()
+        isSpeaking = false
+        isTranslating = true
+        viewModel.readStill(cg, mode: ocrMode) { found in
+            guard found else {
+                isTranslating = false
+                viewModel.speak(text: "I couldn't find any words in that picture.",
+                                voiceIdentifier: selectedVoiceIdentifier) {}
+                return
+            }
+            let speakResult = {
+                let text = ocrMode == .spanishToEnglish ? viewModel.translatedText : viewModel.recognizedText
+                isSpeaking = true
+                RatePrompt.noteResult()
+                viewModel.speak(text: text, voiceIdentifier: selectedVoiceIdentifier) {
+                    isSpeaking = false
+                    // Reading mode has no Continue button; go back to the camera.
+                    if ocrMode == .english { viewModel.continueReading() }
+                }
+            }
+            if ocrMode == .spanishToEnglish {
+                viewModel.translateSpanishText { success in
+                    isTranslating = false
+                    if success { speakResult() }
+                }
+            } else {
+                isTranslating = false
+                speakResult()
+            }
+        }
+    }
+
+    /// The device's real top inset (Dynamic Island / notch), which a view inside
+    /// .ignoresSafeArea() can't see through its GeometryProxy.
+    private static var windowTopInset: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { ($0 as? UIWindowScene)?.keyWindow }
+            .first?.safeAreaInsets.top ?? 0
+    }
+
     /// A photo from the library can be CIImage-backed with no CGImage of its own.
     private func ciBackedCGImage(_ image: UIImage) -> CGImage? {
         guard let ci = image.ciImage else { return nil }
@@ -705,7 +754,10 @@ struct LiveOCRView: View {
                         }
                     }
                     .padding(.horizontal, max(geometry.safeAreaInsets.leading, geometry.safeAreaInsets.trailing) + 20)
-                    .padding(.top, geometry.safeAreaInsets.top + 15)
+                    // ContentView ignores the safe area, so geometry says 0 here and
+                    // the bar sat at y=15, under the Dynamic Island. The window still
+                    // knows where the island ends.
+                    .padding(.top, max(geometry.safeAreaInsets.top, Self.windowTopInset) + 8)
 
                     Spacer()
                 }
@@ -975,8 +1027,12 @@ struct LiveOCRView: View {
                                 )
                                 .contentShape(Circle())
                         }
-                        .accessibilityLabel("Describe a photo from my library")
-                        .accessibilityHint("Pick a picture already on this phone and the app says what is in it")
+                        .accessibilityLabel(ocrMode == .mail ? "Describe a photo from my library"
+                            : (ocrMode == .spanishToEnglish ? "Translate a photo from my library"
+                               : "Read a photo from my library"))
+                        .accessibilityHint(ocrMode == .mail
+                            ? "Pick a picture already on this phone and the app says what is in it"
+                            : "Pick a picture already on this phone and the app reads its words out loud")
 
 
                         // Translate or Copy button
@@ -1045,7 +1101,11 @@ struct LiveOCRView: View {
                 await MainActor.run {
                     pickedItem = nil
                     if let data, let image = UIImage(data: data) {
-                        describePickedPhoto(image)
+                        if ocrMode == .mail {
+                            describePickedPhoto(image)
+                        } else {
+                            readPickedPhoto(image)
+                        }
                     } else {
                         say("That picture couldn't be opened.")
                     }
@@ -1321,7 +1381,9 @@ private struct AppleSpanishTranslationModifier: ViewModifier {
                     // Spanish falls back to the offline engine; other languages
                     // say why, most often a first download attempted offline.
                     viewModel.completeAppleTranslation(nil, failure: status == .installed ? nil
-                        : "\(language.name) needs a one-time download from Apple. Connect to the internet once, then it works offline.")
+                        : (status == .unsupported
+                            ? "Apple's translator can't do \(language.name) on this device."
+                            : "\(language.name) needs a one-time download from Apple. Connect to the internet once, then it works offline."))
                 }
             }
     }
