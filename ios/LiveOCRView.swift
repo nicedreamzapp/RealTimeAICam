@@ -677,10 +677,11 @@ struct LiveOCRView: View {
 
                         Spacer()
 
+                        // With several languages the From menu doubles as the mode
+                        // indicator; two pills side by side ran under the Dynamic Island.
                         if ocrMode == .spanishToEnglish, TranslateLanguage.available.count > 1 {
                             translateFromControl
-                        }
-
+                        } else {
                         // Mode indicator (right side)
                         Text(ocrMode == .english ? "English"
                              : (ocrMode == .mail ? "What's this?"
@@ -701,6 +702,7 @@ struct LiveOCRView: View {
                                 ocrMode == .english ? "Reading English text"
                                 : (ocrMode == .mail ? "Summarizing what you point at"
                                    : "Translating \(viewModel.sourceLanguage.name) to English"))
+                        }
                     }
                     .padding(.horizontal, max(geometry.safeAreaInsets.leading, geometry.safeAreaInsets.trailing) + 20)
                     .padding(.top, geometry.safeAreaInsets.top + 15)
@@ -1086,7 +1088,8 @@ struct LiveOCRView: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "globe")
-                Text(viewModel.sourceLanguage.name)
+                Text("\(viewModel.sourceLanguage.name) → Eng")
+                    .lineLimit(1)
             }
             .font(.system(size: 14, weight: .medium))
             .foregroundStyle(.white)
