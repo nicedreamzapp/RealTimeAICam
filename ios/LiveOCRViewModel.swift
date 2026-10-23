@@ -99,6 +99,11 @@ struct TranslateLanguage: Equatable {
         return [spanish] + appleCandidates.filter { readable.contains($0.vision[0]) }
     }()
 
+    /// Said (and shown) the first time a language downloads. Same words on Android.
+    static func downloadLine(_ name: String) -> String {
+        "Downloading \(name), one time only. After that it works offline."
+    }
+
     static func named(_ code: String) -> TranslateLanguage {
         available.first { $0.code == code } ?? spanish
     }
@@ -238,15 +243,18 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
 
     // MARK: - On-Demand Translation
 
-    /// Matt's call 2026-07-06: everything ships inside the app with zero
-    /// downloads, so Apple's neural translator (which needs a one-time language
-    /// pack download) stays OFF. Flip to true to re-enable the iOS 18+ path.
-    private static let useAppleTranslation = false
-    private static let appleTranslationMinChars = 120
+    /// Matt's call 2026-10-23 (after a blind 62-text test): Spanish goes through
+    /// Apple's translator on iOS 18+, with whole idioms matched first
+    /// (SpanishIdiomPrepass). The built-in dictionary engine is the fallback when
+    /// Apple's Spanish isn't downloaded, can't download, or errors, and on iOS 17.
+    /// It loads only when that fallback is actually used (~110 MB).
 
     /// Non-nil while a request is waiting on Apple's translator; observed by
     /// LiveOCRView's translationTask modifier (iOS 18+ only).
     @Published var appleTranslationRequest: String?
+    /// Apple's Spanish download was declined or failed (offline) this launch:
+    /// go straight to the dictionary instead of asking again on every scan.
+    static var spanishDownloadDeclined = false
     private var pendingAppleCompletion: ((Bool) -> Void)?
 
     /// Pick the language to translate from. Clears what's on screen, since text
@@ -266,20 +274,20 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
         isFrozen = true
         let text = recognizedText
 
-        // Every language except Spanish is Apple's translator, whatever the length.
-        if sourceLanguage != .spanish {
-            if #available(iOS 18.0, *) {
-                pendingAppleCompletion = completion
-                appleTranslationRequest = text
-            } else {
-                completeAppleTranslation(nil, failure: "\(sourceLanguage.name) needs iOS 18 or later.")
+        // Every language goes to Apple's translator on iOS 18+ (LiveOCRView's
+        // translationTask takes over). Spanish falls back to the dictionary.
+        if #available(iOS 18.0, *) {
+            if sourceLanguage == .spanish, Self.spanishDownloadDeclined {
+                translateWithEngine(text, completion: completion)
+                return
             }
+            pendingAppleCompletion = completion
+            appleTranslationRequest = text
             return
         }
-
-        if Self.useAppleTranslation, #available(iOS 18.0, *), text.count >= Self.appleTranslationMinChars {
+        if sourceLanguage != .spanish {
             pendingAppleCompletion = completion
-            appleTranslationRequest = text // LiveOCRView's translationTask takes over
+            completeAppleTranslation(nil, failure: "\(sourceLanguage.name) needs iOS 18 or later.")
             return
         }
         translateWithEngine(text, completion: completion)

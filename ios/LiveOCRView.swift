@@ -1328,9 +1328,8 @@ struct LiveOCRView: View {
 
 // MARK: - Apple on-device neural translation (iOS 18+)
 
-// Long passages (stories, paragraphs) read far better through Apple's neural
-// translator than the offline rule engine. The rule engine remains the instant
-// path for short text and the fallback when the language model isn't available.
+// Every From language, Spanish included (Matt 2026-10-23), runs through Apple's
+// on-device translator. Spanish keeps the offline dictionary engine as its fallback.
 extension View {
     @ViewBuilder
     func appleSpanishTranslation(viewModel: LiveOCRViewModel, enabled: Bool) -> some View {
@@ -1368,18 +1367,37 @@ private struct AppleSpanishTranslationModifier: ViewModifier {
             .translationTask(configuration) { session in
                 guard let text = viewModel.appleTranslationRequest else { return }
                 let language = viewModel.sourceLanguage
+                let isSpanish = language == .spanish
                 let status = await LanguageAvailability().status(
                     from: Locale.Language(identifier: language.code),
                     to: Locale.Language(identifier: "en"))
+                if isSpanish, status == .unsupported {
+                    viewModel.completeAppleTranslation(nil) // dictionary
+                    return
+                }
                 do {
-                    // First use of a language: Apple shows its own "Download
-                    // French?" sheet here. After that it is offline for good.
-                    if status == .supported { try await session.prepareTranslation() }
-                    let response = try await session.translate(text)
-                    viewModel.completeAppleTranslation(response.targetText)
+                    if status == .supported {
+                        // First use of a language: say why Apple's download sheet is
+                        // about to appear. After this it is offline for good.
+                        let line = TranslateLanguage.downloadLine(language.name)
+                        UIAccessibility.post(notification: .announcement, argument: line)
+                        try await session.prepareTranslation()
+                    }
+                    let english: String
+                    if isSpanish {
+                        // Whole idioms first ("No hay mal que por bien no venga" →
+                        // "Every cloud has a silver lining"), the rest through Apple.
+                        english = try await SpanishIdiomPrepass.translate(text) {
+                            try await session.translate($0).targetText
+                        }
+                    } else {
+                        english = try await session.translate(text).targetText
+                    }
+                    viewModel.completeAppleTranslation(english)
                 } catch {
-                    // Spanish falls back to the offline engine; other languages
-                    // say why, most often a first download attempted offline.
+                    // Spanish falls back to the dictionary, so it always has an answer.
+                    // Other languages say why, most often a first download attempted offline.
+                    if isSpanish, status != .installed { LiveOCRViewModel.spanishDownloadDeclined = true }
                     viewModel.completeAppleTranslation(nil, failure: status == .installed ? nil
                         : (status == .unsupported
                             ? "Apple's translator can't do \(language.name) on this device."

@@ -11,7 +11,8 @@ import XCTest
 final class TranslatePhotoUITests: XCTestCase {
     private let env = ProcessInfo.processInfo.environment
 
-    private func probe(_ line: String) {
+    private func probe(_ raw: String) {
+        let line = "\(Int(Date().timeIntervalSince1970)) \(raw)"
         print(line)
         guard let path = env["PROBE_OUT"] else { return }
         let url = URL(fileURLWithPath: path)
@@ -49,6 +50,8 @@ final class TranslatePhotoUITests: XCTestCase {
         shot("00-translate-mode-pill")
 
         for (index, name) in languages.enumerated() {
+            let stopReading = app.buttons["Stop reading"].firstMatch
+            if stopReading.exists { stopReading.tap(); sleep(1) }
             // Pick the language from the pill's menu.
             let item = app.buttons[name].firstMatch
             for _ in 0..<3 {
@@ -59,7 +62,8 @@ final class TranslatePhotoUITests: XCTestCase {
             shot(String(format: "%02d-menu-%@", index + 2, name))
             item.tap()
             sleep(1)
-            if (pill.value as? String) != name {
+            for _ in 0..<3 where (pill.value as? String) != name {
+                sleep(2)
                 pill.tap(); if app.buttons[name].firstMatch.waitForExistence(timeout: 5) { app.buttons[name].firstMatch.tap() }; sleep(1)
             }
             if (pill.value as? String) != name { probe("MENU_TREE \(name)\n\(app.debugDescription)") }

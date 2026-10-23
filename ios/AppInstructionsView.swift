@@ -162,7 +162,7 @@ struct AppInstructionsView: View {
                             Text("🇲🇽→🇺🇸 **Spanish to English Translate**")
                                 .voiceOverWords("🇲🇽→🇺🇸 **Spanish to English Translate**")
                                 .font(.title2).fontWeight(.semibold)
-                            Text("Point at printed Spanish to see instant English translation, spoken aloud and ready to copy. On iOS 18 and later, the globe button at the top picks another language, like French or German. Each one downloads once from Apple, then works offline.")
+                            Text("Point at printed Spanish to see instant English translation, spoken aloud and ready to copy. The globe button at the top picks another language, like French or German. Each language, Spanish included, downloads once for the best translation, then works offline. Until then, Spanish still translates with the built-in dictionary. Other languages need iOS 18 or later.")
                         }
                         .padding(.top, 8)
                     }
@@ -239,7 +239,7 @@ struct AppInstructionsView: View {
             lines.append("LiDAR Distance Assist is not available on this device.")
         }
         lines.append("English O C R reads printed English aloud, and you can copy the text to history.")
-        lines.append("Spanish to English Translate lets you point at printed Spanish and hear a natural English translation while also displaying it on screen. On iOS 18 and later, the Translate from control at the top picks another language, like French or German. Swipe up or down on it to change. Each new language downloads once from Apple, then works offline.")
+        lines.append("Spanish to English Translate lets you point at printed Spanish and hear a natural English translation while also displaying it on screen. The Translate from control at the top picks another language, like French or German. Swipe up or down on it to change. Each language, Spanish included, downloads once for the best translation, then works offline. Until then, Spanish still translates with the built-in dictionary. Other languages need iOS 18 or later.")
         if CameraCapabilities.hasUltraWideRear {
             lines.append("You can switch cameras, toggle wide or ultra wide lenses, change torch brightness, and pinch to zoom. You can show or hide the on screen text, speak the text again, and copy it.")
         } else {
