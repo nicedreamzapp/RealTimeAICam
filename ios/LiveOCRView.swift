@@ -408,6 +408,7 @@ struct LiveOCRView: View {
                 await MainActor.run {
                     if let said {
                         say(Self.cutOffPrefix(looksLikePage ? gate.cutOffEdge : nil) + said)
+                        RatePrompt.noteResult()
                     } else {
                         readWithOCR(image)
                     }
@@ -530,6 +531,7 @@ struct LiveOCRView: View {
         let answer = await OnDeviceVisionNarrator.shared.ask(q, about: photo)
         await MainActor.run {
             isAsking = false
+            if answer != nil { RatePrompt.noteResult() }
             say(answer ?? "Sorry, I couldn't work that out. Try asking again.")
         }
     }
@@ -1216,6 +1218,7 @@ struct LiveOCRView: View {
                                 // completion synchronously, and setting it after
                                 // left the button stuck green with no audio.
                                 isSpeaking = true
+                                RatePrompt.noteResult()
                                 viewModel.speak(text: viewModel.translatedText, voiceIdentifier: selectedVoiceIdentifier) {
                                     isSpeaking = false
                                 }
@@ -1226,6 +1229,7 @@ struct LiveOCRView: View {
                             ? mailSummary
                             : (ocrMode == .english ? viewModel.recognizedText : viewModel.translatedText)
                         isSpeaking = true
+                        if !textToSpeak.isEmpty { RatePrompt.noteResult() }
                         viewModel.speak(text: textToSpeak, voiceIdentifier: selectedVoiceIdentifier) {
                             isSpeaking = false
                         }
