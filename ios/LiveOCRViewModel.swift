@@ -540,6 +540,9 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
         // exactly as it was read.
         let text = SpeakableText.spoken(rawText)
         guard !text.isEmpty else { completion(); return }
+        #if DEBUG
+        SpeakLog.note("speak", rawText)
+        #endif
         if !Self.speaksAloud {
             announceInstead(text)
             completion()
@@ -561,6 +564,17 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
             self.speechSynthesizer.speak(utterance)
         }
     }
+
+    #if DEBUG
+    /// Simulator only: hand the reader a line as if the camera had just read it,
+    /// the same way the Vision callback does. Drives the Auto read UI test.
+    func debugInjectRecognized(_ text: String) {
+        guard !isFrozen else { return }
+        let changed = recognizedText != text
+        recognizedText = text
+        if changed { isTranslated = false; translatedText = "" }
+    }
+    #endif
 
     func stopSpeaking() {
         if speechSynthesizer.isSpeaking { speechSynthesizer.stopSpeaking(at: .immediate) }
@@ -652,6 +666,9 @@ extension LiveOCRViewModel: AVSpeechSynthesizerDelegate {
                 fire?()
                 return
             }
+            #if DEBUG
+            SpeakLog.note("finished", utterance.speechString)
+            #endif
             self.speechCompletionHandler?()
             self.speechCompletionHandler = nil
         }
@@ -661,6 +678,9 @@ extension LiveOCRViewModel: AVSpeechSynthesizerDelegate {
         DispatchQueue.main.async {
             // A cancelled countdown never takes the picture.
             guard self.countdownIndex(of: utterance) == nil else { return }
+            #if DEBUG
+            SpeakLog.note("cancelled", utterance.speechString)
+            #endif
             self.speechCompletionHandler?()
             self.speechCompletionHandler = nil
         }

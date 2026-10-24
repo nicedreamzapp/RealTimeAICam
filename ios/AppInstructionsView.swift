@@ -190,6 +190,8 @@ struct AppInstructionsView: View {
                         }
                         Text("🗣️ Speak Detected / Translated Text")
                             .voiceOverWords("🗣️ Speak Detected / Translated Text")
+                        Text("🔁 The small button next to Speak switches between Tap to read, Auto read (new text is spoken by itself, once) and Mute (text on screen only).")
+                            .voiceOverWords("🔁 The small button next to Speak switches between Tap to read, Auto read (new text is spoken by itself, once) and Mute (text on screen only).")
                         Text("📋 Copy to History")
                             .voiceOverWords("📋 Copy to History")
                         Text("⚙️ Settings")
@@ -240,6 +242,7 @@ struct AppInstructionsView: View {
         }
         lines.append("English O C R reads printed English aloud, and you can copy the text to history.")
         lines.append("Spanish to English Translate lets you point at printed Spanish and hear a natural English translation while also displaying it on screen. The Translate from control at the top picks another language, like French or German. Swipe up or down on it to change. Each language, Spanish included, downloads once for the best translation, then works offline. Until then, Spanish still translates with the built-in dictionary. Other languages need iOS 18 or later.")
+        lines.append("In the text reader and the translator, the small button next to Speak switches between Tap to read, Auto read, which speaks new text by itself once, and Mute, which keeps the text on screen only.")
         if CameraCapabilities.hasUltraWideRear {
             lines.append("You can switch cameras, toggle wide or ultra wide lenses, change torch brightness, and pinch to zoom. You can show or hide the on screen text, speak the text again, and copy it.")
         } else {
