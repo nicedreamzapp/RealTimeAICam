@@ -372,10 +372,13 @@ struct AnimatedVoicePicker: View {
             let cleanedName = (voice?.name ?? "Select Voice")
                 .replacingOccurrences(of: " (Enhanced)", with: "")
                 .replacingOccurrences(of: " (Premium)", with: "")
+            // Spelled out: the one-line ternary timed out the type checker on a busy build machine.
+            let tagSuffix: String = (voice != nil && !tag.isEmpty) ? " " + tag : ""
+            let pillText: String = cleanedName + tagSuffix
             HStack(spacing: 6) {
                 Text(genderEmoji(for: voiceToUse))
                     .font(.system(size: 28))
-                Text(cleanedName + (voice != nil && !tag.isEmpty ? " \(tag)" : ""))
+                Text(pillText)
                     .font(.system(size: 20, weight: .bold, design: .default))
                     .foregroundColor(.white)
                 Image(systemName: showVoiceGrid ? "chevron.down" : "chevron.up")
@@ -388,7 +391,7 @@ struct AnimatedVoicePicker: View {
             .overlay(Capsule().stroke(Color.black, lineWidth: 1.1))
             // Same words as Android's pill; the face emoji is left out.
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Voice, " + cleanedName + (voice != nil && !tag.isEmpty ? " \(tag)" : ""))
+            .accessibilityLabel("Voice, " + pillText)
         }
         .opacity(animateIn ? 1 : 0)
         .scaleEffect(animateIn ? 1 : 0.7)

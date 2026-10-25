@@ -259,6 +259,15 @@ struct LiveOCRView: View {
 
     @StateObject private var buttonDebouncer = ButtonPressDebouncer() // Debouncer to avoid rapid multiple presses
 
+    /// Tap to read / Auto read / Mute, the small button next to Speak (Matt,
+    /// 2026-10-23). Shared by the text reader and the translator, remembered
+    /// across launches.
+    @AppStorage(ReadMode.storageKey) private var readModeRaw = ReadMode.tap.rawValue
+    private var readMode: ReadMode { ReadMode(rawValue: readModeRaw) ?? .tap }
+    /// Decides when Auto read has genuinely new, steady text to say.
+    @State private var autoGate = AutoReadGate()
+    @State private var autoReadTask: Task<Void, Never>?
+
     // Created ONCE for the settings overlay. Building CameraViewModel() inline in
     // body leaked a new capture session + observers on every re-render (~1/sec
     // while OCR text updates with settings open).
@@ -362,6 +371,61 @@ struct LiveOCRView: View {
         analyze(cg, pauseCamera: true)
     }
 
+    /// Reading and Translate modes: a library photo is a page to read, not a scene
+    /// to describe. Its words land where the camera's would, then Translate mode
+    /// translates and speaks them, Reading mode speaks them.
+    private func readPickedPhoto(_ picked: UIImage) {
+        scannedSummary = ""
+        guard let cg = picked.cgImage ?? ciBackedCGImage(picked) else {
+            viewModel.speak(text: "That picture couldn't be opened.", voiceIdentifier: selectedVoiceIdentifier) {}
+            return
+        }
+        viewModel.stopSpeaking()
+        isSpeaking = false
+        isTranslating = true
+        viewModel.readStill(cg, mode: ocrMode) { found in
+            guard found else {
+                isTranslating = false
+                viewModel.speak(text: "I couldn't find any words in that picture.",
+                                voiceIdentifier: selectedVoiceIdentifier) {}
+                return
+            }
+            let speakResult = {
+                let text = ocrMode == .spanishToEnglish ? viewModel.translatedText : viewModel.recognizedText
+                autoGate.markSpoken(viewModel.recognizedText)
+                // Mute: the words stay on screen, Speak reads them on request.
+                guard readMode != .mute else {
+                    if ocrMode == .english { viewModel.continueReading() }
+                    return
+                }
+                isSpeaking = true
+                RatePrompt.noteResult()
+                viewModel.speak(text: text, voiceIdentifier: selectedVoiceIdentifier) {
+                    isSpeaking = false
+                    // Reading mode has no Continue button; go back to the camera.
+                    if ocrMode == .english { viewModel.continueReading() }
+                }
+            }
+            if ocrMode == .spanishToEnglish {
+                viewModel.translateSpanishText { success in
+                    isTranslating = false
+                    if success { speakResult() }
+                }
+            } else {
+                isTranslating = false
+                speakResult()
+            }
+        }
+    }
+
+    /// The device's real top inset (Dynamic Island / notch), which a view inside
+    /// .ignoresSafeArea() can't see through its GeometryProxy.
+    private static var windowTopInset: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { ($0 as? UIWindowScene)?.keyWindow }
+            .first?.safeAreaInsets.top ?? 0
+    }
+
     /// A photo from the library can be CIImage-backed with no CGImage of its own.
     private func ciBackedCGImage(_ image: UIImage) -> CGImage? {
         guard let ci = image.ciImage else { return nil }
@@ -408,6 +472,7 @@ struct LiveOCRView: View {
                 await MainActor.run {
                     if let said {
                         say(Self.cutOffPrefix(looksLikePage ? gate.cutOffEdge : nil) + said)
+                        RatePrompt.noteResult()
                     } else {
                         readWithOCR(image)
                     }
@@ -530,6 +595,7 @@ struct LiveOCRView: View {
         let answer = await OnDeviceVisionNarrator.shared.ask(q, about: photo)
         await MainActor.run {
             isAsking = false
+            if answer != nil { RatePrompt.noteResult() }
             say(answer ?? "Sorry, I couldn't work that out. Try asking again.")
         }
     }
@@ -675,10 +741,11 @@ struct LiveOCRView: View {
 
                         Spacer()
 
+                        // With several languages the From menu doubles as the mode
+                        // indicator; two pills side by side ran under the Dynamic Island.
                         if ocrMode == .spanishToEnglish, TranslateLanguage.available.count > 1 {
                             translateFromControl
-                        }
-
+                        } else {
                         // Mode indicator (right side)
                         Text(ocrMode == .english ? "English"
                              : (ocrMode == .mail ? "What's this?"
@@ -699,9 +766,13 @@ struct LiveOCRView: View {
                                 ocrMode == .english ? "Reading English text"
                                 : (ocrMode == .mail ? "Summarizing what you point at"
                                    : "Translating \(viewModel.sourceLanguage.name) to English"))
+                        }
                     }
                     .padding(.horizontal, max(geometry.safeAreaInsets.leading, geometry.safeAreaInsets.trailing) + 20)
-                    .padding(.top, geometry.safeAreaInsets.top + 15)
+                    // ContentView ignores the safe area, so geometry says 0 here and
+                    // the bar sat at y=15, under the Dynamic Island. The window still
+                    // knows where the island ends.
+                    .padding(.top, max(geometry.safeAreaInsets.top, Self.windowTopInset) + 8)
 
                     Spacer()
                 }
@@ -971,8 +1042,12 @@ struct LiveOCRView: View {
                                 )
                                 .contentShape(Circle())
                         }
-                        .accessibilityLabel("Describe a photo from my library")
-                        .accessibilityHint("Pick a picture already on this phone and the app says what is in it")
+                        .accessibilityLabel(ocrMode == .mail ? "Describe a photo from my library"
+                            : (ocrMode == .spanishToEnglish ? "Translate a photo from my library"
+                               : "Read a photo from my library"))
+                        .accessibilityHint(ocrMode == .mail
+                            ? "Pick a picture already on this phone and the app says what is in it"
+                            : "Pick a picture already on this phone and the app reads its words out loud")
 
 
                         // Translate or Copy button
@@ -980,6 +1055,11 @@ struct LiveOCRView: View {
 
                         // Speak button
                         speakButton(buttonSize: metrics.buttonSize)
+
+                        // Tap to read / Auto read / Mute, right next to Speak.
+                        if ocrMode != .mail {
+                            readModeButton(buttonSize: metrics.buttonSize)
+                        }
 
                     }
                     .frame(maxWidth: .infinity)
@@ -1030,6 +1110,14 @@ struct LiveOCRView: View {
             // and paying it here means the countdown starts into a route that is
             // already awake instead of talking through the ramp.
             viewModel.warmAudioRoute()
+            #if DEBUG
+            startFakeOCRIfAsked()
+            #endif
+        }
+        .onChange(of: viewModel.recognizedText) { text in
+            guard ocrMode != .mail, readMode == .auto else { return }
+            autoGate.observe(text, at: Date())
+            scheduleAutoRead()
         }
         .onChange(of: pickedItem) { item in
             guard let item else { return }
@@ -1041,7 +1129,11 @@ struct LiveOCRView: View {
                 await MainActor.run {
                     pickedItem = nil
                     if let data, let image = UIImage(data: data) {
-                        describePickedPhoto(image)
+                        if ocrMode == .mail {
+                            describePickedPhoto(image)
+                        } else {
+                            readPickedPhoto(image)
+                        }
                     } else {
                         say("That picture couldn't be opened.")
                     }
@@ -1053,6 +1145,8 @@ struct LiveOCRView: View {
             // view that is already going away.
             cameraPreviewRef?.setTorchLevel(0)
             cancelCountdown()
+            autoReadTask?.cancel()
+            autoReadTask = nil
             viewModel.stopSession()
             viewModel.clearText()
             viewModel.resetTranslation()
@@ -1084,7 +1178,8 @@ struct LiveOCRView: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "globe")
-                Text(viewModel.sourceLanguage.name)
+                Text("\(viewModel.sourceLanguage.name) → Eng")
+                    .lineLimit(1)
             }
             .font(.system(size: 14, weight: .medium))
             .foregroundStyle(.white)
@@ -1216,6 +1311,8 @@ struct LiveOCRView: View {
                                 // completion synchronously, and setting it after
                                 // left the button stuck green with no audio.
                                 isSpeaking = true
+                                RatePrompt.noteResult()
+                                autoGate.markSpoken(viewModel.recognizedText)
                                 viewModel.speak(text: viewModel.translatedText, voiceIdentifier: selectedVoiceIdentifier) {
                                     isSpeaking = false
                                 }
@@ -1226,6 +1323,8 @@ struct LiveOCRView: View {
                             ? mailSummary
                             : (ocrMode == .english ? viewModel.recognizedText : viewModel.translatedText)
                         isSpeaking = true
+                        if !textToSpeak.isEmpty { RatePrompt.noteResult() }
+                        if ocrMode != .mail { autoGate.markSpoken(viewModel.recognizedText) }
                         viewModel.speak(text: textToSpeak, voiceIdentifier: selectedVoiceIdentifier) {
                             isSpeaking = false
                         }
@@ -1259,11 +1358,134 @@ struct LiveOCRView: View {
     }
 }
 
+// MARK: - Read mode (Tap to read / Auto read / Mute)
+
+extension LiveOCRView {
+    /// The small button next to Speak. Each tap moves to the next mode and says
+    /// its name, out loud or through VoiceOver, so nobody has to find it on screen.
+    @ViewBuilder
+    func readModeButton(buttonSize: CGFloat) -> some View {
+        Button(action: {
+            guard buttonDebouncer.canPress("LiveOCRView-readMode") else { return }
+            cycleReadMode()
+        }) {
+            Image(systemName: readMode.symbol)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(readMode == .auto ? Color.green : .white)
+                .symbolRenderingMode(.palette)
+                .frame(width: buttonSize - 8, height: buttonSize - 8)
+                .background(
+                    Circle()
+                        .fill(readMode == .auto ? Color.green.opacity(0.25) : Color.black.opacity(0.25))
+                        .overlay(Circle().fill(.ultraThinMaterial.opacity(0.15)))
+                )
+                // Visibly small, but the whole 44 point square still takes the tap.
+                .frame(width: buttonSize, height: buttonSize)
+                .contentShape(Rectangle())
+        }
+        .accessibilityIdentifier("readModeButton")
+        .accessibilityLabel("Read mode")
+        .accessibilityValue(readMode.title)
+        .accessibilityHint("Double tap to switch between Tap to read, Auto read and Mute")
+    }
+
+    private func cycleReadMode() {
+        let next = readMode.next
+        readModeRaw = next.rawValue
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        autoReadTask?.cancel()
+        autoReadTask = nil
+        // Start Auto read fresh, so the text already on screen is read once
+        // after the mode's name.
+        autoGate.reset()
+        if next == .auto { autoGate.observe(viewModel.recognizedText, at: Date()) }
+        isSpeaking = true
+        viewModel.speak(text: next.title, voiceIdentifier: selectedVoiceIdentifier) {
+            isSpeaking = false
+            if readMode == .auto { scheduleAutoRead() }
+        }
+    }
+
+    /// Check again the moment the current text has been steady long enough.
+    func scheduleAutoRead() {
+        autoReadTask?.cancel()
+        let wait = max(0, autoGate.readyAt.timeIntervalSinceNow) + 0.05
+        autoReadTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            autoReadIfNew()
+        }
+    }
+
+    /// Auto read: say genuinely new, steady text once. Never talks over itself or
+    /// over a tapped Speak; whatever arrives meanwhile is checked when speech ends.
+    func autoReadIfNew() {
+        guard readMode == .auto, ocrMode != .mail,
+              !isSpeaking, !isTranslating, !viewModel.isFrozen,
+              countdownRemaining == nil, !showTranslationPopup,
+              let text = autoGate.textToSpeak(at: Date()) else { return }
+        autoGate.markSpoken(text)
+        #if DEBUG
+        SpeakLog.note("auto", text)
+        #endif
+        let finished = {
+            isSpeaking = false
+            if readMode == .auto { scheduleAutoRead() }
+        }
+        guard ocrMode == .spanishToEnglish else {
+            isSpeaking = true
+            RatePrompt.noteResult()
+            viewModel.speak(text: text, voiceIdentifier: selectedVoiceIdentifier, completion: finished)
+            return
+        }
+        // Translator: translate the steady text, say the English, then go back
+        // to the live camera for the next sign. The English stays on screen
+        // until the camera sees something else.
+        isTranslating = true
+        viewModel.translateSpanishText { success in
+            isTranslating = false
+            guard success, readMode == .auto, !viewModel.translatedText.isEmpty else {
+                viewModel.continueReading()
+                return
+            }
+            isSpeaking = true
+            RatePrompt.noteResult()
+            viewModel.speak(text: viewModel.translatedText, voiceIdentifier: selectedVoiceIdentifier) {
+                if !showTranslationPopup { viewModel.continueReading() }
+                finished()
+            }
+        }
+    }
+
+    #if DEBUG
+    /// Simulator only (no camera there): RTCAM_FAKE_OCR="1.0::first text||0.4::next"
+    /// (RTCAM_FAKE_OCR_TRANSLATE for the translator) feeds the reader timed lines
+    /// as if the camera had read them.
+    func startFakeOCRIfAsked() {
+        let key = ocrMode == .spanishToEnglish ? "RTCAM_FAKE_OCR_TRANSLATE" : "RTCAM_FAKE_OCR"
+        guard ocrMode != .mail,
+              let script = ProcessInfo.processInfo.environment[key], !script.isEmpty else { return }
+        let steps: [(Double, String)] = script.components(separatedBy: "||").compactMap { step in
+            let parts = step.components(separatedBy: "::")
+            guard parts.count == 2, let delay = Double(parts[0]) else { return nil }
+            return (delay, parts[1])
+        }
+        Task { @MainActor in
+            for (delay, text) in steps {
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                SpeakLog.note("ocr", text)
+                viewModel.debugInjectRecognized(text)
+            }
+            SpeakLog.note("ocr", "END")
+        }
+    }
+    #endif
+}
+
 // MARK: - Apple on-device neural translation (iOS 18+)
 
-// Long passages (stories, paragraphs) read far better through Apple's neural
-// translator than the offline rule engine. The rule engine remains the instant
-// path for short text and the fallback when the language model isn't available.
+// Every From language, Spanish included (Matt 2026-10-23), runs through Apple's
+// on-device translator. Spanish keeps the offline dictionary engine as its fallback.
 extension View {
     @ViewBuilder
     func appleSpanishTranslation(viewModel: LiveOCRViewModel, enabled: Bool) -> some View {
@@ -1301,20 +1523,41 @@ private struct AppleSpanishTranslationModifier: ViewModifier {
             .translationTask(configuration) { session in
                 guard let text = viewModel.appleTranslationRequest else { return }
                 let language = viewModel.sourceLanguage
+                let isSpanish = language == .spanish
                 let status = await LanguageAvailability().status(
                     from: Locale.Language(identifier: language.code),
                     to: Locale.Language(identifier: "en"))
+                if isSpanish, status == .unsupported {
+                    viewModel.completeAppleTranslation(nil) // dictionary
+                    return
+                }
                 do {
-                    // First use of a language: Apple shows its own "Download
-                    // French?" sheet here. After that it is offline for good.
-                    if status == .supported { try await session.prepareTranslation() }
-                    let response = try await session.translate(text)
-                    viewModel.completeAppleTranslation(response.targetText)
+                    if status == .supported {
+                        // First use of a language: say why Apple's download sheet is
+                        // about to appear. After this it is offline for good.
+                        let line = TranslateLanguage.downloadLine(language.name)
+                        UIAccessibility.post(notification: .announcement, argument: line)
+                        try await session.prepareTranslation()
+                    }
+                    let english: String
+                    if isSpanish {
+                        // Whole idioms first ("No hay mal que por bien no venga" →
+                        // "Every cloud has a silver lining"), the rest through Apple.
+                        english = try await SpanishIdiomPrepass.translate(text) {
+                            try await session.translate($0).targetText
+                        }
+                    } else {
+                        english = try await session.translate(text).targetText
+                    }
+                    viewModel.completeAppleTranslation(english)
                 } catch {
-                    // Spanish falls back to the offline engine; other languages
-                    // say why, most often a first download attempted offline.
+                    // Spanish falls back to the dictionary, so it always has an answer.
+                    // Other languages say why, most often a first download attempted offline.
+                    if isSpanish, status != .installed { LiveOCRViewModel.spanishDownloadDeclined = true }
                     viewModel.completeAppleTranslation(nil, failure: status == .installed ? nil
-                        : "\(language.name) needs a one-time download from Apple. Connect to the internet once, then it works offline.")
+                        : (status == .unsupported
+                            ? "Apple's translator can't do \(language.name) on this device."
+                            : "\(language.name) needs a one-time download from Apple. Connect to the internet once, then it works offline."))
                 }
             }
     }

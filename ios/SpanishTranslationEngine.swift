@@ -31,7 +31,10 @@ private struct ESMaster: Decodable {
     let _metadata: ESMetadata?
     let dictionary: [String: ESDictEntry]?
     let rules: [String: AnyDecodable]?
-    enum CodingKeys: String, CodingKey { case _metadata, dictionary, rules }
+    /// 6,056 curated idioms ("más vale tarde que nunca" → "better late than never").
+    /// Shipped in the data file since day one but never decoded, so none of them matched.
+    let phrases: [String: String]?
+    enum CodingKeys: String, CodingKey { case _metadata, dictionary, rules, phrases }
 }
 
 // Generic "any" JSON wrapper
@@ -825,6 +828,14 @@ final class FixedSpanishEngine {
             let allRulePhrases = collectRulePhrases(rulesBag.mapValues { $0.value })
             phraseSource.merge(allRulePhrases) { current, _ in current } // keep existing (rules) on conflict
         }
+        // 1b) The top-level idiom list, under the hand-written rules on conflict.
+        // Three words and up only: its single words ("si" → "yes") skip the
+        // noun-adjective reorder, and two-word entries fire mid-sentence
+        // ("advirtieron que no es" → "warned I don't think so is").
+        for (k, v) in master.phrases ?? [:]
+        where phraseSource[k] == nil && !v.isEmpty && k.split(separator: " ").count >= 3 {
+            phraseSource[k] = v
+        }
         // 2) Add multi-word dictionary keys ONLY if not already provided by rules
         for (k, v) in newDict where k.contains(" ") {
             if phraseSource[k] == nil { phraseSource[k] = v }
@@ -864,7 +875,7 @@ final class FixedSpanishEngine {
         builtinDialogue = packs.dialogue
 
         markLoaded()
-        print("✅ es data loaded: dict=\(dict.count) phrases=\(phraseMatcher == nil ? 0 : 1) regex: gen=\(compiledGeneral.count) gra=\(compiledGrammar.count) diaJSON=\(compiledDialogueFromJSON.count) cle=\(compiledCleanup.count) builtinNarr=\(builtinNarrativeGrammar.count)")
+        print("✅ es data loaded: dict=\(dict.count) phrases=\(phraseSource.count) regex: gen=\(compiledGeneral.count) gra=\(compiledGrammar.count) diaJSON=\(compiledDialogueFromJSON.count) cle=\(compiledCleanup.count) builtinNarr=\(builtinNarrativeGrammar.count)")
     }
 
     // Synchronous so NSLock is legal here (locks are unavailable in async contexts).
