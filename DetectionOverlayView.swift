@@ -77,7 +77,22 @@ struct DetectionOverlayView: View {
             }
             .allowsHitTesting(false)
             .animation(.easeInOut(duration: 0.15), value: detectedObjects.count)
+            // Each box and caption is its own view, so VoiceOver would otherwise
+            // read dozens of floating fragments scattered over the camera. Collapse
+            // the whole overlay into one element that reads the current list.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Detected objects")
+            .accessibilityValue(spokenSummary)
         }
+    }
+
+    /// Everything currently detected, most confident first, as one sentence.
+    private var spokenSummary: String {
+        if detectedObjects.isEmpty { return "Nothing detected yet" }
+        return detectedObjects
+            .sorted { $0.score > $1.score }
+            .map { buildEnhancedLabel(for: $0) }
+            .joined(separator: ", ")
     }
 
     // Only cleanup if LiDAR is actually running

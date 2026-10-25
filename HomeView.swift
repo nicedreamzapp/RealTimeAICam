@@ -89,6 +89,7 @@ struct HomeView: View {
                 .resizable()
                 .scaledToFill()
                 .ignoresSafeArea(.all, edges: .all)
+                .accessibilityHidden(true)
         }
     }
 
@@ -288,6 +289,10 @@ struct HomeView: View {
         )
         .shadow(color: Color.black.opacity(0.38), radius: 12, y: 5)
         .clipShape(Capsule())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Info and guide")
+        .accessibilityHint("Opens the instructions, including a spoken audio tutorial")
+        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: - Helper Methods

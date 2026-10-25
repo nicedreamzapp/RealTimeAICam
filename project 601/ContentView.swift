@@ -258,10 +258,26 @@ struct ContentView: View {
         }
     }
 
+    /// The whole screen is replaced on a mode switch. Tell VoiceOver so it moves
+    /// focus and says where it landed instead of going silent.
+    private func announceScreenChange(to newMode: AppMode) {
+        let name: String = switch newMode {
+        case .home: "Home screen"
+        case .objectDetection: "Object detection camera"
+        case .ocrEnglish: "English text reader"
+        case .ocrSpanish: "Spanish to English translator"
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            UIAccessibility.post(notification: .screenChanged, argument: name)
+        }
+    }
+
     private func switchToMode(_ newMode: AppMode) {
         // Ensure newMode is the AppMode enum expected by ResourceManager.switchToMode()
         resourceManager.switchToMode(newMode)
         mode = newMode
+        announceScreenChange(to: newMode)
 
         // Every camera mode needs this: OCR uses its own capture pipeline that
         // never checks, and a denied user otherwise gets a silent black screen.

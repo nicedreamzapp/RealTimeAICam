@@ -89,6 +89,7 @@ struct TranslationActionsPopup: View {
                         onContinue()
                     }
                 }
+                .accessibilityHidden(true)
 
             // Glass popup
             VStack(spacing: 20) {
@@ -187,6 +188,9 @@ struct TranslationActionsPopup: View {
             .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
             .scaleEffect(isPresented ? 1 : 0.9)
             .opacity(isPresented ? 1 : 0)
+            // Keeps VoiceOver inside the popup instead of wandering back to the
+            // camera controls underneath it.
+            .accessibilityAddTraits(.isModal)
         }
     }
 }
@@ -325,6 +329,8 @@ struct LiveOCRView: View {
                             )
                         }
                         .fixedSize()
+                        .accessibilityLabel("Back")
+                        .accessibilityHint("Returns to the home screen")
 
                         Spacer()
 
@@ -340,6 +346,8 @@ struct LiveOCRView: View {
                                     .opacity(0.85)
                             )
                             .fixedSize()
+                            .accessibilityLabel("Mode")
+                            .accessibilityValue(ocrMode == .english ? "Reading English text" : "Translating Spanish to English")
                     }
                     .padding(.horizontal, max(geometry.safeAreaInsets.leading, geometry.safeAreaInsets.trailing) + 20)
                     .padding(.top, geometry.safeAreaInsets.top + 15)
@@ -388,6 +396,19 @@ struct LiveOCRView: View {
                                 showTranslationPopup = true
                             }
                         }
+                        // Read as one block instead of a status dot, a heading and a
+                        // scroll view the user has to hunt through.
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(headerText)
+                        .accessibilityValue(displayText)
+                        .accessibilityHint(
+                            ocrMode == .spanishToEnglish && viewModel.isTranslated
+                                ? "Double tap for copy, continue reading or new scan"
+                                : ""
+                        )
+                        .accessibilityAddTraits(
+                            ocrMode == .spanishToEnglish && viewModel.isTranslated ? [.isButton] : []
+                        )
                         .padding(.horizontal, 20)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
@@ -414,6 +435,8 @@ struct LiveOCRView: View {
                                 )
                                 .contentShape(Circle())
                         }
+                        .accessibilityLabel("Settings")
+                        .accessibilityHint("Opens settings, copy history and tips")
 
                         // Torch button with overlay for presets
                         ZStack {
@@ -439,6 +462,9 @@ struct LiveOCRView: View {
                                     )
                                     .contentShape(Circle())
                             }
+                            .accessibilityLabel(viewModel.torchLevel > 0 ? "Turn off flashlight" : "Turn on flashlight")
+                            .accessibilityValue(viewModel.torchLevel > 0 ? "On at \(Int(viewModel.torchLevel * 100)) percent" : "Off")
+                            .accessibilityHint(viewModel.torchLevel > 0 ? "Turns the flashlight off" : "Opens the brightness choices")
                             .overlay(
                                 torchPresetOverlay
                             )
@@ -462,6 +488,8 @@ struct LiveOCRView: View {
                                 )
                                 .contentShape(Circle())
                         }
+                        .accessibilityLabel(viewModel.isUltraWide ? "Switch to normal camera" : "Switch to wide angle camera")
+                        .accessibilityHint("Changes how much the camera can see at once")
 
                         // Translate or Copy button
                         translateOrCopyButton(buttonSize: metrics.buttonSize)
@@ -492,6 +520,8 @@ struct LiveOCRView: View {
                                 )
                                 .contentShape(Circle())
                         }
+                        .accessibilityLabel("Clear and stop")
+                        .accessibilityHint("Clears the detected text and stops speaking")
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.horizontal, metrics.padding + max(geometry.safeAreaInsets.leading, geometry.safeAreaInsets.trailing))
@@ -574,6 +604,10 @@ struct LiveOCRView: View {
                                         .stroke(Int(viewModel.torchLevel * 100) == percentage ? Color.yellow : Color.white.opacity(0.3), lineWidth: 1)
                                 )
                         }
+                        .accessibilityLabel("Flashlight \(percentage) percent")
+                        .accessibilityAddTraits(
+                            Int(viewModel.torchLevel * 100) == percentage ? [.isButton, .isSelected] : [.isButton]
+                        )
                     }
                 }
                 .padding(.vertical, 8)
@@ -615,6 +649,9 @@ struct LiveOCRView: View {
                 }
                 .disabled(isTranslating)
                 .opacity(isTranslating ? 0.6 : 1)
+                .accessibilityLabel("Translate")
+                .accessibilityHint("Translates the Spanish text on screen into English")
+                .accessibilityValue(isTranslating ? "Translating" : "")
             } else {
                 Button(action: {
                     if buttonDebouncer.canPress("LiveOCRView-7") {
@@ -648,6 +685,8 @@ struct LiveOCRView: View {
                         )
                         .contentShape(Circle())
                 }
+                .accessibilityLabel("Copy text")
+                .accessibilityHint("Copies the text on screen to the clipboard")
             }
         }
     }
@@ -701,6 +740,9 @@ struct LiveOCRView: View {
         }
         .scaleEffect(isSpeaking ? 1.1 : 1.0)
         .animation(.easeInOut(duration: 0.2), value: isSpeaking)
+        .accessibilityLabel(isSpeaking ? "Stop reading" : "Read text aloud")
+        .accessibilityHint(isSpeaking ? "Stops speaking the text" : "Speaks the text the camera has found")
+        .accessibilityValue(isSpeaking ? "Speaking" : "Not speaking")
     }
 }
 
