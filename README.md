@@ -39,6 +39,8 @@ fine-tuned vision-language model on the phone itself, and speaks what they find 
 
 **[▶ Watch on YouTube](https://www.youtube.com/watch?v=2BEYv-fv-gE)**: live detection at a concert, describing a scene, answering a question out loud, reading mail, and Help Me Aim talking you into a photo. All real screen recordings, all offline.
 
+🎙️ **On the podcast:** [Blind Android Users, Episode 307: Meet the Developer of RealTime AI Cam](https://youtu.be/VJ0atAEWl1g?t=871)
+
 </div>
 
 ### 📸 Screenshots
