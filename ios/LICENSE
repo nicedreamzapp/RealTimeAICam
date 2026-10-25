@@ -1,0 +1,42 @@
+RealTime AI Camera
+Copyright (C) 2025 Matthew Macosko
+
+This program is dual-licensed:
+
+1. **Open Source License (GPL-3.0)**  
+   This program is free software: you can redistribute it and/or modify  
+   it under the terms of the GNU General Public License version 3  
+   as published by the Free Software Foundation.  
+
+   This program is distributed in the hope that it will be useful,  
+   but WITHOUT ANY WARRANTY; without even the implied warranty of  
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
+   See the GNU General Public License for more details.  
+
+   You should have received a copy of the GNU General Public License  
+   along with this program. If not, see <https://www.gnu.org/licenses/>.  
+
+2. **Commercial Distribution License**  
+   Any publication, distribution, or submission of this software  
+   (modified or unmodified) to the Apple App Store, TestFlight, Google Play,  
+   or any other commercial app distribution platform **requires a separate  
+   commercial license agreement** with the copyright holder, Matthew Macosko.  
+
+   Contact: [your email/website here] to obtain a commercial license.  
+
+---
+
+**Attribution Requirements**  
+
+This software uses the following open-source resources:
+
+- YOLOv8 by Ultralytics, licensed under GPL-3.0  
+  <https://github.com/ultralytics/ultralytics>
+- Open Images Dataset V7 by Google, licensed under CC BY 4.0  
+  <https://storage.googleapis.com/openimages/web/index.html>
+
+Any redistribution of this code or derivative works must include:
+1. Visible credit to "Matthew Macosko" in any public use.  
+2. Preservation of this attribution section.  
+3. The same GPL-3.0 license terms applied to all derivatives (for non-commercial use).  
+4. No use of the name "RealTime AI Camera" or original app icon without permission.  
