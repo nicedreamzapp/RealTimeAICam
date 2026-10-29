@@ -23,3 +23,6 @@ ios/NarratorModel/
 ios/VisionModel/
 # staged beside them by ios/tools/stage-models.sh; the real one is at the repo root
 ios/LICENSE
+
+# llama.cpp b11954 xcframework, self-built (too big for git; see ios/NARRATOR-LLAMA.md)
+ios/Frameworks/

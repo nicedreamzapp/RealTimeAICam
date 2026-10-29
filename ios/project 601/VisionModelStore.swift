@@ -24,7 +24,8 @@ enum VisionModelStore {
     /// 1.2 GB was the 2B model. The bundle now carries the 0.8B at 4-bit,
     /// which is 622 MB on disk (596 MB of weights). Telling a blind user on
     /// cellular that a download is twice its real size is its own bug.
-    static let approximateSizeDescription = "622 MB"
+    /// 735 MB since 1.3.6: LFM3-Omni-2B (IQ2_XS) plus its vision projector.
+    static let approximateSizeDescription = "735 MB"
 
     struct Manifest: Codable, Equatable {
         struct File: Codable, Equatable {

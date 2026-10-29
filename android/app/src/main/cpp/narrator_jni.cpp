@@ -1,7 +1,9 @@
-// JNI bridge to llama.cpp + mtmd so the Android app can run the same vision
-// narrator the iPhone runs. One image in, one spoken sentence out, on device.
+// JNI bridge to llama.cpp + mtmd so the Android app can run its vision model
+// on device: LFM3-Omni-2B by Liquid AI (untrained, IQ2_XS text + vision-only
+// Q4_K_M mmproj) since 1.23. One image in, one spoken answer out, no network.
 #include <jni.h>
 #include <android/log.h>
+#include <cstdio>
 #include <string>
 #include <vector>
 
@@ -21,6 +23,9 @@ struct narrator {
     mtmd_context  * mctx   = nullptr;
     const llama_vocab * vocab = nullptr;
     int n_threads = 4;
+    // timings of the last describe call, read by the on-phone test
+    int64_t last_ttft_ms = 0, last_total_ms = 0, last_encode_ms = 0;
+    int last_prompt_tokens = 0, last_gen_tokens = 0;
 };
 
 std::string jstr(JNIEnv * env, jstring s) {
@@ -31,27 +36,23 @@ std::string jstr(JNIEnv * env, jstring s) {
     return out;
 }
 
-// Build the prompt with the model's own chat template so the fine-tune sees
-// exactly the format it was trained on.
-std::string apply_template(const llama_model * model,
-                           const std::string & system,
-                           const std::string & user) {
-    const char * tmpl = llama_model_chat_template(model, nullptr);
-    llama_chat_message msgs[2] = {
-        {"system", system.c_str()},
-        {"user",   user.c_str()},
-    };
-    std::vector<char> buf(system.size() + user.size() + 2048);
-    int32_t n = llama_chat_apply_template(tmpl, msgs, 2, true, buf.data(), (int32_t) buf.size());
-    if (n > (int32_t) buf.size()) {
-        buf.resize(n + 1);
-        n = llama_chat_apply_template(tmpl, msgs, 2, true, buf.data(), (int32_t) buf.size());
-    }
-    if (n < 0) {           // no template in the gguf: fall back to plain text
-        return system + "\n\n" + user;
-    }
-    return std::string(buf.data(), n);
+// LFM3-Omni-2B's own chat template, rendered exactly as llama-server's Jinja
+// path renders it with enable_thinking=false (checked byte for byte against
+// /apply-template on b11954, 2026-10-29). llama_chat_apply_template has no
+// LFM3 entry and would fall back to plain ChatML without the BOS or the empty
+// think block, which is not the format the model was benched with.
+// The image marker sits directly in front of the question, no newline.
+std::string lfm3_prompt(const std::string & system, const std::string & question) {
+    std::string p = "<|startoftext|><|im_start|>system\n";
+    p += system;
+    p += "<|im_end|>\n<|im_start|>user\n";
+    p += mtmd_default_marker();
+    p += question;
+    p += "<|im_end|>\n<|im_start|>assistant\n<think></think>";
+    return p;
 }
+
+int64_t now_ms() { return ggml_time_us() / 1000; }
 
 } // namespace
 
@@ -149,14 +150,16 @@ Java_com_mattmacosko_realtimeaicam_narrator_NarratorNative_nativeDescribe(
 
     // start from a clean slate for every photo
     llama_memory_clear(llama_get_memory(n->lctx), true);
+    const int64_t t_start = now_ms();
+    n->last_ttft_ms = n->last_total_ms = n->last_encode_ms = 0;
+    n->last_prompt_tokens = n->last_gen_tokens = 0;
 
     auto wrapper = mtmd_helper_bitmap_init_from_file(
             n->mctx, image_path.c_str(), false, mtmd_helper_init_opt_default());
     if (!wrapper.bitmap) { LOGE("could not read %s", image_path.c_str());
                            return env->NewStringUTF(""); }
 
-    const std::string user   = std::string(mtmd_default_marker()) + "\n" + question;
-    const std::string prompt = apply_template(n->model, system, user);
+    const std::string prompt = lfm3_prompt(system, question);
 
     mtmd_input_text text{};
     text.text          = prompt.c_str();
@@ -179,8 +182,11 @@ Java_com_mattmacosko_realtimeaicam_narrator_NarratorNative_nativeDescribe(
     mtmd_input_chunks_free(chunks);
     mtmd_bitmap_free(wrapper.bitmap);
     if (rc != 0) { LOGE("eval failed (%d)", rc); return env->NewStringUTF(""); }
+    n->last_encode_ms = now_ms() - t_start;
+    n->last_prompt_tokens = (int) n_past;
 
-    // Greedy: the model was trained to give one settled answer, not to be creative.
+    // Greedy, as benched: LFM3-Omni's generation_config is do_sample=false,
+    // top_k=1, repetition_penalty=1.0.
     llama_sampler * smpl = llama_sampler_chain_init(llama_sampler_chain_default_params());
     llama_sampler_chain_add(smpl, llama_sampler_init_greedy());
 
@@ -188,7 +194,9 @@ Java_com_mattmacosko_realtimeaicam_narrator_NarratorNative_nativeDescribe(
     llama_batch batch = llama_batch_init(1, 0, 1);
     for (int i = 0; i < maxTokens; ++i) {
         llama_token tok = llama_sampler_sample(smpl, n->lctx, -1);
+        if (i == 0) n->last_ttft_ms = now_ms() - t_start;
         if (llama_vocab_is_eog(n->vocab, tok)) break;
+        n->last_gen_tokens++;
 
         char piece[256];
         int len = llama_token_to_piece(n->vocab, tok, piece, sizeof(piece), 0, true);
@@ -205,13 +213,31 @@ Java_com_mattmacosko_realtimeaicam_narrator_NarratorNative_nativeDescribe(
     llama_batch_free(batch);
     llama_sampler_free(smpl);
 
-    // Some Qwen builds emit an empty reasoning block first; speak only the answer.
+    n->last_total_ms = now_ms() - t_start;
+    LOGI("describe: %d prompt tokens, %d generated, encode %lld ms, first token %lld ms, total %lld ms",
+         n->last_prompt_tokens, n->last_gen_tokens, (long long) n->last_encode_ms,
+         (long long) n->last_ttft_ms, (long long) n->last_total_ms);
+
+    // Thinking is off, but if a reasoning block ever appears, speak only the answer.
     const size_t end_think = out.rfind("</think>");
     if (end_think != std::string::npos) out = out.substr(end_think + 8);
     while (!out.empty() && (out.front() == '\n' || out.front() == ' ')) out.erase(out.begin());
     while (!out.empty() && (out.back()  == '\n' || out.back()  == ' ')) out.pop_back();
 
     return env->NewStringUTF(out.c_str());
+}
+
+// "ttft,total,encode,promptTokens,genTokens" for the last describe call.
+JNIEXPORT jstring JNICALL
+Java_com_mattmacosko_realtimeaicam_narrator_NarratorNative_nativeLastStats(
+        JNIEnv * env, jobject, jlong handle) {
+    auto * n = reinterpret_cast<narrator *>(handle);
+    if (!n) return env->NewStringUTF("");
+    char buf[160];
+    snprintf(buf, sizeof(buf), "%lld,%lld,%lld,%d,%d",
+             (long long) n->last_ttft_ms, (long long) n->last_total_ms, (long long) n->last_encode_ms,
+             n->last_prompt_tokens, n->last_gen_tokens);
+    return env->NewStringUTF(buf);
 }
 
 JNIEXPORT void JNICALL

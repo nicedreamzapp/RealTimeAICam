@@ -56,9 +56,14 @@ private const val TUTORIAL_TEXT =
     "Welcome to RealTime AI Camera! Snap, detect, translate, all on device. " +
         "There are three modes. Object Detection identifies everyday objects in real time. " +
         "English Text to Speech reads printed English out loud. " +
-        "Spanish to English translates printed Spanish instantly. " +
+        "Translate. Point at printed Spanish to see instant English translation, spoken aloud and ready to copy. " +
+        "The Translate from control at the top picks another language, like French or German. " +
+        "Tap it, or with TalkBack swipe up or down on it. " +
+        "Each language, Spanish included, downloads once for the best translation, then works offline. " +
+        "Until then, Spanish still translates with the built-in dictionary. " +
         "Controls: switch camera, toggle the lens, turn the flashlight on or off with one tap, " +
         "pinch to zoom, reset or stop, speak results, copy text to history, and open settings. " +
+        "In the text reader and translator, the small button next to Speak switches between Tap to read, Auto read, which reads new text by itself, and Mute. " +
         "Privacy first: everything runs on your device. No tracking, no accounts, no internet needed."
 
 /** iOS AppInstructionsView (UI_SPEC §4) as a slide-up sheet. */
@@ -70,7 +75,20 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
 
     val tts = remember {
         var t: TextToSpeech? = null
-        t = TextToSpeech(context) { status -> ttsReady = status == TextToSpeech.SUCCESS }
+        t = TextToSpeech(context) { status ->
+            ttsReady = status == TextToSpeech.SUCCESS
+            if (ttsReady) {
+                // Cold first launch: the guide may have been asked for before the engine was up.
+                try {
+                    if (t!!.isLanguageAvailable(java.util.Locale.getDefault()) < TextToSpeech.LANG_AVAILABLE) {
+                        t!!.setLanguage(java.util.Locale.US)
+                    }
+                } catch (_: Throwable) {}
+                if (speaking) t!!.speak(TUTORIAL_TEXT, TextToSpeech.QUEUE_FLUSH, null, "tutorial")
+            } else {
+                speaking = false
+            }
+        }
         t!!.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {}
             override fun onDone(utteranceId: String?) { speaking = false }
@@ -231,7 +249,10 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
                 )
                 ModeBlock(
                     "🇲🇽→🇺🇸 Spanish to English Translate",
-                    "Point at Spanish text — menus, signs, labels — and get instant English, fully offline.",
+                    "Point at printed Spanish to see instant English translation, spoken aloud and ready to copy. " +
+                        "The From button at the top picks another language, like French or German. " +
+                        "Each language, Spanish included, downloads once for the best translation, then works offline. " +
+                        "Until then, Spanish still translates with the built-in dictionary.",
                 )
 
                 SectionHeader("🎛️ Controls")
@@ -241,6 +262,7 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
                 BodyLine("🤏 Pinch to Zoom")
                 BodyLine("🔁 Reset / Stop — clears text, translation, and stops speaking")
                 BodyLine("🗣️ Speak — hear detected or translated text")
+                BodyLine("👂 Reading mode — next to Speak: Tap to read, Auto read (new text is read by itself), or Mute")
                 BodyLine("📋 Copy to History — saved on this device")
                 BodyLine("⚙️ Settings — history, tips, privacy")
 
@@ -249,6 +271,16 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
                 BodyLine("No tracking, no analytics, no accounts", secondary = true)
                 BodyLine("Camera frames are processed on-device only", secondary = true)
                 BodyLine("Copy history stays on this device", secondary = true)
+
+                SectionHeader("🙏 Credits")
+                BodyLine(
+                    "What's this? runs LFM3-Omni-2B by Liquid AI, on this phone, under the LFM Open License v1.0. " +
+                        "Nice Dreamz converted it to GGUF and shrank it (IQ2_XS text, Q4_K_M vision); the weights are otherwise unchanged.",
+                    secondary = true,
+                )
+                LicenseText("Read the LFM Open License v1.0", "licenses/LFM-Open-License-v1.0.txt")
+                BodyLine("On-device engine: llama.cpp by ggml-org (MIT)", secondary = true)
+                BodyLine("Object Detection: YOLOv8 by Ultralytics (AGPL-3.0), trained on Open Images V7 by Google (CC BY 4.0)", secondary = true)
 
                 Spacer(Modifier.height(24.dp))
             }
@@ -272,6 +304,32 @@ private fun ModeBlock(title: String, body: String) {
             modifier = Modifier.semantics { contentDescription = title.withoutEmoji() },
         )
         Text(body, fontSize = 17.sp, color = Color.White.copy(alpha = 0.9f), lineHeight = 23.sp)
+    }
+}
+
+/** A license shipped in assets/, shown in full when tapped (LFM Open License 4(a)). */
+@Composable
+private fun LicenseText(label: String, asset: String) {
+    val context = LocalContext.current
+    var open by remember { mutableStateOf(false) }
+    val body = remember(open) {
+        if (!open) "" else try {
+            context.assets.open(asset).bufferedReader().use { it.readText() }
+        } catch (t: Throwable) { "" }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            (if (open) "▾ " else "▸ ") + label,
+            modifier = Modifier
+                .clickable(role = Role.Button, onClickLabel = if (open) "Hide the license" else "Show the license") { open = !open }
+                .semantics { contentDescription = label },
+            fontSize = 15.sp,
+            color = Color(0xFF64B5F6),
+            lineHeight = 22.sp,
+        )
+        if (open && body.isNotEmpty()) {
+            Text(body, fontSize = 13.sp, color = IosColors.Secondary, lineHeight = 18.sp)
+        }
     }
 }
 

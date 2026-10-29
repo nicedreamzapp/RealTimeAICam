@@ -7,14 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		AA0000072E4400000000A007 /* NarratorModel in Resources */ = {isa = PBXBuildFile; fileRef = AA0000062E4400000000A006 /* NarratorModel */; };
-		AA0000112E4400000000A011 /* VisionModel in Resources */ = {isa = PBXBuildFile; fileRef = AA0000102E4400000000A010 /* VisionModel */; };
-		AA0000042E4400000000A004 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000022E4400000000A002 /* MLXLLM */; };
-		AA0000052E4400000000A005 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000032E4400000000A003 /* MLXLMCommon */; };
-		AA0000082E4400000000A008 /* MLXVLM in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000092E4400000000A009 /* MLXVLM */; };
-		BB0000162E4400000000B016 /* MLXHuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000112E4400000000B011 /* MLXHuggingFace */; };
-		BB0000172E4400000000B017 /* Tokenizers in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000122E4400000000B012 /* Tokenizers */; };
-		BB0000182E4400000000B018 /* HuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000132E4400000000B013 /* HuggingFace */; };
 		9900AAAA2E680000000000AA /* ObjectTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9900AAAB2E680000000000AA /* ObjectTracker.swift */; };
 		990EECF12E489EBD00B7CD8C /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 990EECF02E489EBD00B7CD8C /* LICENSE */; };
 		9919DE3D2E50A7BC0053038B /* SpanishTranslationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9919DE3C2E50A79F0053038B /* SpanishTranslationEngine.swift */; };
@@ -54,6 +46,16 @@
 		99D77E892E4359E8005583DC /* AppInstructionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99D77E882E4359E8005583DC /* AppInstructionsView.swift */; };
 		99D7E6A72E47639F007BBFB7 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 99D7E6A42E4761E9007BBFB7 /* PrivacyInfo.xcprivacy */; };
 		99EE6CEF2E67071800A2F3F3 /* es_final_with_rules.json.gz in Resources */ = {isa = PBXBuildFile; fileRef = 99EE6CEE2E67071800A2F3F3 /* es_final_with_rules.json.gz */; };
+		AA0000042E4400000000A004 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000022E4400000000A002 /* MLXLLM */; };
+		AA0000052E4400000000A005 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000032E4400000000A003 /* MLXLMCommon */; };
+		AA0000072E4400000000A007 /* NarratorModel in Resources */ = {isa = PBXBuildFile; fileRef = AA0000062E4400000000A006 /* NarratorModel */; };
+		AA0000082E4400000000A008 /* MLXVLM in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000092E4400000000A009 /* MLXVLM */; };
+		AA0000112E4400000000A011 /* VisionModel in Resources */ = {isa = PBXBuildFile; fileRef = AA0000102E4400000000A010 /* VisionModel */; };
+		BB0000162E4400000000B016 /* MLXHuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000112E4400000000B011 /* MLXHuggingFace */; };
+		BB0000172E4400000000B017 /* Tokenizers in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000122E4400000000B012 /* Tokenizers */; };
+		BB0000182E4400000000B018 /* HuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000132E4400000000B013 /* HuggingFace */; };
+		E0E5A5270514F3BB1EF8EC52 /* llama.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 44C4767980F0D9F46F4E515E /* llama.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		E1E5220689CA8BD0E17F214A /* llama.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 44C4767980F0D9F46F4E515E /* llama.xcframework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -73,9 +75,22 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		00E4CD87F74B023D1E9BD25D /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				E0E5A5270514F3BB1EF8EC52 /* llama.xcframework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
-		AA0000062E4400000000A006 /* NarratorModel */ = {isa = PBXFileReference; lastKnownFileType = folder; path = NarratorModel; sourceTree = "<group>"; };
-		AA0000102E4400000000A010 /* VisionModel */ = {isa = PBXFileReference; lastKnownFileType = folder; path = VisionModel; sourceTree = "<group>"; };
+		44C4767980F0D9F46F4E515E /* llama.xcframework */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = wrapper.xcframework; name = llama.xcframework; path = Frameworks/llama.xcframework; sourceTree = SOURCE_ROOT; };
 		9900AAAB2E680000000000AA /* ObjectTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectTracker.swift; sourceTree = "<group>"; };
 		990EECF02E489EBD00B7CD8C /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		9919DE3C2E50A79F0053038B /* SpanishTranslationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpanishTranslationEngine.swift; sourceTree = "<group>"; };
@@ -118,26 +133,36 @@
 		99D77E882E4359E8005583DC /* AppInstructionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppInstructionsView.swift; sourceTree = "<group>"; };
 		99D7E6A42E4761E9007BBFB7 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; explicitFileType = "text.plist.app-privacy"; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		99EE6CEE2E67071800A2F3F3 /* es_final_with_rules.json.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; path = es_final_with_rules.json.gz; sourceTree = "<group>"; };
+		AA0000062E4400000000A006 /* NarratorModel */ = {isa = PBXFileReference; lastKnownFileType = folder; path = NarratorModel; sourceTree = "<group>"; };
+		AA0000102E4400000000A010 /* VisionModel */ = {isa = PBXFileReference; lastKnownFileType = folder; path = VisionModel; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		99BA10322E34CF71001E5140 /* project 601 */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = "project 601";
 			sourceTree = "<group>";
 		};
 		99BA10402E34CF71001E5140 /* project 601Tests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = "project 601Tests";
 			sourceTree = "<group>";
 		};
 		99BA104A2E34CF71001E5140 /* project 601UITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = "project 601UITests";
 			sourceTree = "<group>";
 		};
 		99D302382E3CE3D200CAF01A /* Resources */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = Resources;
 			sourceTree = "<group>";
 		};
@@ -163,6 +188,7 @@
 				996B93042E38A16400AE22AA /* MetalKit.framework in Frameworks */,
 				996B93082E38A17F00AE22AA /* CoreImage.framework in Frameworks */,
 				996B930A2E38A18E00AE22AA /* CoreVideo.framework in Frameworks */,
+				E1E5220689CA8BD0E17F214A /* llama.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -195,6 +221,7 @@
 				996B93052E38A17000AE22AA /* MetalPerformanceShaders.framework */,
 				996B93032E38A16400AE22AA /* MetalKit.framework */,
 				996B93012E38A15B00AE22AA /* Metal.framework */,
+				44C4767980F0D9F46F4E515E /* llama.xcframework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -263,6 +290,7 @@
 				99BA102C2E34CF71001E5140 /* Sources */,
 				99BA102D2E34CF71001E5140 /* Frameworks */,
 				99BA102E2E34CF71001E5140 /* Resources */,
+				00E4CD87F74B023D1E9BD25D /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -302,8 +330,6 @@
 				99BA10402E34CF71001E5140 /* project 601Tests */,
 			);
 			name = "RealTime Ai CamTests";
-			packageProductDependencies = (
-			);
 			productName = "project 601Tests";
 			productReference = 99BA103D2E34CF71001E5140 /* RealTime Ai CamTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -325,8 +351,6 @@
 				99BA104A2E34CF71001E5140 /* project 601UITests */,
 			);
 			name = "RealTime Ai CamUITests";
-			packageProductDependencies = (
-			);
 			productName = "project 601UITests";
 			productReference = 99BA10472E34CF71001E5140 /* RealTime Ai CamUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
@@ -608,8 +632,9 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = RealTimeAiCam.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 42;
+				CURRENT_PROJECT_VERSION = 43;
 				DEVELOPMENT_TEAM = B9RA6QH559;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = NO;
@@ -617,8 +642,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "RealTimeAiCam-Info.plist";
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to detect objects in real-time, perform OCR text recognition, and translate text. No images are stored or transmitted";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Help Me Aim saves the pictures you take to your photo library. Nothing is uploaded.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "The mic is used only while you hold the ask button, to hear your question about the photo. Nothing is recorded or sent.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Help Me Aim saves the pictures you take to your photo library. Nothing is uploaded.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Your spoken question is turned into text on this phone, offline. Nothing is sent anywhere.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -630,9 +655,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.3.5;
+				MARKETING_VERSION = 1.3.6;
 				MTL_OPTIMIZATION_LEVEL = "-Osize";
-				CODE_SIGN_ENTITLEMENTS = RealTimeAiCam.entitlements;
 				PRODUCT_BUNDLE_IDENTIFIER = "B9RA6QH559.project-601";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -650,8 +674,9 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = RealTimeAiCam.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 42;
+				CURRENT_PROJECT_VERSION = 43;
 				DEVELOPMENT_TEAM = B9RA6QH559;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = NO;
@@ -659,8 +684,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "RealTimeAiCam-Info.plist";
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to detect objects in real-time, perform OCR text recognition, and translate text. No images are stored or transmitted";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Help Me Aim saves the pictures you take to your photo library. Nothing is uploaded.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "The mic is used only while you hold the ask button, to hear your question about the photo. Nothing is recorded or sent.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Help Me Aim saves the pictures you take to your photo library. Nothing is uploaded.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Your spoken question is turned into text on this phone, offline. Nothing is sent anywhere.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -672,9 +697,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.3.5;
+				MARKETING_VERSION = 1.3.6;
 				MTL_OPTIMIZATION_LEVEL = "-Osize";
-				CODE_SIGN_ENTITLEMENTS = RealTimeAiCam.entitlements;
 				PRODUCT_BUNDLE_IDENTIFIER = "B9RA6QH559.project-601";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;

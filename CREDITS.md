@@ -7,6 +7,8 @@ None of this starts from scratch. Here's whose work this is built on, and under 
 | 👁️ [YOLOv8](https://github.com/ultralytics/ultralytics) | The 601-class detector | Ultralytics | **AGPL-3.0** |
 | 🗂️ [Open Images](https://storage.googleapis.com/openimages/web/index.html) | The class vocabulary it was trained against | Google | CC BY 4.0 (annotations) |
 | 🍎 [Core ML](https://developer.apple.com/documentation/coreml) + Vision | Runs it all on-device | Apple | Apple SDK terms |
+| 💧 [LFM3-Omni-2B](https://huggingface.co/LiquidAI/LFM3-Omni-2B) | The What's this? vision model, untrained, shrunk to GGUF IQ2_XS + Q4_K_M | Liquid AI | LFM Open License v1.0 |
+| 🦙 [llama.cpp](https://github.com/ggml-org/llama.cpp) | Runs the vision model on the phone | ggml-org | MIT |
 
 ## Why this app is open source
 

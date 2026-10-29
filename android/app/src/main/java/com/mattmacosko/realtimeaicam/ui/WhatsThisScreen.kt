@@ -187,6 +187,9 @@ fun WhatsThisScreen(
     /** The description the photo would be saved with; questions don't replace it. */
     var description by remember { mutableStateOf("") }
     var saved by remember { mutableStateOf(false) }
+    // The copy the model actually looked at (768 px for a scene, 1024 for a page);
+    // hold-to-ask uses the same one so a follow-up sees what the answer saw.
+    var askPhoto by remember { mutableStateOf<File?>(null) }
     // Spoken countdown before the shutter, on by default. Asked for on AppleVis
     // (2026-09-12): pressing the button is itself what nudges the phone and blurs
     // the shot, and it is the only way to take a selfie you can't see to frame.
@@ -277,13 +280,16 @@ fun WhatsThisScreen(
                 val started = System.currentTimeMillis()
                 val isPage = question == NarratorPrompt.PAGE_QUESTION
                 val said = withContext(Dispatchers.IO) {
-                    describeNeverRefusing(context, shot, question, isPage, engine)
+                    val forModel = sizedForModel(context, shot, isPage)
+                    askPhoto = forModel
+                    describeNeverRefusing(context, forModel, question, isPage, engine)
                 }
                 Log.i(TAG, "answer in ${System.currentTimeMillis() - started} ms: $said")
                 // No "get closer or add light" fallback: the person holding the
                 // camera cannot see where it is pointing, so that is not advice
                 // they can act on.
                 description = said.trim()
+                if (said.isNotBlank()) com.mattmacosko.realtimeaicam.RatePrompt.noteResult(context)
                 say(said.ifBlank { "It's hard to see clearly, and I couldn't make out enough to say." })
             } finally {
                 camera.resume(lifecycleOwner, previewView)
@@ -354,7 +360,7 @@ fun WhatsThisScreen(
 
     /** Answers [question] about the frozen photo, spoken or typed. */
     fun askAbout(question: String) {
-        val photo = File(context.cacheDir, "whats-this.jpg")
+        val photo = askPhoto?.takeIf { it.isFile } ?: File(context.cacheDir, "whats-this.jpg")
         if (question.isBlank() || frozenPhoto == null || !photo.isFile || isAsking) return
         scope.launch {
             isAsking = true
@@ -367,6 +373,7 @@ fun WhatsThisScreen(
                 if (tellsThemToRetake(said)) withoutRetakeAdvice(said) else said
             }
             isAsking = false
+            if (answer.isNotBlank()) com.mattmacosko.realtimeaicam.RatePrompt.noteResult(context)
             say(answer.ifBlank { "Sorry, I couldn't work that out. Try asking again." })
         }
     }
@@ -860,7 +867,13 @@ fun WhatsThisScreen(
 }
 
 private const val TAG = "WhatsThis"
-private const val MODEL_LONG_SIDE = 512
+/**
+ * The image sizes LFM3-Omni-2B was benchmarked at (liquid-lens-demo round 5 and
+ * Matt's 20-photo test, 2026-10-29): a page at 1024 px on the long side so small
+ * print stays readable, a scene at 768. Same as the iPhone.
+ */
+internal const val PAGE_LONG_SIDE = 1024
+internal const val SCENE_LONG_SIDE = 768
 private const val MODEL_MISSING = "The vision model is not installed on this phone yet."
 
 private fun copySummary(context: Context, text: String) {
@@ -876,6 +889,29 @@ private fun copySummary(context: Context, text: String) {
  * BRIGHTER copy of the photo — when the model says it is too dark, a brighter
  * picture is the useful answer, not a sterner question.
  */
+/**
+ * The copy the model reads: the 1024 px shot as it is for a page, a 768 px copy
+ * for a scene. Routing (looksLikeAPage) runs on the 1024 px shot first.
+ */
+internal fun sizedForModel(context: Context, shot: File, isPage: Boolean): File {
+    if (isPage) return shot
+    return try {
+        val bitmap = BitmapFactory.decodeFile(shot.path, BitmapFactory.Options()) ?: return shot
+        val long = max(bitmap.width, bitmap.height)
+        if (long <= SCENE_LONG_SIDE) { bitmap.recycle(); return shot }
+        val s = SCENE_LONG_SIDE.toFloat() / long
+        val scaled = Bitmap.createScaledBitmap(bitmap, (bitmap.width * s).roundToInt(), (bitmap.height * s).roundToInt(), true)
+        val out = File(shot.parentFile, shot.nameWithoutExtension + "-scene.jpg")
+        out.outputStream().use { scaled.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+        if (scaled !== bitmap) scaled.recycle()
+        bitmap.recycle()
+        out
+    } catch (t: Throwable) {
+        Log.e(TAG, "could not size the shot for the model", t)
+        shot
+    }
+}
+
 internal fun describeNeverRefusing(
     context: Context,
     shot: File,
@@ -908,7 +944,14 @@ internal fun describeNeverRefusing(
  * through this — only one the model already balked at.
  */
 private fun brightenedCopy(context: Context, src: File, name: String, factor: Float): File? = try {
-    val bitmap = BitmapFactory.decodeFile(src.path)
+    // Play vitals (1.17) flagged this decode for having no BitmapFactory.Options. The
+    // shot is already the model-sized copy, so read the bounds first and only
+    // downsample if something larger ever arrives here; normal shots decode at 1x.
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(src.path, bounds)
+    var sample = 1
+    while (max(bounds.outWidth, bounds.outHeight) / (sample * 2) >= PAGE_LONG_SIDE) sample *= 2
+    val bitmap = BitmapFactory.decodeFile(src.path, BitmapFactory.Options().apply { inSampleSize = sample })
     if (bitmap == null) null else {
         val out = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
         val paint = Paint().apply {
@@ -924,8 +967,10 @@ private fun brightenedCopy(context: Context, src: File, name: String, factor: Fl
             )
         }
         Canvas(out).drawBitmap(bitmap, 0f, 0f, paint)
+        bitmap.recycle()
         val file = File(context.cacheDir, name)
         file.outputStream().use { out.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+        out.recycle()
         file
     }
 } catch (t: Throwable) {
@@ -1042,14 +1087,9 @@ internal fun prepareShot(raw: File, out: File): Bitmap? = try {
             val s = 1024f / long
             Bitmap.createScaledBitmap(bmp, (bmp.width * s).roundToInt(), (bmp.height * s).roundToInt(), true)
         } else bmp
-        // The model gets a smaller copy than the screen does: the vision
-        // encoder's work grows with the pixel count, and on a phone-class CPU
-        // that encoder is most of the wait (1024 px = 5 min on a Helio P35).
-        val modelLong = max(scaled.width, scaled.height)
-        val forModel = if (modelLong > MODEL_LONG_SIDE) {
-            val s = MODEL_LONG_SIDE.toFloat() / modelLong
-            Bitmap.createScaledBitmap(scaled, (scaled.width * s).roundToInt(), (scaled.height * s).roundToInt(), true)
-        } else scaled
+        // The model file is the 1024 px upright copy. Pages are read at that
+        // size; sizedForModel() makes the 768 px scene copy after routing.
+        val forModel = scaled
         out.outputStream().use { forModel.compress(Bitmap.CompressFormat.JPEG, 90, it) }
         scaled
     }

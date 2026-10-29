@@ -22,7 +22,14 @@ class NarratorEngine private constructor(private val appContext: Context) {
     /** Whether the weights are on this phone at all, without loading them. */
     fun hasModel(): Boolean = supportedDevice() && modelDirectory() != null
 
-    /** Blocking: loads ~736 MB off storage. Call from a background thread. */
+    /**
+     * On-phone test only: when on, every describe call appends its native
+     * timings ("ttftMs,totalMs,encodeMs,promptTokens,genTokens") here.
+     */
+    @Volatile var recordStats = false
+    val statsLog: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
+
+    /** Blocking: loads ~735 MB off storage. Call from a background thread. */
     @Synchronized
     fun ensureLoaded(): Boolean {
         if (handle != 0L) return true
@@ -68,7 +75,7 @@ class NarratorEngine private constructor(private val appContext: Context) {
             NarratorNative.nativeDescribe(
                 handle, photo.absolutePath,
                 system, question, MAX_TOKENS,
-            )
+            ).also { if (recordStats) statsLog.add(NarratorNative.nativeLastStats(handle)) }
         } catch (t: Throwable) {
             Log.e(TAG, "describe failed", t)
             ""
@@ -108,6 +115,9 @@ class NarratorEngine private constructor(private val appContext: Context) {
             return null
         }
         local.mkdirs()
+        // Before 1.23 the same folder held the 0.8B model's two files; give
+        // that space back once the new model is being copied in.
+        for (old in OLD_FILES) File(local, old).delete()
         for (name in listOf(MODEL_FILE, MMPROJ_FILE)) {
             val dst = File(local, name)
             if (dst.isFile) continue
@@ -151,8 +161,14 @@ class NarratorEngine private constructor(private val appContext: Context) {
         private const val PACK_NAME = "vision_model"
         private const val LOCAL_DIR = "narrator"
         private const val GPU_ATTEMPT_MARKER = "narrator-gpu-attempt"
-        const val MODEL_FILE = "narrator-Q4_K_M.gguf"
-        const val MMPROJ_FILE = "narrator-mmproj-f16.gguf"
+        // LFM3-Omni-2B by Liquid AI (LFM Open License v1.0), untrained: text model
+        // at IQ2_XS, vision-only projector at Q4_K_M. 735 MB together.
+        const val MODEL_FILE = "lfm3-omni-2b-IQ2_XS.gguf"
+        const val MMPROJ_FILE = "lfm3-omni-2b-mmproj-vision-Q4_K_M.gguf"
+        private val OLD_FILES = listOf(
+            "narrator-Q4_K_M.gguf", "narrator-mmproj-f16.gguf",
+            "narrator-Q4_K_M.gguf.part", "narrator-mmproj-f16.gguf.part",
+        )
         private const val MAX_TOKENS = 120
 
         @Volatile private var instance: NarratorEngine? = null

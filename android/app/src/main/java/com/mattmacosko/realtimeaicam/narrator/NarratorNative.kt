@@ -26,5 +26,7 @@ internal object NarratorNative {
         question: String,
         maxTokens: Int,
     ): String
+    /** "ttftMs,totalMs,encodeMs,promptTokens,genTokens" of the last describe call. */
+    external fun nativeLastStats(handle: Long): String
     external fun nativeFree(handle: Long)
 }

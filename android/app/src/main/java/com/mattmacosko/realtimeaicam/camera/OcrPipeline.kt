@@ -31,6 +31,7 @@ import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.mattmacosko.realtimeaicam.translation.ReaderLanguage
 import com.mattmacosko.realtimeaicam.translation.ReaderLanguages
+import com.mattmacosko.realtimeaicam.translation.SpanishIdiomPrepass
 import com.mattmacosko.realtimeaicam.translation.SpanishTranslationEngine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -41,19 +42,34 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Live OCR frame flow (iOS LiveOCRViewModel): CameraX -> ML Kit text
- * recognition -> StateFlows. Spanish mode adds the offline dictionary+rules
- * translation engine (tier 6 agent port). Frame processing pauses while
- * translating and once a translation is displayed (until reset), like iOS.
+ * recognition -> StateFlows. Translator mode sends every language, Spanish
+ * included, through Google's on-device translator (Spanish with whole idioms
+ * matched first, SpanishIdiomPrepass). The built-in dictionary+rules engine is
+ * Spanish's fallback and loads only when that fallback is actually used. Frame
+ * processing pauses while translating and once a translation is displayed
+ * (until reset), like iOS.
  */
 class OcrPipeline(context: Context, val isSpanish: Boolean) {
 
     companion object {
         private const val TAG = "OcrPipeline"
         private const val MIN_INTERVAL_MS = 700L
+        private const val AUTO_TICK_MS = 250L
+        /** After speech ends, a beat before Auto reads the next page. */
+        private const val AFTER_SPEECH_GAP_MS = 500L
+        /** A line handed to the voice may take this long to start; don't flush it meanwhile. */
+        private const val VOICE_START_GRACE_MS = 2_000L
 
-        // Shared engine: loaded once per process, ~27MB decompressed.
+        // Shared dictionary engine (~65 MB in memory): loaded only when Spanish falls back to it.
         @Volatile private var sharedEngine: SpanishTranslationEngine? = null
         private val engineLoading = AtomicBoolean(false)
+
+        /**
+         * Spanish's Google pack failed to download this launch (most often offline): go straight
+         * to the dictionary instead of trying again on every scan, until the next launch (iOS
+         * spanishDownloadDeclined).
+         */
+        @Volatile private var spanishDownloadFailed = false
 
         /** Drop the dictionary so another AI can have the memory; it reloads on the next Spanish scan. */
         fun releaseSharedEngine() {
@@ -65,13 +81,13 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
     private val appContext = context.applicationContext
     private val prefs = appContext.getSharedPreferences("rtcam", Context.MODE_PRIVATE)
 
-    /** Translator mode: which language the page is in. Spanish = the offline engine. */
+    /** Translator mode: which language the page is in. */
     val sourceLanguage = MutableStateFlow(ReaderLanguages.byCode(prefs.getString("translateFrom", "es")))
 
     /** Shown in the text card instead of the page while a language pack is needed or downloading. */
     val notice = MutableStateFlow<String?>(null)
 
-    // Google's translator for the current non-Spanish language. Touched only on workExecutor.
+    // Google's translator for the current language. Touched only on workExecutor.
     private var mlTranslator: Translator? = null
     private var mlTranslatorCode: String? = null
 
@@ -91,6 +107,21 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
 
     val speaker = SpeechAnnouncer(appContext)
 
+    /** Tap to read / Auto read / Mute (the small button next to Speak), remembered. */
+    val readingMode = MutableStateFlow(ReadingMode.fromKey(prefs.getString(ReadingMode.PREF_KEY, null)))
+    private val autoGate = AutoReadGate()
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    /** Auto read stays quiet until then: a line was just handed to the voice or TalkBack. */
+    private var quietUntil = 0L
+    private var autoTicking = false
+    private val autoTick = object : Runnable {
+        override fun run() {
+            if (!autoTicking) return
+            autoReadStep()
+            mainHandler.postDelayed(this, AUTO_TICK_MS)
+        }
+    }
+
     /** Green speak-button state (iOS isSpeaking): true only while TTS plays. */
     val isSpeaking: StateFlow<Boolean> = speaker.speakingNow
 
@@ -102,17 +133,14 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
     private var busy = false
     private var lastProcessed = 0L
 
-    init {
-        if (isSpanish) ensureEngineLoaded()
-    }
-
-    private fun ensureEngineLoaded() {
-        if (sharedEngine?.isLoaded == true) {
-            engineReady.value = true
-            return
-        }
-        if (!engineLoading.compareAndSet(false, true)) return
-        workExecutor.execute {
+    /**
+     * The dictionary engine, loaded on first use on the calling (work) thread. Nothing loads it
+     * when Translator opens any more: Spanish goes to Google first (2026-10-23).
+     */
+    private fun dictionaryEngine(): SpanishTranslationEngine? {
+        sharedEngine?.let { if (it.isLoaded) return it }
+        if (!engineLoading.compareAndSet(false, true)) return null
+        run {
             try {
                 val engine = SpanishTranslationEngine()
                 // AAPT auto-decompresses .gz assets and drops the extension, so
@@ -126,17 +154,7 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
                 if (ok) {
                     sharedEngine = engine
                     engineReady.value = true
-                    Log.i(TAG, "Translation engine loaded: ${engine.entryCount} entries")
-                    // One-time smoke test against the iOS-traced expected pairs
-                    listOf(
-                        "El menú del día",
-                        "El gato negro come arroz",
-                        "Se vende pan",
-                        "¿Dónde está el baño?",
-                        "Por la mañana quiero un café",
-                    ).forEach { s ->
-                        Log.i(TAG, "smoke: '$s' -> '${engine.translate(s)}'")
-                    }
+                    Log.i(TAG, "Dictionary engine loaded (fallback): ${engine.entryCount} entries")
                 } else {
                     Log.e(TAG, "Translation engine load failed")
                 }
@@ -146,6 +164,7 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
                 engineLoading.set(false)
             }
         }
+        return sharedEngine?.takeIf { it.isLoaded }
     }
 
     fun start(lifecycleOwner: LifecycleOwner, previewView: PreviewView) {
@@ -182,9 +201,11 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
                 Log.e(TAG, "Camera bind failed", e)
             }
         }, ContextCompat.getMainExecutor(appContext))
+        setAutoTicking(readingMode.value == ReadingMode.AUTO)
     }
 
     fun stop() {
+        setAutoTicking(false)
         setTorch(false)
         speaker.stop()
         cameraProvider?.unbindAll()
@@ -227,6 +248,57 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
         showTranslationPopup.value = false
         notice.value = null
         frozen.value = false
+        autoGate.reset()
+    }
+
+    // ---- Reading mode: Tap to read / Auto read / Mute ----
+
+    /** The small button next to Speak: step to the next mode, remember it, and say its name. */
+    fun cycleReadingMode() {
+        val mode = readingMode.value.next
+        prefs.edit().putString(ReadingMode.PREF_KEY, mode.key).apply()
+        readingMode.value = mode
+        Log.i(TAG, "reading mode -> ${mode.key}")
+        // Said even for Mute: the person has to hear what they picked. Flushes anything playing.
+        speaker.speak(mode.label)
+        holdAutoFor(mode.label)
+        setAutoTicking(mode == ReadingMode.AUTO)
+    }
+
+    private fun setAutoTicking(on: Boolean) {
+        if (on == autoTicking) return
+        autoTicking = on
+        mainHandler.removeCallbacks(autoTick)
+        if (on) mainHandler.postDelayed(autoTick, AUTO_TICK_MS)
+    }
+
+    /** Keep Auto read from talking over a line that was just handed to the voice / TalkBack. */
+    private fun holdAutoFor(line: String) {
+        val now = SystemClock.elapsedRealtime()
+        val hold = if (speaksAloud()) VOICE_START_GRACE_MS else AnnouncementRules.estimatedMs(line)
+        quietUntil = maxOf(quietUntil, now + hold)
+    }
+
+    private fun speaksAloud(): Boolean = prefs.getBoolean("speakAnswersAloud", true)
+
+    /**
+     * One Auto read step (main thread, every [AUTO_TICK_MS]). The translation is preferred
+     * when there is one; otherwise the text the camera is reading. A language-pack notice is
+     * already said by [showNotice], so nothing else is read while it shows.
+     */
+    private fun autoReadStep() {
+        if (readingMode.value != ReadingMode.AUTO) return
+        val now = SystemClock.elapsedRealtime()
+        if (speaker.speakingNow.value) quietUntil = maxOf(quietUntil, now + AFTER_SPEECH_GAP_MS)
+        if (notice.value != null || isTranslating.value) return
+        val candidate = translatedText.value ?: recognizedText.value
+        if (candidate.isBlank()) return
+        autoGate.observe(candidate, now)
+        val line = autoGate.due(now, busy = speaker.speakingNow.value || now < quietUntil) ?: return
+        autoGate.markSpoken(line, now)
+        Log.i(TAG, "auto read: ${line.length} chars")
+        speaker.speak(line)
+        holdAutoFor(line)
     }
 
     /** "Translate from" control: remember the choice and start the page over. */
@@ -237,82 +309,116 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
         reset()
     }
 
-    /** Spanish mode: translate the current text with the offline engine. */
+    /** Translate the current text into English. */
     fun translate() {
         val text = recognizedText.value
         if (text.isBlank() || isTranslating.value) return
-        val lang = sourceLanguage.value
-        if (lang.code != ReaderLanguages.spanish.code) {
-            translateWithGoogle(text, lang)
-            return
-        }
-        val engine = sharedEngine
-        if (engine?.isLoaded != true) {
-            ensureEngineLoaded()
-            return
-        }
-        isTranslating.value = true
-        frozen.value = true // pause OCR during + after translation (iOS)
-        workExecutor.execute {
-            val result = try {
-                // Translate the lines, not one run-on: a sign's lines are separate
-                // phrases, and the engine reordered words across them (iOS 2026-09-16).
-                SpanishTranslationEngine.translationUnits(text)
-                    .map { engine.translate(it) }
-                    .filter { it.isNotEmpty() }
-                    .joinToString("\n")
-                    .ifEmpty { text }
-            } catch (e: Exception) {
-                Log.e(TAG, "translate failed", e)
-                text
-            }
-            translatedText.value = result
-            isTranslating.value = false
-            showTranslationPopup.value = true
-        }
-    }
-
-    /**
-     * Every language but Spanish: Google's on-device translator. The first time a language is
-     * used its pack downloads (about 30 MB); after that it works with no connection at all.
-     */
-    private fun translateWithGoogle(text: String, lang: ReaderLanguage) {
         notice.value = null
         isTranslating.value = true
-        frozen.value = true
+        frozen.value = true // pause OCR during + after translation (iOS)
+        val lang = sourceLanguage.value
+        val spanish = lang.code == ReaderLanguages.spanish.code
         workExecutor.execute {
-            val result: String? = try {
-                val translator = translatorFor(lang.code)
-                val model = TranslateRemoteModel.Builder(lang.code).build()
-                val have = Tasks.await(RemoteModelManager.getInstance().isModelDownloaded(model))
-                when {
-                    have -> translateLines(translator, text)
-                    !isOnline() -> {
-                        showNotice("${lang.name} needs a one-time download from Google. Connect to the internet once, then it works offline.")
-                        null
-                    }
-                    else -> {
-                        showNotice("Downloading ${lang.name}, one time only.")
-                        Tasks.await(
-                            translator.downloadModelIfNeeded(DownloadConditions.Builder().build()),
-                            5, TimeUnit.MINUTES,
-                        )
-                        notice.value = null
-                        translateLines(translator, text)
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "translate (${lang.code}) failed", e)
-                showNotice("${lang.name} couldn't be translated just now. Please try again.")
-                null
+            val result = if (spanish && spanishDownloadFailed) {
+                translateWithDictionary(text)
+            } else {
+                translateWithGoogle(text, lang, spanish)
             }
             isTranslating.value = false
             if (result != null) {
+                notice.value = null
                 translatedText.value = result
+                com.mattmacosko.realtimeaicam.RatePrompt.noteResult(appContext)
                 showTranslationPopup.value = true
             } else {
                 frozen.value = false // nothing to show, keep reading the page
             }
+        }
+    }
+
+    /**
+     * Google's on-device translator, every language. The first time a language is used its pack
+     * downloads (about 30 MB); after that it works with no connection at all. Spanish never comes
+     * back empty: with no pack and no way to get one, or on any error, the dictionary answers.
+     * Runs on workExecutor.
+     */
+    private fun translateWithGoogle(text: String, lang: ReaderLanguage, spanish: Boolean): String? {
+        var downloading = false
+        return try {
+            val translator = translatorFor(lang.code)
+            val model = TranslateRemoteModel.Builder(lang.code).build()
+            val have = Tasks.await(RemoteModelManager.getInstance().isModelDownloaded(model))
+            if (!have) {
+                if (spanish) {
+                    // Say it even offline (iOS announces before trying): the person learns the
+                    // better translation is one download away, and still gets English now.
+                    showNotice(ReaderLanguages.downloadLine(lang.name))
+                    if (!isOnline()) {
+                        spanishDownloadFailed = true
+                        Log.i(TAG, "Spanish pack not on the phone and offline: dictionary")
+                        return translateWithDictionary(text)
+                    }
+                } else if (!isOnline()) {
+                    showNotice("${lang.name} needs a one-time download from Google. Connect to the internet once, then it works offline.")
+                    return null
+                } else {
+                    showNotice(ReaderLanguages.downloadLine(lang.name))
+                }
+                downloading = true
+                Tasks.await(
+                    translator.downloadModelIfNeeded(DownloadConditions.Builder().build()),
+                    5, TimeUnit.MINUTES,
+                )
+                downloading = false
+            }
+            val english = if (spanish) {
+                // Whole idioms first ("No hay mal que por bien no venga" -> "Every cloud has a
+                // silver lining"), the rest through Google, sign lines kept apart.
+                // The reader wraps long lines ("No hay mal que por\nbien no venga."), so the
+                // idiom check sees the sign-line units, which already re-join wrapped lines.
+                loadIdioms()
+                val units = SpanishTranslationEngine.translationUnits(text).joinToString("\n")
+                SpanishIdiomPrepass.translate(units) { translateLines(translator, it) }
+            } else {
+                translateLines(translator, text)
+            }
+            english.ifBlank { null } ?: if (spanish) translateWithDictionary(text) else text
+        } catch (e: Exception) {
+            Log.e(TAG, "translate (${lang.code}) failed", e)
+            if (spanish) {
+                if (downloading) spanishDownloadFailed = true
+                translateWithDictionary(text)
+            } else {
+                showNotice("${lang.name} couldn't be translated just now. Please try again.")
+                null
+            }
+        }
+    }
+
+    /** The built-in Spanish engine (fallback). Loads it on first use. Runs on workExecutor. */
+    private fun translateWithDictionary(text: String): String {
+        val engine = dictionaryEngine()
+            ?: return "Translation data couldn't load. Please close and reopen the app."
+        return try {
+            // Translate the lines, not one run-on: a sign's lines are separate
+            // phrases, and the engine reordered words across them (iOS 2026-09-16).
+            SpanishTranslationEngine.translationUnits(text)
+                .map { engine.translate(it) }
+                .filter { it.isNotEmpty() }
+                .joinToString("\n")
+                .ifEmpty { text }
+        } catch (e: Exception) {
+            Log.e(TAG, "dictionary translate failed", e)
+            text
+        }
+    }
+
+    private fun loadIdioms() {
+        if (SpanishIdiomPrepass.isLoaded) return
+        try {
+            SpanishIdiomPrepass.load { appContext.assets.open("es_idioms.json") }
+        } catch (e: Exception) {
+            Log.e(TAG, "idiom list failed to load", e) // translation still works, just word for word
         }
     }
 
@@ -338,8 +444,13 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
             .ifEmpty { text }
 
     private fun showNotice(message: String) {
+        Log.i(TAG, "notice: $message")
         notice.value = message
-        ContextCompat.getMainExecutor(appContext).execute { speaker.speak(message) }
+        if (readingMode.value == ReadingMode.MUTE) return // Mute: on screen only
+        ContextCompat.getMainExecutor(appContext).execute {
+            speaker.speak(message)
+            holdAutoFor(message)
+        }
     }
 
     private fun isOnline(): Boolean {
@@ -359,7 +470,13 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
             return
         }
         val toSpeak = translatedText.value ?: recognizedText.value
-        if (toSpeak.isNotBlank()) speaker.speak(toSpeak)
+        if (toSpeak.isNotBlank()) {
+            com.mattmacosko.realtimeaicam.RatePrompt.noteResult(appContext)
+            speaker.speak(toSpeak)
+            // Read by hand: Auto read won't say the same page again right after.
+            autoGate.markSpoken(toSpeak, SystemClock.elapsedRealtime())
+            holdAutoFor(toSpeak)
+        }
     }
 
     // ---- Frame path ----

@@ -1,9 +1,9 @@
 package com.mattmacosko.realtimeaicam.narrator
 
 /**
- * The one instruction the model was trained against. It has to match the iOS
- * app and vision-narrator/prompts.py word for word — the fine-tune answers this
- * wording and drifts on any other.
+ * RT Cam's instruction, word for word the iOS app's. Since 1.23 the model is
+ * LFM3-Omni-2B (untrained), and these exact words plus the scene question below
+ * are what it was benchmarked with (liquid-lens-demo round 5, 2026-10-29).
  */
 object NarratorPrompt {
     const val SYSTEM =
@@ -37,7 +37,9 @@ object NarratorPrompt {
     const val ASK = "You are the eyes of a blind person. They are asking a question about this photo. Answer it in one short spoken sentence, and start with the answer itself: yes or no, a number, a colour, a name, or the words that are printed. Then, only if it helps, a few words about where or why. If the photo does not show the answer, say you can't tell for sure and say what you can see. Plain words, no lists, no markdown."
 
     const val PAGE_QUESTION = "What is this page?"
-    const val SCENE_QUESTION = "What is in front of me?"
+    // The iPhone's scene question, as benchmarked. Before 1.23 Android asked only
+    // "What is in front of me?" because the old fine-tune was trained on that.
+    const val SCENE_QUESTION = "What is in front of me? Describe the scene: the objects, any people, and where they are."
 
     /** Second pass when the first one balked. */
     fun forcedDescribe(isPage: Boolean): String = if (isPage) {

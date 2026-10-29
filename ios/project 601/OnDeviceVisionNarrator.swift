@@ -1,10 +1,5 @@
 import CoreImage
 import Foundation
-import MLX
-import MLXHuggingFace
-import MLXLMCommon
-import MLXVLM
-import Tokenizers
 import UIKit
 import Vision
 
@@ -12,7 +7,8 @@ import Vision
 ///
 /// ``OnDeviceNarrator`` reads words the recognizer hands it; this one skips the
 /// recognizer and is shown the picture itself — a vision-language model
-/// (Qwen3.5-2B, MLX 4-bit) found through ``VisionModelStore``: bundled as a
+/// (LFM3-Omni-2B by Liquid AI on llama.cpp since 1.3.6; before that Vision
+/// Narrator 0.8B on MLX) found through ``VisionModelStore``: bundled as a
 /// `VisionModel` folder, or downloaded once into Application Support.
 /// Same promise as before: no network, no account, nothing leaves the phone.
 ///
@@ -23,11 +19,27 @@ import Vision
 actor OnDeviceVisionNarrator {
     static let shared = OnDeviceVisionNarrator()
 
-    private var container: ModelContainer?
+    private var engine: LlamaVisionEngine?
     private var unavailable = false
 
-    /// Word for word the instruction the model was tuned against. Do not edit
-    /// without retuning — a drifted prompt asks a question it was never taught.
+    /// Native timings of every model pass since the last `resetPassStats()`,
+    /// read by the on-phone photo test (PhotoSetTest).
+    private(set) var passStats: [LlamaVisionEngine.Stats] = []
+    func resetPassStats() { passStats = [] }
+
+    /// One pass through the model, off the actor's thread.
+    private func run(_ engine: LlamaVisionEngine, system: String, question: String, image: CIImage,
+                     maxTokens: Int = 120, temperature: Float = 0) async throws -> String {
+        let answer = try await Task.detached(priority: .userInitiated) {
+            try engine.respond(system: system, question: question, image: image,
+                               maxTokens: maxTokens, temperature: temperature)
+        }.value
+        passStats.append(engine.lastStats)
+        return answer
+    }
+
+    /// RT Cam's describe instruction. Since 1.3.6 the model is LFM3-Omni-2B
+    /// (untrained), benchmarked with exactly these words; Android uses the same.
     private static let instructions = """
     You are the eyes of a blind person. Look at the photo and say what matters in one to three short spoken sentences. If it is a page of mail, a bill, a label or a receipt: lead with what the page is and who sent it, then the number that matters, then the deadline, then what happens if it is ignored. Money owed to the person is money coming to them, never a bill. Use only what is printed. An issue date is not a deadline. A number is only money if a dollar sign or the word dollars is printed with it. Not every page is a bill; an advertisement owes nothing. If it is a place or a thing: say where they are, then what is nearby and where it is relative to them, then people and anything moving, then hazards. Plain words, no lists, no markdown. Never guess at names or senders that are not printed. Never refuse, never say you cannot see it, and never ask for another photo. If the shot is dark, blurry or cut off, say in a few words that it is hard to see and then describe whatever you can make out anyway: the shapes, the colours, where things are, and any words you can read.
     """
@@ -84,15 +96,9 @@ actor OnDeviceVisionNarrator {
         guard let photo = Self.downscaled(image, longSide: 1024) else { return nil }
         do {
             let model = try await loaded()
-            let session = ChatSession(
-                model, instructions: Self.askInstructions,
-                generateParameters: GenerateParameters(maxTokens: 120, temperature: 0,
-                                                       repetitionPenalty: 1.1),
-                processing: UserInput.Processing(resize: nil),
-                additionalContext: ["enable_thinking": false]
-            )
             let started = Date()
-            var said = Self.tidyKeepingShort(try await session.respond(to: question, image: .ciImage(photo)))
+            var said = Self.tidyKeepingShort(try await run(model, system: Self.askInstructions,
+                                                           question: question, image: photo))
             // "I can't tell for sure, but I can see..." is the trained honest
             // answer, so no refusal retry here. Only instructions a blind person
             // cannot act on get cut: "move closer, turn on a light, take another"
@@ -120,26 +126,10 @@ actor OnDeviceVisionNarrator {
         guard let photo = Self.downscaled(image, longSide: longSide) else { return nil }
         do {
             let model = try await loaded()
-            // A fresh session per photo, on purpose: one letter must never colour
-            // the next. (mlx-swift-lm #157, the Qwen3.5 M-RoPE state crash, is
-            // fixed in 3.31.4 — position ids now live in per-request LMOutput
-            // state — which is why the project pins 3.x.)
-            let session = ChatSession(
-                model,
-                instructions: Self.instructions,
-                generateParameters: GenerateParameters(
-                    maxTokens: 120,
-                    temperature: 0,
-                    repetitionPenalty: 1.1
-                ),
-                // The photo is already the size we want; the default here would
-                // shrink it again to fit 512×512.
-                processing: UserInput.Processing(resize: nil),
-                // Qwen's chat-template switch for "answer, don't deliberate."
-                additionalContext: ["enable_thinking": false]
-            )
+            // A fresh conversation per photo, on purpose: one letter must never
+            // colour the next (the engine clears its memory on every call).
             let started = Date()
-            let answer = try await session.respond(to: question, image: .ciImage(photo))
+            let answer = try await run(model, system: Self.instructions, question: question, image: photo)
             var said = Self.tidy(answer)
             // Wall-clock seconds from photo to sentence, on this phone. The M5
             // numbers never meant anything for the device; this does.
@@ -160,15 +150,9 @@ actor OnDeviceVisionNarrator {
                         + "Do not say you cannot. Start with \"It's hard to see clearly, but\" and then "
                         + "describe the shapes, colours, objects and people you can make out and where they are."
                 }
-                let retrySession = ChatSession(
-                    model, instructions: Self.instructions,
-                    generateParameters: GenerateParameters(maxTokens: 120, temperature: 0.2,
-                                                           repetitionPenalty: 1.1),
-                    processing: UserInput.Processing(resize: nil),
-                    additionalContext: ["enable_thinking": false]
-                )
-                if let retry = Self.tidy(try await retrySession.respond(
-                        to: forced, image: .ciImage(Self.brightened(photo, ev: 1.6)))) {
+                if let retry = Self.tidy(try await run(
+                        model, system: Self.instructions, question: forced,
+                        image: Self.brightened(photo, ev: 1.6), temperature: 0.2)) {
                     said = retry
                     extra["forced_describe"] = true
                 }
@@ -179,15 +163,9 @@ actor OnDeviceVisionNarrator {
             if Self.looksLikeRefusal(said) {
                 let plain = "Describe this photo: the objects, their colours, where they are, any people, "
                     + "and any words you can read. Describe only. Never say you cannot see it."
-                let lastSession = ChatSession(
-                    model, instructions: Self.describeOnlyInstructions,
-                    generateParameters: GenerateParameters(maxTokens: 120, temperature: 0.4,
-                                                           repetitionPenalty: 1.1),
-                    processing: UserInput.Processing(resize: nil),
-                    additionalContext: ["enable_thinking": false]
-                )
-                if let last = Self.tidy(try await lastSession.respond(
-                        to: plain, image: .ciImage(Self.brightened(photo, ev: 2.2)))) {
+                if let last = Self.tidy(try await run(
+                        model, system: Self.describeOnlyInstructions, question: plain,
+                        image: Self.brightened(photo, ev: 2.2), temperature: 0.4)) {
                     said = last
                     extra["plain_describe"] = true
                 }
@@ -199,15 +177,9 @@ actor OnDeviceVisionNarrator {
             if Self.looksLikeRefusal(said) {
                 let listing = "List the things you can see in this picture, separated by commas. "
                     + "Nouns only. No sentences, no explanations, no apologies."
-                let listSession = ChatSession(
-                    model, instructions: Self.describeOnlyInstructions,
-                    generateParameters: GenerateParameters(maxTokens: 90, temperature: 0.6,
-                                                           repetitionPenalty: 1.1),
-                    processing: UserInput.Processing(resize: nil),
-                    additionalContext: ["enable_thinking": false]
-                )
-                let raw = try await listSession.respond(
-                    to: listing, image: .ciImage(Self.brightened(photo, ev: 2.6)))
+                let raw = try await run(
+                    model, system: Self.describeOnlyInstructions, question: listing,
+                    image: Self.brightened(photo, ev: 2.6), maxTokens: 90, temperature: 0.6)
                 if let things = Self.thingsOnly(raw) {
                     // Matt's words for what this should sound like: "I'm having a
                     // hard time seeing it, but this is what I think it is."
@@ -277,20 +249,16 @@ actor OnDeviceVisionNarrator {
         }.value
     }
 
-    private func loaded() async throws -> ModelContainer {
-        if let container { return container }
+    private func loaded() async throws -> LlamaVisionEngine {
+        if let engine { return engine }
         guard let url = VisionModelStore.installedURL else {
             throw VisionNarratorError.noModelInBundle
         }
-        // Keep MLX's Metal buffer cache tiny: on a 6 GB phone the default cache
-        // plus a 1.7 GB model is enough to get the app jetsammed (signal 9).
-        MLX.GPU.set(cacheLimit: 20 * 1024 * 1024)
-        // mlx-swift-lm 3.x: the tokenizer implementation is injected rather than
-        // bundled; the weights and tokenizer.json both come from the app bundle.
-        let loaded = try await VLMModelFactory.shared.loadContainer(
-            from: url, using: #huggingFaceTokenizerLoader())
-        container = loaded
-        return loaded
+        let made = try await Task.detached(priority: .userInitiated) {
+            try LlamaVisionEngine(folder: url)
+        }.value
+        engine = made
+        return made
     }
 
     /// Redraws the photo so its long side is `longSide` points of pixels (never

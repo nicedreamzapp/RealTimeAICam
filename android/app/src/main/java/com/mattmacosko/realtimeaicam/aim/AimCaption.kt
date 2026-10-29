@@ -9,6 +9,7 @@ import com.mattmacosko.realtimeaicam.narrator.NarratorPrompt
 import com.mattmacosko.realtimeaicam.ui.describeNeverRefusing
 import com.mattmacosko.realtimeaicam.ui.looksLikeAPage
 import com.mattmacosko.realtimeaicam.ui.prepareShot
+import com.mattmacosko.realtimeaicam.ui.sizedForModel
 import kotlinx.coroutines.runBlocking
 import java.io.File
 
@@ -36,7 +37,7 @@ object AimCaption {
             // scene describer: the same split as What's this?.
             val page = isPage && runBlocking { looksLikeAPage(context, shot) }
             val question = if (page) NarratorPrompt.PAGE_QUESTION else NarratorPrompt.SCENE_QUESTION
-            describeNeverRefusing(context, shot, question, page, engine).trim().ifBlank { null }
+            describeNeverRefusing(context, sizedForModel(context, shot, page), question, page, engine).trim().ifBlank { null }
         }
     } catch (t: Throwable) {
         Log.e(TAG, "describe failed", t)

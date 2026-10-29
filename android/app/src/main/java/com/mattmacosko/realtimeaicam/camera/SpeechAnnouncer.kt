@@ -42,6 +42,7 @@ class SpeechAnnouncer(context: Context) {
         const val INTER_OBJECT_DELAY_MS = 800L
         const val CLEANUP_AGE_MS = 60_000L
         const val MAX_PER_CYCLE = 3
+        const val GOOGLE_TTS = "com.google.android.tts"
     }
 
     val enabled = MutableStateFlow(false)
@@ -56,7 +57,7 @@ class SpeechAnnouncer(context: Context) {
 
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var ready = false
+    @Volatile private var ready = false
     private var appliedVoice: String? = null
 
     @Volatile private var isSpeaking = false
@@ -72,13 +73,70 @@ class SpeechAnnouncer(context: Context) {
     private val lastSpokenByClass = java.util.concurrent.ConcurrentHashMap<String, Long>()
     private var utteranceSeq = 0L
 
-    private val tts: TextToSpeech = TextToSpeech(context.applicationContext) { status ->
-        ready = status == TextToSpeech.SUCCESS
-        // Load the voice now, silently, so the first thing the app says (the "three" of a
-        // countdown) is not waiting on a cold voice. Google TTS takes ~3.5 s to load one.
-        if (ready) warmVoice()
-    }.apply {
-        setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+    /**
+     * Cold first launch (2026-10-23, a 1-star Play review: "no voice output"). The speech
+     * engine starts asynchronously, and on a fresh install it can take seconds. Anything the
+     * app said before then was silently dropped, and nothing ever retried. Now:
+     *  - the latest line asked for before the engine is up is kept and said the moment it is;
+     *  - if the phone's default engine fails to start, Google's engine is tried once;
+     *  - if the engine has no voice for the phone's language, US English is used;
+     *  - if no engine works at all, lines go to TalkBack instead of nowhere.
+     */
+    @Volatile private var pendingLine: Pair<String, String>? = null
+    @Volatile private var engineFailed = false
+    private var triedGoogleEngine = false
+
+    private fun createEngine(enginePackage: String?): TextToSpeech {
+        val holder = arrayOfNulls<TextToSpeech>(1)
+        val onInit = TextToSpeech.OnInitListener { status ->
+            mainHandler.post { onEngineInit(holder[0], status) }
+        }
+        val engine = if (enginePackage == null) TextToSpeech(appContext, onInit)
+        else TextToSpeech(appContext, onInit, enginePackage)
+        holder[0] = engine
+        engine.setOnUtteranceProgressListener(progressListener)
+        return engine
+    }
+
+    private fun onEngineInit(engine: TextToSpeech?, status: Int) {
+        if (engine == null || engine !== tts) return
+        if (status != TextToSpeech.SUCCESS) {
+            if (!triedGoogleEngine && engine.defaultEngine != GOOGLE_TTS) {
+                triedGoogleEngine = true
+                try { engine.shutdown() } catch (_: Throwable) {}
+                tts = createEngine(GOOGLE_TTS)
+                return
+            }
+            engineFailed = true
+            pendingLine?.let { announceToScreenReader(it.first) }
+            pendingLine = null
+            return
+        }
+        ensureLanguage(engine)
+        ready = true
+        val line = pendingLine
+        pendingLine = null
+        if (line != null) {
+            speakInternal(line.first, line.second)
+        } else {
+            // Load the voice now, silently, so the first thing the app says (the "three" of a
+            // countdown) is not waiting on a cold voice. Google TTS takes ~3.5 s to load one.
+            warmVoice()
+        }
+    }
+
+    /** No voice data for the phone's language (or none picked yet): fall back to US English. */
+    private fun ensureLanguage(engine: TextToSpeech) {
+        try {
+            val current = engine.voice?.locale ?: java.util.Locale.getDefault()
+            val ok = engine.isLanguageAvailable(current) >= TextToSpeech.LANG_AVAILABLE &&
+                engine.voice?.features?.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) != true
+            if (!ok) engine.setLanguage(java.util.Locale.US)
+        } catch (_: Throwable) {}
+    }
+
+    private val progressListener: UtteranceProgressListener by lazy {
+        object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {
                 this@SpeechAnnouncer.isSpeaking = true
                 speakingNow.value = true
@@ -107,8 +165,11 @@ class SpeechAnnouncer(context: Context) {
                 this@SpeechAnnouncer.isSpeaking = false
                 speakingNow.value = false
             }
-        })
+        }
     }
+
+    // Declared after progressListener: createEngine() reads it while this initialises.
+    private var tts: TextToSpeech = createEngine(null)
 
     /** iOS setSpeechEnabled/handleToggleSpeech behavior. */
     fun setEnabled(on: Boolean) {
@@ -118,7 +179,7 @@ class SpeechAnnouncer(context: Context) {
             // iOS announceSpeechEnabled(): clears queue, speaks confirmation
             announcementQueue.clear()
             isProcessingQueue = false
-            speakInternal("Speech enabled", "toggle-${utteranceSeq++}")
+            sayOrHold("Speech enabled", "toggle-${utteranceSeq++}")
         } else {
             stop() // also sets enabled=false, like iOS stopSpeech()
         }
@@ -249,14 +310,22 @@ class SpeechAnnouncer(context: Context) {
     }
 
     fun speak(text: String) {
-        if (!ready) return
         announcementQueue.clear()
         isProcessingQueue = false
         // Never let a text rewrite cost the person their speech: if a pattern
         // misbehaves on some device, say the text as read.
         val spoken = try { SpeakableText.make(text) } catch (t: Throwable) { text }
         if (spoken.isBlank()) return
-        speakInternal(spoken, "speak-${utteranceSeq++}")
+        sayOrHold(spoken, "speak-${utteranceSeq++}")
+    }
+
+    /** Speak now if the engine is up; otherwise keep the latest line and say it when it is. */
+    private fun sayOrHold(text: String, id: String) {
+        when {
+            ready -> speakInternal(text, id)
+            engineFailed || !speaksAloud -> announceToScreenReader(text)
+            else -> pendingLine = text to id
+        }
     }
 
     /**
@@ -272,9 +341,9 @@ class SpeechAnnouncer(context: Context) {
     private fun speakInternal(text: String, id: String) {
         // Debug builds log every spoken line so a cable test can read what was said.
         if ((appContext.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) android.util.Log.d("RTCamSpeech", text)
-        if (!speaksAloud) {
+        if (!speaksAloud || engineFailed) {
             // TalkBack reads this in the user's OWN voice and rate, which is the
-            // whole point of the setting.
+            // whole point of the setting. Also the fallback when no speech engine works.
             announceToScreenReader(text)
             return
         }
@@ -303,6 +372,7 @@ class SpeechAnnouncer(context: Context) {
     }
 
     fun stop() {
+        pendingLine = null
         tts.stop()
         isSpeaking = false
         speakingNow.value = false

@@ -257,6 +257,7 @@ struct SettingsOverlayView: View {
                         )
 
                         PrivacyCardView()
+                        CreditsCardView()
                     }
                     .padding()
                 }
@@ -316,6 +317,57 @@ private struct PrivacyCardView: View {
                 Label("No tracking, no analytics, no accounts", systemImage: "eye.slash")
                 Label("Camera frames are processed on-device only", systemImage: "camera.viewfinder")
                 Label("Copy history stays on this device (you can clear it anytime)", systemImage: "doc.on.clipboard")
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(.ultraThinMaterial.opacity(0.3))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.white.opacity(0.15), lineWidth: 1)
+        )
+    }
+}
+
+/// Who the app is built on. The LFM Open License asks that everyone who gets
+/// the model also gets the license, so its full text opens right here
+/// (it ships inside the VisionModel folder).
+private struct CreditsCardView: View {
+    @State private var showLicense = false
+
+    private var licenseText: String {
+        guard let url = Bundle.main.url(forResource: "VisionModel", withExtension: nil)?
+            .appendingPathComponent("LFM-Open-License-v1.0.txt"),
+              let text = try? String(contentsOf: url, encoding: .utf8) else { return "" }
+        return text
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: "heart.text.square")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(.pink)
+                Text("Credits")
+                    .font(.headline)
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("What's this? runs LFM3-Omni-2B by Liquid AI, on this phone, under the LFM Open License v1.0. "
+                     + "Nice Dreamz converted it to GGUF and shrank it (IQ2_XS text, Q4_K_M vision); the weights are otherwise unchanged.")
+                Button(showLicense ? "Hide the LFM Open License" : "Read the LFM Open License v1.0") {
+                    showLicense.toggle()
+                }
+                if showLicense {
+                    Text(licenseText)
+                        .font(.caption2)
+                        .textSelection(.enabled)
+                }
+                Text("On-device engine: llama.cpp by ggml-org (MIT)")
+                Text("Object Detection: YOLOv8 by Ultralytics (AGPL-3.0), trained on Open Images V7 by Google (CC BY 4.0)")
             }
             .font(.subheadline)
             .foregroundStyle(.secondary)

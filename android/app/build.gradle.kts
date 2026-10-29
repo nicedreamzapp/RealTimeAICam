@@ -8,18 +8,20 @@ plugins {
 android {
     namespace = "com.mattmacosko.realtimeaicam"
     compileSdk = 36
+    ndkVersion = "29.0.14206865"
 
     defaultConfig {
         applicationId = "com.mattmacosko.realtimeaicam"
         minSdk = 26
         targetSdk = 36
-        versionCode = 22
-        versionName = "1.17"
+        versionCode = 28
+        versionName = "1.23"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         externalNativeBuild {
             cmake {
                 cppFlags += "-std=c++17"
+                arguments += "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
             }
         }
 
@@ -47,8 +49,22 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Side by side with the store build on a test phone (the on-phone
+            // photo test runs against this one).
+            applicationIdSuffix = ".test"
+            versionNameSuffix = "-test"
+        }
         release {
-            isMinifyEnabled = false
+            // R8 on from 1.19 (vc24): Play vitals flagged DEX obfuscation at 1% vs a 25% minimum
+            // (enforced Feb 2027). Keep rules for JNI / reflection / XML live in proguard-rules.pro;
+            // upload build/outputs/mapping/release/mapping.txt with every AAB.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
             // Only sign when the keystore is actually present. On a machine
             // without it the bundle still builds; it just comes out unsigned
             // instead of dying inside bundletool with a bare NullPointerException.
@@ -112,6 +128,8 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     // AssetPackManager: where the install-time model pack landed on disk
     implementation("com.google.android.play:asset-delivery:2.3.0")
+    // In-app "rate this app" card (RatePrompt)
+    implementation("com.google.android.play:review:2.0.2")
     implementation("androidx.activity:activity-compose:1.9.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.2")
 

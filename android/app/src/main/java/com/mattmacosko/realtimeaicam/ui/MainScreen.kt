@@ -55,6 +55,17 @@ fun MainScreen(
 ) {
     BackHandler(enabled = mode != AppMode.Home) { onModeChange(AppMode.Home) }
 
+    // Back on Home from a camera screen: a calm moment to ask for a rating, if one is due
+    // (RatePrompt, same rule as iOS).
+    val activityForRating = LocalContext.current as? android.app.Activity
+    var lastMode by remember { androidx.compose.runtime.mutableStateOf(mode) }
+    androidx.compose.runtime.LaunchedEffect(mode) {
+        if (mode == AppMode.Home && lastMode != AppMode.Home && activityForRating != null) {
+            com.mattmacosko.realtimeaicam.RatePrompt.askIfDue(activityForRating)
+        }
+        lastMode = mode
+    }
+
     val context = LocalContext.current
 
     // iOS parity: the iPhone interface is portrait-only (pbxproj

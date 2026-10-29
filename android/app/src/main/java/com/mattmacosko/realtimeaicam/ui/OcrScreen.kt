@@ -49,6 +49,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Hearing
+import androidx.compose.material.icons.filled.TouchApp
+import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material3.Switch
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Timer
@@ -97,6 +100,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.mattmacosko.realtimeaicam.camera.OcrPipeline
+import com.mattmacosko.realtimeaicam.camera.ReadingMode
 import com.mattmacosko.realtimeaicam.translation.ReaderLanguages
 
 /** Copy history: last 5 unique strings, newest first (SharedPreferences). */
@@ -151,6 +155,7 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit) {
     val isSpeaking by pipeline.isSpeaking.collectAsState()
     val sourceLang by pipeline.sourceLanguage.collectAsState()
     val notice by pipeline.notice.collectAsState()
+    val readingMode by pipeline.readingMode.collectAsState()
 
     var showSettings by remember { mutableStateOf(false) }
     var showTorchPopup by remember { mutableStateOf(false) }
@@ -407,6 +412,12 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit) {
             ) {
                 Icon(Icons.Default.RecordVoiceOver, null, tint = Color.White, modifier = Modifier.size(22.dp))
             }
+            // 4b. Reading mode — Tap to read / Auto read / Mute (Matt, 2026-10-23). Each tap steps
+            // to the next mode and says its name; the choice is remembered.
+            ReadingModeButton(
+                mode = readingMode,
+                onClick = { if (debouncer.tryFire()) pipeline.cycleReadingMode() },
+            )
             // 5. Reset
             CircleControlButton(
                 label = "Clear and stop",
@@ -501,6 +512,33 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit) {
         if (showSettings) {
             SettingsOverlay(zoom = zoom, onDismiss = { showSettings = false })
         }
+    }
+}
+
+/**
+ * The small reading-mode button beside Speak. TalkBack hears "Reading mode, Auto read" and
+ * "double tap to switch to Mute"; the app also says the new mode's name when it changes.
+ */
+@Composable
+private fun ReadingModeButton(mode: ReadingMode, onClick: () -> Unit) {
+    val auto = mode == ReadingMode.AUTO
+    CircleControlButton(
+        fillColor = if (auto) IosColors.Blue.copy(alpha = 0.30f) else Color.Black.copy(alpha = 0.32f),
+        ringColor = if (auto) IosColors.Blue.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.2f),
+        label = "Reading mode, ${mode.label}",
+        clickLabel = "switch to ${mode.next.label}",
+        onClick = onClick,
+    ) {
+        Icon(
+            when (mode) {
+                ReadingMode.TAP -> Icons.Default.TouchApp
+                ReadingMode.AUTO -> Icons.Default.Hearing
+                ReadingMode.MUTE -> Icons.Default.VolumeOff
+            },
+            null,
+            tint = Color.White,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 
@@ -834,6 +872,7 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit) {
                     TipLine("• 📋 Copy detected/translated text")
                     TipLine("• 🔁 Reset/Stop — clears text, translation, and stops speaking")
                     TipLine("• 🗣️ Speak detected/translated text")
+                    TipLine("• 👂 Reading mode button — Tap to read, Auto read (new text is read by itself), or Mute")
                     TipLine("• 🔦 Adjust flashlight")
                     TipLine("• ⚙️ Open settings/history")
                 }
