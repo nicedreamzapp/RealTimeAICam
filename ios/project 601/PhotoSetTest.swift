@@ -61,7 +61,8 @@ enum PhotoSetTest {
         for line in text.split(separator: "\n") {
             if let d = line.data(using: .utf8),
                let row = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
-               let name = row["image"] as? String { names.insert(name) }
+               let name = row["image"] as? String,
+               !((row["text"] as? String) ?? "").isEmpty { names.insert(name) }   // empty = run it again
         }
         return names
     }

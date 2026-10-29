@@ -27,15 +27,41 @@ actor OnDeviceVisionNarrator {
     private(set) var passStats: [LlamaVisionEngine.Stats] = []
     func resetPassStats() { passStats = [] }
 
-    /// One pass through the model, off the actor's thread.
+    /// Spoken when the engine fails twice in a row. Never silence: the person
+    /// holding the camera cannot see that nothing happened.
+    static let engineFailedAnswer = "Sorry, I couldn't work that one out. Please try again."
+
+    /// One pass through the model, off the actor's thread. The GPU only works
+    /// while the app is in front (iOS refuses Metal work in the background:
+    /// llama.cpp reports it as eval -3, which on 10/29 left every later photo
+    /// silent), so it waits for the app to be active, and on any failure drops
+    /// the engine, reloads it and tries once more before giving up.
     private func run(_ engine: LlamaVisionEngine, system: String, question: String, image: CIImage,
                      maxTokens: Int = 120, temperature: Float = 0) async throws -> String {
-        let answer = try await Task.detached(priority: .userInitiated) {
-            try engine.respond(system: system, question: question, image: image,
-                               maxTokens: maxTokens, temperature: temperature)
-        }.value
-        passStats.append(engine.lastStats)
-        return answer
+        func once(_ e: LlamaVisionEngine) async throws -> String {
+            await Self.waitUntilActive()
+            let answer = try await Task.detached(priority: .userInitiated) {
+                try e.respond(system: system, question: question, image: image,
+                              maxTokens: maxTokens, temperature: temperature)
+            }.value
+            passStats.append(e.lastStats)
+            return answer
+        }
+        do {
+            return try await once(engine)
+        } catch {
+            OnDeviceNarrator.log(read: "[engine retry]", said: nil, extra: ["error": String(describing: error)])
+            self.engine = nil
+            return try await once(try await loaded())
+        }
+    }
+
+    /// Up to a minute for the app to come back to the foreground.
+    private static func waitUntilActive() async {
+        for _ in 0 ..< 120 {
+            if await MainActor.run(body: { UIApplication.shared.applicationState == .active }) { return }
+            try? await Task.sleep(nanoseconds: 500_000_000)
+        }
     }
 
     /// RT Cam's describe instruction. Since 1.3.6 the model is LFM3-Omni-2B
@@ -112,7 +138,9 @@ actor OnDeviceVisionNarrator {
             return said
         } catch {
             OnDeviceNarrator.log(read: "[ask]", said: nil, extra: ["error": String(describing: error)])
-            return nil
+            if case VisionNarratorError.noModelInBundle = error { return nil }
+            engine = nil
+            return Self.engineFailedAnswer
         }
     }
 
@@ -218,8 +246,12 @@ actor OnDeviceVisionNarrator {
             // but it is written down, so a silent fallback to OCR can be seen.
             OnDeviceNarrator.log(read: "[photo: \(kind)]", said: nil,
                                  extra: ["error": String(describing: error), "gate": gate])
-            unavailable = true
-            return nil
+            // No weights at all: the feature is off and the OCR path takes over.
+            // Anything else (an engine error that survived the reload): drop the
+            // engine so the next press starts clean, and say so out loud.
+            if case VisionNarratorError.noModelInBundle = error { unavailable = true; return nil }
+            engine = nil
+            return Self.engineFailedAnswer
         }
     }
 
