@@ -12,6 +12,37 @@ import UIKit
 @available(iOS 17.0, *)
 enum PhotoSetTest {
     static var requested: Bool { ProcessInfo.processInfo.arguments.contains("-rtcamPhotoTest") }
+    static var twoAtOnceRequested: Bool { ProcessInfo.processInfo.arguments.contains("-rtcamTwoAtOnce") }
+
+    /// `-rtcamTwoAtOnce`: the 10/29 10:19 AM crash on purpose. A scene answer and
+    /// two Asks about the same photo are started together, twenty rounds, the way a
+    /// second request lands while "Working it out" is still running. Before the
+    /// engine lock both reached one llama context and the app aborted; now the
+    /// second waits. One JSON line per answer in Documents/photo-test/twoatonce.jsonl.
+    static func runTwoAtOnce() async {
+        let fm = FileManager.default
+        guard let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
+        let dir = docs.appendingPathComponent("photo-test", isDirectory: true)
+        let out = dir.appendingPathComponent("twoatonce.jsonl")
+        try? fm.removeItem(at: out)
+        let photos = ((try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? [])
+            .filter { $0.pathExtension.lowercased() == "jpg" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        write(["event": "start", "photos": photos.count], to: out)
+        for round in 0 ..< 20 where !photos.isEmpty {
+            let url = photos[round % photos.count]
+            guard let ui = UIImage(contentsOfFile: url.path), let cg = upright(ui) else { continue }
+            let image = UIImage(cgImage: cg)
+            let started = Date()
+            async let scene = OnDeviceVisionNarrator.shared.narrateScene(image)
+            async let asked = OnDeviceVisionNarrator.shared.ask("Is there a person in this photo?", about: image)
+            async let again = OnDeviceVisionNarrator.shared.ask("What colour is it?", about: image)
+            let (s, a, b) = await (scene, asked, again)
+            write(["round": round, "image": url.lastPathComponent, "scene": s ?? "", "ask": a ?? "", "ask2": b ?? "",
+                   "ms": Int(Date().timeIntervalSince(started) * 1000)], to: out)
+        }
+        write(["event": "done"], to: out)
+    }
 
     static func run() async {
         // Auto-lock suspends the app mid-run (10/29: stopped after 4 of 20), so the

@@ -8,9 +8,15 @@ import llama
 /// the Android app's narrator_jni.cpp, which reproduced the Mac benchmark word
 /// for word on all 20 of Matt's photos (2026-10-29).
 ///
-/// Not thread-safe on its own: OnDeviceVisionNarrator (an actor) owns the only
-/// instance and runs one call at a time.
+/// One answer at a time, enforced here. The narrator actor is re-entrant at its
+/// awaits, so a second request (Ask held while "Working it out" is still
+/// running) used to reach `respond` while the first was mid-decode, and two
+/// threads on one llama context abort in llama_sampler_sample (crash on the
+/// iPhone 18, 10/29 10:19 AM). The lock is shared by every instance so a
+/// reload can never run beside an answer still finishing; the second request
+/// waits for the first and then runs.
 final class LlamaVisionEngine: @unchecked Sendable {
+    private static let oneAtATime = NSLock()
     static let modelFile = "lfm3-omni-2b-IQ2_XS.gguf"
     static let mmprojFile = "lfm3-omni-2b-mmproj-vision-Q4_K_M.gguf"
 
@@ -85,6 +91,8 @@ final class LlamaVisionEngine: @unchecked Sendable {
     /// little temperature, as they always have. Blocking.
     func respond(system: String, question: String, image: CIImage,
                  maxTokens: Int = 120, temperature: Float = 0) throws -> String {
+        Self.oneAtATime.lock()
+        defer { Self.oneAtATime.unlock() }
         let t0 = DispatchTime.now().uptimeNanoseconds
         func ms() -> Double { Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6 }
         var stats = Stats()

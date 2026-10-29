@@ -31,6 +31,7 @@ struct project_601App: App {
                 .task {
                     // On-phone photo test: only with the -rtcamPhotoTest launch argument.
                     if #available(iOS 17.0, *), PhotoSetTest.requested { await PhotoSetTest.run() }
+                    if #available(iOS 17.0, *), PhotoSetTest.twoAtOnceRequested { await PhotoSetTest.runTwoAtOnce() }
                 }
         }
     }
