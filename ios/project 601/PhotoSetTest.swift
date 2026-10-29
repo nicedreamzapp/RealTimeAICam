@@ -14,16 +14,23 @@ enum PhotoSetTest {
     static var requested: Bool { ProcessInfo.processInfo.arguments.contains("-rtcamPhotoTest") }
 
     static func run() async {
+        // Auto-lock suspends the app mid-run (10/29: stopped after 4 of 20), so the
+        // screen stays awake for the whole test and goes back to normal after.
+        await MainActor.run { UIApplication.shared.isIdleTimerDisabled = true }
+        defer { Task { @MainActor in UIApplication.shared.isIdleTimerDisabled = false } }
         let fm = FileManager.default
         guard let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
         let dir = docs.appendingPathComponent("photo-test", isDirectory: true)
         let out = dir.appendingPathComponent("results.jsonl")
-        try? fm.removeItem(at: out)
+        // Resume: photos already in results.jsonl are skipped, so a relaunch
+        // picks up after the last finished one instead of starting over.
+        let done = finished(in: out)
         let photos = ((try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? [])
             .filter { $0.pathExtension.lowercased() == "jpg" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
-        write(["event": "start", "photos": photos.count, "peakMB": peakMB()], to: out)
-        for url in photos {
+        write(["event": done.isEmpty ? "start" : "resume", "photos": photos.count,
+               "alreadyDone": done.count, "peakMB": peakMB()], to: out)
+        for url in photos where !done.contains(url.lastPathComponent) {
             guard let ui = UIImage(contentsOfFile: url.path), let cg = upright(ui) else { continue }
             let started = Date()
             let gate = FrameQualityGate.check(cg, checkDocumentEdges: true)
@@ -45,6 +52,18 @@ enum PhotoSetTest {
             ], to: out)
         }
         write(["event": "done", "peakMB": peakMB()], to: out)
+    }
+
+    /// Image names that already have a result line.
+    private static func finished(in url: URL) -> Set<String> {
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return [] }
+        var names = Set<String>()
+        for line in text.split(separator: "\n") {
+            if let d = line.data(using: .utf8),
+               let row = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
+               let name = row["image"] as? String { names.insert(name) }
+        }
+        return names
     }
 
     /// Pixels upright (the camera roll JPEGs carry EXIF orientation).
