@@ -71,6 +71,18 @@ class NarratorEngine private constructor(private val appContext: Context) {
     @Synchronized
     fun describe(photo: File, question: String, system: String = NarratorPrompt.SYSTEM): String {
         if (!ensureLoaded()) return ""
+        val first = describeOnce(photo, question, system)
+        if (first.isNotBlank()) return first
+        // Empty means the native side failed (a model answer is never empty):
+        // drop the engine, load it fresh and try once more. Callers speak a
+        // fallback sentence if this is still empty, never silence.
+        Log.w(TAG, "empty answer, reloading the engine once")
+        release()
+        if (!ensureLoaded()) return ""
+        return describeOnce(photo, question, system)
+    }
+
+    private fun describeOnce(photo: File, question: String, system: String): String {
         return try {
             NarratorNative.nativeDescribe(
                 handle, photo.absolutePath,
