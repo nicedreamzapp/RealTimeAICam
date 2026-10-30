@@ -18,6 +18,8 @@ a vision-language model on the phone itself, and speaks what they find out loud.
 
 **[How we pick the AI model (living benchmark) →](benchmarks/)**
 
+**[Next: Live Room Mode, the plan for real-time room narration →](roadmap/live-room-mode.md)**
+
 <br>
 
 ![Works Offline](https://img.shields.io/badge/Works_Offline-100%25-brightgreen?style=for-the-badge)

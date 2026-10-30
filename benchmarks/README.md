@@ -207,3 +207,7 @@ Scores are only comparable inside the same round (judges drift 2 to 5 points bet
 Newest first. Every app release that changes the model, its settings or the speed check adds an entry here.
 
 - **2026-10-30.** First published. Initial model comparison of Liquid LFM2.5 and LFM3 against our own Vision Narrator 0.8B and a Qwen3.5-2B fair fight. LFM3-Omni-2B chosen, as released, at 735 MB (Balanced). iPhone 1.3.6 is in App Store review with it; the Android release (1.23) is pending. A model picker that lets each phone choose Sharp, Clear, Balanced or Quick is coming next.
+
+## What comes next
+
+The plan for Live Room Mode (real-time room narration that only speaks up for new things) is in [roadmap/live-room-mode.md](../roadmap/live-room-mode.md).
