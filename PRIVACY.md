@@ -14,7 +14,7 @@ Everything the app does — object detection, text recognition (OCR), and Spanis
 
 - **Camera**: The app uses your camera to run live AI detection, read text, and translate. Camera frames are processed in real time on your device and are never recorded, saved, or transmitted anywhere.
 - **No accounts**: The app has no sign-up, no login, and no user profiles.
-- **No network use**: The AI models (object detection, OCR, translation) are bundled with the app and run offline. The app does not send your images, text, location, or any other data to us or to any third party.
+- **No data leaves your phone**: The AI models (object detection, OCR, translation, and the built-in What's this? model) are bundled with the app and run offline. Since 1.4.0 the app can also download larger What's this? models once from our own server (ineedhemp.com), automatically on Wi-Fi or when you tap download; that request only fetches the model files and carries no photos, text, location, or account. After that they run offline too. The app does not send your images, text, location, or any other data to us or to any third party.
 - **No analytics or ads**: The app contains no advertising SDKs, no trackers, and no analytics libraries.
 - **No data sale**: We have nothing to sell, because we collect nothing.
 
