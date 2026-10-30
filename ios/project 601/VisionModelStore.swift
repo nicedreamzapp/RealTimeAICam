@@ -1,6 +1,7 @@
 import Combine
 import CryptoKit
 import Foundation
+import UIKit
 
 /// Where each What's this? level lives, and how it gets there (1.4.0).
 ///
@@ -321,6 +322,11 @@ final class VisionModelDownloader: NSObject, ObservableObject {
     private func verifyAndInstall(_ level: ModelLevel) async {
         guard let manifest else { return }
         states[level] = .verifying
+        // Hashing 2 GB takes a few seconds; ask iOS for them so a screen that
+        // locks right as the last file lands doesn't leave the level half
+        // installed until the next launch (iPhone 18, 2026-10-30).
+        let background = UIApplication.shared.beginBackgroundTask(withName: "rtcam.verify-model")
+        defer { if background != .invalid { UIApplication.shared.endBackgroundTask(background) } }
         let staging = VisionModelStore.stagingURL(level)
         let final = VisionModelStore.downloadedURL(level)
         let outcome: Result<Void, Error> = await Task.detached(priority: .userInitiated) {
