@@ -87,8 +87,10 @@ enum ModelsText {
             parts.append("Waiting to download.")
         } else if state == .verifying {
             parts.append("Checking the download.")
+        } else if level.isBundled {
+            // the blurb already says it is built in
         } else if VisionModelStore.isInstalled(level) {
-            parts.append(level.isBundled ? "Built in." : "On this phone.")
+            parts.append("On this phone.")
         } else {
             parts.append("Not downloaded. \(level.sizeDescription), downloads when you pick it.")
         }
