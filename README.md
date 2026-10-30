@@ -16,6 +16,8 @@ a vision-language model on the phone itself, and speaks what they find out loud.
 
 **Free on [iPhone](https://apps.apple.com/us/app/id6751230739) and [Android](https://play.google.com/store/apps/details?id=com.mattmacosko.realtimeaicam) — no ads, no subscription, nothing to buy inside.**
 
+**[How we pick the AI model (living benchmark) →](benchmarks/)**
+
 <br>
 
 ![Works Offline](https://img.shields.io/badge/Works_Offline-100%25-brightgreen?style=for-the-badge)

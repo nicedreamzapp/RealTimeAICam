@@ -1,0 +1,100 @@
+{
+  "note": "20 everyday photos from the developer's own phone. The photos, their file names and their ground truth are private and not published; only totals are.",
+  "max_score_approx": 65,
+  "mac_run": [
+    {
+      "name": "RT Cam iOS (Vision Narrator 0.8B, MLX, 625 MB)",
+      "score": 17.5,
+      "facts": 30.5,
+      "text": 1,
+      "halluc": 12,
+      "safety": 1,
+      "median_first_token_ms_mac": 75,
+      "median_total_ms_mac": 184,
+      "answers_hit_cap": 0
+    },
+    {
+      "name": "RT Cam Android (0.8B GGUF, 737 MB)",
+      "score": 18.0,
+      "facts": 32.0,
+      "text": 1,
+      "halluc": 13,
+      "safety": 1,
+      "median_first_token_ms_mac": 55,
+      "median_total_ms_mac": 177,
+      "answers_hit_cap": 0
+    },
+    {
+      "name": "Liquid LFM3-Omni-2B IQ2_XS untrained (735 MB)",
+      "score": 33.5,
+      "facts": 46.5,
+      "text": 2,
+      "halluc": 15,
+      "safety": 0,
+      "median_first_token_ms_mac": 168,
+      "median_total_ms_mac": 490,
+      "answers_hit_cap": 1
+    },
+    {
+      "name": "Liquid LFM3-Omni-2B Q3_K_M untrained (1,118 MB)",
+      "score": 40.0,
+      "facts": 49.0,
+      "text": 2,
+      "halluc": 11,
+      "safety": 0,
+      "median_first_token_ms_mac": 180,
+      "median_total_ms_mac": 662,
+      "answers_hit_cap": 9
+    }
+  ],
+  "pairwise_which_would_a_blind_user_rather_hear": {
+    "liquid_735mb_wins": 12,
+    "rtcam_0.8b_wins": 8,
+    "ties": 0
+  },
+  "phone_vs_mac_rescore": {
+    "note": "A separate, smaller judging run comparing answers made inside the real apps with Mac answers on the same photos. Compare rows only within this block.",
+    "rows": [
+      {
+        "name": "RT Cam 0.8B iPhone build, run on a Mac",
+        "score": 26.5,
+        "facts": 31.5,
+        "text": 1,
+        "hall": 4,
+        "safety": 1
+      },
+      {
+        "name": "LFM3-Omni-2B 735 MB, run on a Mac",
+        "score": 42.0,
+        "facts": 45.0,
+        "text": 3,
+        "hall": 6,
+        "safety": 0
+      },
+      {
+        "name": "LFM3-Omni-2B 735 MB, in the app on the budget Android",
+        "score": 40.5,
+        "facts": 47.5,
+        "text": 2,
+        "hall": 7,
+        "safety": 1
+      },
+      {
+        "name": "LFM3-Omni-2B 735 MB, in the app on the iPhone 12 Pro Max",
+        "score": 39.0,
+        "facts": 44.0,
+        "text": 2,
+        "hall": 5,
+        "safety": 1
+      },
+      {
+        "name": "RT Cam 0.8B, in the app on the budget Android",
+        "score": 29.5,
+        "facts": 34.5,
+        "text": 0,
+        "hall": 3,
+        "safety": 1
+      }
+    ]
+  }
+}
