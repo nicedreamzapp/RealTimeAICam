@@ -14,8 +14,8 @@ android {
         applicationId = "com.mattmacosko.realtimeaicam"
         minSdk = 26
         targetSdk = 36
-        versionCode = 28
-        versionName = "1.23"
+        versionCode = 29
+        versionName = "1.24"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         externalNativeBuild {

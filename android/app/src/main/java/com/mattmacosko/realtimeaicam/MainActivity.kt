@@ -35,6 +35,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 1.24 model picker: finish any cut-off model download, and fetch the
+        // level this phone wants if it is on Wi-Fi.
+        com.mattmacosko.realtimeaicam.narrator.ModelDownloader.resumeInterrupted(this)
+        com.mattmacosko.realtimeaicam.narrator.ModelDownloader.fetchWanted(this, automatic = true)
         enableEdgeToEdge()
 
         // iOS parity: status bar hidden, content edge-to-edge (UI_SPEC §0)

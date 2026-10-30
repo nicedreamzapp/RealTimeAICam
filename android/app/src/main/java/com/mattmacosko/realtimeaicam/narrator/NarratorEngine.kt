@@ -17,6 +17,25 @@ class NarratorEngine private constructor(private val appContext: Context) {
 
     private var handle: Long = 0L
 
+    /** The level the next load uses (1.24 model picker), and the one loaded now. */
+    @Volatile private var wanted: ModelLevel = ModelLevel.BALANCED
+    @Volatile var loadedLevel: ModelLevel? = null
+        private set
+
+    /** Seconds the last describe call spent in the model itself. */
+    @Volatile var lastPassSeconds = 0.0
+        private set
+
+    /**
+     * Picks the level for the next answers. Lets go of a different level first so
+     * two models never sit in memory together.
+     */
+    @Synchronized
+    fun select(level: ModelLevel) {
+        wanted = level
+        if (handle != 0L && loadedLevel != level) release()
+    }
+
     val isAvailable: Boolean get() = handle != 0L
 
     /** Whether the weights are on this phone at all, without loading them. */
@@ -36,9 +55,19 @@ class NarratorEngine private constructor(private val appContext: Context) {
         if (!supportedDevice()) return false
         if (!NarratorNative.load()) return false
 
-        val dir = modelDirectory() ?: return false
-        val model = File(dir, MODEL_FILE)
-        val mmproj = File(dir, MMPROJ_FILE)
+        if (wanted != ModelLevel.BALANCED) {
+            if (load(wanted)) return true
+            // A downloaded level that will not load: the built-in one answers.
+            Log.w(TAG, "${wanted.key} would not load; falling back to balanced")
+            wanted = ModelLevel.BALANCED
+        }
+        return load(ModelLevel.BALANCED)
+    }
+
+    private fun load(level: ModelLevel): Boolean {
+        val dir = if (level.isBundled) modelDirectory() ?: return false else level.folder(appContext)
+        val model = File(dir, level.modelFile)
+        val mmproj = File(dir, level.mmprojFile)
         if (!model.isFile || !mmproj.isFile) {
             Log.w(TAG, "model files missing under ${dir.absolutePath}")
             return false
@@ -54,7 +83,9 @@ class NarratorEngine private constructor(private val appContext: Context) {
         val useGpu = !marker.exists()
         if (!useGpu) Log.w(TAG, "a previous GPU attempt never finished; staying on the CPU")
         if (useGpu) marker.writeText("trying")
-        handle = NarratorNative.nativeInit(model.absolutePath, mmproj.absolutePath, threads, useGpu)
+        handle = NarratorNative.nativeInit(model.absolutePath, mmproj.absolutePath, threads, useGpu,
+            level.usesLfm3Prompt)
+        loadedLevel = if (handle != 0L) level else null
         // We came back at all, so the driver did not take the process down;
         // a plain failure is reported by the return value, not the marker.
         marker.delete()
@@ -87,7 +118,11 @@ class NarratorEngine private constructor(private val appContext: Context) {
             NarratorNative.nativeDescribe(
                 handle, photo.absolutePath,
                 system, question, MAX_TOKENS,
-            ).also { if (recordStats) statsLog.add(NarratorNative.nativeLastStats(handle)) }
+            ).also {
+                val stats = NarratorNative.nativeLastStats(handle)
+                lastPassSeconds = (stats.split(",").getOrNull(1)?.toDoubleOrNull() ?: 0.0) / 1000
+                if (recordStats) statsLog.add(stats)
+            }
         } catch (t: Throwable) {
             Log.e(TAG, "describe failed", t)
             ""
@@ -99,6 +134,7 @@ class NarratorEngine private constructor(private val appContext: Context) {
         if (handle != 0L) {
             NarratorNative.nativeFree(handle)
             handle = 0L
+            loadedLevel = null
         }
     }
 

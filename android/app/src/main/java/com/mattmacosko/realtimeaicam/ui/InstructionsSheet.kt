@@ -270,14 +270,16 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
                 BodyLine("Works 100% offline — even in Airplane Mode", secondary = true)
                 BodyLine("No tracking, no analytics, no accounts", secondary = true)
                 BodyLine("Camera frames are processed on-device only", secondary = true)
+                BodyLine("Bigger What's this? models download once from our own server, then run offline", secondary = true)
                 BodyLine("Copy history stays on this device", secondary = true)
 
                 SectionHeader("🙏 Credits")
                 BodyLine(
                     "What's this? runs LFM3-Omni-2B by Liquid AI, on this phone, under the LFM Open License v1.0. " +
-                        "Nice Dreamz converted it to GGUF and shrank it (IQ2_XS text, Q4_K_M vision); the weights are otherwise unchanged.",
+                        "Nice Dreamz converted it to GGUF in three sizes (Sharp Q8_0, Clear Q3_K_M, Balanced IQ2_XS); the weights are otherwise unchanged.",
                     secondary = true,
                 )
+                BodyLine("Quick: Vision Narrator 0.8B by Nice Dreamz, fine-tuned from Qwen3.5-0.8B by Alibaba Cloud (Apache-2.0)", secondary = true)
                 LicenseText("Read the LFM Open License v1.0", "licenses/LFM-Open-License-v1.0.txt")
                 BodyLine("On-device engine: llama.cpp by ggml-org (MIT)", secondary = true)
                 BodyLine("Object Detection: YOLOv8 by Ultralytics (AGPL-3.0), trained on Open Images V7 by Google (CC BY 4.0)", secondary = true)

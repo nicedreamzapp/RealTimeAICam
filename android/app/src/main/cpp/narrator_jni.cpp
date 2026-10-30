@@ -23,6 +23,9 @@ struct narrator {
     mtmd_context  * mctx   = nullptr;
     const llama_vocab * vocab = nullptr;
     int n_threads = 4;
+    // Quick (Vision Narrator 0.8B) uses the template inside its own GGUF;
+    // the LFM3 levels use lfm3_prompt below (1.24, model picker).
+    bool lfm3 = true;
     // timings of the last describe call, read by the on-phone test
     int64_t last_ttft_ms = 0, last_total_ms = 0, last_encode_ms = 0;
     int last_prompt_tokens = 0, last_gen_tokens = 0;
@@ -52,6 +55,23 @@ std::string lfm3_prompt(const std::string & system, const std::string & question
     return p;
 }
 
+// Quick: the chat template stored in the GGUF, image marker on its own line
+// ahead of the question, exactly how the app ran the 0.8B through 1.22.
+std::string own_template_prompt(const llama_model * model, const std::string & system,
+                                const std::string & question) {
+    const std::string user = std::string(mtmd_default_marker()) + "\n" + question;
+    const char * tmpl = llama_model_chat_template(model, nullptr);
+    llama_chat_message msgs[2] = { {"system", system.c_str()}, {"user", user.c_str()} };
+    std::vector<char> buf(system.size() + user.size() + 2048);
+    int32_t n = llama_chat_apply_template(tmpl, msgs, 2, true, buf.data(), (int32_t) buf.size());
+    if (n > (int32_t) buf.size()) {
+        buf.resize(n + 1);
+        n = llama_chat_apply_template(tmpl, msgs, 2, true, buf.data(), (int32_t) buf.size());
+    }
+    if (n < 0) return system + "\n\n" + user;
+    return std::string(buf.data(), n);
+}
+
 int64_t now_ms() { return ggml_time_us() / 1000; }
 
 } // namespace
@@ -60,7 +80,8 @@ extern "C" {
 
 JNIEXPORT jlong JNICALL
 Java_com_mattmacosko_realtimeaicam_narrator_NarratorNative_nativeInit(
-        JNIEnv * env, jobject, jstring jmodel, jstring jmmproj, jint nThreads, jboolean useGpu) {
+        JNIEnv * env, jobject, jstring jmodel, jstring jmmproj, jint nThreads, jboolean useGpu,
+        jboolean lfm3Prompt) {
     const std::string model_path  = jstr(env, jmodel);
     const std::string mmproj_path = jstr(env, jmmproj);
 
@@ -133,6 +154,7 @@ Java_com_mattmacosko_realtimeaicam_narrator_NarratorNative_nativeInit(
     n->model = model; n->lctx = lctx; n->mctx = mctx;
     n->vocab = llama_model_get_vocab(model);
     n->n_threads = nThreads;
+    n->lfm3 = lfm3Prompt;
     LOGI("narrator ready");
     return reinterpret_cast<jlong>(n);
 }
@@ -159,7 +181,8 @@ Java_com_mattmacosko_realtimeaicam_narrator_NarratorNative_nativeDescribe(
     if (!wrapper.bitmap) { LOGE("could not read %s", image_path.c_str());
                            return env->NewStringUTF(""); }
 
-    const std::string prompt = lfm3_prompt(system, question);
+    const std::string prompt = n->lfm3 ? lfm3_prompt(system, question)
+                                       : own_template_prompt(n->model, system, question);
 
     mtmd_input_text text{};
     text.text          = prompt.c_str();

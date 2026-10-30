@@ -723,6 +723,9 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit) {
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
+                // 1.24: which What's this? model answers.
+                ModelsCard()
+
                 // Countdown before the photo — asked for on AppleVis by Dennis.
                 SettingsCard {
                     Row(verticalAlignment = Alignment.CenterVertically) {

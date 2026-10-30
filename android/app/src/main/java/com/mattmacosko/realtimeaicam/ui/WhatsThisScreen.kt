@@ -119,7 +119,10 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.mattmacosko.realtimeaicam.camera.SpeechAnnouncer
+import com.mattmacosko.realtimeaicam.narrator.ModelDownloader
+import com.mattmacosko.realtimeaicam.narrator.ModelPicker
 import com.mattmacosko.realtimeaicam.narrator.NarratorEngine
+import com.mattmacosko.realtimeaicam.narrator.PhotoKind
 import com.mattmacosko.realtimeaicam.narrator.NarratorPrompt
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -280,6 +283,8 @@ fun WhatsThisScreen(
                 val started = System.currentTimeMillis()
                 val isPage = question == NarratorPrompt.PAGE_QUESTION
                 val said = withContext(Dispatchers.IO) {
+                    // 1.24: the level for this photo (Settings > Models).
+                    engine.select(ModelPicker.level(context, if (isPage) PhotoKind.PAGE else PhotoKind.SCENE))
                     val forModel = sizedForModel(context, shot, isPage)
                     askPhoto = forModel
                     describeNeverRefusing(context, forModel, question, isPage, engine)
@@ -920,6 +925,13 @@ internal fun describeNeverRefusing(
     engine: NarratorEngine,
 ): String {
     var said = engine.describe(shot, question)
+    // The first pass of every photo is this phone's speed check: the first one
+    // ever sets the estimate, later ones keep it honest. Then fetch whatever
+    // level automatic mode now wants (on Wi-Fi only).
+    engine.loadedLevel?.let { level ->
+        ModelPicker.noteAnswer(context, level, if (isPage) PhotoKind.PAGE else PhotoKind.SCENE, engine.lastPassSeconds)
+        ModelDownloader.fetchWanted(context, automatic = true)
+    }
     if (!looksLikeRefusal(said)) return said
 
     val brighter = brightenedCopy(context, shot, "whats-this-bright.jpg", 1.8f) ?: shot

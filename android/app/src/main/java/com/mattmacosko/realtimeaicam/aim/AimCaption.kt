@@ -37,6 +37,8 @@ object AimCaption {
             // scene describer: the same split as What's this?.
             val page = isPage && runBlocking { looksLikeAPage(context, shot) }
             val question = if (page) NarratorPrompt.PAGE_QUESTION else NarratorPrompt.SCENE_QUESTION
+            engine.select(com.mattmacosko.realtimeaicam.narrator.ModelPicker.level(context,
+                if (page) com.mattmacosko.realtimeaicam.narrator.PhotoKind.PAGE else com.mattmacosko.realtimeaicam.narrator.PhotoKind.SCENE))
             describeNeverRefusing(context, sizedForModel(context, shot, page), question, page, engine).trim().ifBlank { null }
         }
     } catch (t: Throwable) {
