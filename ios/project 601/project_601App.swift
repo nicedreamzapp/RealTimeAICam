@@ -22,7 +22,7 @@ struct project_601App: App {
         // Debug builds only: `-rtcamShowModels` opens Settings > Models on its own,
         // so the card can be screenshotted in a Simulator nobody is driving.
         if ProcessInfo.processInfo.arguments.contains("-rtcamShowModels") {
-            ScrollView { ModelsCardView().padding() }
+            VStack { ModelsCardView().padding(); ModelsChooserView() }
         } else {
             ContentView()
         }
