@@ -64,6 +64,7 @@ private const val TUTORIAL_TEXT =
         "Controls: switch camera, toggle the lens, turn the flashlight on or off with one tap, " +
         "pinch to zoom, reset or stop, speak results, copy text to history, and open settings. " +
         "In the text reader and translator, the small button next to Speak switches between Tap to read, Auto read, which reads new text by itself, and Mute. " +
+        "What's this? picks the most accurate model your phone can run by itself, and downloads it once on Wi-Fi. You can change it in Settings, under Models. " +
         "Privacy first: everything runs on your device. No tracking, no accounts, no internet needed."
 
 /** iOS AppInstructionsView (UI_SPEC §4) as a slide-up sheet. */
@@ -253,6 +254,15 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
                         "The From button at the top picks another language, like French or German. " +
                         "Each language, Spanish included, downloads once for the best translation, then works offline. " +
                         "Until then, Spanish still translates with the built-in dictionary.",
+                )
+                ModeBlock(
+                    "🧠 What's this? models",
+                    "What's this? describes photos with an AI model that lives on your phone. You don't have to set anything up. " +
+                        "Your first photo times how fast your phone is, then the app picks the most accurate model your phone can run " +
+                        "and downloads it once, on Wi-Fi. Until it arrives, the built-in model answers. " +
+                        "Mail, money and medicine always get the most accurate model your phone can handle. " +
+                        "To change it, open Settings, then Models: choose Most accurate or Fastest, or pick a model yourself. " +
+                        "Every model works offline once it's on your phone.",
                 )
 
                 SectionHeader("🎛️ Controls")

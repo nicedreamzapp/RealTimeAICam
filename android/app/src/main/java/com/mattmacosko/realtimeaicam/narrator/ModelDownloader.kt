@@ -3,6 +3,9 @@ package com.mattmacosko.realtimeaicam.narrator
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.speech.tts.TextToSpeech
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityManager
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,6 +45,32 @@ object ModelDownloader {
     val states: StateFlow<Map<ModelLevel, State>> = _states
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var tts: TextToSpeech? = null
+
+    /**
+     * Says a download update out loud: the app's own voice, or TalkBack when the
+     * person turned the app voice off (Settings), so two voices never overlap.
+     */
+    private fun announce(context: Context, text: String) {
+        val app = context.applicationContext
+        val ownVoice = app.getSharedPreferences("rtaicam", Context.MODE_PRIVATE).getBoolean("speakAnswersAloud", true)
+        val am = app.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
+        if (!ownVoice && am.isEnabled) {
+            @Suppress("DEPRECATION")
+            val e = AccessibilityEvent.obtain(AccessibilityEvent.TYPE_ANNOUNCEMENT).apply {
+                this.text.add(text); packageName = app.packageName; className = javaClass.name
+            }
+            am.sendAccessibilityEvent(e)
+            return
+        }
+        val existing = tts
+        if (existing != null) { existing.speak(text, TextToSpeech.QUEUE_ADD, null, "model"); return }
+        var made: TextToSpeech? = null
+        made = TextToSpeech(app) { status ->
+            if (status == TextToSpeech.SUCCESS) made?.speak(text, TextToSpeech.QUEUE_ADD, null, "model")
+        }
+        tts = made
+    }
     private val queue = ArrayDeque<ModelLevel>()
     private var current: ModelLevel? = null
     private var job: Job? = null
@@ -121,16 +150,21 @@ object ModelDownloader {
         val level = queue.removeFirst()
         current = level
         set(level, State.Downloading(0f))
+        announce(context, "Getting the ${level.title} model for this phone, ${level.sizeText()}. What's this? keeps working while it downloads.")
         job = scope.launch {
             val outcome = try { fetch(context, level); null } catch (t: Throwable) { t }
             synchronized(this@ModelDownloader) {
                 if (current == level) {
                     when {
-                        outcome == null -> set(level, State.Ready)
+                        outcome == null -> {
+                            set(level, State.Ready)
+                            announce(context, "The ${level.title} model is ready. What's this? will use it from now on.")
+                        }
                         outcome is kotlinx.coroutines.CancellationException -> {}
                         else -> {
                             Log.e(TAG, "download of ${level.key} failed", outcome)
                             set(level, State.Failed(outcome.message ?: outcome.javaClass.simpleName))
+                            announce(context, "The ${level.title} model download stopped. You can try again in Settings, under Models. What's this? still works.")
                         }
                     }
                     current = null

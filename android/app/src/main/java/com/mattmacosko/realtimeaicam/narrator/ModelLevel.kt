@@ -30,16 +30,16 @@ enum class ModelLevel(
     /** Total RAM (ActivityManager.totalMem) before the level is offered. */
     val minimumMemory: Long,
 ) {
-    SHARP("Sharp", 78, "Most accurate. LFM3-Omni-2B by Liquid AI, full detail.",
+    SHARP("Sharp", 78, "The most accurate answers. Best on newer phones.",
         "lfm3-omni-2b-Q8_0.gguf", "lfm3-omni-2b-mmproj-vision-Q8_0.gguf",
         2_049_283_586L, 1.3, 7_000_000_000L),
-    CLEAR("Clear", 75, "Nearly as accurate as Sharp at half the size.",
+    CLEAR("Clear", 75, "Almost as accurate as Sharp, half the download.",
         "lfm3-omni-2b-Q3_K_M.gguf", "lfm3-omni-2b-mmproj-vision-Q8_0.gguf",
         1_117_944_898L, 1.05, 3_500_000_000L),
-    BALANCED("Balanced", 57, "Built into the app.",
+    BALANCED("Balanced", 57, "Built into the app, always ready, even with no internet.",
         NarratorEngine.MODEL_FILE, NarratorEngine.MMPROJ_FILE,
         735_090_426L, 1.0, 0L),
-    QUICK("Quick", 47, "Fastest, for older phones. The model RT Cam used before 1.23.",
+    QUICK("Quick", 47, "The fastest answers, for older phones. Less detail.",
         "vision-narrator-0.8b-Q4_K_M.gguf", "vision-narrator-0.8b-mmproj-F16.gguf",
         736_644_128L, 0.72, 0L);
 
@@ -81,7 +81,12 @@ enum class PhotoKind { PAGE, SCENE }
 
 /** Settings > Models: "Accuracy first" (default) or "Speed first". */
 enum class ModelPriority(val title: String) {
-    ACCURACY("Accuracy first"), SPEED("Speed first");
+    ACCURACY("Most accurate"), SPEED("Fastest");
+
+    /** One plain line under the choice. */
+    val explanation: String get() = if (this == ACCURACY)
+        "Best answers. Mail, money and medicine may take up to a minute, everything else up to 20 seconds."
+    else "Quicker answers, about 10 seconds where this phone can, a little less accurate."
 
     /**
      * The longest a level may take and still be picked automatically. Matt's rule

@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -79,17 +80,31 @@ fun ModelsCard() {
             Icon(Icons.Default.Memory, null, tint = Color(0xFF30B0C7), modifier = Modifier.size(22.dp))
             Text("  Models", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
         }
+        Text(
+            "You don't need to change anything here. What's this? uses an AI model that lives on your phone. " +
+                "Bigger models give more accurate answers but take longer. Automatic picks the best one this phone can handle " +
+                "and downloads it once, on Wi-Fi. What's this? keeps working while it downloads.",
+            fontSize = 14.sp, color = IosColors.Gray,
+        )
         val summary = when {
-            checking -> "Checking this phone's speed with one test photo…"
-            !measured -> "Your first What's this? photo measures this phone's speed, then the best level for it downloads on Wi-Fi."
+            checking -> "Measuring this phone's speed with one test photo…"
+            !measured -> "Your first What's this? photo measures this phone's speed. Then the best model for it downloads on Wi-Fi."
             else -> {
                 val page = ModelPicker.ideal(context, PhotoKind.PAGE)
                 val scene = ModelPicker.ideal(context, PhotoKind.SCENE)
-                if (page == scene) "Automatic uses ${page.title} on this phone."
-                else "Automatic uses ${page.title} for mail, money and medicine, and ${scene.title} for everything else."
+                val using = ModelPicker.level(context, PhotoKind.SCENE)
+                when {
+                    choice != null -> "This phone is using ${using.title}, the one you picked."
+                    page != scene -> "Best fit for this phone: ${page.title} for mail, money and medicine, ${scene.title} for everything else."
+                    using == page -> "This phone is using ${page.title}, the best fit for it."
+                    else -> "This phone is using ${using.title} for now. ${page.title}, the best fit, is on its way."
+                }
             }
         }
-        Text(summary, fontSize = 14.sp, color = IosColors.Gray)
+        Text(summary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+
+        Text("What matters more to you?", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
+            modifier = Modifier.semantics { heading() })
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             for (p in ModelPriority.entries) {
@@ -108,11 +123,15 @@ fun ModelsCard() {
                             ModelDownloader.fetchWanted(context, automatic = true)
                             refresh++
                         }
-                        .semantics { selected = on }
+                        .semantics { selected = on; contentDescription = "${p.title}. ${p.explanation}" }
                         .padding(vertical = 8.dp, horizontal = 12.dp),
                 )
             }
         }
+
+        Text(priority.explanation, fontSize = 12.sp, color = IosColors.Gray)
+        Text("Which model", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
+            modifier = Modifier.semantics { heading() })
 
         LevelRow(null, choice == null, measured) {
             ModelPicker.setManualLevel(context, null)
@@ -130,7 +149,7 @@ fun ModelsCard() {
         }
 
         Text(
-            if (checking) "Checking speed…" else "Check this phone's speed again",
+            if (checking) "Measuring speed…" else "Measure this phone's speed again",
             fontSize = 14.sp,
             color = IosColors.Blue,
             modifier = Modifier
@@ -152,15 +171,35 @@ fun ModelsCard() {
 private fun LevelRow(level: ModelLevel?, selected: Boolean, measured: Boolean, onPick: () -> Unit) {
     val context = LocalContext.current
     val state = level?.let { ModelDownloader.state(context, it) }
-    val title = level?.let { "${it.title}  ·  ${it.score}/100" } ?: "Automatic (recommended)"
+    val title = level?.title ?: "Automatic (recommended)"
+    val installed = level?.isInstalled(context) == true
     val detail = when {
-        level == null -> "Picks the smartest level this phone runs in time, and gives mail, money and medicine the most accurate one."
-        !level.fitsThisPhone(context) -> "${level.blurb} Needs more memory than this phone has."
+        level == null -> "The app chooses for you. Mail, money and medicine always get the most accurate model this phone can run."
+        !level.fitsThisPhone(context) -> "${level.blurb} This phone doesn't have enough memory for it."
         else -> {
-            val size = if (level.isBundled) "No download." else "${level.sizeText()}."
+            val size = when {
+                level.isBundled -> "No download needed."
+                installed -> "Uses ${level.sizeText()}."
+                else -> "${level.sizeText()} download."
+            }
             if (!measured) "${level.blurb} $size"
-            else "${level.blurb} $size A scene takes ${ModelPicker.spoken(ModelPicker.estimate(context, level, PhotoKind.SCENE))}, " +
-                "a page ${ModelPicker.spoken(ModelPicker.estimate(context, level, PhotoKind.PAGE))}."
+            else "${level.blurb} $size On this phone: ${ModelPicker.spoken(ModelPicker.estimate(context, level, PhotoKind.SCENE))} " +
+                "for a room or object, ${ModelPicker.spoken(ModelPicker.estimate(context, level, PhotoKind.PAGE))} for a letter or label."
+        }
+    }
+    // Said in words, never left to a colour or an icon.
+    val words = when {
+        level == null || !level.fitsThisPhone(context) -> null
+        !installed -> if (state is ModelDownloader.State.Idle) "Not downloaded yet" else null
+        else -> {
+            val scene = ModelPicker.level(context, PhotoKind.SCENE) == level
+            val page = ModelPicker.level(context, PhotoKind.PAGE) == level
+            when {
+                scene && page -> "In use now"
+                page -> "In use now for mail, money and medicine"
+                scene -> "In use now for everything except mail, money and medicine"
+                else -> "On this phone"
+            }
         }
     }
     Row(
@@ -178,7 +217,10 @@ private fun LevelRow(level: ModelLevel?, selected: Boolean, measured: Boolean, o
         )
         Column(Modifier.padding(start = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+            if (level != null) Text("Accuracy ${level.score} out of 100", fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold, color = Color.White)
             Text(detail, fontSize = 12.sp, color = IosColors.Gray)
+            if (words != null) Text(words, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF30B0C7))
             if (level != null && !level.isBundled) when (state) {
                 is ModelDownloader.State.Ready -> SmallAction("Delete (frees ${level.sizeText()})", IosColors.Red) {
                     ModelDownloader.delete(context, level)
