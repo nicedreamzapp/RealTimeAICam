@@ -219,6 +219,8 @@ final class VisionModelDownloader: NSObject, ObservableObject {
         current = level
         states[level] = .downloading
         progress = 0
+        SpeechManager.shared.speak("Getting the \(level.name) model for this phone, \(level.sizeDescription). "
+                                   + "What's this? keeps working while it downloads.")
         Task { await fetchManifestAndQueue(level) }
     }
 
@@ -359,6 +361,7 @@ final class VisionModelDownloader: NSObject, ObservableObject {
         case .success:
             progress = 1
             states[level] = .ready
+            SpeechManager.shared.speak("The \(level.name) model is ready. What's this? will use it from now on.")
             finishCurrent()
         case .failure(let error):
             // A bad file must not be trusted next time round.
@@ -371,6 +374,7 @@ final class VisionModelDownloader: NSObject, ObservableObject {
 
     private func fail(_ level: ModelLevel, _ message: String) {
         states[level] = .failed(message)
+        SpeechManager.shared.speak("The \(level.name) model download stopped. You can try again in Settings, under Models. What's this? still works.")
         if current == level { finishCurrent() }
     }
 

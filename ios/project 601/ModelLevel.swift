@@ -33,10 +33,10 @@ enum ModelLevel: String, CaseIterable, Codable, Identifiable {
 
     var blurb: String {
         switch self {
-        case .sharp: "Most accurate. LFM3-Omni-2B by Liquid AI, full detail."
-        case .clear: "Nearly as accurate as Sharp at half the size."
-        case .balanced: "Built into the app."
-        case .quick: "Fastest, for older phones. The model RT Cam used before 1.3.6."
+        case .sharp: "The most accurate answers. Best on newer phones."
+        case .clear: "Almost as accurate as Sharp, half the download."
+        case .balanced: "Built into the app, always ready, even with no internet."
+        case .quick: "The fastest answers, for older phones. Less detail."
         }
     }
 
@@ -121,7 +121,14 @@ enum ModelPriority: String, CaseIterable, Identifiable {
     case accuracy, speed
     var id: String { rawValue }
 
-    var name: String { self == .accuracy ? "Accuracy first" : "Speed first" }
+    var name: String { self == .accuracy ? "Most accurate" : "Fastest" }
+
+    /// One plain line under the choice.
+    var explanation: String {
+        self == .accuracy
+            ? "Best answers. Mail, money and medicine may take up to a minute, everything else up to 20 seconds."
+            : "Quicker answers, about 10 seconds where this phone can, a little less accurate."
+    }
 
     /// The longest a level may take and still be picked automatically.
     /// Accuracy first is Matt's rule (2026-10-30): pages, money, medicine and

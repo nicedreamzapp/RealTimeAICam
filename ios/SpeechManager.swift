@@ -364,6 +364,7 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
             "Object Detection mode detects and labels up to six hundred and one objects in real time.",
             "English OCR mode reads printed English text aloud.",
             "The translator turns printed Spanish into English and reads it aloud. On iOS 18 and later it can translate other languages too, after a one-time download from Apple.",
+            "What's this? picks the most accurate model your phone can run by itself, and downloads it once on Wi-Fi. You can change it in Settings, under Models.",
         ]
 
         if supportsLiDAR {

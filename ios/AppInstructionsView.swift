@@ -165,6 +165,15 @@ struct AppInstructionsView: View {
                             Text("Point at printed Spanish to see instant English translation, spoken aloud and ready to copy. The globe button at the top picks another language, like French or German. Each language, Spanish included, downloads once for the best translation, then works offline. Until then, Spanish still translates with the built-in dictionary. Other languages need iOS 18 or later.")
                         }
                         .padding(.top, 8)
+
+                        // 🧠 What's this? models (1.4.0)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("🧠 **What's this? models**")
+                                .voiceOverWords("🧠 **What's this? models**")
+                                .font(.title2).fontWeight(.semibold)
+                            Text("What's this? describes photos with an AI model that lives on your phone. You don't have to set anything up. The first time you open the app it times one test photo, then picks the most accurate model your phone can run and downloads it once, on Wi-Fi. Until it arrives, the built-in model answers. Mail, money and medicine always get the most accurate model your phone can handle. To change it, open Settings, then Models: choose Most accurate or Fastest, or pick a model yourself. Every model works offline once it's on your phone.")
+                        }
+                        .padding(.top, 8)
                     }
 
                     // Controls

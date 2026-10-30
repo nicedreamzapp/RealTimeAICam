@@ -77,7 +77,7 @@ struct HomeView: View {
         guard quarter > spokenDownloadQuarter, quarter >= 1 else { return }
         spokenDownloadQuarter = quarter
         if quarter >= 4 {
-            SpeechManager.shared.speak("Download complete. Checking the \(level.name) model.")
+            // "ready" is said by the downloader once the check passes.
         } else {
             SpeechManager.shared.speak("\(level.name) model download \(quarter * 25) percent.")
         }
@@ -140,10 +140,7 @@ struct HomeView: View {
         .onChange(of: modelDownloader.progress) { _, value in
             announceDownloadProgress(value)
         }
-        .onChange(of: modelDownloader.current) { old, new in
-            if let old, modelDownloader.state(old) == .ready {
-                SpeechManager.shared.speak("The \(old.name) model is ready.")
-            }
+        .onChange(of: modelDownloader.current) { _, new in
             if new != nil { spokenDownloadQuarter = 0 }
         }
         .onAppear {

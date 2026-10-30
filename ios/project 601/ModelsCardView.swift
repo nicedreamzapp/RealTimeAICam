@@ -23,21 +23,35 @@ struct ModelsCardView: View {
                     .font(.headline)
             }
 
-            Text(summary)
+            Text("You don't need to change anything here. What's this? uses an AI model that lives on your phone. "
+                 + "Bigger models give more accurate answers but take longer. Automatic picks the best one this phone can handle "
+                 + "and downloads it once, on Wi-Fi. What's this? keeps working while it downloads.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            Picker("Pick for me", selection: $priority) {
+            Text(summary)
+                .font(.subheadline.weight(.semibold))
+
+            Text("What matters more to you?")
+                .font(.subheadline.weight(.semibold))
+                .accessibilityAddTraits(.isHeader)
+            Picker("What matters more to you?", selection: $priority) {
                 ForEach(ModelPriority.allCases) { Text($0.name).tag($0.rawValue) }
             }
             .pickerStyle(.segmented)
-            .accessibilityHint("Accuracy first lets mail, money and medicine take up to a minute and scenes up to 20 seconds. Speed first keeps scenes near 10 seconds.")
             .onChange(of: priority) { _, _ in setup.fetchWanted(automatic: true) }
+            Text(pickedPriority.explanation)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Text("Which model")
+                .font(.subheadline.weight(.semibold))
+                .accessibilityAddTraits(.isHeader)
 
             levelRow(nil)
             ForEach(ModelLevel.allCases) { levelRow($0) }
 
-            Button(setup.checkingSpeed ? "Checking speed…" : "Check this phone's speed again") {
+            Button(setup.checkingSpeed ? "Checking speed…" : "Measure this phone's speed again") {
                 if #available(iOS 17.0, *) { Task { await setup.runSpeedCheck() } }
             }
             .disabled(setup.checkingSpeed)
@@ -61,8 +75,13 @@ struct ModelsCardView: View {
         if ModelPicker.balancedSeconds == nil { return "The speed check runs once, a few seconds after the app opens." }
         let page = ModelPicker.ideal(for: .page, priority: pickedPriority)
         let scene = ModelPicker.ideal(for: .scene, priority: pickedPriority)
-        if page == scene { return "Automatic uses \(page.name) on this phone." }
-        return "Automatic uses \(page.name) for mail, money and medicine, and \(scene.name) for everything else."
+        let using = ModelPicker.level(for: .scene)
+        if ModelPicker.manualLevel != nil { return "This phone is using \(using.name), the one you picked." }
+        if page == scene {
+            return using == page ? "This phone is using \(page.name), the best fit for it."
+                : "This phone is using \(using.name) for now. \(page.name), the best fit, is on its way."
+        }
+        return "Best fit for this phone: \(page.name) for mail, money and medicine, \(scene.name) for everything else."
     }
 
     /// nil is the Automatic row.
@@ -75,11 +94,20 @@ struct ModelsCardView: View {
                 .foregroundStyle(selected ? .teal : .secondary)
                 .font(.title3)
             VStack(alignment: .leading, spacing: 3) {
-                Text(level.map { "\($0.name)  ·  \($0.score)/100" } ?? "Automatic (recommended)")
+                Text(level?.name ?? "Automatic (recommended)")
                     .font(.subheadline.weight(.semibold))
+                if let level {
+                    Text("Accuracy \(level.score) out of 100")
+                        .font(.caption.weight(.semibold))
+                }
                 Text(detail(level))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if let level, let words = statusWords(level) {
+                    Text(words)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.teal)
+                }
                 if let level { status(level) }
             }
             Spacer(minLength: 0)
@@ -90,17 +118,36 @@ struct ModelsCardView: View {
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 
+    /// "In use now", "On this phone", "Not downloaded yet" — said in words, not
+    /// left for a colour or an icon to carry.
+    private func statusWords(_ level: ModelLevel) -> String? {
+        _ = balancedSeconds; _ = choice
+        guard level.fitsThisPhone else { return nil }
+        guard VisionModelStore.isInstalled(level) else {
+            return downloader.state(level) == .idle ? "Not downloaded yet" : nil
+        }
+        let scene = ModelPicker.level(for: .scene) == level
+        let page = ModelPicker.level(for: .page) == level
+        switch (scene, page) {
+        case (true, true): return "In use now"
+        case (false, true): return "In use now for mail, money and medicine"
+        case (true, false): return "In use now for everything except mail, money and medicine"
+        default: return "On this phone"
+        }
+    }
+
     private func detail(_ level: ModelLevel?) -> String {
         _ = balancedSeconds
         guard let level else {
-            return "Picks the smartest level this phone runs in time, and gives mail, money and medicine the most accurate one."
+            return "The app chooses for you. Mail, money and medicine always get the most accurate model this phone can run."
         }
-        if !level.fitsThisPhone { return "\(level.blurb) Needs more memory than this phone has." }
+        if !level.fitsThisPhone { return "\(level.blurb) This phone doesn't have enough memory for it." }
         let scene = ModelPicker.spoken(ModelPicker.estimate(level, kind: .scene))
         let page = ModelPicker.spoken(ModelPicker.estimate(level, kind: .page))
-        let size = level.isBundled ? "No download" : level.sizeDescription
+        let size = level.isBundled ? "No download needed"
+            : VisionModelStore.isInstalled(level) ? "Uses \(level.sizeDescription)" : "\(level.sizeDescription) download"
         if ModelPicker.balancedSeconds == nil { return "\(level.blurb) \(size)." }
-        return "\(level.blurb) \(size). A scene takes \(scene), a page \(page)."
+        return "\(level.blurb) \(size). On this phone: \(scene) for a room or object, \(page) for a letter or label."
     }
 
     @ViewBuilder
