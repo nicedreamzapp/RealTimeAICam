@@ -20,6 +20,22 @@ a vision-language model on the phone itself, and speaks what they find out loud.
 
 **[Next: Live Room Mode, the plan for real-time room narration →](roadmap/live-room-mode.md)**
 
+</div>
+
+### 🧭 Where RealTime AI Cam is going
+
+This is a no-holds-barred app for blind and low-vision people, and it keeps getting better with every update. When a better on-device model shows up, we test it on real photos, publish the results in the [living benchmark](benchmarks/), and ship the winner.
+
+**The smartest model your phone can run fast (coming).** On first launch the app runs a short speed check and picks one of four levels: **Sharp** for the newest phones, **Clear** for recent ones, **Balanced** for most phones, and **Quick** for older and budget phones. Every phone works, and newer phones get more detail. You can switch levels any time in settings.
+
+**Accuracy first when it matters (coming).** Medicine, money, mail and labels always get the most careful model your phone can run, even if it takes a little longer. Looking around a room stays quick.
+
+**Live Room Mode (in the works).** Hold the phone up and it describes the room, remembers what it already told you, and only speaks up when something new shows up or something needs your attention. [Read the plan](roadmap/live-room-mode.md).
+
+**Beyond 601 objects.** The live detector knows 601 kinds of things today. The vision model can already name almost anything it sees, and the goal is for the live view to know thousands of things, all still on the phone.
+
+<div align="center">
+
 <br>
 
 ![Works Offline](https://img.shields.io/badge/Works_Offline-100%25-brightgreen?style=for-the-badge)
@@ -110,8 +126,8 @@ where you are, what's near you and on which side, people, anything moving, hazar
 Point it at mail and it leads with **what the page is and who sent it**, then the number
 that matters, then the deadline, then what happens if it's ignored.
 
-This runs on a **small vision-language model that ships inside the app**: since iOS 1.3.6 and
-Android 1.23 that is [LFM3-Omni-2B](https://huggingface.co/LiquidAI/LFM3-Omni-2B) from Liquid AI, run by llama.cpp, instead of calling somebody's server. That's most of why the download is
+This runs on a **small vision-language model that ships inside the app**: starting with iOS 1.3.6 (in App Store review) and
+Android 1.23 (coming next) that is [LFM3-Omni-2B](https://huggingface.co/LiquidAI/LFM3-Omni-2B) from Liquid AI, run by llama.cpp, instead of calling somebody's server. That's most of why the download is
 large, and it's the whole point. It works in airplane mode, on a plane, in a basement, in a
 country where your data plan doesn't.
 
@@ -213,7 +229,7 @@ graph TB
 
 | Component | Technology | Purpose |
 |---|---|---|
-| 🗣️ **Narrator** | LFM3-Omni-2B by Liquid AI (GGUF IQ2_XS + Q4_K_M vision projector, 735 MB, bundled) · llama.cpp on both phones | Scene and page description |
+| 🗣️ **Narrator** | LFM3-Omni-2B by Liquid AI (GGUF IQ2_XS + Q4_K_M vision projector, 735 MB, bundled) · llama.cpp (iOS 1.3.6 in review, Android 1.23 coming) | Scene and page description |
 | 🤖 **Detector** | YOLOv8 (Ultralytics) | 601-class object detection |
 | 🏗️ **UI** | SwiftUI (iOS) · Jetpack Compose (Android) | Native interface on both |
 | ⚡ **Acceleration** | CoreML + Metal + Neural Engine · TensorFlow Lite | Hardware-optimized inference |
