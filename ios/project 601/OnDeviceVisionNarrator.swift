@@ -52,7 +52,7 @@ actor OnDeviceVisionNarrator {
         } catch {
             OnDeviceNarrator.log(read: "[engine retry]", said: nil, extra: ["error": String(describing: error)])
             self.engine = nil
-            return try await once(try await loaded())
+            return try await once(try await loaded(engine.level))
         }
     }
 
@@ -121,7 +121,9 @@ actor OnDeviceVisionNarrator {
         guard !unavailable else { return nil }
         guard let photo = Self.downscaled(image, longSide: 1024) else { return nil }
         do {
-            let model = try await loaded()
+            // A follow-up stays on the level that just answered, so asking
+            // never waits on a second model load.
+            let model = try await loaded(engine?.level ?? ModelPicker.level(for: .scene))
             let started = Date()
             var said = Self.tidyKeepingShort(try await run(model, system: Self.askInstructions,
                                                            question: question, image: photo))
@@ -153,17 +155,24 @@ actor OnDeviceVisionNarrator {
         #endif
         guard let photo = Self.downscaled(image, longSide: longSide) else { return nil }
         do {
-            let model = try await loaded()
+            let photoKind: PhotoKind = kind == "page" ? .page : .scene
+            let level = ModelPicker.level(for: photoKind)
+            let model = try await loaded(level)
             // A fresh conversation per photo, on purpose: one letter must never
             // colour the next (the engine clears its memory on every call).
             let started = Date()
             let answer = try await run(model, system: Self.instructions, question: question, image: photo)
+            // The engine's own clock: time spent waiting behind another answer
+            // (the one-at-a-time lock) is not this phone being slow.
+            let firstPass = model.lastStats.totalMs / 1000
+            ModelPicker.noteAnswer(level: model.level, kind: photoKind, seconds: firstPass)
             var said = Self.tidy(answer)
             // Wall-clock seconds from photo to sentence, on this phone. The M5
             // numbers never meant anything for the device; this does.
             var extra: [String: Any] = ["gate": gate,
                                         "seconds": (Date().timeIntervalSince(started) * 100).rounded() / 100,
-                                        "model": VisionModelStore.installedURL?.lastPathComponent ?? "?"]
+                                        "model": model.level.rawValue,
+                                        "first_pass": (firstPass * 100).rounded() / 100]
             // Never leave the user with a flat "I can't" — mail or scene. If the
             // model balked, ask once more and require an answer that leads with an
             // honest caveat instead of a refusal.
@@ -281,16 +290,47 @@ actor OnDeviceVisionNarrator {
         }.value
     }
 
-    private func loaded() async throws -> LlamaVisionEngine {
-        if let engine { return engine }
-        guard let url = VisionModelStore.installedURL else {
-            throw VisionNarratorError.noModelInBundle
+    /// The engine for `level`, loading it (and letting go of any other level
+    /// first, so two models never sit in memory together). A level that will
+    /// not load falls back to the bundled Balanced, and says so in the log.
+    private func loaded(_ level: ModelLevel) async throws -> LlamaVisionEngine {
+        if let engine, engine.level == level { return engine }
+        engine = nil
+        do {
+            guard let url = VisionModelStore.folder(level) else { throw VisionNarratorError.noModelInBundle }
+            let made = try await Task.detached(priority: .userInitiated) {
+                try LlamaVisionEngine(folder: url, level: level)
+            }.value
+            engine = made
+            return made
+        } catch {
+            guard level != .balanced else { throw error }
+            OnDeviceNarrator.log(read: "[level fallback]", said: nil,
+                                 extra: ["level": level.rawValue, "error": String(describing: error)])
+            return try await loaded(.balanced)
         }
-        let made = try await Task.detached(priority: .userInitiated) {
-            try LlamaVisionEngine(folder: url)
-        }.value
-        engine = made
-        return made
+    }
+
+    /// The first-launch speed check: one bundled photo on Balanced, timed on
+    /// this phone. Everything the picker estimates for the other levels is
+    /// scaled from this one number. Returns the seconds, or nil if it failed.
+    func speedCheck() async -> Double? {
+        guard let url = Bundle.main.url(forResource: "SpeedCheckPhoto", withExtension: "jpg"),
+              let photo = UIImage(contentsOfFile: url.path),
+              let image = Self.downscaled(photo, longSide: 768) else { return nil }
+        do {
+            let model = try await loaded(.balanced)
+            let ask = "What is in front of me? Describe the scene: the objects, any people, and where they are."
+            _ = try await run(model, system: Self.instructions, question: ask, image: image)
+            let seconds = model.lastStats.totalMs / 1000
+            guard seconds > 0 else { return nil }
+            OnDeviceNarrator.log(read: "[speed check]", said: nil, extra: ["seconds": (seconds * 100).rounded() / 100])
+            return seconds
+        } catch {
+            OnDeviceNarrator.log(read: "[speed check]", said: nil, extra: ["error": String(describing: error)])
+            engine = nil
+            return nil
+        }
     }
 
     /// Redraws the photo so its long side is `longSide` points of pixels (never

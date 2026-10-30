@@ -18,6 +18,14 @@ struct project_601App: App {
         } else {
             ContentView()
         }
+        #elseif DEBUG
+        // Debug builds only: `-rtcamShowModels` opens Settings > Models on its own,
+        // so the card can be screenshotted in a Simulator nobody is driving.
+        if ProcessInfo.processInfo.arguments.contains("-rtcamShowModels") {
+            ScrollView { ModelsCardView().padding() }
+        } else {
+            ContentView()
+        }
         #else
         ContentView()
         #endif
@@ -29,6 +37,8 @@ struct project_601App: App {
                 .preferredColorScheme(.dark)
                 .statusBarHidden(true)
                 .task {
+                    // 1.4.0: speed check once, then fetch this phone's level.
+                    ModelSetup.shared.launch()
                     // On-phone photo test: only with the -rtcamPhotoTest launch argument.
                     if #available(iOS 17.0, *), PhotoSetTest.requested { await PhotoSetTest.run() }
                     if #available(iOS 17.0, *), PhotoSetTest.twoAtOnceRequested { await PhotoSetTest.runTwoAtOnce() }

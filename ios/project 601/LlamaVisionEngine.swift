@@ -17,8 +17,8 @@ import llama
 /// waits for the first and then runs.
 final class LlamaVisionEngine: @unchecked Sendable {
     private static let oneAtATime = NSLock()
-    static let modelFile = "lfm3-omni-2b-IQ2_XS.gguf"
-    static let mmprojFile = "lfm3-omni-2b-mmproj-vision-Q4_K_M.gguf"
+    /// Which of the four levels this engine holds (1.4.0).
+    let level: ModelLevel
 
     struct Stats {
         var ttftMs = 0.0, totalMs = 0.0, encodeMs = 0.0
@@ -34,8 +34,9 @@ final class LlamaVisionEngine: @unchecked Sendable {
     private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
     private(set) var lastStats = Stats()
 
-    /// Loads both files from `folder` (mmap'd). Blocking; call off the main thread.
-    init(folder: URL) throws {
+    /// Loads the level's two files from `folder` (mmap'd). Blocking; call off the main thread.
+    init(folder: URL, level: ModelLevel) throws {
+        self.level = level
         #if targetEnvironment(simulator)
         // The Simulator's Metal shim cannot wrap host memory: CPU only there.
         setenv("GGML_METAL_DEVICES", "0", 1)
@@ -49,8 +50,8 @@ final class LlamaVisionEngine: @unchecked Sendable {
         #else
         mp.n_gpu_layers = 99
         #endif
-        let modelPath = folder.appendingPathComponent(Self.modelFile).path
-        let mmprojPath = folder.appendingPathComponent(Self.mmprojFile).path
+        let modelPath = folder.appendingPathComponent(level.modelFile).path
+        let mmprojPath = folder.appendingPathComponent(level.mmprojFile).path
         guard let m = llama_model_load_from_file(modelPath, mp) else { throw EngineError.modelLoad }
         var cp = llama_context_default_params()
         // A turn is at most ~1,170 tokens (1,045 for a 1024 px page + 120 out).
@@ -80,10 +81,37 @@ final class LlamaVisionEngine: @unchecked Sendable {
     /// LFM3's chat template as llama-server renders it with enable_thinking=false:
     /// BOS, system turn, the image marker directly in front of the question, and
     /// an empty think block so the model answers straight away.
-    private static func prompt(system: String, question: String) -> String {
+    private static func lfm3Prompt(system: String, question: String) -> String {
         let marker = String(cString: mtmd_default_marker())
         return "<|startoftext|><|im_start|>system\n\(system)<|im_end|>\n<|im_start|>user\n"
             + "\(marker)\(question)<|im_end|>\n<|im_start|>assistant\n<think></think>"
+    }
+
+    /// Quick (Vision Narrator 0.8B) through the chat template inside its own
+    /// GGUF, image marker on its own line ahead of the question: exactly how
+    /// the Android app ran it through 1.22 (narrator_jni.cpp apply_template).
+    private func ownTemplatePrompt(system: String, question: String) -> String {
+        let user = String(cString: mtmd_default_marker()) + "\n" + question
+        let tmpl = llama_model_chat_template(model, nil)
+        return system.withCString { sys in
+            user.withCString { usr in
+                var msgs = [llama_chat_message(role: "system", content: sys),
+                            llama_chat_message(role: "user", content: usr)]
+                var buf = [CChar](repeating: 0, count: system.utf8.count + user.utf8.count + 2048)
+                var n = llama_chat_apply_template(tmpl, &msgs, 2, true, &buf, Int32(buf.count))
+                if n > Int32(buf.count) {
+                    buf = [CChar](repeating: 0, count: Int(n) + 1)
+                    n = llama_chat_apply_template(tmpl, &msgs, 2, true, &buf, Int32(buf.count))
+                }
+                guard n >= 0 else { return system + "\n\n" + user }
+                return String(decoding: buf[0 ..< Int(n)].map { UInt8(bitPattern: $0) }, as: UTF8.self)
+            }
+        }
+    }
+
+    private func prompt(system: String, question: String) -> String {
+        level.usesLFM3Prompt ? Self.lfm3Prompt(system: system, question: question)
+            : ownTemplatePrompt(system: system, question: question)
     }
 
     /// One photo, one answer. `temperature` 0 is greedy (LFM3-Omni's own
@@ -106,7 +134,7 @@ final class LlamaVisionEngine: @unchecked Sendable {
         defer { mtmd_bitmap_free(bitmap) }
         let chunks = mtmd_input_chunks_init()
         defer { mtmd_input_chunks_free(chunks) }
-        let text = Self.prompt(system: system, question: question)
+        let text = prompt(system: system, question: question)
         let rc: Int32 = text.withCString { p in
             var input = mtmd_input_text(text: p, text_len: strlen(p), add_special: true, parse_special: true)
             var bitmaps: [OpaquePointer?] = [bitmap]

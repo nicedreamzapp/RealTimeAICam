@@ -256,6 +256,7 @@ struct SettingsOverlayView: View {
                                 .fill(.ultraThinMaterial.opacity(0.3))
                         )
 
+                        ModelsCardView()
                         PrivacyCardView()
                         CreditsCardView()
                     }
@@ -313,7 +314,7 @@ private struct PrivacyCardView: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Label("Works 100% offline — even in Airplane Mode", systemImage: "airplane")
+                Label("Works 100% offline — even in Airplane Mode (the optional bigger models download once, then stay offline)", systemImage: "airplane")
                 Label("No tracking, no analytics, no accounts", systemImage: "eye.slash")
                 Label("Camera frames are processed on-device only", systemImage: "camera.viewfinder")
                 Label("Copy history stays on this device (you can clear it anytime)", systemImage: "doc.on.clipboard")
@@ -357,7 +358,8 @@ private struct CreditsCardView: View {
             }
             VStack(alignment: .leading, spacing: 6) {
                 Text("What's this? runs LFM3-Omni-2B by Liquid AI, on this phone, under the LFM Open License v1.0. "
-                     + "Nice Dreamz converted it to GGUF and shrank it (IQ2_XS text, Q4_K_M vision); the weights are otherwise unchanged.")
+                     + "Nice Dreamz converted it to GGUF in three sizes (Sharp Q8_0, Clear Q3_K_M, Balanced IQ2_XS); the weights are otherwise unchanged.")
+                Text("Quick: Vision Narrator 0.8B by Nice Dreamz, fine-tuned from Qwen3.5-0.8B by Alibaba Cloud (Apache-2.0)")
                 Button(showLicense ? "Hide the LFM Open License" : "Read the LFM Open License v1.0") {
                     showLicense.toggle()
                 }

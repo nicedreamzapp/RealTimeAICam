@@ -2,30 +2,20 @@ import Combine
 import CryptoKit
 import Foundation
 
-/// Where the vision model lives, and how it gets there.
+/// Where each What's this? level lives, and how it gets there (1.4.0).
 ///
-/// Lookup order, first hit wins:
-///   1. a `VisionModel` folder bundled inside the app (the way v4 ships today);
-///   2. `<Application Support>/VisionModel`, but only when every file in its
-///      `manifest.json` is present at the byte size the manifest says.
+/// Balanced is a `VisionModel` folder inside the app. Sharp, Clear and Quick
+/// are downloaded once into `<Application Support>/VisionModels/<level>` and
+/// count as installed only when every file in their `manifest.json` is there
+/// at the byte size the manifest says.
 ///
-/// Nothing here ever reaches the network except ``VisionModelDownloader``, and
-/// that only when the user taps the download button. Once the folder is on the
-/// phone the app is as offline as it has always been.
+/// Nothing here reaches the network except ``VisionModelDownloader``, which
+/// only fetches model files from our own server (ineedhemp.com) and sends
+/// nothing about the person or their photos. Once a level is on the phone it
+/// is as offline as the bundled one.
 enum VisionModelStore {
-    /// Folder that holds the manifest and the weights. Change this one line to
-    /// move the model to a different host or version.
-    static let baseURL = URL(string: "https://ineedhemp.com/models/visionmodel/v4-q4all/")!
-
     static let manifestName = "manifest.json"
-    static let folderName = "VisionModel"
-
-    /// Rough size shown to the user before they commit to the download.
-    /// 1.2 GB was the 2B model. The bundle now carries the 0.8B at 4-bit,
-    /// which is 622 MB on disk (596 MB of weights). Telling a blind user on
-    /// cellular that a download is twice its real size is its own bug.
-    /// 735 MB since 1.3.6: LFM3-Omni-2B (IQ2_XS) plus its vision projector.
-    static let approximateSizeDescription = "735 MB"
+    static let bundledFolderName = "VisionModel"
 
     struct Manifest: Codable, Equatable {
         struct File: Codable, Equatable {
@@ -40,27 +30,50 @@ enum VisionModelStore {
 
     // MARK: - Lookup
 
-    /// The folder to load weights from, or `nil` when the model is nowhere.
-    static var installedURL: URL? {
-        if let bundled = Bundle.main.url(forResource: folderName, withExtension: nil) {
-            return bundled
+    /// The folder to load `level` from, or nil when it is not on the phone.
+    static func folder(_ level: ModelLevel) -> URL? {
+        if level.isBundled {
+            return Bundle.main.url(forResource: bundledFolderName, withExtension: nil)
         }
-        let downloaded = downloadedURL
-        if isComplete(at: downloaded) { return downloaded }
-        return nil
+        let url = downloadedURL(level)
+        return isComplete(at: url) ? url : nil
     }
 
-    static var isInstalled: Bool { installedURL != nil }
+    static func isInstalled(_ level: ModelLevel) -> Bool { folder(level) != nil }
 
-    /// `<Application Support>/VisionModel`
-    static var downloadedURL: URL {
-        applicationSupport.appendingPathComponent(folderName, isDirectory: true)
+    /// True when any level can answer. Balanced is bundled, so this is the
+    /// old feature flag: false only in a build that ships without weights.
+    static var isInstalled: Bool { ModelLevel.allCases.contains { isInstalled($0) } }
+
+    /// The bundled folder (license text, credits).
+    static var installedURL: URL? { folder(.balanced) }
+
+    static func downloadedURL(_ level: ModelLevel) -> URL {
+        applicationSupport.appendingPathComponent("VisionModels", isDirectory: true)
+            .appendingPathComponent(level.rawValue, isDirectory: true)
     }
 
     /// Where files land while they are being fetched; renamed to
-    /// ``downloadedURL`` in one move once everything checks out.
-    static var stagingURL: URL {
-        applicationSupport.appendingPathComponent(folderName + ".partial", isDirectory: true)
+    /// ``downloadedURL(_:)`` in one move once everything checks out.
+    static func stagingURL(_ level: ModelLevel) -> URL {
+        applicationSupport.appendingPathComponent("VisionModels", isDirectory: true)
+            .appendingPathComponent(level.rawValue + ".partial", isDirectory: true)
+    }
+
+    /// Frees the space a downloaded level takes. The bundled one stays.
+    static func delete(_ level: ModelLevel) {
+        guard !level.isBundled else { return }
+        try? FileManager.default.removeItem(at: downloadedURL(level))
+        try? FileManager.default.removeItem(at: stagingURL(level))
+    }
+
+    /// Before 1.3.6 the one model could be downloaded to
+    /// `<Application Support>/VisionModel` (the old MLX 0.8B). Nothing reads it
+    /// any more, so it is 600+ MB of nothing.
+    static func removeLegacyDownload() {
+        let old = applicationSupport.appendingPathComponent("VisionModel", isDirectory: true)
+        try? FileManager.default.removeItem(at: old)
+        try? FileManager.default.removeItem(at: applicationSupport.appendingPathComponent("VisionModel.partial"))
     }
 
     private static var applicationSupport: URL {
@@ -111,28 +124,33 @@ enum VisionModelStore {
 
 // MARK: - Downloader
 
-/// Fetches the model folder once, file by file, on a background `URLSession`
-/// so the transfer keeps going when the app is put away. Files that are
-/// already complete in the staging folder are skipped, so a second tap after
-/// an interruption picks up where it left off.
+/// Fetches downloadable levels, one at a time, file by file, on a background
+/// `URLSession` so a transfer keeps going when the app is put away. Files
+/// already complete in a level's staging folder are skipped, so an
+/// interrupted download picks up where it left off.
 @MainActor
 final class VisionModelDownloader: NSObject, ObservableObject {
     static let shared = VisionModelDownloader()
 
     enum State: Equatable {
         case idle
+        case queued
         case downloading
         case verifying
         case ready
         case failed(String)
     }
 
-    /// 0…1 across every byte in the manifest.
+    /// Per level. A level missing from the dictionary is ready if it is on the
+    /// phone and idle otherwise (see ``state(_:)``).
+    @Published private(set) var states: [ModelLevel: State] = [:]
+    /// 0…1 across every byte of the level now downloading.
     @Published private(set) var progress: Double = 0
-    @Published private(set) var state: State = VisionModelStore.isInstalled ? .ready : .idle
+    @Published private(set) var current: ModelLevel?
 
-    static let sessionIdentifier = "com.nicedreamz.visionmodel"
+    static let sessionIdentifier = "com.nicedreamz.visionmodels"
 
+    private var queue: [ModelLevel] = []
     private var manifest: VisionModelStore.Manifest?
     /// Bytes known to be on disk (or received so far) per file name.
     private var received: [String: Int64] = [:]
@@ -149,23 +167,64 @@ final class VisionModelDownloader: NSObject, ObservableObject {
 
     private override init() { super.init() }
 
-    /// Kicks off (or resumes) the download. Safe to call again after a failure.
-    func start() {
-        guard state == .idle || { if case .failed = state { return true } else { return false } }() else { return }
-        if VisionModelStore.isInstalled {
-            state = .ready
-            progress = 1
-            return
+    func state(_ level: ModelLevel) -> State {
+        if let s = states[level] { return s }
+        return VisionModelStore.isInstalled(level) ? .ready : .idle
+    }
+
+    /// Adds a level to the queue (or retries a failed one). Safe to call twice.
+    func start(_ level: ModelLevel) {
+        guard !level.isBundled else { return }
+        switch state(level) {
+        case .ready, .queued, .downloading, .verifying: return
+        case .idle, .failed: break
         }
-        state = .downloading
+        if VisionModelStore.isInstalled(level) { states[level] = .ready; return }
+        states[level] = .queued
+        queue.append(level)
+        next()
+    }
+
+    /// Stops a queued or running level and throws its partial files away.
+    func cancel(_ level: ModelLevel) {
+        queue.removeAll { $0 == level }
+        if current == level {
+            session.getAllTasks { tasks in tasks.forEach { $0.cancel() } }
+            current = nil
+            manifest = nil
+            pending = []
+        }
+        try? FileManager.default.removeItem(at: VisionModelStore.stagingURL(level))
+        states[level] = .idle
+        next()
+    }
+
+    /// Picks up any level whose download was cut off by the app being closed.
+    func resumeInterrupted() {
+        for level in ModelLevel.allCases where !level.isBundled && !VisionModelStore.isInstalled(level) {
+            if FileManager.default.fileExists(atPath: VisionModelStore.stagingURL(level).path) { start(level) }
+        }
+    }
+
+    func delete(_ level: ModelLevel) {
+        cancel(level)
+        VisionModelStore.delete(level)
+        states[level] = .idle
+    }
+
+    private func next() {
+        guard current == nil, !queue.isEmpty else { return }
+        let level = queue.removeFirst()
+        current = level
+        states[level] = .downloading
         progress = 0
-        Task { await fetchManifestAndQueue() }
+        Task { await fetchManifestAndQueue(level) }
     }
 
     // MARK: Manifest
 
-    private func fetchManifestAndQueue() async {
-        let manifestURL = VisionModelStore.baseURL.appendingPathComponent(VisionModelStore.manifestName)
+    private func fetchManifestAndQueue(_ level: ModelLevel) async {
+        let manifestURL = level.remoteURL.appendingPathComponent(VisionModelStore.manifestName)
         do {
             let (data, response) = try await URLSession.shared.data(from: manifestURL)
             if let http = response as? HTTPURLResponse, !(200 ..< 300).contains(http.statusCode) {
@@ -173,17 +232,18 @@ final class VisionModelDownloader: NSObject, ObservableObject {
             }
             let manifest = try JSONDecoder().decode(VisionModelStore.Manifest.self, from: data)
             guard !manifest.files.isEmpty else { throw DownloadError.emptyManifest }
-            let staging = VisionModelStore.stagingURL
+            guard current == level else { return }
+            let staging = VisionModelStore.stagingURL(level)
             try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
             try data.write(to: staging.appendingPathComponent(VisionModelStore.manifestName), options: .atomic)
             self.manifest = manifest
-            queueMissingFiles(manifest, in: staging)
+            queueMissingFiles(manifest, level: level, in: staging)
         } catch {
-            fail(Self.describe(error))
+            fail(level, Self.describe(error))
         }
     }
 
-    private func queueMissingFiles(_ manifest: VisionModelStore.Manifest, in staging: URL) {
+    private func queueMissingFiles(_ manifest: VisionModelStore.Manifest, level: ModelLevel, in staging: URL) {
         received = [:]
         pending = []
         for file in manifest.files {
@@ -199,7 +259,7 @@ final class VisionModelDownloader: NSObject, ObservableObject {
         }
         publishProgress()
         if pending.isEmpty {
-            Task { await verifyAndInstall() }
+            Task { await verifyAndInstall(level) }
             return
         }
         // Don't double-queue anything the session is already carrying from a
@@ -207,14 +267,23 @@ final class VisionModelDownloader: NSObject, ObservableObject {
         session.getAllTasks { [weak self] tasks in
             let inFlight = Set(tasks.compactMap { $0.taskDescription })
             Task { @MainActor [weak self] in
-                guard let self else { return }
-                for name in self.pending where !inFlight.contains(name) {
-                    let task = self.session.downloadTask(with: VisionModelStore.baseURL.appendingPathComponent(name))
-                    task.taskDescription = name
+                guard let self, self.current == level else { return }
+                for name in self.pending where !inFlight.contains(Self.tag(level, name)) {
+                    let task = self.session.downloadTask(with: level.remoteURL.appendingPathComponent(name))
+                    task.taskDescription = Self.tag(level, name)
                     task.resume()
                 }
             }
         }
+    }
+
+    /// "clear/lfm3-omni-2b-Q3_K_M.gguf": which level a session task belongs to.
+    nonisolated static func tag(_ level: ModelLevel, _ name: String) -> String { "\(level.rawValue)/\(name)" }
+
+    nonisolated static func untag(_ tag: String) -> (ModelLevel, String)? {
+        guard let slash = tag.firstIndex(of: "/"),
+              let level = ModelLevel(rawValue: String(tag[..<slash])) else { return nil }
+        return (level, String(tag[tag.index(after: slash)...]))
     }
 
     // MARK: Progress
@@ -225,17 +294,17 @@ final class VisionModelDownloader: NSObject, ObservableObject {
         progress = min(1, Double(done) / Double(manifest.totalBytes))
     }
 
-    fileprivate func fileProgressed(name: String, bytes: Int64) {
-        guard state == .downloading else { return }
+    fileprivate func fileProgressed(level: ModelLevel, name: String, bytes: Int64) {
+        guard current == level, states[level] == .downloading else { return }
         received[name] = bytes
         publishProgress()
     }
 
     /// Called once the relay has moved the finished file into staging.
-    fileprivate func fileFinished(name: String, error: Error?) {
-        guard state == .downloading else { return }
+    fileprivate func fileFinished(level: ModelLevel, name: String, error: Error?) {
+        guard current == level, states[level] == .downloading else { return }
         if let error {
-            fail(Self.describe(error, file: name))
+            fail(level, Self.describe(error, file: name))
             return
         }
         guard let file = manifest?.files.first(where: { $0.name == name }) else { return }
@@ -243,17 +312,17 @@ final class VisionModelDownloader: NSObject, ObservableObject {
         pending.remove(name)
         publishProgress()
         if pending.isEmpty {
-            Task { await verifyAndInstall() }
+            Task { await verifyAndInstall(level) }
         }
     }
 
     // MARK: Verify + install
 
-    private func verifyAndInstall() async {
+    private func verifyAndInstall(_ level: ModelLevel) async {
         guard let manifest else { return }
-        state = .verifying
-        let staging = VisionModelStore.stagingURL
-        let final = VisionModelStore.downloadedURL
+        states[level] = .verifying
+        let staging = VisionModelStore.stagingURL(level)
+        let final = VisionModelStore.downloadedURL(level)
         let outcome: Result<Void, Error> = await Task.detached(priority: .userInitiated) {
             do {
                 for file in manifest.files {
@@ -283,18 +352,27 @@ final class VisionModelDownloader: NSObject, ObservableObject {
         switch outcome {
         case .success:
             progress = 1
-            state = .ready
+            states[level] = .ready
+            finishCurrent()
         case .failure(let error):
             // A bad file must not be trusted next time round.
             if case DownloadError.hashMismatch(let name) = error {
                 try? FileManager.default.removeItem(at: staging.appendingPathComponent(name))
             }
-            fail(Self.describe(error))
+            fail(level, Self.describe(error))
         }
     }
 
-    private func fail(_ message: String) {
-        state = .failed(message)
+    private func fail(_ level: ModelLevel, _ message: String) {
+        states[level] = .failed(message)
+        if current == level { finishCurrent() }
+    }
+
+    private func finishCurrent() {
+        current = nil
+        manifest = nil
+        pending = []
+        next()
     }
 
     enum DownloadError: LocalizedError {
@@ -333,23 +411,24 @@ final class VisionModelDownloader: NSObject, ObservableObject {
                         didWriteData bytesWritten: Int64, totalBytesWritten: Int64,
                         totalBytesExpectedToWrite: Int64)
         {
-            guard let name = downloadTask.taskDescription else { return }
-            Task { @MainActor in self.owner.fileProgressed(name: name, bytes: totalBytesWritten) }
+            guard let tag = downloadTask.taskDescription, let (level, name) = VisionModelDownloader.untag(tag) else { return }
+            Task { @MainActor in self.owner.fileProgressed(level: level, name: name, bytes: totalBytesWritten) }
         }
 
         func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
                         didFinishDownloadingTo location: URL)
         {
             // `location` is gone the moment this returns: move it now, on this thread.
-            guard let name = downloadTask.taskDescription else { return }
+            guard let tag = downloadTask.taskDescription, let (level, name) = VisionModelDownloader.untag(tag) else { return }
             var moveError: Error?
             if let http = downloadTask.response as? HTTPURLResponse, !(200 ..< 300).contains(http.statusCode) {
                 moveError = DownloadError.http(http.statusCode, name)
             } else {
-                let dest = VisionModelStore.stagingURL.appendingPathComponent(name)
+                let staging = VisionModelStore.stagingURL(level)
+                let dest = staging.appendingPathComponent(name)
                 do {
                     let fm = FileManager.default
-                    try fm.createDirectory(at: VisionModelStore.stagingURL, withIntermediateDirectories: true)
+                    try fm.createDirectory(at: staging, withIntermediateDirectories: true)
                     if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
                     try fm.moveItem(at: location, to: dest)
                 } catch {
@@ -357,12 +436,14 @@ final class VisionModelDownloader: NSObject, ObservableObject {
                 }
             }
             let failure = moveError
-            Task { @MainActor in self.owner.fileFinished(name: name, error: failure) }
+            Task { @MainActor in self.owner.fileFinished(level: level, name: name, error: failure) }
         }
 
         func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-            guard let error, let name = task.taskDescription else { return }
-            Task { @MainActor in self.owner.fileFinished(name: name, error: error) }
+            guard let error, let tag = task.taskDescription, let (level, name) = VisionModelDownloader.untag(tag) else { return }
+            // A cancel from ``cancel(_:)`` is not a failure worth showing.
+            if (error as NSError).code == NSURLErrorCancelled { return }
+            Task { @MainActor in self.owner.fileFinished(level: level, name: name, error: error) }
         }
     }
 }

@@ -22,25 +22,39 @@ struct HomeView: View {
 
     // MARK: - Vision model download
 
-    /// One small row under the buttons. Hidden once the model is on the phone
-    /// (bundled or downloaded); until then every scan takes the OCR path as before.
+    @ObservedObject private var modelSetup = ModelSetup.shared
+
+    /// One small row under the buttons, shown only while a smarter level for
+    /// this phone is downloading, or waiting for a tap because the phone is off
+    /// Wi-Fi. Balanced ships inside the app, so What's this? always works.
     @ViewBuilder
     private var visionModelBanner: some View {
-        switch modelDownloader.state {
-        case .ready:
-            EmptyView()
-        case .idle, .failed:
+        if let level = modelDownloader.current {
+            let verifying = modelDownloader.state(level) == .verifying
+            let percent = Int((modelDownloader.progress * 100).rounded(.down))
             VStack(spacing: 4) {
-                if case .failed(let why) = modelDownloader.state {
+                Text(verifying ? "Checking the \(level.name) model…"
+                     : "Downloading the \(level.name) model… \(percent)%")
+                    .font(.footnote.weight(.semibold))
+                ProgressView(value: modelDownloader.progress)
+                    .tint(.white)
+            }
+            .padding(.bottom, 6)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(verifying ? "Checking the \(level.name) model"
+                                : "Downloading the \(level.name) model, \(percent) percent")
+        } else if let level = modelSetup.missingWanted.first {
+            VStack(spacing: 4) {
+                if case .failed(let why) = modelDownloader.state(level) {
                     Text("Download failed: \(why)")
                         .font(.footnote)
                         .foregroundColor(.white)
                         .multilineTextAlignment(.center)
                 }
                 Button {
-                    modelDownloader.start()
+                    modelSetup.fetchWanted(automatic: false)
                 } label: {
-                    Text("Download the vision model (\(VisionModelStore.approximateSizeDescription), one time, Wi-Fi recommended)")
+                    Text("Get the \(level.name) model for this phone (\(level.sizeDescription), one time, Wi-Fi recommended)")
                         .font(.footnote.weight(.semibold))
                         .multilineTextAlignment(.center)
                         .padding(.vertical, 8)
@@ -49,38 +63,23 @@ struct HomeView: View {
                         .background(Color.white.opacity(0.15))
                         .cornerRadius(10)
                 }
-                .accessibilityLabel("Download the vision model")
-                .accessibilityHint("One point two gigabytes, one time. Wi-Fi recommended. Lets the app describe photos without reading text first.")
+                .accessibilityLabel("Get the \(level.name) model for this phone")
+                .accessibilityHint("\(level.sizeDescription), one time, Wi-Fi recommended. What's this? gets more accurate. It already works without it.")
             }
             .padding(.bottom, 6)
-        case .downloading, .verifying:
-            let percent = Int((modelDownloader.progress * 100).rounded(.down))
-            VStack(spacing: 4) {
-                Text(modelDownloader.state == .verifying
-                     ? "Checking the vision model…"
-                     : "Downloading the vision model… \(percent)%")
-                    .font(.footnote.weight(.semibold))
-                ProgressView(value: modelDownloader.progress)
-                    .tint(.white)
-            }
-            .padding(.bottom, 6)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(modelDownloader.state == .verifying
-                                ? "Checking the vision model"
-                                : "Downloading the vision model, \(percent) percent")
         }
     }
 
     /// Speaks 25, 50, 75 and 100 percent, each once, through the app's voice.
     private func announceDownloadProgress(_ value: Double) {
-        guard modelDownloader.state == .downloading || modelDownloader.state == .verifying else { return }
+        guard let level = modelDownloader.current else { return }
         let quarter = Int((value * 4).rounded(.down))
         guard quarter > spokenDownloadQuarter, quarter >= 1 else { return }
         spokenDownloadQuarter = quarter
         if quarter >= 4 {
-            SpeechManager.shared.speak("Download complete. Checking the vision model.")
+            SpeechManager.shared.speak("Download complete. Checking the \(level.name) model.")
         } else {
-            SpeechManager.shared.speak("Vision model download \(quarter * 25) percent.")
+            SpeechManager.shared.speak("\(level.name) model download \(quarter * 25) percent.")
         }
     }
 
@@ -141,11 +140,11 @@ struct HomeView: View {
         .onChange(of: modelDownloader.progress) { _, value in
             announceDownloadProgress(value)
         }
-        .onChange(of: modelDownloader.state) { _, value in
-            if value == .ready, spokenDownloadQuarter < 4 {
-                spokenDownloadQuarter = 4
-                SpeechManager.shared.speak("Vision model ready.")
+        .onChange(of: modelDownloader.current) { old, new in
+            if let old, modelDownloader.state(old) == .ready {
+                SpeechManager.shared.speak("The \(old.name) model is ready.")
             }
+            if new != nil { spokenDownloadQuarter = 0 }
         }
         .onAppear {
             if !animationState.hasAnimatedOnce {
