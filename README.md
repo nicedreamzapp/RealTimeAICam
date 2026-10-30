@@ -9,7 +9,7 @@ Press one button and it describes the whole room in a sentence you can act on.
 **No account. No signal. No server. Nothing ever leaves the phone.**
 
 It is a native iPhone and Android app that runs object detection, text recognition and a
-fine-tuned vision-language model on the phone itself, and speaks what they find out loud.
+a vision-language model on the phone itself, and speaks what they find out loud.
 
 ### [![Download on the App Store](https://img.shields.io/badge/Download_on_the-App_Store-0D96F6?style=for-the-badge&logo=apple&logoColor=white)](https://apps.apple.com/us/app/id6751230739) [![Get it on Google Play](https://img.shields.io/badge/Get_it_on-Google_Play-01875f?style=for-the-badge&logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.mattmacosko.realtimeaicam) [![Downloads, both stores](https://img.shields.io/endpoint?url=https%3A%2F%2Fnicedreamzwholesale.com%2Fsoftware%2Fbadge-realtime-ai-cam.json&style=for-the-badge&logo=appstore&logoColor=white&labelColor=1a7f37)](https://nicedreamzwholesale.com/software/#apps)
 
@@ -67,7 +67,7 @@ them is this repo.
 
 - 📱 **The iOS app**: SwiftUI screens ([`ContentView.swift`](ios/project%20601/ContentView.swift), [`HomeView.swift`](ios/HomeView.swift)) and the camera pipeline with thermal throttling ([`CameraViewModel.swift`](ios/CameraViewModel.swift))
 - 🎯 **Detection around upstream YOLOv8**: 601-class decoding and the indoor/outdoor filters ([`YOLOv8Processor.swift`](ios/YOLOv8Processor.swift)), tracking ([`ObjectTracker.swift`](ios/ObjectTracker.swift)), LiDAR distance ([`LiDARManager.swift`](ios/LiDARManager.swift))
-- 🗣️ **The on-device narrator**: running the fine-tuned model through upstream MLX Swift ([`OnDeviceVisionNarrator.swift`](ios/project%20601/OnDeviceVisionNarrator.swift)), a check that says what is wrong with a bad shot before the model runs ([`FrameQualityGate.swift`](ios/project%20601/FrameQualityGate.swift)), and model lookup with a size- and hash-checked install ([`VisionModelStore.swift`](ios/project%20601/VisionModelStore.swift), [`make_manifest.py`](tools/make_manifest.py)). The model itself is a LoRA fine-tune of upstream Qwen3.5-0.8B; its weights and training code are not in this repo
+- 🗣️ **The on-device narrator**: LFM3-Omni-2B by Liquid AI through upstream llama.cpp ([`LlamaVisionEngine.swift`](ios/project%20601/LlamaVisionEngine.swift), [`OnDeviceVisionNarrator.swift`](ios/project%20601/OnDeviceVisionNarrator.swift)), a check that says what is wrong with a bad shot before the model runs ([`FrameQualityGate.swift`](ios/project%20601/FrameQualityGate.swift)), and model lookup with a size- and hash-checked install ([`VisionModelStore.swift`](ios/project%20601/VisionModelStore.swift), [`make_manifest.py`](tools/make_manifest.py)). The model is used untrained under the LFM Open License v1.0, converted and quantized by Nice Dreamz; see [CREDITS.md](CREDITS.md) and [NOTICE.md](NOTICE.md)
 - 📖 **Reading**: live OCR on Apple Vision ([`LiveOCRViewModel.swift`](ios/LiveOCRViewModel.swift)), careful single-page reads ([`PageScanner.swift`](ios/project%20601/PageScanner.swift)), mail and bill summaries in plain code with no model ([`MailSummarizer.swift`](ios/project%20601/MailSummarizer.swift)), a second check on dollar amounts ([`MoneyCrossCheck.swift`](ios/project%20601/MoneyCrossCheck.swift)), offline Spanish to English ([`SpanishTranslationEngine.swift`](ios/SpanishTranslationEngine.swift))
 - 📸 **Help Me Aim**: talks a blind photographer into the shot, then takes it ([`HelpMeAim.swift`](ios/project%20601/HelpMeAim.swift)), with unit tests in [`project 601Tests/`](ios/project%20601Tests/)
 - 🤖 **The Android port**: Jetpack Compose UI ([`ui/`](android/app/src/main/java/com/mattmacosko/realtimeaicam/ui/)), the TensorFlow Lite detector ([`YoloDetector.kt`](android/app/src/main/java/com/mattmacosko/realtimeaicam/detection/YoloDetector.kt)), a JNI bridge to upstream llama.cpp that probes the GPU before trusting it ([`narrator_jni.cpp`](android/app/src/main/cpp/narrator_jni.cpp), [`NarratorEngine.kt`](android/app/src/main/java/com/mattmacosko/realtimeaicam/narrator/NarratorEngine.kt)), and the model conversion tooling ([`android/tools/`](android/tools/))
@@ -86,7 +86,7 @@ low-vision users found it, and told us what it was really for.
 
 > **Chicken is still class 109 of the 601.** So are Fox, Raccoon, Owl and Eagle.
 
-**Vision Narrator 0.8B** on Hugging Face: [divinetribe/Vision-Narrator-0.8B-4bit-mlx](https://huggingface.co/divinetribe/Vision-Narrator-0.8B-4bit-mlx)
+**The model:** [LiquidAI/LFM3-Omni-2B](https://huggingface.co/LiquidAI/LFM3-Omni-2B) (Liquid AI, LFM Open License v1.0). Up to iOS 1.3.5 and Android 1.22 the app ran **Vision Narrator 0.8B** ([divinetribe/Vision-Narrator-0.8B-4bit-mlx](https://huggingface.co/divinetribe/Vision-Narrator-0.8B-4bit-mlx))
 
 <img src="https://raw.githubusercontent.com/nicedreamzapp/RealTimeAICam/b15505da3532f26d1b783de23d4d2ab89580c94c/assets/readme/s02-rule.svg" width="100%" alt="">
 
@@ -106,8 +106,8 @@ where you are, what's near you and on which side, people, anything moving, hazar
 Point it at mail and it leads with **what the page is and who sent it**, then the number
 that matters, then the deadline, then what happens if it's ignored.
 
-This runs on a **small vision-language model that was fine-tuned for this one job and ships
-inside the app** instead of calling somebody's server. That's most of why the download is
+This runs on a **small vision-language model that ships inside the app**: since iOS 1.3.6 and
+Android 1.23 that is [LFM3-Omni-2B](https://huggingface.co/LiquidAI/LFM3-Omni-2B) from Liquid AI, run by llama.cpp, instead of calling somebody's server. That's most of why the download is
 large, and it's the whole point. It works in airplane mode, on a plane, in a basement, in a
 country where your data plan doesn't.
 
@@ -163,7 +163,7 @@ order, or just not useful — say so, and it gets fixed.
 <td width="50%">
 
 ### 🎯 **Sees**
-- 🗣️ **Scene & page description** — the fine-tuned on-device narrator
+- 🗣️ **Scene & page description** — LFM3-Omni-2B by Liquid AI, on the phone
 - 🐶 **Object detection** — YOLOv8, **601 classes** from Open Images V7
 - 🏠 **Indoor / outdoor modes** — swaps the whole list of things the detector may name, so your bathroom stops containing a skyscraper
 - 📏 **LiDAR distance** — per-object depth on Pro models
@@ -193,7 +193,7 @@ order, or just not useful — say so, and it gets fixed.
 graph TB
     A[📱 Camera Frame] --> B[🎯 YOLOv8 · 601 classes]
     A --> C[📝 Vision OCR]
-    A --> D[🗣️ Fine-tuned Vision-Language Narrator]
+    A --> D[🗣️ On-device Vision-Language Model]
     A --> H[📏 ARKit LiDAR Depth]
 
     B --> E[⚡ Metal]
@@ -209,7 +209,7 @@ graph TB
 
 | Component | Technology | Purpose |
 |---|---|---|
-| 🗣️ **Narrator** | Fine-tuned vision-language model, 4-bit, bundled · MLX Swift (iOS) · llama.cpp (Android) | Scene and page description |
+| 🗣️ **Narrator** | LFM3-Omni-2B by Liquid AI (GGUF IQ2_XS + Q4_K_M vision projector, 735 MB, bundled) · llama.cpp on both phones | Scene and page description |
 | 🤖 **Detector** | YOLOv8 (Ultralytics) | 601-class object detection |
 | 🏗️ **UI** | SwiftUI (iOS) · Jetpack Compose (Android) | Native interface on both |
 | ⚡ **Acceleration** | CoreML + Metal + Neural Engine · TensorFlow Lite | Hardware-optimized inference |
@@ -372,7 +372,7 @@ then open `android/` in Android Studio.
 - Product page: https://nicedreamzwholesale.com/github-realtime-ai-camera/
 - Questions or bugs: **info@nicedreamzwholesale.com**
 
-The narrator here runs on MLX Swift on the phone. On the Mac I use MLX for [claude-code-local](https://github.com/nicedreamzapp/claude-code-local), which runs Claude Code with local models and no API key.
+The narrator here runs on llama.cpp on the phone. On the Mac I use MLX for [claude-code-local](https://github.com/nicedreamzapp/claude-code-local), which runs Claude Code with local models and no API key.
 
 ### 📄 License & credits
 
