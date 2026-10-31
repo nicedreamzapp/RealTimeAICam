@@ -37,11 +37,17 @@ struct project_601App: App {
                 .preferredColorScheme(.dark)
                 .statusBarHidden(true)
                 .task {
+                    #if DEBUG
+                    // Debug builds only: `-rtcamOpenTalk` opens Talk, for simulator screenshots.
+                    if ProcessInfo.processInfo.arguments.contains("-rtcamOpenTalk") { ShortcutRouter.shared.open(.talk) }
+                    #endif
                     // 1.4.0: speed check once, then fetch this phone's level.
                     ModelSetup.shared.launch()
                     // On-phone photo test: only with the -rtcamPhotoTest launch argument.
                     if #available(iOS 17.0, *), PhotoSetTest.requested { await PhotoSetTest.run() }
                     if #available(iOS 17.0, *), PhotoSetTest.twoAtOnceRequested { await PhotoSetTest.runTwoAtOnce() }
+                    // Talk timing test: only with the -rtcamTalkTest launch argument.
+                    if #available(iOS 17.0, *), TalkSelfTest.requested { await TalkSelfTest.run() }
                 }
         }
     }

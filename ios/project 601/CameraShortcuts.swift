@@ -67,6 +67,18 @@ struct TranslateIntent: AppIntent {
     }
 }
 
+struct TalkIntent: AppIntent {
+    static let title: LocalizedStringResource = "Talk to the camera"
+    static let description = IntentDescription("Opens Talk: point the camera and ask out loud what you want to know. It answers on the phone, no internet.")
+    static let openAppWhenRun = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        ShortcutRouter.shared.open(.talk)
+        return .result()
+    }
+}
+
 struct ObjectDetectionIntent: AppIntent {
     static let title: LocalizedStringResource = "Object Detection"
     static let description = IntentDescription("Opens Object Detection, which names the things around you out loud.")
@@ -84,6 +96,16 @@ struct ObjectDetectionIntent: AppIntent {
 /// Every phrase has to carry the app's name, Apple's rule.
 struct CameraShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
+        AppShortcut(
+            intent: TalkIntent(),
+            phrases: [
+                "Talk to \(.applicationName)",
+                "Talk to the camera in \(.applicationName)",
+                "Start talking with \(.applicationName)",
+            ],
+            shortTitle: "Talk",
+            systemImageName: "waveform"
+        )
         AppShortcut(
             intent: WhatsThisIntent(),
             phrases: [

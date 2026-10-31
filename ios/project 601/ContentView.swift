@@ -149,6 +149,10 @@ struct ContentView: View {
                 onBack: switchToHome
             )
 
+        case .talk:
+            TalkView(viewModel: viewModel, onBack: switchToHome)
+                .onDisappear { cleanupCurrentMode() }
+
         case .objectDetection:
             ObjectDetectionView(
                 viewModel: viewModel,
@@ -191,6 +195,9 @@ struct ContentView: View {
             onHelpMeAim: {
                 switchToMode(.helpMeAim)
             },
+            onTalk: {
+                switchToMode(.talk)
+            },
             onVoiceChange: playWelcomeMessage,
             speechSynthesizer: speechSynthesizer
         )
@@ -223,7 +230,7 @@ struct ContentView: View {
         SpeechManager.shared.resetSpeechState()
         viewModel.turnOffTorch()
 
-        if mode == .objectDetection {
+        if mode == .objectDetection || mode == .talk {
             viewModel.stopSession()
             viewModel.clearDetections()
         }
@@ -290,7 +297,7 @@ struct ContentView: View {
         } else if newPhase == .active {
             // Coming back from Control Center / notification shade is not a fresh
             // launch — just restart the paused session; don't wipe the user's state.
-            if mode == .objectDetection {
+            if mode == .objectDetection || mode == .talk {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                     viewModel.startSession()
                 }
@@ -308,6 +315,7 @@ struct ContentView: View {
         case .ocrSpanish: "Translator"
         case .mail: "Mail reader"
         case .helpMeAim: "Help me aim"
+        case .talk: "Talk to the camera"
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {

@@ -117,8 +117,14 @@ final class LlamaVisionEngine: @unchecked Sendable {
     /// One photo, one answer. `temperature` 0 is greedy (LFM3-Omni's own
     /// generation_config, and what was benchmarked); the retry passes ask for a
     /// little temperature, as they always have. Blocking.
+    ///
+    /// `onText` (Talk mode) is handed everything written so far after each
+    /// token, so the first sentence can be spoken while the rest is still
+    /// being written; returning false stops the answer there (the person
+    /// started talking over it).
     func respond(system: String, question: String, image: CIImage,
-                 maxTokens: Int = 120, temperature: Float = 0) throws -> String {
+                 maxTokens: Int = 120, temperature: Float = 0,
+                 onText: ((String) -> Bool)? = nil) throws -> String {
         Self.oneAtATime.lock()
         defer { Self.oneAtATime.unlock() }
         let t0 = DispatchTime.now().uptimeNanoseconds
@@ -164,6 +170,7 @@ final class LlamaVisionEngine: @unchecked Sendable {
             stats.genTokens += 1
             let len = llama_token_to_piece(vocab, tok, &piece, Int32(piece.count), 0, true)
             if len > 0 { bytes += piece[0 ..< Int(len)].map { UInt8(bitPattern: $0) } }
+            if let onText, !onText(String(decoding: bytes, as: UTF8.self)) { break }
             guard llama_decode(ctx, llama_batch_get_one(&tok, 1)) == 0 else { break }
         }
         stats.totalMs = ms()

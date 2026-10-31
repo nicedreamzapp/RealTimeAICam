@@ -137,6 +137,15 @@ struct AppInstructionsView: View {
                             .voiceOverWords("✨ **Modes**")
                             .font(.headline)
 
+                        // 🎙️ Talk to the Camera (2026-10-31)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("🎙️ **Talk to the Camera**")
+                                .voiceOverWords("🎙️ **Talk to the Camera**")
+                                .font(.title2).fontWeight(.semibold)
+                            Text("Point the camera and ask out loud: what's this, what colour is it, how do I fix it. It listens by itself, answers in a sentence or two, and remembers what you just talked about, so you can follow up. Talk over it to interrupt. It tells you when to move the phone for a better look. Say goodbye, or press End Talk, to stop. Everything runs on your phone, with no internet.")
+                        }
+                        .padding(.top, 4)
+
                         // 🐕 Object Detection + 📏 LiDAR sub-feature
                         VStack(alignment: .leading, spacing: 6) {
                             Text("🐕 **Object Detection**")
@@ -243,6 +252,7 @@ struct AppInstructionsView: View {
     private func audioScript(liDARAvailable: Bool) -> String {
         var lines: [String] = []
         lines.append("Welcome to the RealTime A I Camera.")
+        lines.append("The first button is Talk to the Camera. Point the camera and ask out loud what you want to know. It listens by itself, answers in a sentence or two, and remembers what you just talked about, so you can ask a follow up. Talk over it to interrupt. It tells you when to move the phone for a better look. Say goodbye, or press End Talk, to stop. Everything runs on your phone, with no internet.")
         lines.append("There are three main modes. Object Detection. English O C R. And Spanish to English Translate.")
         if liDARAvailable {
             lines.append("In Object Detection, you can turn on LiDAR Distance Assist by tapping the white ruler. It turns green when active and adds an approximate distance after the item, for example, Dog, three feet.")

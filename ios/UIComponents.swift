@@ -359,39 +359,45 @@ struct AnimatedVoicePicker: View {
         return tag.isEmpty ? name : "\(name), \(tag) quality"
     }
 
+    /// The pill's contents, on its own so the type checker gets it in one go.
+    @ViewBuilder
+    private var pillLabel: some View {
+        let voice = selectedVoice
+        let defaultVoice = premiumEnglishVoices.first ?? AVSpeechSynthesisVoice(language: "en-US")!
+        let voiceToUse = voice ?? defaultVoice
+        let tag = qualityTag(for: voiceToUse)
+        let cleanedName = (voice?.name ?? "Select Voice")
+            .replacingOccurrences(of: " (Enhanced)", with: "")
+            .replacingOccurrences(of: " (Premium)", with: "")
+        // Spelled out: the one-line ternary timed out the type checker on a busy build machine.
+        let tagSuffix: String = (voice != nil && !tag.isEmpty) ? " " + tag : ""
+        let pillText: String = cleanedName + tagSuffix
+        HStack(spacing: 6) {
+            Text(genderEmoji(for: voiceToUse))
+                .font(.system(size: 28))
+            Text(pillText)
+                .font(.system(size: 20, weight: .bold, design: .default))
+                .foregroundColor(.white)
+            Image(systemName: showVoiceGrid ? "chevron.down" : "chevron.up")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(.white)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Capsule().fill(Color.purple.opacity(0.24)))
+        .overlay(Capsule().stroke(Color.black, lineWidth: 1.1))
+        // Same words as Android's pill; the face emoji is left out.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Voice, " + pillText)
+    }
+
     var body: some View {
         Button(action: {
             withAnimation(.spring(response: 0.3)) {
                 showVoiceGrid.toggle()
             }
         }) {
-            let voice = selectedVoice
-            let defaultVoice = premiumEnglishVoices.first ?? AVSpeechSynthesisVoice(language: "en-US")!
-            let voiceToUse = voice ?? defaultVoice
-            let tag = qualityTag(for: voiceToUse)
-            let cleanedName = (voice?.name ?? "Select Voice")
-                .replacingOccurrences(of: " (Enhanced)", with: "")
-                .replacingOccurrences(of: " (Premium)", with: "")
-            // Spelled out: the one-line ternary timed out the type checker on a busy build machine.
-            let tagSuffix: String = (voice != nil && !tag.isEmpty) ? " " + tag : ""
-            let pillText: String = cleanedName + tagSuffix
-            HStack(spacing: 6) {
-                Text(genderEmoji(for: voiceToUse))
-                    .font(.system(size: 28))
-                Text(pillText)
-                    .font(.system(size: 20, weight: .bold, design: .default))
-                    .foregroundColor(.white)
-                Image(systemName: showVoiceGrid ? "chevron.down" : "chevron.up")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(Capsule().fill(Color.purple.opacity(0.24)))
-            .overlay(Capsule().stroke(Color.black, lineWidth: 1.1))
-            // Same words as Android's pill; the face emoji is left out.
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Voice, " + pillText)
+            pillLabel
         }
         .opacity(animateIn ? 1 : 0)
         .scaleEffect(animateIn ? 1 : 0.7)

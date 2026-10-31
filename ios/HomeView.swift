@@ -17,6 +17,7 @@ struct HomeView: View {
     let onObjectDetection: () -> Void
     let onReadMail: () -> Void
     let onHelpMeAim: () -> Void
+    let onTalk: () -> Void
     let onVoiceChange: () -> Void
     let speechSynthesizer: AVSpeechSynthesizer
 
@@ -98,6 +99,7 @@ struct HomeView: View {
                     Spacer()
                     GeometryReader { _ in
                         VStack(spacing: 14) {
+                            talkButton(scale: scale, screenWidth: screenWidth)
                             englishOCRButton(scale: scale, screenWidth: screenWidth)
                             spanishOCRButton(scale: scale, screenWidth: screenWidth)
                             objectDetectionButton(scale: scale, screenWidth: screenWidth)
@@ -107,7 +109,7 @@ struct HomeView: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                         // GeometryReader used for vertical spacing only
                     }
-                    .frame(height: 300 + 80 * scale)
+                    .frame(height: 410 + 110 * scale)
                     Spacer()
                     visionModelBanner
                     voicePicker
@@ -407,6 +409,47 @@ struct HomeView: View {
         .animation(.easeOut(duration: 0.3), value: animationState.button5)
         .accessibilityLabel("Help Me Aim")
         .accessibilityHint("Tell the camera what you want a picture of. It talks you into the shot, then takes the photo")
+        .accessibilityAddTraits(.isButton)
+    }
+
+    /// Talk to the camera: ask out loud and hear the answer, hands free, all
+    /// on the phone (Matt, 2026-10-31). First and biggest: it is the one that
+    /// can do what the others do, by asking.
+    private func talkButton(scale: CGFloat, screenWidth: CGFloat) -> some View {
+        Button(action: {
+            guard buttonDebouncer.canPress("HomeView-9") else { return }
+            onTalk()
+        }) {
+            HStack(spacing: 6 * scale) {
+                Text("\u{1F399}\u{FE0F}").font(.system(size: 36 * scale))
+                OutlinedText(text: "Talk to the Camera", fontSize: 23 * scale)
+            }
+            .padding(.vertical, 20 * scale)
+        }
+        .frame(maxWidth: min(360 * scale, screenWidth - 28), alignment: .center)
+        .padding(.horizontal, 8 * scale)
+        .background(
+            ZStack {
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.white.opacity(0.25), Color.blue.opacity(0.60)]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                Capsule().stroke(Color.white.opacity(0.85), lineWidth: 4.8 * scale)
+                Capsule().stroke(Color.blue, lineWidth: 2.4 * scale)
+            }
+        )
+        .shadow(color: Color.black.opacity(0.38), radius: 15 * scale, y: 5 * scale)
+        .clipShape(Capsule())
+        .opacity(animationState.button1 ? 1 : 0)
+        .shadow(color: Color.blue.opacity(0.55), radius: 12 * scale)
+        .scaleEffect(animationState.button1 ? 1 : 0.7)
+        .animation(.easeOut(duration: 0.3), value: animationState.button1)
+        .accessibilityLabel("Talk to the Camera")
+        .accessibilityHint("Hands free. Point the camera and ask out loud what you want to know. It answers by voice, on this phone, no internet")
         .accessibilityAddTraits(.isButton)
     }
 

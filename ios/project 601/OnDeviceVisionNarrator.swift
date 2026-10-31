@@ -37,12 +37,13 @@ actor OnDeviceVisionNarrator {
     /// silent), so it waits for the app to be active, and on any failure drops
     /// the engine, reloads it and tries once more before giving up.
     private func run(_ engine: LlamaVisionEngine, system: String, question: String, image: CIImage,
-                     maxTokens: Int = 120, temperature: Float = 0) async throws -> String {
+                     maxTokens: Int = 120, temperature: Float = 0,
+                     onText: ((String) -> Bool)? = nil) async throws -> String {
         func once(_ e: LlamaVisionEngine) async throws -> String {
             await Self.waitUntilActive()
             let answer = try await Task.detached(priority: .userInitiated) {
                 try e.respond(system: system, question: question, image: image,
-                              maxTokens: maxTokens, temperature: temperature)
+                              maxTokens: maxTokens, temperature: temperature, onText: onText)
             }.value
             passStats.append(e.lastStats)
             return answer
@@ -453,7 +454,7 @@ actor OnDeviceVisionNarrator {
         return text.isEmpty ? nil : text
     }
 
-    private static let retakeAdvice = ["move closer", "move the phone", "move the camera", "hold the camera",
+    nonisolated private static let retakeAdvice = ["move closer", "move the phone", "move the camera", "hold the camera",
                                        "hold the phone", "hold it steady", "turn on a light", "turn on the flash",
                                        "add some light", "retake", "take another", "take the picture again",
                                        "take it again", "try again", "take a new photo"]
@@ -492,4 +493,78 @@ actor OnDeviceVisionNarrator {
     }
 
     enum VisionNarratorError: Error { case noModelInBundle }
+
+    // MARK: - Talk to the camera
+
+    /// One spoken answer in Talk mode, with this phone's real timings.
+    struct TalkAnswer: Sendable {
+        var text: String
+        var level: ModelLevel
+        /// From the request to the first token, on the engine's clock (photo
+        /// encode included).
+        var firstTokenSeconds: Double
+        var totalSeconds: Double
+    }
+
+    /// Load the level Talk will use now, while the greeting is being spoken,
+    /// so the first question does not wait on a model load.
+    func warmUp(for kind: PhotoKind) async {
+        guard !unavailable else { return }
+        _ = try? await loaded(ModelPicker.level(for: kind))
+    }
+
+    /// A Talk question about the current camera frame. `context` is the
+    /// detector list, scene memory and the last few exchanges (TalkPrompt).
+    ///
+    /// Scenes stream: `onText` gets the answer as it is written so the first
+    /// sentence is spoken straight away, and returning false stops it. Pages,
+    /// money, medicine and labels keep the most-accurate routing: the page
+    /// level, the 1024 px photo, and the money cross-check against Apple's
+    /// recognizer before anything is said, so they are not streamed.
+    func talk(_ context: String, about image: UIImage, kind: PhotoKind,
+              onText: ((String) -> Bool)?) async -> TalkAnswer? {
+        guard !unavailable else { return nil }
+        let longSide: CGFloat = kind == .page ? 1024 : 768
+        guard let photo = Self.downscaled(image, longSide: longSide) else { return nil }
+        do {
+            let model = try await loaded(ModelPicker.level(for: kind))
+            let started = Date()
+            let raw = try await run(model, system: TalkPrompt.system, question: context, image: photo,
+                                    maxTokens: 110, onText: kind == .page ? nil : onText)
+            let stats = model.lastStats
+            ModelPicker.noteAnswer(level: model.level, kind: kind, seconds: stats.totalMs / 1000)
+            var said = Self.tidyKeepingShort(TalkSentenceStream.cleaned(raw)) ?? ""
+            if Self.tellsThemToRetake(said) {
+                // The app gives its own aim help (TalkAim); the model's
+                // "move closer, retake" is cut, as in hold-to-ask.
+                said = Self.withoutRetakeAdvice(said) ?? said
+            }
+            var extra: [String: Any] = ["kind": "talk-\(kind == .page ? "page" : "scene")",
+                                        "model": model.level.rawValue,
+                                        "first_token": (stats.ttftMs / 10).rounded() / 100,
+                                        "seconds": (Date().timeIntervalSince(started) * 100).rounded() / 100]
+            if kind == .page, !said.isEmpty, let cg = image.cgImage {
+                let ocr = await Self.recognizedText(in: cg)
+                let checked = MoneyCrossCheck.reconcile(sentence: said, ocrText: ocr)
+                if let agreed = checked.agreed { extra["money_agreed"] = agreed }
+                said = checked.sentence
+            }
+            OnDeviceNarrator.log(read: "[talk]", said: said, extra: extra)
+            guard !said.isEmpty else { return nil }
+            return TalkAnswer(text: said, level: model.level, firstTokenSeconds: stats.ttftMs / 1000,
+                              totalSeconds: stats.totalMs / 1000)
+        } catch {
+            OnDeviceNarrator.log(read: "[talk]", said: nil, extra: ["error": String(describing: error)])
+            if case VisionNarratorError.noModelInBundle = error { return nil }
+            engine = nil
+            return TalkAnswer(text: Self.engineFailedAnswer, level: .balanced, firstTokenSeconds: 0, totalSeconds: 0)
+        }
+    }
+
+    /// Is this answer one of the "please retake" lines? Shared with Talk's
+    /// sentence filter so a streamed sentence gets the same treatment.
+    nonisolated static func isRetakeAdvice(_ sentence: String) -> Bool {
+        let s = sentence.lowercased()
+        return retakeAdvice.contains { s.contains($0) }
+    }
 }

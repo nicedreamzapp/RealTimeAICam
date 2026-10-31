@@ -471,6 +471,8 @@ struct LiveOCRView: View {
                 }
                 await MainActor.run {
                     if let said {
+                        // One memory with Talk: a follow-up asked in Talk knows this answer.
+                        TalkMemory.shared.note(question: "What's this?", answer: said)
                         say(Self.cutOffPrefix(looksLikePage ? gate.cutOffEdge : nil) + said)
                         RatePrompt.noteResult()
                     } else {
@@ -595,7 +597,7 @@ struct LiveOCRView: View {
         let answer = await OnDeviceVisionNarrator.shared.ask(q, about: photo)
         await MainActor.run {
             isAsking = false
-            if answer != nil { RatePrompt.noteResult() }
+            if let answer { RatePrompt.noteResult(); TalkMemory.shared.note(question: q, answer: answer) }
             say(answer ?? "Sorry, I couldn't work that out. Try asking again.")
         }
     }

@@ -14,6 +14,9 @@ enum AppMode: String, CaseIterable {
     /// Help Me Aim: talks you into the shot, then takes it (Dennis Long's
     /// Pixel Guided Frame request).
     case helpMeAim
+    /// Talk to the camera: ask out loud, hear the answer, all on the phone
+    /// (Matt, 2026-10-31). The 601 detector keeps running underneath.
+    case talk
 
     var displayName: String {
         switch self {
@@ -23,6 +26,7 @@ enum AppMode: String, CaseIterable {
         case .ocrSpanish: "Spanish OCR"
         case .mail: "Read My Mail"
         case .helpMeAim: "Help Me Aim"
+        case .talk: "Talk"
         }
     }
 }
@@ -94,6 +98,10 @@ final class ResourceManager: ObservableObject {
             // Same camera and recognizer as English OCR — the difference is only
             // in what gets read back to you.
             loadOCRMode(language: .english)
+
+        case .talk:
+            // The object-detection camera and detector, plus the vision model.
+            loadObjectDetectionMode()
 
         case .helpMeAim:
             // Its own camera session and detectors, created and released by
