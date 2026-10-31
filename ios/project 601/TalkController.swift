@@ -44,6 +44,10 @@ final class TalkVoice: NSObject, AVSpeechSynthesizerDelegate {
     var onQuiet: (() -> Void)?
     /// Called when the first utterance after `markTurn()` starts playing.
     var onFirstWords: (() -> Void)?
+    /// Test aid: no sound at all. Every sentence still goes through the queue,
+    /// takes as long as it would to say, and is reported to `onSentence`.
+    var muted = false
+    var onSentence: ((String) -> Void)?
     private var turnStarted = false
 
     override init() {
@@ -65,8 +69,9 @@ final class TalkVoice: NSObject, AVSpeechSynthesizerDelegate {
     func say(_ raw: String) {
         let text = SpeakableText.spoken(raw)
         guard !text.isEmpty else { return }
-        guard speaksAloud else {
-            UIAccessibility.post(notification: .announcement, argument: text)
+        onSentence?(text)
+        guard speaksAloud, !muted else {
+            if !muted { UIAccessibility.post(notification: .announcement, argument: text) }
             let start = max(Date(), announceUntil)
             announceUntil = start.addingTimeInterval(SpeechManager.estimatedAnnouncementSeconds(text))
             if !turnStarted { turnStarted = true; onFirstWords?() }
@@ -161,15 +166,17 @@ final class TalkController: ObservableObject {
 
     static let greeting = "I'm watching. What do you want to know?"
 
-    @Published private(set) var phase: Phase = .starting
+    @Published private(set) var phase: Phase = .starting {
+        didSet { if phase != oldValue { testLog(["event": "phase", "phase": phase.words]) } }
+    }
     @Published private(set) var heard = ""
     @Published private(set) var spokenAnswer = ""
     /// Seconds from the last word of the question to the first word spoken.
     @Published private(set) var lastSpeed: Double?
 
     let frames = TalkFrames()
-    private let listener = TalkListener()
-    private let voice = TalkVoice()
+    let listener = TalkListener()
+    let voice = TalkVoice()
     private var scene = TalkSceneMemory()
     private var detectionsSub: AnyCancellable?
     private var current: TalkStreamBox?
@@ -178,7 +185,7 @@ final class TalkController: ObservableObject {
     private var questionEndedAt: Date?
     private var onEnd: (() -> Void)?
     private var lifecycle: [NSObjectProtocol] = []
-    private var running = false
+    private(set) var running = false
 
     // MARK: Start and stop
 
@@ -209,18 +216,21 @@ final class TalkController: ObservableObject {
             },
         ]
         UIApplication.shared.isIdleTimerDisabled = true
+        configureTestFeed()
         Task {
             if let failure = await listener.start() {
                 let why = failure == .notAllowed
                     ? "Talk needs the microphone and speech recognition. You can allow them in Settings."
                     : "Talk can't hear on this phone right now: offline speech recognition is not available."
                 phase = .failed(why)
-                SpeechManager.shared.speak(why)
+                if !voice.muted { SpeechManager.shared.speak(why) }
+                testLog(["event": "failed", "why": why])
                 return
             }
             // Load the model while the greeting plays.
             Task.detached(priority: .utility) { await OnDeviceVisionNarrator.shared.warmUp(for: .scene) }
             speak(Self.greeting, thenListen: true)
+            startTestFeed()
         }
     }
 
@@ -288,7 +298,7 @@ final class TalkController: ObservableObject {
         heard = ""
         let voiceOver = UIAccessibility.isVoiceOverRunning
         if voiceOver { UIAccessibility.post(notification: .announcement, argument: "Listening") }
-        if tone { AimTonePlayer.shared.play(start: true) }
+        if tone, !voice.muted { AimTonePlayer.shared.play(start: true) }
         // Let the tone (and VoiceOver's word) finish before the mic opens.
         let wait = (tone ? AimTones.duration + 0.08 : 0) + (voiceOver ? 0.7 : 0)
         let myTurn = turn
@@ -321,6 +331,7 @@ final class TalkController: ObservableObject {
         questionEndedAt = nil
         let seconds = Date().timeIntervalSince(ended)
         lastSpeed = (seconds * 10).rounded() / 10
+        testLog(["event": "first_words", "after_last_word": seconds])
         OnDeviceNarrator.log(read: "[talk first words]", said: nil,
                              extra: ["after_last_word": (seconds * 100).rounded() / 100,
                                      "after_end_of_question": ((seconds - TalkTiming.endOfSentence) * 100).rounded() / 100])
@@ -331,6 +342,7 @@ final class TalkController: ObservableObject {
     private func heardQuestion(_ question: String, endedAt: Date) {
         guard running else { return }
         heard = question
+        testLog(["event": "question", "text": question, "last_word_at": endedAt.timeIntervalSince1970])
         switch TalkRouting.intent(of: question) {
         case .end:
             voice.markTurn()

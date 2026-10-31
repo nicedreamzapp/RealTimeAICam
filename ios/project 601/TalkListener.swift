@@ -41,12 +41,28 @@ final class TalkListener {
     /// Shared with the audio thread.
     private let tapState = TapState()
 
+    /// Debug test aid (`-rtcamTalkFeed`): no microphone at all; recorded
+    /// questions are pushed in through `inject`, exactly where the mic tap
+    /// would hand its buffers over.
+    var feedMode = false
+
     // MARK: Session
 
     /// Asks for the mic and speech permissions, sets up one play-and-record
     /// session and starts the engine. Does not start listening yet.
     func start() async -> Failure? {
         guard !isRunning else { return nil }
+        if feedMode {
+            let ok = await withCheckedContinuation { c in
+                SFSpeechRecognizer.requestAuthorization { c.resume(returning: $0 == .authorized) }
+            }
+            guard ok else { return .notAllowed }
+            guard let recognizer, recognizer.isAvailable, recognizer.supportsOnDeviceRecognition else {
+                return .unavailable
+            }
+            isRunning = true
+            return nil
+        }
         guard await Self.authorize() else { return .notAllowed }
         guard let recognizer, recognizer.isAvailable, recognizer.supportsOnDeviceRecognition else {
             return .unavailable
@@ -93,6 +109,7 @@ final class TalkListener {
     func shutdown() {
         stopListening()
         tapState.set(mode: .idle)
+        if feedMode { isRunning = false; return }
         if engine.isRunning { engine.stop() }
         engine.inputNode.removeTap(onBus: 0)
         #if !targetEnvironment(simulator)
@@ -150,6 +167,11 @@ final class TalkListener {
                 }
             }
         }
+    }
+
+    /// One buffer from the test feed, handled exactly like a mic buffer.
+    func inject(_ buffer: AVAudioPCMBuffer) {
+        if case .bargeIn = tapState.handle(buffer) { onBargeIn?() }
     }
 
     /// Close the recognizer without delivering anything.
