@@ -119,6 +119,7 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.mattmacosko.realtimeaicam.camera.SpeechAnnouncer
+import com.mattmacosko.realtimeaicam.narrator.AnswerText
 import com.mattmacosko.realtimeaicam.narrator.ModelDownloader
 import com.mattmacosko.realtimeaicam.narrator.ModelPicker
 import com.mattmacosko.realtimeaicam.narrator.NarratorEngine
@@ -249,7 +250,9 @@ fun WhatsThisScreen(
      * An answer from the model (English): into Your language first when that is on (about a
      * second), then shown and read aloud. Read to the end, it is a success for the rating card.
      */
-    suspend fun sayAnswer(english: String) {
+    suspend fun sayAnswer(answer: String) {
+        // Never read out half a sentence, whatever path the answer came by.
+        val english = AnswerText.completeSentences(answer)
         val lang = speaker.outputLanguage()
         val (text, used) = withContext(Dispatchers.IO) {
             com.mattmacosko.realtimeaicam.translation.AnswerLanguage.forPerson(english, lang) { t, from, to ->
@@ -272,7 +275,13 @@ fun WhatsThisScreen(
         scope.launch {
             val raw = File(context.cacheDir, "whats-this-raw.jpg")
             val shot = File(context.cacheDir, "whats-this.jpg")
-            if (!camera.capture(raw)) {
+            // Test builds only: `-e readTestImage <file>` (in files/ or the external files folder)
+            // is the picture instead of the camera, so a timing can be proved on a real phone.
+            val testShot = testImageFile(context)
+            val captured = if (testShot != null) {
+                withContext(Dispatchers.IO) { runCatching { testShot.copyTo(raw, overwrite = true) }.isSuccess }
+            } else camera.capture(raw)
+            if (!captured) {
                 isScanning = false
                 summary = "The camera couldn't take the picture. Try again."
                 return@launch
@@ -310,7 +319,8 @@ fun WhatsThisScreen(
                     askPhoto = forModel
                     describeNeverRefusing(context, forModel, question, isPage, engine)
                 }
-                Log.i(TAG, "answer in ${System.currentTimeMillis() - started} ms: $said")
+                Log.i(TAG, "answer in ${System.currentTimeMillis() - started} ms " +
+                    "(level ${engine.loadedLevel?.key}, ${if (isPage) "page" else "scene"}, ${askPhoto?.let { imageSize(it) }}): $said")
                 // No "get closer or add light" fallback: the person holding the
                 // camera cannot see where it is pointing, so that is not advice
                 // they can act on.
@@ -466,15 +476,6 @@ fun WhatsThisScreen(
         val fullWidth = maxWidth
         AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
 
-        // Can't be heard? Say why, under the top bar (2026-11-04).
-        SpeechProblemBanner(
-            speaker,
-            Modifier
-                .align(Alignment.TopCenter)
-                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top))
-                .padding(top = 90.dp, start = 20.dp, end = 20.dp),
-        )
-
         // Pinch-to-zoom (live camera only)
         if (frozenPhoto == null) {
             Box(
@@ -523,7 +524,7 @@ fun WhatsThisScreen(
         Row(
             Modifier
                 .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                .liveSafePadding(horizontal = true)
                 .padding(top = 40.dp, start = 20.dp, end = 20.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Top,
@@ -541,6 +542,17 @@ fun WhatsThisScreen(
                     .semantics { contentDescription = "Mode, summarizing what you point at" },
             )
         }
+
+        // Can't be heard? Say why, under the top bar (2026-11-04). Drawn AFTER the frozen
+        // photo: drawn before it, the held shot covered the banner the whole time the model
+        // was "Looking…", while the volume was still 0.
+        SpeechProblemBanner(
+            speaker,
+            Modifier
+                .align(Alignment.TopCenter)
+                .liveSafePadding(horizontal = true, top = true)
+                .padding(top = 90.dp, start = 20.dp, end = 20.dp),
+        )
 
         // Zoom pill
         AnimatedVisibility(
@@ -566,7 +578,7 @@ fun WhatsThisScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .navigationBarsPadding()
+                .liveSafePadding(horizontal = true, bottom = true, navOnly = true)
                 .padding(bottom = 108.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -832,7 +844,7 @@ fun WhatsThisScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .navigationBarsPadding()
+                .liveSafePadding(horizontal = true, bottom = true, navOnly = true)
                 .padding(bottom = 32.dp, start = 20.dp, end = 20.dp),
         ) {
             // 1. Settings
@@ -914,6 +926,23 @@ private const val TAG = "WhatsThis"
  * Matt's 20-photo test, 2026-10-29): a page at 1024 px on the long side so small
  * print stays readable, a scene at 768. Same as the iPhone.
  */
+/** Test builds only: the picture named by `-e readTestImage`, or null (always null in release). */
+private fun testImageFile(context: Context): File? {
+    if ((context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) == 0) return null
+    var c: Context? = context
+    while (c is android.content.ContextWrapper && c !is android.app.Activity) c = c.baseContext
+    val name = (c as? android.app.Activity)?.intent?.getStringExtra("readTestImage")?.takeIf { it.isNotBlank() } ?: return null
+    return listOfNotNull(File(context.filesDir, name), context.getExternalFilesDir(null)?.let { File(it, name) })
+        .firstOrNull { it.isFile }
+}
+
+/** "768x576" for the log. */
+private fun imageSize(f: File): String {
+    val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(f.path, o)
+    return "${o.outWidth}x${o.outHeight}"
+}
+
 internal const val PAGE_LONG_SIDE = 1024
 internal const val SCENE_LONG_SIDE = 768
 private const val MODEL_MISSING = "The vision model is not installed on this phone yet."
@@ -961,31 +990,79 @@ internal fun describeNeverRefusing(
     isPage: Boolean,
     engine: NarratorEngine,
 ): String {
-    var said = engine.describe(shot, question)
+    val started = android.os.SystemClock.elapsedRealtime()
+    fun elapsed() = (android.os.SystemClock.elapsedRealtime() - started) / 1000.0
+    var passes = 0
+    fun pass(photo: File, q: String, system: String = NarratorPrompt.SYSTEM): String {
+        passes++
+        return engine.describe(photo, q, system)
+    }
+    fun done(answer: String, why: String): String {
+        Log.i(TAG, "describe: ${engine.loadedLevel?.key} $passes pass(es) in ${"%.1f".format(elapsed())} s ($why)")
+        val clean = if (tellsThemToRetake(answer)) withoutRetakeAdvice(answer) else answer
+        return AnswerText.completeSentences(clean)
+    }
+
+    // A dim shot is brightened BEFORE the first pass (2026-11-04): on a budget phone each
+    // retry costs the whole answer time again, and brightening was all the retries did.
+    val first = dimShotBrightened(context, shot) ?: shot
+    var said = pass(first, question)
+    val passSeconds = engine.lastPassSeconds.takeIf { it > 0 } ?: elapsed()
     // The first pass of every photo is this phone's speed check: the first one
     // ever sets the estimate, later ones keep it honest. Then fetch whatever
     // level automatic mode now wants (on Wi-Fi only).
     engine.loadedLevel?.let { level ->
-        ModelPicker.noteAnswer(context, level, if (isPage) PhotoKind.PAGE else PhotoKind.SCENE, engine.lastPassSeconds)
+        ModelPicker.noteAnswer(context, level, if (isPage) PhotoKind.PAGE else PhotoKind.SCENE, passSeconds)
         ModelDownloader.fetchWanted(context, automatic = true)
     }
-    if (!looksLikeRefusal(said)) return said
+    // "It's hard to see, but there's a lamp on a table" is the answer the prompt asks for,
+    // not a refusal. Only an answer with nothing described in it is retried.
+    if (!AnswerText.isRefusal(said)) return done(said, "first answer")
+    Log.i(TAG, "first pass balked: $said")
+    // Every retry must fit the time budget: a phone that needs ~100 s a pass answers with
+    // what the first pass saw instead of spending seven more minutes (456 s on the Cricket).
+    fun canRetry() = AnswerText.retryFits(elapsed(), passSeconds)
+    val firstSaid = said
 
-    val brighter = brightenedCopy(context, shot, "whats-this-bright.jpg", 1.8f) ?: shot
-    said = engine.describe(brighter, NarratorPrompt.forcedDescribe(isPage))
-    if (!looksLikeRefusal(said)) return said
+    if (!canRetry()) return done(AnswerText.strippingExcuses(firstSaid), "slow phone, no retry")
+    val brighter = brightenedCopy(context, shot, "whats-this-bright.jpg", 1.8f) ?: first
+    said = pass(brighter, NarratorPrompt.forcedDescribe(isPage))
+    if (!AnswerText.isRefusal(said)) return done(said, "forced retry")
 
+    if (!canRetry()) return done(AnswerText.strippingExcuses(said), "budget spent")
     val brightest = brightenedCopy(context, shot, "whats-this-brightest.jpg", 2.4f) ?: brighter
-    said = engine.describe(brightest, NarratorPrompt.PLAIN_DESCRIBE, NarratorPrompt.DESCRIBE_ONLY)
-    if (!looksLikeRefusal(said)) return said
+    said = pass(brightest, NarratorPrompt.PLAIN_DESCRIBE, NarratorPrompt.DESCRIBE_ONLY)
+    if (!AnswerText.isRefusal(said)) return done(said, "describe-only retry")
 
-    val listed = engine.describe(brightest, NarratorPrompt.LIST_THINGS, NarratorPrompt.DESCRIBE_ONLY)
-    thingsOnly(listed)?.let {
-        // Matt's words for how this should sound: "I'm having a hard time seeing
-        // it, but this is what I think it is."
-        return "It's hard to see clearly, but I think I can make out $it."
+    if (canRetry()) {
+        val listed = pass(brightest, NarratorPrompt.LIST_THINGS, NarratorPrompt.DESCRIBE_ONLY)
+        AnswerText.thingsOnly(listed)?.let {
+            // Matt's words for how this should sound: "I'm having a hard time seeing
+            // it, but this is what I think it is."
+            return done("It's hard to see clearly, but I think I can make out $it.", "noun list")
+        }
     }
-    return strippingExcuses(said) ?: ""
+    return done(AnswerText.strippingExcuses(said), "nothing described")
+}
+
+/** A brightened copy when the shot is dim (mean brightness under [AnswerText.DIM_LUMA]), else null. */
+private fun dimShotBrightened(context: Context, shot: File): File? = try {
+    val small = BitmapFactory.decodeFile(shot.path, BitmapFactory.Options().apply { inSampleSize = 8 })
+    if (small == null) null else {
+        val px = IntArray(small.width * small.height)
+        small.getPixels(px, 0, small.width, 0, 0, small.width, small.height)
+        small.recycle()
+        var sum = 0.0
+        for (c in px) sum += 0.299 * ((c shr 16) and 0xff) + 0.587 * ((c shr 8) and 0xff) + 0.114 * (c and 0xff)
+        val mean = if (px.isEmpty()) 255.0 else sum / px.size
+        AnswerText.brightenFactor(mean)?.let { factor ->
+            Log.i(TAG, "dim shot (mean ${mean.roundToInt()}), brightened x${"%.1f".format(factor)} before the first pass")
+            brightenedCopy(context, shot, "whats-this-lit.jpg", factor)
+        }
+    }
+} catch (t: Throwable) {
+    Log.e(TAG, "could not measure the shot", t)
+    null
 }
 
 /**
@@ -1027,57 +1104,6 @@ private fun brightenedCopy(context: Context, src: File, name: String, factor: Fl
     null
 }
 
-/**
- * Keep the comma-separated things and throw away any apology wrapped around
- * them. An instruction is not a thing: "hold the camera steady" came back from
- * the listing pass once and was read out as something visible in the room.
- */
-private fun thingsOnly(raw: String): String? {
-    var text = raw.trim().trim('"', '\'')
-    if (text.isEmpty()) return null
-    for (opener in listOf(
-        "in this picture, i can see", "in this photo, i can see",
-        "i can see", "i see", "the things i can see are",
-        "here is a list", "here are the things",
-    )) {
-        if (text.lowercase().startsWith(opener)) {
-            text = text.substring(opener.length)
-            break
-        }
-    }
-    val things = text.split(',', '\n', ';')
-        .map { it.trim().trim('.', ':', '-', '*') }
-        .filter { it.isNotEmpty() && it.length <= 40 && !looksLikeRefusal(it) && !isInstruction(it) }
-    if (things.isEmpty()) return null
-    val kept = things.take(4)
-    return if (kept.size == 1) kept[0]
-    else kept.dropLast(1).joinToString(", ") + " and " + kept.last()
-}
-
-private fun isInstruction(fragment: String): Boolean {
-    val verbs = listOf(
-        "hold", "move", "turn", "take", "try", "use", "ensure", "make sure",
-        "point", "adjust", "increase", "retry", "please", "consider",
-        "bring", "step", "add", "switch", "clean", "wipe", "check",
-    )
-    val f = fragment.lowercase().trim()
-    return verbs.any { f.startsWith("$it ") || f == it }
-}
-
-/** Cut the excuse sentences out and speak whatever description is left. */
-private fun strippingExcuses(sentence: String?): String? {
-    if (sentence.isNullOrBlank()) return null
-    val parts = sentence.split('.', '!', '?', ';')
-        .map { it.trim() }
-        .filter { it.isNotEmpty() }
-    val described = parts.filter { !looksLikeRefusal(it) }
-    if (described.isNotEmpty()) {
-        val rebuilt = described.joinToString(". ") + "."
-        if (rebuilt.length >= 12) return rebuilt
-    }
-    return "It's hard to see clearly, and I couldn't make out enough to say."
-}
-
 /** Same markers as the iPhone: an answer that only says to retake is a refusal. */
 private val RETAKE_ADVICE = listOf(
     "move closer", "move the phone", "move the camera", "hold the camera", "hold the phone", "hold it steady",
@@ -1091,26 +1117,6 @@ private fun tellsThemToRetake(s: String): Boolean = s.lowercase().let { t -> RET
 private fun withoutRetakeAdvice(s: String): String {
     val kept = s.split(Regex("(?<=[.!?])\\s+")).map { it.trim() }.filter { it.isNotEmpty() && !tellsThemToRetake(it) }
     return if (kept.isEmpty()) "I can't tell that for sure from this photo." else kept.joinToString(" ")
-}
-
-private fun looksLikeRefusal(s: String?): Boolean {
-    val t = s?.lowercase() ?: return true
-    // These must be REFUSAL phrases, not description words. "make out" on its own
-    // flagged "I can make out a cat on a bed" as a refusal — and the forced retry
-    // asks for exactly that wording, so every good answer was thrown away and the
-    // chain fell through to the floor line. Match the whole phrase.
-    val markers = listOf(
-        "can't make out", "cannot make out", "can not make out",
-        "couldn't make out", "could not make out",
-        "can't see", "cannot see", "can't read", "cannot read",
-        "can't tell", "cannot tell", "can't determine", "cannot determine",
-        "unable to", "too dark to", "too blurry to", "too dark and blurry",
-        "retake", "hold the camera still", "hold the phone still",
-        "turn on a light", "turn on the flash", "add some light",
-        "move closer", "take the picture again", "take it again",
-        "try again", "not clear enough", "no details are visible",
-    )
-    return markers.any { t.contains(it) }
 }
 
 /**
