@@ -8,22 +8,44 @@ import org.junit.Test
 
 class AnswerTextTest {
     @Test fun finishedAnswerIsKept() {
-        assertEquals("A red mug on a table.", AnswerText.completeSentences("A red mug on a table."))
-        assertEquals("Is that a door?", AnswerText.completeSentences("  Is that a door?  "))
-        assertEquals("He said \"stop.\"", AnswerText.completeSentences("He said \"stop.\""))
+        assertEquals("A red mug on a table.", AnswerText.completeSentences("A red mug on a table.", hitTokenLimit = true))
+        assertEquals("Is that a door?", AnswerText.completeSentences("  Is that a door?  ", hitTokenLimit = true))
+        assertEquals("He said \"stop.\"", AnswerText.completeSentences("He said \"stop.\"", hitTokenLimit = true))
     }
 
     @Test fun cutOffAnswerEndsAtTheLastFullSentence() {
         assertEquals(
             "A kitchen with a white table. A mug sits on the left.",
-            AnswerText.completeSentences("A kitchen with a white table. A mug sits on the left. Behind it there is a"),
+            AnswerText.completeSentences("A kitchen with a white table. A mug sits on the left. Behind it there is a", hitTokenLimit = true),
         )
-        assertEquals("It costs 3.50 dollars.", AnswerText.completeSentences("It costs 3.50 dollars. The due da"))
+        assertEquals("It costs 3.50 dollars.", AnswerText.completeSentences("It costs 3.50 dollars. The due da", hitTokenLimit = true))
     }
 
     @Test fun noFullSentenceIsClosedWithoutADanglingWord() {
-        assertEquals("A lamp next to a chair.", AnswerText.completeSentences("A lamp next to a chair"))
-        assertEquals("A dark room with a lamp.", AnswerText.completeSentences("A dark room with a lamp and the"))
+        assertEquals("A lamp next to a chair.", AnswerText.completeSentences("A lamp next to a chair", hitTokenLimit = true))
+        assertEquals("A dark room with a lamp.", AnswerText.completeSentences("A dark room with a lamp and the", hitTokenLimit = true))
+    }
+
+    @Test fun finishedAnswerKeepsItsLastSentenceWithoutAPeriod() {
+        // 11/04 review: the model stopped on its own, so the last line is the answer, period or not.
+        assertEquals(
+            "This is a bill. Amount due: \$84.20 by Nov 12",
+            AnswerText.completeSentences("This is a bill. Amount due: \$84.20 by Nov 12", hitTokenLimit = false),
+        )
+        assertEquals("Amount due: \$84.20 by Nov 12", AnswerText.completeSentences("Amount due: \$84.20 by Nov 12", hitTokenLimit = false))
+        assertEquals("A lamp next to a chair", AnswerText.completeSentences("A lamp next to a chair", hitTokenLimit = false))
+    }
+
+    @Test fun onlyAnAnswerThatHitTheTokenLimitIsCutBack() {
+        val cut = "A kitchen with a white table. A mug sits on the left. Behind it there is a"
+        assertEquals("A kitchen with a white table. A mug sits on the left.", AnswerText.completeSentences(cut, hitTokenLimit = true))
+        assertEquals(cut, AnswerText.completeSentences(cut, hitTokenLimit = false))
+    }
+
+    @Test fun tokenLimitReadFromTheEngineStats() {
+        assertTrue(NarratorEngine.hitLimit("812,9400,3100,640,120", 120))
+        assertFalse(NarratorEngine.hitLimit("812,9400,3100,640,37", 120))
+        assertFalse(NarratorEngine.hitLimit("", 120))
     }
 
     @Test fun hardToSeeButDescribedIsNotARefusal() {

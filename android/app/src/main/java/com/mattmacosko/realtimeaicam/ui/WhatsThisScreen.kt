@@ -250,9 +250,10 @@ fun WhatsThisScreen(
      * An answer from the model (English): into Your language first when that is on (about a
      * second), then shown and read aloud. Read to the end, it is a success for the rating card.
      */
-    suspend fun sayAnswer(answer: String) {
-        // Never read out half a sentence, whatever path the answer came by.
-        val english = AnswerText.completeSentences(answer)
+    suspend fun sayAnswer(answer: String, hitTokenLimit: Boolean = false) {
+        // Never read out half a sentence: an answer the model was cut off in ends at its last
+        // full sentence; a finished one is read whole.
+        val english = AnswerText.completeSentences(answer, hitTokenLimit)
         val lang = speaker.outputLanguage()
         val (text, used) = withContext(Dispatchers.IO) {
             com.mattmacosko.realtimeaicam.translation.AnswerLanguage.forPerson(english, lang) { t, from, to ->
@@ -401,6 +402,7 @@ fun WhatsThisScreen(
         scope.launch {
             isAsking = true
             summary = "Thinking…"
+            var cutOff = false
             val answer = withContext(Dispatchers.IO) {
                 // Your language: the question goes to the model in English.
                 val lang = speaker.outputLanguage()
@@ -412,10 +414,11 @@ fun WhatsThisScreen(
                 // answer, so no refusal retry. Only advice a blind person cannot
                 // act on ("move closer, turn on a light") is cut.
                 val said = engine.describe(photo, english, NarratorPrompt.ASK)
+                cutOff = engine.lastHitTokenLimit
                 if (tellsThemToRetake(said)) withoutRetakeAdvice(said) else said
             }
             isAsking = false
-            if (answer.isNotBlank()) sayAnswer(answer)
+            if (answer.isNotBlank()) sayAnswer(answer, cutOff)
             else say("Sorry, I couldn't work that out. Try asking again.")
         }
     }
@@ -993,14 +996,16 @@ internal fun describeNeverRefusing(
     val started = android.os.SystemClock.elapsedRealtime()
     fun elapsed() = (android.os.SystemClock.elapsedRealtime() - started) / 1000.0
     var passes = 0
+    // Whether the last pass ran into the token limit (its answer may stop mid-sentence).
+    var cutOff = false
     fun pass(photo: File, q: String, system: String = NarratorPrompt.SYSTEM): String {
         passes++
-        return engine.describe(photo, q, system)
+        return engine.describe(photo, q, system).also { cutOff = engine.lastHitTokenLimit }
     }
-    fun done(answer: String, why: String): String {
+    fun done(answer: String, why: String, fromLastPass: Boolean = true): String {
         Log.i(TAG, "describe: ${engine.loadedLevel?.key} $passes pass(es) in ${"%.1f".format(elapsed())} s ($why)")
         val clean = if (tellsThemToRetake(answer)) withoutRetakeAdvice(answer) else answer
-        return AnswerText.completeSentences(clean)
+        return AnswerText.completeSentences(clean, hitTokenLimit = fromLastPass && cutOff)
     }
 
     // A dim shot is brightened BEFORE the first pass (2026-11-04): on a budget phone each
@@ -1024,12 +1029,12 @@ internal fun describeNeverRefusing(
     fun canRetry() = AnswerText.retryFits(elapsed(), passSeconds)
     val firstSaid = said
 
-    if (!canRetry()) return done(AnswerText.strippingExcuses(firstSaid), "slow phone, no retry")
+    if (!canRetry()) return done(AnswerText.strippingExcuses(AnswerText.completeSentences(firstSaid, cutOff)), "slow phone, no retry")
     val brighter = brightenedCopy(context, shot, "whats-this-bright.jpg", 1.8f) ?: first
     said = pass(brighter, NarratorPrompt.forcedDescribe(isPage))
     if (!AnswerText.isRefusal(said)) return done(said, "forced retry")
 
-    if (!canRetry()) return done(AnswerText.strippingExcuses(said), "budget spent")
+    if (!canRetry()) return done(AnswerText.strippingExcuses(AnswerText.completeSentences(said, cutOff)), "budget spent")
     val brightest = brightenedCopy(context, shot, "whats-this-brightest.jpg", 2.4f) ?: brighter
     said = pass(brightest, NarratorPrompt.PLAIN_DESCRIBE, NarratorPrompt.DESCRIBE_ONLY)
     if (!AnswerText.isRefusal(said)) return done(said, "describe-only retry")
@@ -1042,7 +1047,7 @@ internal fun describeNeverRefusing(
             return done("It's hard to see clearly, but I think I can make out $it.", "noun list")
         }
     }
-    return done(AnswerText.strippingExcuses(said), "nothing described")
+    return done(AnswerText.strippingExcuses(AnswerText.completeSentences(said, cutOff)), "nothing described", fromLastPass = false)
 }
 
 /** A brightened copy when the shot is dim (mean brightness under [AnswerText.DIM_LUMA]), else null. */

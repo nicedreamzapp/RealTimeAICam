@@ -152,13 +152,15 @@ object AnswerText {
     )
 
     /**
-     * Never stop in the middle of a sentence. An answer that ends without . ! ? is cut back
-     * to its last full sentence; with no full sentence at all, a dangling little word is
-     * dropped and the sentence is closed.
+     * Never stop in the middle of a sentence. Only an answer the model was cut off in (it used
+     * every token it was allowed, [hitTokenLimit]) can end mid-sentence: that one is cut back to
+     * its last full sentence, and with no full sentence at all a dangling little word is dropped
+     * and the sentence is closed. An answer the model finished on its own is kept whole, even when
+     * its last sentence has no period ("Amount due: $84.20 by Nov 12" is the answer, 11/04 review).
      */
-    fun completeSentences(text: String): String {
+    fun completeSentences(text: String, hitTokenLimit: Boolean): String {
         val t = text.trim()
-        if (t.isEmpty()) return t
+        if (t.isEmpty() || !hitTokenLimit) return t
         val core = t.trimEnd('"', '\'', ')', '”', '’', '»')
         if (core.isNotEmpty() && core.last() in ".!?…") return t
         val lastEnd = Regex("[.!?…][\"'”’)»]*(?=\\s)").findAll(t).lastOrNull()

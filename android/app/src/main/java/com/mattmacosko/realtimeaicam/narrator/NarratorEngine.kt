@@ -24,6 +24,8 @@ class NarratorEngine private constructor(private val appContext: Context) {
 
     /** Seconds the last describe call spent in the model itself. */
     @Volatile var lastPassSeconds = 0.0
+    /** The last answer used every token it was allowed, so it may stop mid-sentence. */
+    @Volatile var lastHitTokenLimit = false
         private set
 
     /**
@@ -121,6 +123,7 @@ class NarratorEngine private constructor(private val appContext: Context) {
             ).also {
                 val stats = NarratorNative.nativeLastStats(handle)
                 lastPassSeconds = (stats.split(",").getOrNull(1)?.toDoubleOrNull() ?: 0.0) / 1000
+                lastHitTokenLimit = hitLimit(stats, MAX_TOKENS)
                 if (recordStats) statsLog.add(stats)
             }
         } catch (t: Throwable) {
@@ -218,6 +221,10 @@ class NarratorEngine private constructor(private val appContext: Context) {
             "narrator-Q4_K_M.gguf.part", "narrator-mmproj-f16.gguf.part",
         )
         private const val MAX_TOKENS = 120
+
+        /** From "ttftMs,totalMs,encodeMs,promptTokens,genTokens": the answer ran into [maxTokens]. */
+        fun hitLimit(stats: String, maxTokens: Int): Boolean =
+            (stats.split(",").getOrNull(4)?.trim()?.toIntOrNull() ?: 0) >= maxTokens
 
         @Volatile private var instance: NarratorEngine? = null
 
