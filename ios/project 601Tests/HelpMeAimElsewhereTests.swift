@@ -35,8 +35,11 @@ struct AimElsewhereTimingTests {
         let out = run(&c, to: 40, elsewhere: line)
         let miss = AimPhrases.phrase(for: .notFound, subject: key)
         #expect(miss == "I don't see a key yet, move the phone slowly")
+        // Since 2026-09-20 (7eda570): "what IS in view" comes on the second turn (10 s) and
+        // every 12 s after, and the misses walk the ladder instead of repeating one line.
+        let step = { (n: Int) in AimPhrases.searching(step: n, for: key) }
         let expected: [(TimeInterval, String)] = [
-            (5, miss), (11, miss), (15, line), (21, miss), (27, miss), (33, miss), (36, line),
+            (5, miss), (10, line), (16, step(1)), (22, line), (28, step(2)), (34, line), (40, step(3)),
         ]
         #expect(out.count == expected.count)
         for (got, want) in zip(out, expected) {
@@ -49,7 +52,9 @@ struct AimElsewhereTimingTests {
         var c = AimCoach(subject: .face)
         c.reset(now: t0)
         let out = run(&c, to: 40, elsewhere: nil)
-        #expect(out.allSatisfy { $0.1 == "I don't see a face yet, move the phone slowly" })
+        // No "I can see ..." sentence; the misses walk the ladder (never the same line twice in a row).
+        #expect(out.first?.1 == "I don't see a face yet, move the phone slowly")
+        #expect(out.map(\.1) == (0..<out.count).map { AimPhrases.searching(step: $0, for: .face) })
         #expect(out.map(\.0).first.map { abs($0 - 5) < 1e-6 } == true)
         #expect(out.count == 6) // 5, 11, 17, 23, 29, 35
     }
