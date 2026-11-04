@@ -115,7 +115,7 @@ fun DetectionChrome(
             pipeline.announcer,
             Modifier
                 .align(Alignment.TopCenter)
-                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top))
+                .liveSafePadding(horizontal = true, top = true)
                 .padding(top = if (isLandscape) 64.dp else 110.dp, start = 28.dp, end = 28.dp),
         )
         // ---- Top row (spec §2.1) ----
@@ -124,15 +124,7 @@ fun DetectionChrome(
         Row(
             Modifier
                 .fillMaxWidth()
-                .windowInsetsPadding(
-                    if (isLandscape) {
-                        WindowInsets.safeDrawing.only(
-                            WindowInsetsSides.Horizontal + WindowInsetsSides.Top
-                        )
-                    } else {
-                        WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)
-                    }
-                )
+                .liveSafePadding(horizontal = true, top = isLandscape)
                 .padding(
                     top = if (isLandscape) 4.dp else 50.dp,
                     start = if (isLandscape) 16.dp else 28.dp,
@@ -303,9 +295,7 @@ fun DetectionChrome(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .windowInsetsPadding(
-                        WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)
-                    )
+                    .liveSafePadding(bottom = true, navOnly = true)
                     .padding(bottom = 10.dp),
             ) {
                 controlButtons()
@@ -323,10 +313,8 @@ fun DetectionChrome(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .windowInsetsPadding(
-                        WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)
-                    )
-                    .navigationBarsPadding()
+                    .liveSafePadding(horizontal = true)
+                    .liveSafePadding(horizontal = true, bottom = true, navOnly = true)
                     .padding(bottom = 32.dp),
             ) {
                 IosSegmentedControl(
@@ -369,16 +357,14 @@ fun DetectionChrome(
                 modifier = if (isLandscape) {
                     Modifier
                         .align(Alignment.BottomStart)
-                        .windowInsetsPadding(
-                            WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)
-                        )
+                        .liveSafePadding(bottom = true, navOnly = true)
                         .padding(bottom = 66.dp) // floats above the FIXED single row
                         // torch = button 3 of the 536dp row: center 134dp in
                         .offset(x = landRowStart + 134.dp - 34.dp)
                 } else {
                     Modifier
                         .align(Alignment.BottomStart)
-                        .navigationBarsPadding()
+                        .liveSafePadding(horizontal = true, bottom = true, navOnly = true)
                         .padding(bottom = 162.dp) // floats above the FIXED control row
                         .offset(x = fullWidth * (2.5f / 6f) - 34.dp)
                 },
@@ -433,16 +419,14 @@ fun DetectionChrome(
                 modifier = if (isLandscape) {
                     Modifier
                         .align(Alignment.BottomStart)
-                        .windowInsetsPadding(
-                            WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)
-                        )
+                        .liveSafePadding(bottom = true, navOnly = true)
                         .padding(bottom = 66.dp) // floats above the FIXED single row
                         // confidence = button 6 of the 536dp row: center 302dp in
                         .offset(x = landRowStart + 302.dp - 32.dp)
                 } else {
                     Modifier
                         .align(Alignment.BottomEnd)
-                        .navigationBarsPadding()
+                        .liveSafePadding(horizontal = true, bottom = true, navOnly = true)
                         .padding(bottom = 132.dp, end = 14.dp) // floats above the FIXED row
                 },
             ) {

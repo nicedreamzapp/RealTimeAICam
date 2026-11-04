@@ -240,9 +240,7 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
         Row(
             Modifier
                 .fillMaxWidth()
-                .windowInsetsPadding(
-                    WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)
-                )
+                .liveSafePadding(horizontal = true)
                 .padding(top = 40.dp, start = 20.dp, end = 20.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Top,
@@ -275,7 +273,7 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
             pipeline.speaker,
             Modifier
                 .align(Alignment.TopCenter)
-                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                .liveSafePadding(horizontal = true)
                 .padding(top = 100.dp, start = 20.dp, end = 20.dp),
         )
 
@@ -307,7 +305,7 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
             exit = slideOutVertically(tween(200)) { it / 2 } + fadeOut(tween(200)),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
+                .liveSafePadding(horizontal = true, bottom = true, navOnly = true)
                 .padding(bottom = 122.dp, start = 20.dp, end = 20.dp),
         ) {
             val displayText = notice ?: translated ?: text
@@ -388,7 +386,7 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .navigationBarsPadding()
+                .liveSafePadding(horizontal = true, bottom = true, navOnly = true)
                 .padding(bottom = 32.dp, start = 20.dp, end = 20.dp),
         ) {
             // 1. Settings
@@ -495,7 +493,7 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
             exit = scaleOut(targetScale = 0.95f, animationSpec = tween(100)) + fadeOut(tween(100)),
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .navigationBarsPadding()
+                .liveSafePadding(horizontal = true, bottom = true, navOnly = true)
                 .padding(bottom = 122.dp)
                 // torch-button center (SpaceEvenly, 5×44dp, 20dp side pad) − half popup width
                 .offset(x = 52.dp + (fullWidth - 260.dp) / 3),

@@ -1,5 +1,6 @@
 package com.mattmacosko.realtimeaicam.aim
 
+import com.mattmacosko.realtimeaicam.ui.liveSafePadding
 import com.mattmacosko.realtimeaicam.ui.withoutEmoji
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import android.content.Context
@@ -353,7 +354,7 @@ fun HelpMeAimScreen(onBack: () -> Unit) {
             speaker,
             Modifier
                 .align(Alignment.TopCenter)
-                .statusBarsPadding()
+                .liveSafePadding(top = true)
                 .padding(top = 90.dp, start = 20.dp, end = 20.dp),
         )
     }
@@ -368,7 +369,7 @@ private fun TopBar(title: String, backLabel: String, onBack: () -> Unit) {
     // only centres it when the back button happens to be exactly that wide,
     // which it never is.
     Box(
-        Modifier.fillMaxWidth().statusBarsPadding().padding(top = 8.dp),
+        Modifier.fillMaxWidth().liveSafePadding(top = true).padding(top = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -457,7 +458,7 @@ private fun Choices(
     onSomethingElse: () -> Unit,
 ) {
     Column(
-        Modifier.fillMaxSize().navigationBarsPadding().padding(horizontal = 16.dp),
+        Modifier.fillMaxSize().liveSafePadding(horizontal = true, bottom = true, navOnly = true).padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         TopBar("Help Me Aim", "Back to home", onBack)
@@ -502,7 +503,7 @@ private fun Asking(
     onClearRecent: () -> Unit = {},
 ) {
     Column(
-        Modifier.fillMaxSize().navigationBarsPadding().padding(horizontal = 16.dp),
+        Modifier.fillMaxSize().liveSafePadding(horizontal = true, bottom = true, navOnly = true).padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         TopBar("Something Else", "Back to choices", onBack)
@@ -602,7 +603,7 @@ private fun Aiming(
 
         Column(Modifier.fillMaxSize()) {
             Row(
-                Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp),
+                Modifier.fillMaxWidth().liveSafePadding(top = true).padding(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -645,7 +646,7 @@ private fun Aiming(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
                     .padding(bottom = 24.dp)
-                    .navigationBarsPadding()
+                    .liveSafePadding(horizontal = true, bottom = true, navOnly = true)
                     .clip(RoundedCornerShape(14.dp))
                     .background(Color.Black.copy(alpha = 0.55f))
                     .padding(12.dp),
@@ -679,7 +680,7 @@ private fun Taken(
 ) {
     Column(
         // Scrolls: a long description was cut off under the photo (Matt, 2026-11-03).
-        Modifier.fillMaxSize().navigationBarsPadding()
+        Modifier.fillMaxSize().liveSafePadding(horizontal = true, bottom = true, navOnly = true)
             .verticalScroll(androidx.compose.foundation.rememberScrollState())
             .padding(horizontal = 16.dp).padding(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
