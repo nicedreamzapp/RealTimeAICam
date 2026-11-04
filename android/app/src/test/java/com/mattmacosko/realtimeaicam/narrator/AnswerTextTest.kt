@@ -66,6 +66,9 @@ class AnswerTextTest {
         assertEquals("a mug", AnswerText.thingsOnly("a mug, the photo is dark"))
         assertEquals("a mug and a door", AnswerText.thingsOnly("too dim to see, a mug, dark, a door, very dark and blurry"))
         assertNull(AnswerText.thingsOnly("dark, dim lighting, too dark to tell"))
+        // Round 2: the look of the photo with a vague noun is not a thing either.
+        assertEquals("a lamp", AnswerText.thingsOnly("blurry shapes, dark background, a lamp"))
+        assertEquals("a red chair", AnswerText.thingsOnly("a dark area, a blurry object, a red chair, some dim shadows"))
     }
 
     @Test fun aRetryIsNeverDarkerThanTheTryBeforeIt() {

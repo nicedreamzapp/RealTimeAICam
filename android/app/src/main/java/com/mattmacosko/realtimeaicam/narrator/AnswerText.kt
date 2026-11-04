@@ -104,10 +104,12 @@ object AnswerText {
 
     /** A fragment that is nothing but how the photo looks: "dark", "very dim", "dark and blurry". */
     private val PHOTO_STATE_ONLY = Regex(
-        "^(?:(?:just|too|very|quite|really|so|a bit|a little|kind of|pretty|rather|and|or|a)\\s+)*" +
+        "^(?:(?:just|too|very|quite|really|so|a bit|a little|kind of|pretty|rather|and|or|a|an|some|the)\\s+)*" +
             "(?:dark|dim|blurry|blurred|grainy|fuzzy|murky|shadowy|unclear)" +
             "(?:\\s+(?:and|or)\\s+(?:(?:too|very|quite|a bit)\\s+)?(?:dark|dim|blurry|blurred|grainy|fuzzy|murky|shadowy|unclear))*" +
-            "(?:\\s+(?:image|photo|picture|shot|scene|lighting|light))?$"
+            // ...or that look with a vague noun: "blurry shapes", "a dark background", "dim area" (round-2 review).
+            "(?:\\s+(?:image|photo|picture|shot|scene|lighting|light|shapes?|background|areas?|objects?|spots?|" +
+            "shadows?|patch(?:es)?|blobs?|smudges?|things?|stuff|space|corner|outlines?|forms?|figures?))?$"
     )
 
     private val INSTRUCTION_VERBS = listOf(
