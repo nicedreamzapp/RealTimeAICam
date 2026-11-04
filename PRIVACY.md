@@ -1,6 +1,6 @@
 # Privacy Policy — RealTime AI Cam (Android & iOS)
 
-**Effective date: July 13, 2026**
+**Effective date: November 4, 2026**
 
 RealTime AI Cam is built by Nice Dreamz LLC ("we", "us"). This policy covers the RealTime AI Cam mobile app on Android and iOS.
 
@@ -8,7 +8,7 @@ RealTime AI Cam is built by Nice Dreamz LLC ("we", "us"). This policy covers the
 
 **RealTime AI Cam does not collect, store, or share any personal data. Period.**
 
-Everything the app does — object detection, text recognition (OCR), and Spanish translation — happens entirely on your device. Nothing you point your camera at ever leaves your phone.
+Everything the app does — object detection, text recognition (OCR), translation, describing photos, and Live Cam conversations — happens entirely on your device. Nothing you point your camera at ever leaves your phone.
 
 ## Details
 
@@ -21,6 +21,8 @@ Everything the app does — object detection, text recognition (OCR), and Spanis
 ## Permissions
 
 - **Camera** — required for the app's core features (live detection, text reading, translation). Used only while the app is open.
+- **Microphone and speech recognition** — used only to hear questions you ask out loud: while you hold the ask button in What's this?, while you speak to Help Me Aim, and the whole time Live Cam is open. Your words are turned into text by Apple's speech recognition on your phone (on-device only, it works in airplane mode). No audio is recorded, saved, or sent anywhere, and Live Cam's conversation is forgotten when you leave it.
+- **Photos (add only)** — Help Me Aim saves the pictures you take to your photo library. Nothing is uploaded.
 
 ## Children
 

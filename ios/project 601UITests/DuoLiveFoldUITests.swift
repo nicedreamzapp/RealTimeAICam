@@ -11,7 +11,7 @@
 import XCTest
 
 final class DuoLiveFoldUITests: XCTestCase {
-    private let tools = ["Read", "Object Detection", "What's this?", "Help Me Aim", "Live Cam"]
+    private let tools = ["Read", "Object Detection", "What's this?", "Help Me Aim", "Live Cam, experimental"]
 
     private func keep(_ shot: XCUIScreenshot, _ name: String) {
         let a = XCTAttachment(screenshot: shot)

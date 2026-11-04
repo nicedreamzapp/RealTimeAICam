@@ -290,6 +290,11 @@ actor OnDeviceVisionNarrator {
         }.value
     }
 
+    /// Live Cam is opening and loads the same level with its own context: let
+    /// go of this one first, so two copies of the model never sit in memory.
+    /// The next What's this? loads it again.
+    func releaseEngine() { engine = nil }
+
     /// The engine for `level`, loading it (and letting go of any other level
     /// first, so two models never sit in memory together). A level that will
     /// not load falls back to the bundled Balanced, and says so in the log.

@@ -25,6 +25,8 @@ struct ContentView: View {
     @State private var animationState = AnimationState()
     @Environment(\.scenePhase) private var scenePhase
     @State private var lastModeSwitch = Date.distantPast
+    /// Live Cam, full screen over home (2026-11-04).
+    @State private var showLiveCam = false
 
     private var isPortrait: Bool {
         normalizedOrientation == .portrait || !normalizedOrientation.isValidInterfaceOrientation
@@ -99,6 +101,9 @@ struct ContentView: View {
             }
         }
         .onAppear {
+            #if DEBUG
+            if LiveCamTest.openAtLaunch { showLiveCam = true }
+            #endif
             if storedMode == .home {
                 mode = storedMode
             } else {
@@ -117,6 +122,9 @@ struct ContentView: View {
         .onChange(of: scenePhase) { newValue in
             handleScenePhaseChange(newValue)
             storedMode = mode
+        }
+        .fullScreenCover(isPresented: $showLiveCam) {
+            LiveCamView(onBack: closeLiveCam)
         }
         .alert(item: $viewModel.cameraPermissionAlert) { alert in
             Alert(
@@ -188,6 +196,7 @@ struct ContentView: View {
             onHelpMeAim: {
                 switchToMode(.helpMeAim)
             },
+            onLiveCam: openLiveCam,
             onVoiceChange: playWelcomeMessage,
             speechSynthesizer: speechSynthesizer
         )
@@ -200,6 +209,20 @@ struct ContentView: View {
             selectedVoiceIdentifier: viewModel.selectedVoiceIdentifier
         )
         .ignoresSafeArea()
+    }
+
+    /// Live Cam from the home button: nothing else may hold the camera or talk while it is open.
+    private func openLiveCam() {
+        viewModel.stopSession()
+        SpeechManager.shared.resetSpeechState()
+        showLiveCam = true
+    }
+
+    private func closeLiveCam() {
+        showLiveCam = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            UIAccessibility.post(notification: .screenChanged, argument: "Home screen")
+        }
     }
 
     private func switchToHome() {

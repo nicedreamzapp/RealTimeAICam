@@ -393,7 +393,17 @@ struct HomeView: View {
         }) {
             HStack(spacing: 4 * scale) {
                 Text("\u{1F4AC}").font(.system(size: 32 * scale))
-                OutlinedText(text: "Live Cam", fontSize: 20 * scale)
+                // Matt 11/4: Live Cam says it's experimental. The tag sits under the name, inside the
+                // emoji's line height, so the button is no taller than the others.
+                VStack(spacing: 0) {
+                    OutlinedText(text: "Live Cam", fontSize: 20 * scale)
+                    Text("EXPERIMENTAL")
+                        .font(.system(size: 9 * scale, weight: .heavy, design: .rounded))
+                        .kerning(0.6 * scale)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 5 * scale)
+                        .background(Capsule().fill(Color.pink.opacity(0.75)))
+                }
             }
             .padding(.vertical, 14 * scale)
             .frame(maxWidth: .infinity)
@@ -429,7 +439,7 @@ struct HomeView: View {
         .shadow(color: Color.pink.opacity(0.50), radius: 12 * scale)
         .scaleEffect(animationState.button5 ? 1 : 0.7)
         .animation(.easeOut(duration: 0.3), value: animationState.button5)
-        .accessibilityLabel("Live Cam")
+        .accessibilityLabel("Live Cam, experimental")
         .accessibilityHint("Talk with the camera. Ask out loud about what's in front of you and hear the answer")
         .accessibilityAddTraits(.isButton)
     }
