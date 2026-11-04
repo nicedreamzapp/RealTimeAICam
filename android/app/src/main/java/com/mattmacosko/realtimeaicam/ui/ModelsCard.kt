@@ -59,7 +59,6 @@ import com.mattmacosko.realtimeaicam.narrator.ModelPicker
 import com.mattmacosko.realtimeaicam.narrator.ModelPriority
 import com.mattmacosko.realtimeaicam.narrator.NarratorEngine
 import com.mattmacosko.realtimeaicam.narrator.PhotoKind
-import com.mattmacosko.realtimeaicam.narrator.SpeedCheck
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -161,7 +160,6 @@ private fun ModelsChooser(onDone: () -> Unit) {
     val scope = rememberCoroutineScope()
     val states by ModelDownloader.states.collectAsState()
     var refresh by remember { mutableIntStateOf(0) }
-    var checking by remember { mutableStateOf(false) }
     @Suppress("UNUSED_EXPRESSION") states; refresh
 
     fun say(text: String) { view.announceForAccessibility(text) }
@@ -235,6 +233,7 @@ private fun ModelsChooser(onDone: () -> Unit) {
                     }
                     BigRow(
                         level.title, rowSentence(context, level), selected = choice == level,
+                        note = level.technicalLine(),
                         dimmed = !level.fitsThisPhone(context),
                         progress = (state as? ModelDownloader.State.Downloading)?.progress,
                         actions = actions,
@@ -256,28 +255,7 @@ private fun ModelsChooser(onDone: () -> Unit) {
                         refresh++
                     }
                 }
-                item {
-                    Text(
-                        if (checking) "Measuring speed…" else "Measure this phone's speed again",
-                        fontSize = 16.sp, color = IosColors.Blue,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 56.dp)
-                            .clickable(enabled = !checking, role = Role.Button,
-                                onClickLabel = "time one test photo and update every estimate") {
-                                checking = true
-                                say("Measuring this phone's speed.")
-                                scope.launch {
-                                    withContext(Dispatchers.IO) { SpeedCheck.run(context) }
-                                    checking = false
-                                    say("Done. ${modelsSummary(context)}")
-                                    refresh++
-                                }
-                            }
-                            .padding(vertical = 16.dp),
-                    )
-                }
-                item { Spacer(Modifier.heightIn(min = 32.dp)) }
+                item { Spacer(Modifier.heightIn(min = 72.dp)) }
             }
         }
     }
@@ -296,6 +274,7 @@ private fun BigRow(
     detail: String,
     selected: Boolean,
     dimmed: Boolean = false,
+    note: String? = null,
     progress: Float? = null,
     actions: List<CustomAccessibilityAction> = emptyList(),
     visibleAction: Pair<String, () -> Boolean>? = null,
@@ -310,7 +289,7 @@ private fun BigRow(
             .background(Color.White.copy(alpha = if (selected) 0.16f else 0.08f))
             .clickable(role = Role.RadioButton, onClick = onPick)
             .clearAndSetSemantics {
-                contentDescription = "$title. $detail"
+                contentDescription = if (note != null) "$title. $detail $note" else "$title. $detail"
                 stateDescription = if (selected) "Selected" else "Not selected"
                 this.selected = selected
                 role = Role.RadioButton
@@ -327,6 +306,7 @@ private fun BigRow(
             Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
                 color = if (dimmed) IosColors.Gray else Color.White)
             Text(detail, fontSize = 14.sp, color = IosColors.Gray)
+            if (note != null) Text(note, fontSize = 12.sp, color = IosColors.Gray)
             if (progress != null) LinearProgressIndicator(progress = { progress }, color = Teal,
                 modifier = Modifier.fillMaxWidth())
             if (visibleAction != null) Text(

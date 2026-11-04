@@ -44,6 +44,14 @@ enum class ModelLevel(
         736_644_128L, 0.72, 0L);
 
     val key: String get() = name.lowercase()
+    /** The real model behind the level, shown small after the plain sentence. */
+    val modelName: String get() = when (this) {
+        SHARP -> "LFM3-Omni 2B, 8-bit"
+        CLEAR -> "LFM3-Omni 2B, 3-bit"
+        BALANCED -> "LFM3-Omni 2B, 2-bit"
+        QUICK -> "Vision Narrator 0.8B, 4-bit"
+    }
+    fun technicalLine(): String = "Model: $modelName, ${sizeText()}."
     val isBundled: Boolean get() = this == BALANCED
     val usesLfm3Prompt: Boolean get() = this != QUICK
     /** Folder on our server. */
