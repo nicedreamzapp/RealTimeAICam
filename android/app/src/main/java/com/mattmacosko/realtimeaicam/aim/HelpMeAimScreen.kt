@@ -67,6 +67,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withContext
 
 /**
  * Help Me Aim, Android.
@@ -96,7 +97,14 @@ fun HelpMeAimScreen(onBack: () -> Unit) {
     val owner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
 
-    val speaker = remember { SpeechAnnouncer(context).also { it.setEnabled(true) } }
+    // Your language (2026-11-04): guidance and the description are said in it once its pack is on
+    // the phone; the finder's word matching stays English inside.
+    val speaker = remember {
+        SpeechAnnouncer(context).also {
+            it.setEnabled(true)
+            it.localizeTo = com.mattmacosko.realtimeaicam.translation.YourLanguage.code(context)
+        }
+    }
     val pipeline = remember { AimPipeline(context, speaker) }
     val listener = remember { AimListener(context) }
     val previewView = remember {
@@ -203,10 +211,28 @@ fun HelpMeAimScreen(onBack: () -> Unit) {
         }
     }
 
+    /**
+     * What the person typed or said, in Your language, put into English first so the finder's
+     * English word list (AimVocabulary, AimAsk) can match it: "taza" -> "cup".
+     */
+    fun findInYourLanguage(word: String) {
+        val lang = speaker.outputLanguage()
+        if (lang == "en") { findTyped(word); return }
+        scope.launch {
+            val english = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                AimInput.toEnglish(word, lang) { w, from ->
+                    com.mattmacosko.realtimeaicam.translation.YourLanguage.translateBlocking(w, from, "en")
+                }
+            }
+            android.util.Log.i("HelpMeAim", "target [$lang] \"$word\" -> \"$english\" -> ${AimVocabulary.match(english, pipeline.classNames)}")
+            findTyped(english)
+        }
+    }
+
     LaunchedEffect(fakeStart) {
         val w = fakeStart ?: return@LaunchedEffect
         delay(2000)
-        findTyped(w)
+        findInYourLanguage(w)
     }
 
     /** Ask, beep, listen, look it up — the iPhone's Something Else flow. */
@@ -225,12 +251,12 @@ fun HelpMeAimScreen(onBack: () -> Unit) {
             // ones when it stops. Matt asked for this on the iPhone.
             AimBeep.play(context, AimTones.start)
             delay((AimTones.duration * 1000).toLong())
-            val heard = listener.listen()
+            val heard = listener.listen(speaker.outputLanguage())
             AimBeep.play(context, AimTones.end)
             listening = false
             val result = AimListening.result(heard ?: "", failed = heard == null)
             if (result is AimListening.Result.Heard) {
-                findTyped(result.transcript)
+                findInYourLanguage(result.transcript)
             } else {
                 status = AimListening.reply(result) ?: AimPhrases.didntCatch
                 speaker.speak(status)
@@ -281,7 +307,7 @@ fun HelpMeAimScreen(onBack: () -> Unit) {
                 typed = typed,
                 onTyped = { typed = it },
                 onListen = { listen() },
-                onSubmit = { if (typed.isNotBlank()) findTyped(typed) },
+                onSubmit = { if (typed.isNotBlank()) findInYourLanguage(typed) },
                 onBack = { backToChoices() },
                 recent = recent,
                 onPickRecent = { findTyped(it) },
@@ -694,7 +720,7 @@ class AimListener(private val context: Context) {
     val available: Boolean get() = SpeechRecognizer.isRecognitionAvailable(context)
 
     /** The transcript, or null when nothing usable was heard. */
-    suspend fun listen(): String? {
+    suspend fun listen(language: String = "en"): String? {
         if (!available) return null
         val done = CompletableDeferred<String?>()
         val r = SpeechRecognizer.createSpeechRecognizer(context).also { recognizer = it }
@@ -721,6 +747,8 @@ class AimListener(private val context: Context) {
                 RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
             )
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            // Your language: listen for it (the phone's own language otherwise, as before).
+            if (language != "en") putExtra(RecognizerIntent.EXTRA_LANGUAGE, language)
             putExtra(
                 RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS,
                 (AimListening.silence * 1000).toLong(),
@@ -737,5 +765,16 @@ class AimListener(private val context: Context) {
     fun close() {
         recognizer?.destroy()
         recognizer = null
+    }
+}
+
+/** Help Me Aim input in Your language, put into English for the finder. Pure, unit tested. */
+object AimInput {
+    /** [translate] (text, fromLanguage) -> English or null. Falls back to what was said. */
+    fun toEnglish(word: String, lang: String, translate: (String, String) -> String?): String {
+        val w = word.trim()
+        if (lang == "en" || w.isEmpty()) return w
+        val out = translate(w, lang)?.trim()?.trimEnd('.', '!', '?')
+        return if (out.isNullOrBlank()) w else out
     }
 }

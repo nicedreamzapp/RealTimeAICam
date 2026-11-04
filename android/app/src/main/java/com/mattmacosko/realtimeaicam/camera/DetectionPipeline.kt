@@ -179,6 +179,7 @@ class DetectionPipeline(
     /** Binds preview + analysis to [lifecycleOwner], rendering into [previewView]. */
     fun start(lifecycleOwner: LifecycleOwner, previewView: PreviewView) {
         loadModel()
+        prepareNames()
         _zoomRatio.value = 1f
         _torchOn.value = false
         boundLifecycleOwner = lifecycleOwner
@@ -230,6 +231,36 @@ class DetectionPipeline(
                 Log.e(TAG, "Camera bind failed", e)
             }
         }, ContextCompat.getMainExecutor(appContext))
+    }
+
+    /**
+     * Your language (2026-11-04): object names are said in it. The English list is translated
+     * once per language (after its pack was downloaded on the person's tap), saved to a file,
+     * and read from the file every time after that. English, or no pack yet: English names.
+     */
+    private fun prepareNames() {
+        val lang = announcer.outputLanguage()
+        if (lang == "en") { announcer.nameFor = null; announcer.namesLanguage = "en"; return }
+        if (announcer.namesLanguage == lang && announcer.nameFor != null) return
+        Thread({
+            try {
+                val labels = appContext.assets.open(YoloDetector.LABELS_ASSET).bufferedReader()
+                    .readLines().map { it.trim() }.filter { it.isNotEmpty() }
+                val t0 = android.os.SystemClock.elapsedRealtime()
+                val names = com.mattmacosko.realtimeaicam.translation.ObjectLabelTranslations.loadOrBuild(
+                    appContext.filesDir, lang, labels,
+                ) { com.mattmacosko.realtimeaicam.translation.YourLanguage.translateBlocking(it, "en", lang) }
+                if (names == null) { Log.w(TAG, "object names in $lang not ready; English for now"); return@Thread }
+                val map = HashMap<String, String>(labels.size * 2)
+                labels.forEachIndexed { i, l -> map[l] = names[i] }
+                announcer.namesLanguage = lang
+                announcer.nameFor = { map[it] }
+                Log.i(TAG, "object names in $lang: ${map.size} in ${android.os.SystemClock.elapsedRealtime() - t0} ms " +
+                    "(mouse=${map["Mouse"]}, computer mouse=${map["Computer mouse"]}, glasses=${map["Glasses"]}, cup=${map["Coffee cup"]})")
+            } catch (t: Throwable) {
+                Log.w(TAG, "object names in $lang failed", t)
+            }
+        }, "object-names").start()
     }
 
     fun stop() {

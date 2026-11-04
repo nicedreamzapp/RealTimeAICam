@@ -54,6 +54,9 @@ import androidx.compose.ui.unit.sp
 
 // Rewritten for the new home (iOS parity, 2026-11-04): the same order as the home screen,
 // Read and Translate merged, Settings on home, Help Me Aim, Live Cam.
+/** One short paragraph, same words in the INFO GUIDE and the spoken tutorial (and on iOS). */
+const val YOUR_LANGUAGE_GUIDE = "Your language: in Settings, pick the language you want to hear. The first time, tap Download once; after that it works offline. Read, Object Detection, Help Me Aim and What's this? then speak in your language. Buttons stay in English for now."
+
 private val TUTORIAL_TEXT = listOf(
     "Welcome to the RealTime A I Camera.",
     "The home screen has two buttons at the top, Settings and Info and guide, then five tools, then the voice button. Swipe through them, or touch the screen to explore.",
@@ -63,6 +66,7 @@ private val TUTORIAL_TEXT = listOf(
     "Help Me Aim takes a good photo for you. Choose Face, Picture or Page, or Something Else and say what you want. It tells you which way to move, counts down, and saves the photo with a description. For things it doesn't know by sight, like a wallet, it looks closely and tells you where it is. Double tap anywhere to take the picture yourself.",
     "Live Cam is coming soon. It lets you talk with the camera. Ask out loud about what's in front of you and hear the answer.",
     "In Settings, Models, the app already picked the best A I for your phone. You can choose Most accurate or Fastest there.",
+    YOUR_LANGUAGE_GUIDE,
     "Everything runs on your phone and works offline. No accounts and no tracking.",
 ).joinToString(" ")
 
@@ -280,6 +284,10 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
                         "one your phone can run. In Settings, then Models, you can choose Most accurate or Fastest, or pick one " +
                         "yourself. Settings also has the countdown before photos, the app's own voice or TalkBack, and your copy " +
                         "history. The voice button at the bottom of the home screen changes the voice.",
+                )
+                ModeBlock(
+                    "🌍 Your language",
+                    YOUR_LANGUAGE_GUIDE,
                 )
 
                 SectionHeader("🎛️ Camera controls")

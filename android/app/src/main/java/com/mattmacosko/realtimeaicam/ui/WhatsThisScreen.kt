@@ -181,6 +181,8 @@ fun WhatsThisScreen(
     var ready by remember { mutableStateOf(false) }
     var modelMissing by remember { mutableStateOf(false) }
     var summary by remember { mutableStateOf("") }
+    /** The language [summary] is in: Your language once an answer was translated into it. */
+    var summaryLang by remember { mutableStateOf("en") }
     var isScanning by remember { mutableStateOf(false) }
     var frozenPhoto by remember { mutableStateOf<Bitmap?>(null) }
     var isListening by remember { mutableStateOf(false) }
@@ -239,7 +241,26 @@ fun WhatsThisScreen(
     fun say(sentence: String) {
         isScanning = false
         summary = sentence
+        summaryLang = "en"
         speaker.speak(sentence)
+    }
+
+    /**
+     * An answer from the model (English): into Your language first when that is on (about a
+     * second), then shown and read aloud. Read to the end, it is a success for the rating card.
+     */
+    suspend fun sayAnswer(english: String) {
+        val lang = speaker.outputLanguage()
+        val (text, used) = withContext(Dispatchers.IO) {
+            com.mattmacosko.realtimeaicam.translation.AnswerLanguage.forPerson(english, lang) { t, from, to ->
+                com.mattmacosko.realtimeaicam.translation.YourLanguage.translateLinesBlocking(t, from, to)
+            }
+        }
+        if (used != "en") Log.i(TAG, "answer en>$used: $text")
+        isScanning = false
+        summary = text
+        summaryLang = used
+        speaker.speakIn(text, used, result = true)
     }
 
     /** The primary action: snap now, freeze the frame, let the model look. */
@@ -294,8 +315,8 @@ fun WhatsThisScreen(
                 // camera cannot see where it is pointing, so that is not advice
                 // they can act on.
                 description = said.trim()
-                if (said.isNotBlank()) com.mattmacosko.realtimeaicam.RatePrompt.noteResult(context)
-                say(said.ifBlank { "It's hard to see clearly, and I couldn't make out enough to say." })
+                if (said.isNotBlank()) sayAnswer(said)
+                else say("It's hard to see clearly, and I couldn't make out enough to say.")
             } finally {
                 camera.resume(lifecycleOwner, previewView)
             }
@@ -371,15 +392,21 @@ fun WhatsThisScreen(
             isAsking = true
             summary = "Thinking…"
             val answer = withContext(Dispatchers.IO) {
+                // Your language: the question goes to the model in English.
+                val lang = speaker.outputLanguage()
+                val english = com.mattmacosko.realtimeaicam.translation.AnswerLanguage.questionForModel(question, lang) { t, from, to ->
+                    com.mattmacosko.realtimeaicam.translation.YourLanguage.translateBlocking(t, from, to)
+                }
+                if (lang != "en") Log.i(TAG, "question [$lang] \"$question\" -> \"$english\"")
                 // "I can't tell for sure, but I can see..." is the trained honest
                 // answer, so no refusal retry. Only advice a blind person cannot
                 // act on ("move closer, turn on a light") is cut.
-                val said = engine.describe(photo, question, NarratorPrompt.ASK)
+                val said = engine.describe(photo, english, NarratorPrompt.ASK)
                 if (tellsThemToRetake(said)) withoutRetakeAdvice(said) else said
             }
             isAsking = false
-            if (answer.isNotBlank()) com.mattmacosko.realtimeaicam.RatePrompt.noteResult(context)
-            say(answer.ifBlank { "Sorry, I couldn't work that out. Try asking again." })
+            if (answer.isNotBlank()) sayAnswer(answer)
+            else say("Sorry, I couldn't work that out. Try asking again.")
         }
     }
 
@@ -416,6 +443,7 @@ fun WhatsThisScreen(
         }
         speaker.stop()
         isListening = true
+        listener.language = speaker.outputLanguage()
         listener.start()
     }
 
@@ -560,7 +588,7 @@ fun WhatsThisScreen(
                             onClickLabel = "Hear it again",
                         ) {
                             speaker.stop()
-                            speaker.speak(summary)
+                            speaker.speakIn(summary, summaryLang)
                         }
                         .padding(16.dp)
                         .semantics(mergeDescendants = true) {
@@ -855,7 +883,7 @@ fun WhatsThisScreen(
                 onClick = {
                     if (!debouncer.tryFire()) return@CircleControlButton
                     if (isSpeaking) speaker.stop()
-                    else if (summary.isNotBlank() && !isScanning && !isAsking) speaker.speak(summary)
+                    else if (summary.isNotBlank() && !isScanning && !isAsking) speaker.speakIn(summary, summaryLang)
                 },
             ) {
                 Icon(Icons.Default.RecordVoiceOver, null, tint = Color.White, modifier = Modifier.size(22.dp))
@@ -1257,6 +1285,9 @@ private class AskListener(private val context: Context) {
 
     val available: Boolean get() = SpeechRecognizer.isRecognitionAvailable(context)
 
+    /** Your language, so a question asked in it is heard in it (the phone's language otherwise). */
+    var language: String = "en"
+
     fun start() {
         destroy()
         partial = ""
@@ -1289,6 +1320,7 @@ private class AskListener(private val context: Context) {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                if (language != "en") putExtra(RecognizerIntent.EXTRA_LANGUAGE, language)
                 putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
             }
         )

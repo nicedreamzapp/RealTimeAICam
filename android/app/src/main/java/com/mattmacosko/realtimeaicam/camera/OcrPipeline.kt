@@ -120,6 +120,44 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
 
     val recognizedText = MutableStateFlow("")
     val translatedText = MutableStateFlow<String?>(null)
+    /** The language [translatedText] is in ("en" unless Your language is in use). */
+    @Volatile private var translatedLang = "en"
+
+    /**
+     * Your language (2026-11-04): the language results are spoken in. English unless the person
+     * picked another and its pack is on the phone (and a voice can say it).
+     */
+    fun outputLanguage(): String = speaker.outputLanguage()
+
+    /** English page, Your language not English: each page is translated into it as it is read. */
+    private fun localizingEnglish(): Boolean = !isSpanish && outputLanguage() != "en"
+
+    /** The camera found text. English pages are translated into Your language when that is on. */
+    private fun onRecognized(text: String) {
+        if (text == recognizedText.value) return
+        recognizedText.value = text
+        if (isSpanish) return
+        val to = outputLanguage()
+        if (to == "en") { if (translatedText.value != null) translatedText.value = null; return }
+        translatedText.value = null
+        com.mattmacosko.realtimeaicam.translation.YourLanguage.translateAsync(text, "en", to) { out ->
+            if (out != null && recognizedText.value == text && !isSpanish) {
+                translatedLang = to
+                translatedText.value = out
+                Log.i(TAG, "read en>$to: ${out.take(80)}")
+            }
+        }
+    }
+
+    /** What to say for the current page, and the language it is in; null while it is still being translated. */
+    private fun currentReading(): Pair<String, String>? {
+        translatedText.value?.let { return it to translatedLang }
+        if (localizingEnglish()) return null
+        val src = recognizedText.value
+        // A page already in Your language is just read, in a voice for it.
+        val lang = if (isSpanish && sourceLanguage.value.code == outputLanguage()) sourceLanguage.value.code else "en"
+        return src to lang
+    }
     val isTranslating = MutableStateFlow(false)
     val showTranslationPopup = MutableStateFlow(false)
     val engineReady = MutableStateFlow(sharedEngine?.isLoaded == true)
@@ -279,6 +317,7 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
         speaker.stop()
         recognizedText.value = ""
         translatedText.value = null
+        translatedLang = "en"
         isTranslating.value = false
         showTranslationPopup.value = false
         notice.value = null
@@ -328,13 +367,13 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
         val now = SystemClock.elapsedRealtime()
         if (speaker.speakingNow.value) quietUntil = maxOf(quietUntil, now + AFTER_SPEECH_GAP_MS)
         if (notice.value != null || isTranslating.value) return
-        val candidate = translatedText.value ?: recognizedText.value
+        val (candidate, lang) = currentReading() ?: return
         if (candidate.isBlank()) return
         autoGate.observe(candidate, now)
         val line = autoGate.due(now, busy = speaker.speakingNow.value || now < quietUntil) ?: return
         autoGate.markSpoken(line, now)
-        Log.i(TAG, "auto read: ${line.length} chars")
-        speaker.speak(line)
+        Log.i(TAG, "auto read: ${line.length} chars ($lang)")
+        speaker.speakIn(line, lang, result = true)
         holdAutoFor(line)
     }
 
@@ -470,17 +509,34 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
         frozen.value = true // pause OCR during + after translation (iOS)
         val lang = sourceLanguage.value
         val spanish = lang.code == ReaderLanguages.spanish.code
+        // Your language: the page goes into it instead of English (pill "French → Spanish").
+        val target = outputLanguage()
         workExecutor.execute {
-            val result = if (spanish && spanishDownloadFailed) {
+            var resultLang = "en"
+            val result = if (target != "en" && target == lang.code) {
+                // The page is already in Your language: nothing to translate, just read it.
+                resultLang = target
+                text
+            } else if (target != "en") {
+                val english = if (spanish && spanishDownloadFailed) translateWithDictionary(text)
+                    else translateWithGoogle(text, lang, spanish)
+                // Straight from the page's language when its pack is here (better than via English).
+                val yl = com.mattmacosko.realtimeaicam.translation.YourLanguage
+                val direct = if (isPackHere(lang.code)) yl.translateLinesBlocking(
+                    ReaderLanguages.translationUnits(lang, text).joinToString("\n"), lang.code, target) else null
+                val viaEnglish = if (direct == null && english != null) yl.translateLinesBlocking(english, "en", target) else null
+                (direct ?: viaEnglish)?.also { resultLang = target } ?: english
+            } else if (spanish && spanishDownloadFailed) {
                 translateWithDictionary(text)
             } else {
                 translateWithGoogle(text, lang, spanish)
             }
+            Log.i(TAG, "translate ${lang.code}>$resultLang (wanted $target)")
             isTranslating.value = false
             if (result != null) {
                 notice.value = null
+                translatedLang = resultLang
                 translatedText.value = result
-                com.mattmacosko.realtimeaicam.RatePrompt.noteResult(appContext)
                 showTranslationPopup.value = true
             } else {
                 frozen.value = false // nothing to show, keep reading the page
@@ -605,6 +661,12 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
         }
     }
 
+    /** The page language's translation pack is on the phone (asks Google; never downloads). */
+    private fun isPackHere(code: String): Boolean = try {
+        Tasks.await(RemoteModelManager.getInstance().isModelDownloaded(TranslateRemoteModel.Builder(code).build()))
+            .also { if (it) com.mattmacosko.realtimeaicam.translation.YourLanguage.readyPacks.value += code }
+    } catch (_: Exception) { false }
+
     private fun isOnline(): Boolean {
         val cm = appContext.getSystemService(ConnectivityManager::class.java) ?: return false
         val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
@@ -621,10 +683,21 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
             speaker.stop()
             return
         }
-        val toSpeak = translatedText.value ?: recognizedText.value
+        val reading = currentReading()
+        if (reading == null) {
+            // English page still being put into Your language: translate it now, then read it.
+            val src = recognizedText.value
+            val to = outputLanguage()
+            if (src.isBlank()) return
+            com.mattmacosko.realtimeaicam.translation.YourLanguage.translateAsync(src, "en", to) { out ->
+                speaker.speakIn(out ?: src, if (out != null) to else "en", result = true)
+                autoGate.markSpoken(out ?: src, SystemClock.elapsedRealtime())
+            }
+            return
+        }
+        val (toSpeak, lang) = reading
         if (toSpeak.isNotBlank()) {
-            com.mattmacosko.realtimeaicam.RatePrompt.noteResult(appContext)
-            speaker.speak(toSpeak)
+            speaker.speakIn(toSpeak, lang, result = true)
             // Read by hand: Auto read won't say the same page again right after.
             autoGate.markSpoken(toSpeak, SystemClock.elapsedRealtime())
             holdAutoFor(toSpeak)
@@ -653,7 +726,7 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
             try {
                 val bitmap = test ?: frameBitmap(image)
                 val text = reader.page.read(bitmap).trim()
-                if (!frozen.value && text.isNotEmpty()) recognizedText.value = text
+                if (!frozen.value && text.isNotEmpty()) mainHandler.post { if (!frozen.value) onRecognized(text) }
             } catch (t: Throwable) {
                 Log.w(TAG, "Tesseract read failed", t)
             } finally {
@@ -669,7 +742,7 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
             .addOnSuccessListener { result ->
                 if (!frozen.value) {
                     val text = result.text.trim()
-                    if (text.isNotEmpty()) recognizedText.value = text
+                    if (text.isNotEmpty()) onRecognized(text)
                 }
             }
             .addOnFailureListener { e -> Log.w(TAG, "OCR failed", e) }

@@ -55,18 +55,24 @@ fun MainScreen(
 ) {
     BackHandler(enabled = mode != AppMode.Home) { onModeChange(AppMode.Home) }
 
-    // Back on Home from a camera screen: a calm moment to ask for a rating, if one is due
-    // (RatePrompt, same rule as iOS).
-    val activityForRating = LocalContext.current as? android.app.Activity
-    var lastMode by remember { androidx.compose.runtime.mutableStateOf(mode) }
-    androidx.compose.runtime.LaunchedEffect(mode) {
-        if (mode == AppMode.Home && lastMode != AppMode.Home && activityForRating != null) {
-            com.mattmacosko.realtimeaicam.RatePrompt.askIfDue(activityForRating)
-        }
-        lastMode = mode
-    }
+    // The rating card is asked for right after a result is read aloud (RatePrompt), not here.
 
     val context = LocalContext.current
+
+    // Your language, said once on the first launch when the phone is in a language the app can
+    // translate into (and not English). Nothing downloads; Settings has the download row.
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        val p = context.getSharedPreferences(com.mattmacosko.realtimeaicam.translation.YourLanguage.PREFS, android.content.Context.MODE_PRIVATE)
+        val announced = p.getBoolean(com.mattmacosko.realtimeaicam.translation.YourLanguage.ANNOUNCED_KEY, false)
+        val phone = com.mattmacosko.realtimeaicam.translation.YourLanguage.phoneLanguage()
+        if (com.mattmacosko.realtimeaicam.translation.YourLanguageRules.shouldAnnounceFirstLaunch(phone, announced)) {
+            p.edit().putBoolean(com.mattmacosko.realtimeaicam.translation.YourLanguage.ANNOUNCED_KEY, true).apply()
+            val line = com.mattmacosko.realtimeaicam.translation.YourLanguageRules.firstLaunchLine(
+                com.mattmacosko.realtimeaicam.translation.YourLanguage.code(context))
+            android.util.Log.i("YourLanguage", "first launch: $line")
+            AppVoice.get(context).speak(line)
+        }
+    }
 
     // iOS parity: the iPhone interface is portrait-only (pbxproj
     // UISupportedInterfaceOrientations = Portrait) and LiveOCRView has no

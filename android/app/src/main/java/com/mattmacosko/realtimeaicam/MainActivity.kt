@@ -39,6 +39,16 @@ class MainActivity : ComponentActivity() {
         // level this phone wants if it is on Wi-Fi.
         com.mattmacosko.realtimeaicam.narrator.ModelDownloader.resumeInterrupted(this)
         com.mattmacosko.realtimeaicam.narrator.ModelDownloader.fetchWanted(this, automatic = true)
+        // Rating card: never during the first launch (RatePrompt).
+        if (savedInstanceState == null) RatePrompt.noteLaunch(this) else RatePrompt.attach(this)
+        // Your language: which translation packs are already on the phone (asks, never downloads).
+        com.mattmacosko.realtimeaicam.translation.YourLanguage.choice.value =
+            com.mattmacosko.realtimeaicam.translation.YourLanguage.code(this)
+        com.mattmacosko.realtimeaicam.translation.YourLanguage.refresh()
+        // Test builds only: `-e userLanguage es` sets Your language.
+        if ((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+            intent.getStringExtra("userLanguage")?.let { com.mattmacosko.realtimeaicam.translation.YourLanguage.set(this, it) }
+        }
         enableEdgeToEdge()
 
         // iOS parity: status bar hidden, content edge-to-edge (UI_SPEC §0)

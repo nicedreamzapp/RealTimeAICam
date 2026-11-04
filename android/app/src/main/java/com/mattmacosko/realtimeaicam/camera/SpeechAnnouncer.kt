@@ -24,6 +24,8 @@ enum class SpeechProblem {
     NO_ENGINE,
     /** The engine started but has no voice it can use (language data missing). */
     NO_VOICE,
+    /** Your language is set but the phone has no voice for it; English is spoken meanwhile. */
+    NO_LANGUAGE_VOICE,
 }
 
 /**
@@ -52,6 +54,7 @@ enum class SpeechProblem {
 class SpeechAnnouncer(context: Context) {
 
     private companion object {
+        const val YL_EN = "en"
         const val ANNOUNCEMENT_INTERVAL_MS = 1_000L
         const val CLASS_COOLDOWN_MS = 45_000L
         const val INTER_OBJECT_DELAY_MS = 800L
@@ -115,6 +118,23 @@ class SpeechAnnouncer(context: Context) {
     private var volumeWasOff = false
     /** Last line handed to the engine, so an engine error can still reach TalkBack. */
     @Volatile private var lastLine: Pair<String, String>? = null
+
+    /**
+     * Your language (2026-11-04). When set (not English), [speak] translates each English line
+     * into it before saying it, in a voice for that language. Help Me Aim and What's this? set
+     * this; Read and Object Detection pass the language per line instead.
+     */
+    @Volatile var localizeTo: String? = null
+    /** Object Detection: English class name -> the name to say, in [namesLanguage]. */
+    @Volatile var nameFor: ((String) -> String?)? = null
+    @Volatile var namesLanguage: String = YL_EN
+    /** Language of each utterance id still to be spoken (English when absent). */
+    private val utteranceLanguage = java.util.concurrent.ConcurrentHashMap<String, String>()
+    /** Your language with no voice on the phone: the banner names it. */
+    val missingVoiceLanguage = MutableStateFlow<String?>(null)
+    private var noVoiceSaid = false
+    private var englishVoice: android.speech.tts.Voice? = null
+    @Volatile private var speakSeq = 0L
 
     /**
      * The voice plays as accessibility speech (2026-11-04). On media volume, which many TalkBack
@@ -198,6 +218,10 @@ class SpeechAnnouncer(context: Context) {
                 lastFinishedId = utteranceId
                 this@SpeechAnnouncer.isSpeaking = false
                 speakingNow.value = false
+                // A result read aloud to the end: the one success moment for the rating card.
+                if (utteranceId?.startsWith("result-") == true) {
+                    mainHandler.post { com.mattmacosko.realtimeaicam.RatePrompt.noteResultSpoken(appContext) }
+                }
                 // iOS: schedule next queued object after interObjectDelay
                 if (utteranceId?.startsWith("announce-") == true) {
                     mainHandler.postDelayed({ processNextInQueue() }, INTER_OBJECT_DELAY_MS)
@@ -284,7 +308,48 @@ class SpeechAnnouncer(context: Context) {
             engineFailed = engineFailed || (!ready && engineSlow),
             voiceFailed = voiceFailed,
             volumeOff = volumeWasOff,
-        )
+        ) ?: if (speaksAloud && missingVoiceLanguage.value != null) SpeechProblem.NO_LANGUAGE_VOICE else null
+    }
+
+    /**
+     * The best voice the phone has for [lang] that works offline and is installed, or null.
+     * Null too while the engine is still starting (callers then assume one exists).
+     */
+    private fun voiceFor(lang: String): android.speech.tts.Voice? = try {
+        val want = java.util.Locale(lang).language
+        tts.voices.orEmpty()
+            .filter {
+                (it.locale.language == want || com.mattmacosko.realtimeaicam.translation.YourLanguageRules.normalize(it.locale.language) == lang) &&
+                    !it.isNetworkConnectionRequired &&
+                    it.features?.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) != true
+            }
+            .sortedWith(compareByDescending<android.speech.tts.Voice> { it.quality }.thenBy { it.name })
+            .firstOrNull()
+    } catch (_: Throwable) { null }
+
+    /** True when [lang] can be said aloud (or goes to TalkBack, which has its own voices). */
+    fun canSpeak(lang: String): Boolean {
+        if (lang == YL_EN || !speaksAloud || !ready) return true
+        return voiceFor(lang) != null
+    }
+
+    /**
+     * The language to speak results in right now: Your language when its pack is on the phone
+     * and there is a voice for it, otherwise English (exactly today's behaviour). With no voice,
+     * says so once in English and shows the speech-settings button.
+     */
+    fun outputLanguage(): String {
+        val lang = com.mattmacosko.realtimeaicam.translation.YourLanguage.active(appContext)
+        if (lang == YL_EN) { if (missingVoiceLanguage.value != null) { missingVoiceLanguage.value = null; updateProblem() }; return YL_EN }
+        if (canSpeak(lang)) { if (missingVoiceLanguage.value != null) { missingVoiceLanguage.value = null; updateProblem() }; return lang }
+        if (missingVoiceLanguage.value != lang) { missingVoiceLanguage.value = lang; updateProblem() }
+        if (!noVoiceSaid) {
+            noVoiceSaid = true
+            val line = com.mattmacosko.realtimeaicam.translation.YourLanguageRules.noVoiceLine(lang)
+            android.util.Log.i("RTCamSpeech", "no voice for $lang")
+            mainHandler.post { sayOrHold(line, "speak-${utteranceSeq++}") }
+        }
+        return YL_EN
     }
 
     private fun screenReaderOn(): Boolean {
@@ -333,7 +398,8 @@ class SpeechAnnouncer(context: Context) {
             if (now - lastSpoken >= CLASS_COOLDOWN_MS) {
                 // Name only, no confidence, and without label notes: "Bat (Animal)"
                 // is said "bat" (iOS SpeechManager, 2026-09-16).
-                val spoken = try { SpeakableText.className(exactName) } catch (t: Throwable) { exactName.lowercase() }
+                val spoken = nameFor?.invoke(exactName)
+                    ?: try { SpeakableText.className(exactName) } catch (t: Throwable) { exactName.lowercase() }
                 toAnnounce.add(exactName to spoken)
                 lastSpokenByClass[exactName] = now
             }
@@ -373,7 +439,9 @@ class SpeechAnnouncer(context: Context) {
         }
         isProcessingQueue = true
         val next = announcementQueue.removeFirst()
-        speakInternal(next.second, "announce-${utteranceSeq++}")
+        val id = "announce-${utteranceSeq++}"
+        if (nameFor != null && namesLanguage != YL_EN) utteranceLanguage[id] = namesLanguage
+        speakInternal(next.second, id)
     }
 
     /**
@@ -432,21 +500,83 @@ class SpeechAnnouncer(context: Context) {
             return
         }
         val id = "wait-${utteranceSeq++}"
-        speakInternal(text, id)
+        val lang = localizeTarget()
+        if (lang != YL_EN) {
+            val said = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.mattmacosko.realtimeaicam.translation.YourLanguage.translateBlocking(text, YL_EN, lang)
+            }
+            if (said != null) utteranceLanguage[id] = lang
+            speakInternal(said ?: text, id)
+        } else {
+            speakInternal(text, id)
+        }
         if (!speaksAloud) return  // TalkBack says it; no callback to wait for
         while (lastFinishedId != id && SystemClock.elapsedRealtime() - start < timeoutMs) {
             kotlinx.coroutines.delay(30)
         }
     }
 
-    fun speak(text: String) {
+    fun speak(text: String) = speakLine(text, result = false)
+
+    /**
+     * A result (a read page, a translation, an answer, a description). Same as [speak], but when
+     * the voice finishes it to the end it counts as a success for the rating card.
+     */
+    fun speakResult(text: String) = speakLine(text, result = true)
+
+    /**
+     * Say text that is already in [lang] (Read output, translated answers), in a voice for it.
+     * English goes through the usual number/address rewrite; other languages only lose markdown.
+     */
+    fun speakIn(text: String, lang: String, result: Boolean = false) {
+        if (lang == YL_EN) { speakLine(text, result, localize = false); return }
         announcementQueue.clear()
         isProcessingQueue = false
+        speakSeq++
+        val spoken = try { SpeakableText.stripFormatting(text) } catch (t: Throwable) { text }
+        if (spoken.isBlank()) return
+        val id = "${if (result) "result" else "speak"}-${utteranceSeq++}"
+        utteranceLanguage[id] = lang
+        sayOrHold(spoken, id)
+    }
+
+    /** Your language for [speak]'s English lines on this screen, or English. */
+    private fun localizeTarget(): String {
+        val to = localizeTo ?: return YL_EN
+        if (to == YL_EN) return YL_EN
+        return outputLanguage()
+    }
+
+    private fun speakLine(text: String, result: Boolean, localize: Boolean = true) {
+        announcementQueue.clear()
+        isProcessingQueue = false
+        val lang = if (localize) localizeTarget() else YL_EN
+        val prefix = if (result) "result" else "speak"
+        if (lang != YL_EN) {
+            // Translate first (a few ms once the pack is loaded), then say it, unless a newer line
+            // was asked for meanwhile: the same "the latest line wins" as QUEUE_FLUSH.
+            val mine = ++speakSeq
+            com.mattmacosko.realtimeaicam.translation.YourLanguage.translateAsync(text, YL_EN, lang) { said ->
+                if (mine != speakSeq) return@translateAsync
+                if (said == null) { speakEnglish(text, prefix); return@translateAsync }
+                val clean = try { SpeakableText.stripFormatting(said) } catch (t: Throwable) { said }
+                if (clean.isBlank()) return@translateAsync
+                val id = "$prefix-${utteranceSeq++}"
+                utteranceLanguage[id] = lang
+                sayOrHold(clean, id)
+            }
+            return
+        }
+        speakSeq++
+        speakEnglish(text, prefix)
+    }
+
+    private fun speakEnglish(text: String, prefix: String) {
         // Never let a text rewrite cost the person their speech: if a pattern
         // misbehaves on some device, say the text as read.
         val spoken = try { SpeakableText.make(text) } catch (t: Throwable) { text }
         if (spoken.isBlank()) return
-        sayOrHold(spoken, "speak-${utteranceSeq++}")
+        sayOrHold(spoken, "$prefix-${utteranceSeq++}")
     }
 
     /** Speak now if the engine is up; otherwise keep the latest line and say it when it is. */
@@ -471,17 +601,37 @@ class SpeechAnnouncer(context: Context) {
     private fun speakInternal(text: String, id: String) {
         // Debug builds log every spoken line so a cable test can read what was said.
         if ((appContext.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) android.util.Log.d("RTCamSpeech", text)
+        val lang = utteranceLanguage.remove(id) ?: YL_EN
         if (!speaksAloud || voiceUnavailable) {
             // TalkBack reads this in the user's OWN voice and rate, which is the
             // whole point of the setting. Also the fallback when no speech engine works.
             announceToScreenReader(text)
+            if (id.startsWith("result-")) {
+                // No "done" from TalkBack: count it once it has had time to be heard.
+                mainHandler.postDelayed({ com.mattmacosko.realtimeaicam.RatePrompt.noteResultSpoken(appContext) },
+                    AnnouncementRules.estimatedMs(text))
+            }
             return
         }
-        // Honor the Home-screen voice selection (persisted)
-        val wanted = com.mattmacosko.realtimeaicam.ui.VoicePrefs.get(appContext)
-        if (wanted != null && wanted != appliedVoice) {
-            com.mattmacosko.realtimeaicam.ui.VoicePrefs.apply(appContext, tts)
-            appliedVoice = wanted
+        if (lang != YL_EN) {
+            // Your language: a voice for it (the Home voice picker lists English voices only).
+            val v = voiceFor(lang)
+            if (v != null && tts.voice?.name != v.name) {
+                if (englishVoice == null) englishVoice = tts.voice
+                try { tts.voice = v } catch (_: Throwable) {}
+                appliedVoice = null
+            }
+            if (v == null) outputLanguage() // says once that no voice is installed
+            android.util.Log.i("RTCamSpeech", "[$lang] voice=${v?.name}")
+        } else {
+            // Honor the Home-screen voice selection (persisted)
+            val wanted = com.mattmacosko.realtimeaicam.ui.VoicePrefs.get(appContext)
+            if (wanted != null && wanted != appliedVoice) {
+                com.mattmacosko.realtimeaicam.ui.VoicePrefs.apply(appContext, tts)
+                appliedVoice = wanted
+            } else if (wanted == null && englishVoice != null && tts.voice?.locale?.language != YL_EN) {
+                try { tts.voice = englishVoice } catch (_: Throwable) {}
+            }
         }
         lastLine = text to id
         if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, id) == TextToSpeech.ERROR) {
@@ -507,6 +657,7 @@ class SpeechAnnouncer(context: Context) {
 
     fun stop() {
         pendingLine = null
+        speakSeq++ // a line still being translated is not said after a stop
         tts.stop()
         isSpeaking = false
         speakingNow.value = false

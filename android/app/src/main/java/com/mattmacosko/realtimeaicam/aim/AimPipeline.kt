@@ -543,7 +543,9 @@ class AimPipeline(
             )
         }
         Log.i(TAG, "SAY $line")
-        say(line)
+        _spoken.value = line
+        // A description read to the end is a success moment for the rating card.
+        if (description != null) speaker.speakResult(line) else speaker.speak(line)
         _done.value = line
     }
 

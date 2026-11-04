@@ -48,6 +48,17 @@ fun SpeechProblemBanner(announcer: SpeechAnnouncer, modifier: Modifier = Modifie
         }
     }
     val problem by announcer.problem.collectAsState()
+    // Your language's one-time download, offered on every camera screen until it is taken.
+    Column(modifier, verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+        SpeechProblemCard(announcer, problem)
+        YourLanguageDownloadRow(say = { announcer.speak(it) })
+    }
+}
+
+@Composable
+private fun SpeechProblemCard(announcer: SpeechAnnouncer, problem: SpeechProblem?) {
+    val modifier = Modifier
+    val missingLang by announcer.missingVoiceLanguage.collectAsState()
     val current = problem ?: return
     val context = LocalContext.current
     val message = when (current) {
@@ -56,6 +67,9 @@ fun SpeechProblemBanner(announcer: SpeechAnnouncer, modifier: Modifier = Modifie
             "Open speech settings and pick or install one, like Speech Services by Google."
         SpeechProblem.NO_VOICE -> "The speech engine has no voice installed, so the app can't talk. " +
             "Open speech settings to download a voice."
+        SpeechProblem.NO_LANGUAGE_VOICE -> com.mattmacosko.realtimeaicam.translation.YourLanguageRules.noVoiceLine(
+            missingLang ?: "en",
+        ) + " Until then it speaks English."
     }
     Column(
         modifier

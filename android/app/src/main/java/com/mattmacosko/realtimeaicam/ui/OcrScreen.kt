@@ -184,6 +184,10 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
     val readingMode by pipeline.readingMode.collectAsState()
     val readerOffer by pipeline.readerOffer.collectAsState()
     val readerDownloading by pipeline.readerDownloading.collectAsState()
+    // Your language: the pill names where the page goes ("French → Spanish").
+    val ylReady by com.mattmacosko.realtimeaicam.translation.YourLanguage.readyPacks.collectAsState()
+    val ylChoice by com.mattmacosko.realtimeaicam.translation.YourLanguage.choice.collectAsState()
+    val outputLang = remember(ylReady, ylChoice) { pipeline.outputLanguage() }
 
     var showSettings by remember { mutableStateOf(false) }
     var showTorchPopup by remember { mutableStateOf(false) }
@@ -248,15 +252,18 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
             // picks English, or a language to translate into English. Remembered.
             LanguagePill(
                 index = ReaderChoice.indexOf(isSpanish, sourceLang),
+                target = outputLang,
                 onSelect = { i ->
                     val translating = i > 0
                     ReaderChoice.remember(context, translating)
                     if (translating) pipeline.setSourceLanguage(ReaderLanguages.all[i - 1])
+                    val spoken = com.mattmacosko.realtimeaicam.translation.YourLanguageRules.pillSpoken(
+                        if (i > 0) ReaderLanguages.all[i - 1] else null, outputLang)
                     if (translating == isSpanish) {
-                        pipeline.speaker.speak(ReaderChoice.spoken(i))
+                        pipeline.speaker.speak(spoken)
                     } else {
                         // The other mode's screen says it once it is up.
-                        ReaderChoice.pendingAnnouncement = ReaderChoice.spoken(i)
+                        ReaderChoice.pendingAnnouncement = spoken
                         onSwitchReader(translating)
                     }
                 },
@@ -414,7 +421,7 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
                 CircleControlButton(
                     label = "Translate",
                     stateLabel = if (translating) "Translating" else null,
-                    clickLabel = "Translate the ${sourceLang.name} text on screen into English",
+                    clickLabel = "Translate the ${sourceLang.name} text on screen into ${com.mattmacosko.realtimeaicam.translation.YourLanguageRules.name(outputLang)}",
                     onClick = { if (debouncer.tryFire()) pipeline.translate() },
                 ) {
                     Icon(
@@ -704,6 +711,9 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit, fromHome: Boolean = fals
     val prefs = remember { context.getSharedPreferences("rtcam", Context.MODE_PRIVATE) }
     var countdownEnabled by remember { mutableStateOf(prefs.getBoolean("countdownBeforeCapture", true)) }
     var speakAloud by remember { mutableStateOf(prefs.getBoolean("speakAnswersAloud", true)) }
+    // Says the Your language choice and the download progress (kept for the app's life, so
+    // "ready" is still said after Settings is closed).
+    val settingsVoice = remember { AppVoice.get(context) }
 
     Box(
         Modifier
@@ -764,6 +774,9 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit, fromHome: Boolean = fals
             ) {
                 // 1.24: which What's this? model answers.
                 ModelsCard()
+
+                // Your language (2026-11-04): what results are spoken in.
+                YourLanguageSettingsCard(say = { settingsVoice.speak(it) })
 
                 // Countdown before the photo — asked for on AppleVis by Dennis.
                 SettingsCard {
@@ -971,9 +984,12 @@ private fun TipLine(text: String) {
  * a double tap or a sighted tap steps to the next choice, wrapping back to English.
  */
 @Composable
-private fun LanguagePill(index: Int, onSelect: (Int) -> Unit) {
+private fun LanguagePill(index: Int, target: String = "en", onSelect: (Int) -> Unit) {
     val count = ReaderChoice.count
     val i = index.coerceIn(0, count - 1)
+    val page = if (i > 0) ReaderLanguages.all[i - 1] else null
+    val pillText = com.mattmacosko.realtimeaicam.translation.YourLanguageRules.pillLabel(page, target)
+    val pillSpoken = com.mattmacosko.realtimeaicam.translation.YourLanguageRules.pillSpoken(page, target)
     val next = { onSelect(ReaderChoice.next(i)) }
     Row(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -985,7 +1001,7 @@ private fun LanguagePill(index: Int, onSelect: (Int) -> Unit) {
             .padding(horizontal = 12.dp, vertical = 10.dp)
             .clearAndSetSemantics {
                 contentDescription = "Language"
-                stateDescription = ReaderChoice.spoken(i)
+                stateDescription = pillSpoken
                 progressBarRangeInfo = ProgressBarRangeInfo(
                     i.toFloat(), 0f..(count - 1).toFloat(), steps = count - 2,
                 )
@@ -999,7 +1015,7 @@ private fun LanguagePill(index: Int, onSelect: (Int) -> Unit) {
     ) {
         Text("🌍", fontSize = 14.sp)
         Text(
-            ReaderChoice.label(i),
+            pillText,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
             color = Color.White,
