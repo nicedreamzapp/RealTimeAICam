@@ -97,6 +97,10 @@ fun MainScreen(
     }
 
     var showVoiceGrid by remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showHomeSettings by remember { androidx.compose.runtime.mutableStateOf(false) }
+    // A voice for the home screen's own lines (Live Cam coming soon), made on first use.
+    var homeVoice by remember { androidx.compose.runtime.mutableStateOf<com.mattmacosko.realtimeaicam.camera.SpeechAnnouncer?>(null) }
+    DisposableEffect(Unit) { onDispose { homeVoice?.shutdown() } }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         when (mode) {
@@ -106,16 +110,35 @@ fun MainScreen(
                     versionLabel = versionLabel,
                     voiceLabel = voiceModel.selected?.display ?: "System Voice",
                     voiceEmoji = voiceModel.selected?.emoji ?: "🧑",
-                    onEnglishOcr = { onModeChange(AppMode.OcrEnglish) },
-                    onSpanishOcr = { onModeChange(AppMode.OcrSpanish) },
+                    // Read + Translate are one button; it opens the way it was left.
+                    onRead = {
+                        onModeChange(
+                            if (com.mattmacosko.realtimeaicam.translation.ReaderChoice.opensTranslating(context)) {
+                                AppMode.OcrSpanish
+                            } else {
+                                AppMode.OcrEnglish
+                            }
+                        )
+                    },
                     onObjectDetection = { onModeChange(AppMode.ObjectDetection) },
                     onWhatsThis = { onModeChange(AppMode.WhatsThis) },
                     onHelpMeAim = { onModeChange(AppMode.HelpMeAim) },
+                    // Layout only for now: the button is there, Live Cam itself is not built yet.
+                    onLiveCam = {
+                        val voice = homeVoice ?: com.mattmacosko.realtimeaicam.camera.SpeechAnnouncer(context)
+                            .also { homeVoice = it }
+                        voice.speak("Live Cam is coming soon.")
+                    },
+                    onSettings = { showHomeSettings = true },
                     onInfo = { showInstructions = true },
                     onVoicePicker = { showVoiceGrid = true },
                 )
                 if (showVoiceGrid) {
                     VoiceGridPopup(voiceModel, onDismiss = { showVoiceGrid = false })
+                }
+                if (showHomeSettings) {
+                    BackHandler { showHomeSettings = false }
+                    SettingsOverlay(zoom = 1f, onDismiss = { showHomeSettings = false }, fromHome = true)
                 }
             }
 
@@ -124,11 +147,19 @@ fun MainScreen(
             }
 
             AppMode.OcrEnglish -> CameraGate(hasCameraPermission, onRequestPermission) {
-                OcrScreen(isSpanish = false, onBack = { onModeChange(AppMode.Home) })
+                OcrScreen(
+                    isSpanish = false,
+                    onBack = { onModeChange(AppMode.Home) },
+                    onSwitchReader = { onModeChange(if (it) AppMode.OcrSpanish else AppMode.OcrEnglish) },
+                )
             }
 
             AppMode.OcrSpanish -> CameraGate(hasCameraPermission, onRequestPermission) {
-                OcrScreen(isSpanish = true, onBack = { onModeChange(AppMode.Home) })
+                OcrScreen(
+                    isSpanish = true,
+                    onBack = { onModeChange(AppMode.Home) },
+                    onSwitchReader = { onModeChange(if (it) AppMode.OcrSpanish else AppMode.OcrEnglish) },
+                )
             }
 
             AppMode.WhatsThis -> CameraGate(hasCameraPermission, onRequestPermission) {

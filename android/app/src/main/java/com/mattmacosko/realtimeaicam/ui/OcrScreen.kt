@@ -101,6 +101,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.mattmacosko.realtimeaicam.camera.OcrPipeline
 import com.mattmacosko.realtimeaicam.camera.ReadingMode
+import com.mattmacosko.realtimeaicam.translation.ReaderChoice
 import com.mattmacosko.realtimeaicam.translation.ReaderLanguages
 
 /** Copy history: last 5 unique strings, newest first (SharedPreferences). */
@@ -132,7 +133,7 @@ private fun copyToClipboard(context: Context, text: String) {
 
 /** Live OCR screen — English and Spanish→English modes (UI_SPEC §3). */
 @Composable
-fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit) {
+fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translating: Boolean) -> Unit = {}) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -144,6 +145,13 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit) {
     DisposableEffect(lifecycleOwner) {
         pipeline.start(lifecycleOwner, previewView)
         onDispose { pipeline.shutdown() }
+    }
+    // The language pill just switched modes: say the new choice from this screen.
+    LaunchedEffect(Unit) {
+        ReaderChoice.pendingAnnouncement?.let {
+            ReaderChoice.pendingAnnouncement = null
+            pipeline.speaker.speak(it)
+        }
     }
 
     val text by pipeline.recognizedText.collectAsState()
@@ -216,28 +224,22 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit) {
             verticalAlignment = Alignment.Top,
         ) {
             BackPill(onBack)
-            if (isSpanish) {
-                TranslateFromControl(
-                    languageIndex = ReaderLanguages.all.indexOf(sourceLang),
-                    onSelect = { pipeline.setSourceLanguage(ReaderLanguages.all[it]) },
-                )
-            }
-            Text(
-                if (isSpanish) "${sourceLang.tag} → Eng" else "English",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.White,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(IosColors.Material.copy(alpha = 0.85f), RoundedCornerShape(20.dp))
-                    .padding(horizontal = 12.dp, vertical = 10.dp)
-                    .semantics {
-                        contentDescription = if (isSpanish) {
-                            "Mode, translating ${sourceLang.name} to English"
-                        } else {
-                            "Mode, reading English text"
-                        }
-                    },
+            // One Read screen (Read + Translate merged, iOS parity 2026-11-03): the pill
+            // picks English, or a language to translate into English. Remembered.
+            LanguagePill(
+                index = ReaderChoice.indexOf(isSpanish, sourceLang),
+                onSelect = { i ->
+                    val translating = i > 0
+                    ReaderChoice.remember(context, translating)
+                    if (translating) pipeline.setSourceLanguage(ReaderLanguages.all[i - 1])
+                    if (translating == isSpanish) {
+                        pipeline.speaker.speak(ReaderChoice.spoken(i))
+                    } else {
+                        // The other mode's screen says it once it is up.
+                        ReaderChoice.pendingAnnouncement = ReaderChoice.spoken(i)
+                        onSwitchReader(translating)
+                    }
+                },
             )
         }
 
@@ -660,7 +662,7 @@ fun AnimatedLoader(size: androidx.compose.ui.unit.Dp) {
 
 /** Settings overlay (spec §3.7): history, zoom, tips, privacy. */
 @Composable
-fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit) {
+fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit, fromHome: Boolean = false) {
     val context = LocalContext.current
     var history by remember { mutableStateOf(CopyHistory.get(context)) }
     val prefs = remember { context.getSharedPreferences("rtcam", Context.MODE_PRIVATE) }
@@ -670,7 +672,8 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.4f))
+            // From home (Settings pill, 2026-11-03) it covers the busy home art.
+            .background(Color.Black.copy(alpha = if (fromHome) 0.75f else 0.4f))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -686,7 +689,7 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit) {
                 .fillMaxWidth(0.92f)
                 .heightIn(max = 600.dp)
                 .clip(RoundedCornerShape(20.dp))
-                .background(Color(0xE61E1E1E), RoundedCornerShape(20.dp))
+                .background(if (fromHome) Color(0xFF1E1E1E) else Color(0xE61E1E1E), RoundedCornerShape(20.dp))
                 .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(20.dp))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
@@ -845,7 +848,7 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit) {
                 }
 
                 // Camera Zoom (only when zoomed)
-                if (zoom < 0.95f || zoom > 1.05f) {
+                if (!fromHome && (zoom < 0.95f || zoom > 1.05f)) {
                     SettingsCard {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("🔍", fontSize = 18.sp, modifier = Modifier.clearAndSetSemantics { })
@@ -862,8 +865,9 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit) {
                     }
                 }
 
-                // Tips
-                SettingsCard {
+                // Tips: camera-screen controls; from home they would point at
+                // controls that aren't there (iOS parity, 2026-11-03).
+                if (!fromHome) SettingsCard {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("ℹ️", fontSize = 18.sp, modifier = Modifier.clearAndSetSemantics { })
                         Text(
@@ -876,7 +880,7 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit) {
                     TipLine("• 🔁 Reset/Stop — clears text, translation, and stops speaking")
                     TipLine("• 🗣️ Speak detected/translated text")
                     TipLine("• 👂 Reading mode button — Tap to read, Auto read (new text is read by itself), or Mute")
-                    TipLine("• 🔦 Adjust flashlight")
+                    TipLine("• 🔦 Flashlight: one tap on, one tap off")
                     TipLine("• ⚙️ Open settings/history")
                 }
 
@@ -925,33 +929,45 @@ private fun TipLine(text: String) {
 
 
 /**
- * "Translate from" (2026-09-21): which language the page is in. A screen reader hears one
- * control, "Translate from, Spanish", and adjusts it like a slider (volume keys or TalkBack's
- * adjust gesture); a double tap or a sighted tap steps to the next language.
+ * The Read language pill (2026-09-21 "Translate from", merged with English 2026-11-03).
+ * A screen reader hears one control, "Language, English" or "Language, Spanish, translated
+ * to English", and adjusts it like a slider (volume keys or TalkBack's adjust gesture);
+ * a double tap or a sighted tap steps to the next choice, wrapping back to English.
  */
 @Composable
-private fun TranslateFromControl(languageIndex: Int, onSelect: (Int) -> Unit) {
-    val langs = ReaderLanguages.all
-    val i = languageIndex.coerceIn(0, langs.size - 1)
-    val next = { onSelect((i + 1) % langs.size) }
-    Text(
-        "From: ${langs[i].name}",
-        fontSize = 14.sp,
-        fontWeight = FontWeight.Medium,
-        color = Color.White,
+private fun LanguagePill(index: Int, onSelect: (Int) -> Unit) {
+    val count = ReaderChoice.count
+    val i = index.coerceIn(0, count - 1)
+    val next = { onSelect(ReaderChoice.next(i)) }
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .clip(RoundedCornerShape(20.dp))
             .background(IosColors.Material.copy(alpha = 0.85f), RoundedCornerShape(20.dp))
             .clickable { next() }
             .padding(horizontal = 12.dp, vertical = 10.dp)
             .clearAndSetSemantics {
-                contentDescription = "Translate from"
-                stateDescription = langs[i].name
+                contentDescription = "Language"
+                stateDescription = ReaderChoice.spoken(i)
                 progressBarRangeInfo = ProgressBarRangeInfo(
-                    i.toFloat(), 0f..(langs.size - 1).toFloat(), steps = langs.size - 2,
+                    i.toFloat(), 0f..(count - 1).toFloat(), steps = count - 2,
                 )
-                setProgress { v -> onSelect(Math.round(v).coerceIn(0, langs.size - 1)); true }
+                setProgress { v ->
+                    val to = Math.round(v).coerceIn(0, count - 1)
+                    if (to != i) onSelect(to)
+                    true
+                }
                 onClick(label = "Next language") { next(); true }
             },
-    )
+    ) {
+        Text("🌍", fontSize = 14.sp)
+        Text(
+            ReaderChoice.label(i),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color.White,
+            maxLines = 1,
+        )
+    }
 }

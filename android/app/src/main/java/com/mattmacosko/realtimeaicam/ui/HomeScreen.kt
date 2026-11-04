@@ -35,6 +35,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.heading
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
@@ -56,6 +61,7 @@ import androidx.compose.ui.unit.sp
 import com.mattmacosko.realtimeaicam.R
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.max
 import kotlin.math.min
 
 // Entry animation plays once per process (UI_SPEC §1.9)
@@ -66,11 +72,12 @@ fun HomeScreen(
     versionLabel: String,
     voiceLabel: String,
     voiceEmoji: String,
-    onEnglishOcr: () -> Unit,
-    onSpanishOcr: () -> Unit,
+    onRead: () -> Unit,
     onObjectDetection: () -> Unit,
     onWhatsThis: () -> Unit,
     onHelpMeAim: () -> Unit,
+    onLiveCam: () -> Unit,
+    onSettings: () -> Unit,
     onInfo: () -> Unit,
     onVoicePicker: () -> Unit,
 ) {
@@ -78,6 +85,7 @@ fun HomeScreen(
 
     BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
         val screenWidth = maxWidth
+        val screenHeight = maxHeight
         val scale = min(screenWidth.value / 390f, 1f)
 
         Image(
@@ -87,91 +95,77 @@ fun HomeScreen(
             modifier = Modifier.fillMaxSize(),
         )
 
-        // Landscape: fixed spacing + scroll (weights are illegal in scrollables);
-        // portrait: weighted spacers exactly like iOS.
-        val isLandscape = maxWidth > maxHeight
-        val columnModifier = if (isLandscape) {
-            Modifier
+        // iOS parity (2026-11-03/04): centered top row (Settings, Info), the title, five
+        // equal full-tap buttons with real gaps, then the voice. Natural spacing that can
+        // never overlap: when it doesn't fit (small phones, landscape) the page scrolls
+        // instead of squeezing. TalkBack order is top to bottom.
+        Column(
+            modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
+                .heightIn(min = screenHeight)
+                .windowInsetsPadding(WindowInsets.safeDrawing)
                 .padding(horizontal = 16.dp)
-        } else {
-            Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp)
-        }
-        Column(
-            modifier = columnModifier,
+                .padding(top = 14.dp, bottom = 36.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
         ) {
-            if (isLandscape) Spacer(Modifier.height(16.dp))
-            else Spacer(Modifier.weight(1f).height(80.dp))
+            EntryAnimated(200) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    SettingsPill(onClick = { if (debouncer.tryFire()) onSettings() })
+                    InfoGuideButton(onClick = { if (debouncer.tryFire()) onInfo() })
+                }
+            }
+            Spacer(Modifier.height((28 * scale).dp))
             EntryAnimated(200) { HeadingPill(scale, screenWidth) }
-            if (isLandscape) Spacer(Modifier.height(20.dp)) else Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height((24 * scale).dp))
 
             Column(
-                verticalArrangement = Arrangement.spacedBy((18 * scale).dp),
+                verticalArrangement = Arrangement.spacedBy(max(14f, 22 * scale).dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 EntryAnimated(700) {
                     ModeButton(
                         IosColors.Blue, scale, screenWidth,
-                        onClick = { if (debouncer.tryFire()) onEnglishOcr() },
-                        label = "English text to speech",
-                        clickLabel = "Point the camera at English text to read it aloud",
+                        onClick = { if (debouncer.tryFire()) onRead() },
+                        label = "Read",
+                        clickLabel = "Read text out loud. Pick another language at the top to translate it into English",
                     ) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text("📖", fontSize = (34 * scale).sp)
-                            OutlinedText("Eng Text2Speech", (20 * scale).sp)
-                            ShadedEmoji("🗣️", (29 * scale))
+                            Text("📖", fontSize = (32 * scale).sp)
+                            OutlinedText("Read", (20 * scale).sp)
+                            Text("🌍", fontSize = (26 * scale).sp)
                         }
                     }
                 }
                 EntryAnimated(1200) {
                     ModeButton(
-                        IosColors.Green, scale, screenWidth,
-                        onClick = { if (debouncer.tryFire()) onSpanishOcr() },
-                        label = "Translator",
-                        clickLabel = "Point the camera at text in Spanish or another language to hear it in English",
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text("🇲🇽", fontSize = (31 * scale).sp)
-                            OutlinedText("Span", (18 * scale).sp)
-                            Text("🇺🇸", fontSize = (31 * scale).sp)
-                            OutlinedText("Eng", (18 * scale).sp)
-                            Text("🌎", fontSize = (31 * scale).sp)
-                            OutlinedText("Translate", (18 * scale).sp)
-                        }
-                    }
-                }
-                EntryAnimated(1700) {
-                    ModeButton(
                         IosColors.Orange, scale, screenWidth,
                         onClick = { if (debouncer.tryFire()) onObjectDetection() },
-                        label = "Object detection",
+                        label = "Object Detection",
                         clickLabel = "Identify objects around you and hear them announced",
                     ) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text("🐶", fontSize = (35 * scale).sp)
+                            Text("🐶", fontSize = (32 * scale).sp)
                             OutlinedText("Object Detection", (20 * scale).sp)
                         }
                     }
                 }
-                EntryAnimated(2000) {
+                EntryAnimated(1700) {
                     ModeButton(
                         IosColors.Purple, scale, screenWidth,
                         onClick = { if (debouncer.tryFire()) onWhatsThis() },
                         label = "What's this?",
-                        clickLabel = "Take a photo and hear what it is",
+                        clickLabel = "Point the camera at a page, a bill, a package, or a room to hear what it is",
                     ) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -185,12 +179,12 @@ fun HomeScreen(
                 // Help Me Aim: its own button, exactly as on the iPhone. What's
                 // this? answers a question and throws the photo away; this one
                 // talks you into the shot and keeps it.
-                EntryAnimated(2100) {
+                EntryAnimated(2200) {
                     ModeButton(
-                        IosColors.Purple, scale, screenWidth,
+                        HomeTeal, scale, screenWidth,
                         onClick = { if (debouncer.tryFire()) onHelpMeAim() },
                         label = "Help Me Aim",
-                        clickLabel = "Say what you want a picture of and be talked into the shot",
+                        clickLabel = "Tell the camera what you want a picture of. It talks you into the shot, then takes the photo",
                     ) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -201,13 +195,29 @@ fun HomeScreen(
                         }
                     }
                 }
+                // Live Cam: layout only for now (iOS 6e1fc97); the tap says it is coming soon.
+                EntryAnimated(2700) {
+                    ModeButton(
+                        HomePink, scale, screenWidth,
+                        onClick = { if (debouncer.tryFire()) onLiveCam() },
+                        label = "Live Cam",
+                        clickLabel = "Talk with the camera. Ask out loud about what's in front of you and hear the answer",
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("\uD83D\uDCAC", fontSize = (32 * scale).sp)
+                            OutlinedText("Live Cam", (20 * scale).sp)
+                        }
+                    }
+                }
             }
 
-            if (isLandscape) Spacer(Modifier.height(20.dp)) else Spacer(Modifier.weight(1f))
-            EntryAnimated(2200) {
+            Spacer(Modifier.height((28 * scale).dp))
+            EntryAnimated(3200) {
                 VoicePickerPill(voiceEmoji, voiceLabel, scale, onVoicePicker)
             }
-            Spacer(Modifier.height(if (isLandscape) 24.dp else 75.dp))
         }
 
         // Version label — bottom-left (spec §1.2), above the system nav bar
@@ -221,23 +231,15 @@ fun HomeScreen(
                 .padding(start = 14.dp, bottom = 10.dp),
         )
 
-        // INFO 💡 GUIDE — top-end (spec §1.5)
-        Box(
-            Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = 8.dp, end = 16.dp)
-        ) {
-            EntryAnimated(200) {
-                InfoGuideButton(onClick = { if (debouncer.tryFire()) onInfo() })
-            }
-        }
-
         LaunchedEffect(Unit) {
-            delay(2600)
+            delay(3500)
             homeIntroPlayed = true
         }
     }
 }
+
+private val HomeTeal = Color(0xFF40C8E0)
+private val HomePink = Color(0xFFFF375F)
 
 /** Fade 0→1 + scale 0.7→1, easeOut 300ms after [delayMs]; instant on revisit. */
 @Composable
@@ -263,8 +265,12 @@ private fun EntryAnimated(delayMs: Long, content: @Composable () -> Unit) {
 private fun HeadingPill(scale: Float, screenWidth: Dp) {
     Box(
         modifier = Modifier
-            .width(screenWidth * 0.92f)
-            .height((120 * scale).dp),
+            .width(minOf(screenWidth * 0.92f, 440.dp))
+            .height((120 * scale).dp)
+            .clearAndSetSemantics {
+                contentDescription = "RealTime AI Camera"
+                heading()
+            },
         contentAlignment = Alignment.Center,
     ) {
         // 1. Glow
@@ -367,6 +373,8 @@ fun ModeButton(
         Box(
             Modifier
                 .width(buttonWidth)
+                // Every tool the same size, whatever its emoji (iOS parity 2026-11-03).
+                .height(max(56f, 68 * scale).dp)
                 .shadow(8.dp, CapsuleShape, spotColor = Color.Black.copy(alpha = 0.38f))
                 .clip(CapsuleShape)
                 .background(
@@ -415,12 +423,7 @@ fun ModeButton(
                     .blur(7.dp)
                     .background(Color.Black.copy(alpha = 0.12f), CapsuleShape)
             )
-            Box(
-                Modifier.padding(
-                    vertical = (16 * scale).dp,
-                    horizontal = (16 * scale).dp,
-                )
-            ) { content() }
+            Box(Modifier.padding(horizontal = (16 * scale).dp)) { content() }
         }
     }
 }
@@ -441,6 +444,48 @@ fun ShadedEmoji(emoji: String, sizeSp: Float) {
                 .background(Color.White.copy(alpha = 0.92f), CircleShape)
         )
         Text(emoji, fontSize = sizeSp.sp)
+    }
+}
+
+/** SETTINGS ⚙️ pill next to INFO (iOS parity 2026-11-03): Models etc. right from home. */
+@Composable
+private fun SettingsPill(onClick: () -> Unit) {
+    val accent = Color.Black
+    Box(
+        Modifier
+            .shadow(6.dp, CapsuleShape, spotColor = Color.Black.copy(alpha = 0.38f))
+            .clip(CapsuleShape)
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color.White.copy(alpha = 0.23f), accent.copy(alpha = 0.50f))
+                ),
+                CapsuleShape,
+            )
+            .border(4.8.dp, Color.White.copy(alpha = 0.80f), CapsuleShape)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                role = Role.Button,
+                onClickLabel = "Open models, voice and other settings",
+                onClick = onClick,
+            )
+            .clearAndSetSemantics { contentDescription = "Settings" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier
+                .matchParentSize()
+                .padding(2.4.dp)
+                .border(2.4.dp, accent, CapsuleShape)
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(vertical = 12.dp, horizontal = 14.dp),
+        ) {
+            Text("⚙️", fontSize = 14.sp)
+            OutlinedText("SETTINGS", 14.sp)
+        }
     }
 }
 
@@ -478,7 +523,7 @@ private fun InfoGuideButton(onClick: () -> Unit) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(vertical = 6.dp, horizontal = 18.dp),
+            modifier = Modifier.padding(vertical = 12.dp, horizontal = 18.dp),
         ) {
             OutlinedText("INFO", 14.sp)
             Text("💡", fontSize = 14.sp)

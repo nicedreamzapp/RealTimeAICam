@@ -52,20 +52,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private const val TUTORIAL_TEXT =
-    "Welcome to RealTime AI Camera! Snap, detect, translate, all on device. " +
-        "There are three modes. Object Detection identifies everyday objects in real time. " +
-        "English Text to Speech reads printed English out loud. " +
-        "Translate. Point at printed Spanish to see instant English translation, spoken aloud and ready to copy. " +
-        "The Translate from control at the top picks another language, like French or German. " +
-        "Tap it, or with TalkBack swipe up or down on it. " +
-        "Each language, Spanish included, downloads once for the best translation, then works offline. " +
-        "Until then, Spanish still translates with the built-in dictionary. " +
-        "Controls: switch camera, toggle the lens, turn the flashlight on or off with one tap, " +
-        "pinch to zoom, reset or stop, speak results, copy text to history, and open settings. " +
-        "In the text reader and translator, the small button next to Speak switches between Tap to read, Auto read, which reads new text by itself, and Mute. " +
-        "What's this? picks the most accurate model your phone can run by itself, and downloads it once on Wi-Fi. You can change it in Settings, under Models. " +
-        "Privacy first: everything runs on your device. No tracking, no accounts, no internet needed."
+// Rewritten for the new home (iOS parity, 2026-11-04): the same order as the home screen,
+// Read and Translate merged, Settings on home, Help Me Aim, Live Cam.
+private val TUTORIAL_TEXT = listOf(
+    "Welcome to the RealTime A I Camera.",
+    "The home screen has two buttons at the top, Settings and Info and guide, then five tools, then the voice button. Swipe through them, or touch the screen to explore.",
+    "Read. Point at printed text and hear it out loud. The Language button at the top picks English, or one of ${com.mattmacosko.realtimeaicam.translation.ReaderLanguages.all.size} languages to translate into English. Tap it to step to the next one, or with TalkBack swipe up or down on it. The small button next to Speak switches between Tap to read, Auto read, and Mute.",
+    "Object Detection names the things around you as you move the phone.",
+    "What's this? takes one careful look. Mail and pages get the point of them, like who sent it and what's due. A room gets a description. Afterwards, hold to ask a follow up question.",
+    "Help Me Aim takes a good photo for you. Choose Face, Picture or Page, or Something Else and say what you want. It tells you which way to move, counts down, and saves the photo with a description. For things it doesn't know by sight, like a wallet, it looks closely and tells you where it is. Double tap anywhere to take the picture yourself.",
+    "Live Cam is coming soon. It lets you talk with the camera. Ask out loud about what's in front of you and hear the answer.",
+    "In Settings, Models, the app already picked the best A I for your phone. You can choose Most accurate or Fastest there.",
+    "Everything runs on your phone and works offline. No accounts and no tracking.",
+).joinToString(" ")
 
 /** iOS AppInstructionsView (UI_SPEC §4) as a slide-up sheet. */
 @Composable
@@ -85,6 +84,7 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
                         t!!.setLanguage(java.util.Locale.US)
                     }
                 } catch (_: Throwable) {}
+                try { VoicePrefs.apply(context, t!!) } catch (_: Throwable) {}
                 if (speaking) t!!.speak(TUTORIAL_TEXT, TextToSpeech.QUEUE_FLUSH, null, "tutorial")
             } else {
                 speaking = false
@@ -174,7 +174,7 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
             ) {
                 Text(
                     "👋 Welcome to RealTime AI Camera!",
-                    modifier = Modifier.semantics { contentDescription = "Welcome to RealTime AI Camera!" },
+                    modifier = Modifier.semantics { contentDescription = "Welcome to RealTime AI Camera!"; heading() },
                     fontSize = 34.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
@@ -234,54 +234,61 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
                 }
 
                 Text(
-                    "Snap, Detect, Translate — all on-device.",
+                    "Your camera, out loud. Everything runs on your phone.",
                     fontSize = 20.sp,
                     color = Color.White,
                 )
 
-                SectionHeader("✨ Modes")
+                // The five tools, in the same order as the home screen.
+                val languageCount = com.mattmacosko.realtimeaicam.translation.ReaderLanguages.all.size
+                ModeBlock(
+                    "📖 Read",
+                    "Point at printed text and hear it read out loud. The Language pill at the top picks English or one of " +
+                        "$languageCount languages, like Spanish, French, German or Vietnamese, and translates it into English. " +
+                        "Each language downloads once from Google, then works offline; until then, Spanish still translates " +
+                        "with the built-in dictionary. The small button next to Speak switches between Tap to read, Auto read " +
+                        "(new text is spoken by itself, once) and Mute. Copy keeps the text in your history.",
+                )
                 ModeBlock(
                     "🐶 Object Detection",
-                    "Point the camera at everyday objects and hear what they are — 600+ classes, live bounding boxes, adjustable confidence.",
+                    "Names the things around you as you move the phone, nonstop, fast and offline.",
                 )
                 ModeBlock(
-                    "🔠 English OCR",
-                    "Reads printed English text out loud in real time. Copy it, or have it spoken.",
+                    "📄 What's this?",
+                    "One careful look. Point at a page, a bill, a package or a room and press the button. Mail and pages get " +
+                        "the point of them: who sent it, what it is, what's due. A room or a thing gets a description. " +
+                        "Afterwards, hold to ask a follow-up question about the same photo.",
                 )
                 ModeBlock(
-                    "🇲🇽→🇺🇸 Spanish to English Translate",
-                    "Point at printed Spanish to see instant English translation, spoken aloud and ready to copy. " +
-                        "The From button at the top picks another language, like French or German. " +
-                        "Each language, Spanish included, downloads once for the best translation, then works offline. " +
-                        "Until then, Spanish still translates with the built-in dictionary.",
+                    "🎯 Help Me Aim",
+                    "Takes a good photo for you. Choose Face, Picture or Page, or Something Else and say or type what you want, " +
+                        "like keys, a mug or your dog. The app tells you which way to move, counts down and takes the picture, " +
+                        "then saves it to your gallery with a description written into it. It knows hundreds of everyday things; " +
+                        "for anything else, like a wallet, it looks closely with the describing AI and tells you where it is. " +
+                        "Double tap anywhere to take the picture yourself.",
                 )
                 ModeBlock(
-                    "🧠 What's this? models",
-                    "What's this? describes photos with an AI model that lives on your phone. You don't have to set anything up. " +
-                        "Your first photo times how fast your phone is, then the app picks the most accurate model your phone can run " +
-                        "and downloads it once, on Wi-Fi. Until it arrives, the built-in model answers. " +
-                        "Mail, money and medicine always get the most accurate model your phone can handle. " +
-                        "To change it, open Settings, then Models: choose Most accurate or Fastest, or pick a model yourself. " +
-                        "Every model works offline once it's on your phone.",
+                    "💬 Live Cam",
+                    "Coming soon. Talk with the camera. Ask out loud about what's in front of you and hear the answer, then keep asking.",
+                )
+                ModeBlock(
+                    "⚙️ Settings",
+                    "The Settings button at the top of the home screen. Models: the app picks the best describing AI for your " +
+                        "phone by itself and downloads it once, on Wi-Fi. Mail, money and medicine always get the most accurate " +
+                        "one your phone can run. In Settings, then Models, you can choose Most accurate or Fastest, or pick one " +
+                        "yourself. Settings also has the countdown before photos, the app's own voice or TalkBack, and your copy " +
+                        "history. The voice button at the bottom of the home screen changes the voice.",
                 )
 
-                SectionHeader("🎛️ Controls")
-                BodyLine("🔄 Switch Camera — flip between rear and front")
-                BodyLine("🌐 Lens Toggle — wide / ultra-wide (when available)")
-                BodyLine("🔦 Flashlight — one tap on at full brightness, one tap off")
-                BodyLine("🤏 Pinch to Zoom")
-                BodyLine("🔁 Reset / Stop — clears text, translation, and stops speaking")
-                BodyLine("🗣️ Speak — hear detected or translated text")
-                BodyLine("👂 Reading mode — next to Speak: Tap to read, Auto read (new text is read by itself), or Mute")
-                BodyLine("📋 Copy to History — saved on this device")
-                BodyLine("⚙️ Settings — history, tips, privacy")
+                SectionHeader("🎛️ Camera controls")
+                BodyLine("🔄 Switch camera, front or back")
+                BodyLine("🌐 Lens toggle, wide or ultra-wide (Object Detection, when the phone has one)")
+                BodyLine("🔦 Flashlight, one tap on, one tap off")
+                BodyLine("🤏 Pinch to zoom")
 
-                SectionHeader("🔒 Privacy First")
-                BodyLine("Works 100% offline — even in Airplane Mode", secondary = true)
-                BodyLine("No tracking, no analytics, no accounts", secondary = true)
-                BodyLine("Camera frames are processed on-device only", secondary = true)
-                BodyLine("Bigger What's this? models download once from our own server, then run offline", secondary = true)
-                BodyLine("Copy history stays on this device", secondary = true)
+                SectionHeader("🔒 Private by design")
+                BodyLine("Everything runs on your phone and works offline, even in Airplane Mode. The bigger AI models and translation languages download once, then stay on your phone.", secondary = true)
+                BodyLine("No accounts, no tracking, no location access. Nothing you point the camera at is uploaded.", secondary = true)
 
                 SectionHeader("🙏 Credits")
                 BodyLine(
@@ -313,7 +320,7 @@ private fun ModeBlock(title: String, body: String) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
             title, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
-            modifier = Modifier.semantics { contentDescription = title.withoutEmoji() },
+            modifier = Modifier.semantics { contentDescription = title.withoutEmoji(); heading() },
         )
         Text(body, fontSize = 17.sp, color = Color.White.copy(alpha = 0.9f), lineHeight = 23.sp)
     }
