@@ -45,3 +45,14 @@
 
 -keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod,SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
+
+# --- On-demand readers module (Russian, Ukrainian, Thai, Arabic) ---
+# ScriptReaders.openTesseract finds the factory BY NAME (the base app has no Tesseract code),
+# and Tesseract4Android's JNI reads its Java fields by name.
+-keep class com.mattmacosko.realtimeaicam.camera.PageReader { *; }
+-keep class com.mattmacosko.realtimeaicam.camera.PageReaderFactory { *; }
+-keep class com.mattmacosko.realtimeaicam.readers.TessPageReaderFactory { <init>(); *; }
+-keep class com.googlecode.tesseract.android.** { *; }
+-keep class com.googlecode.leptonica.android.** { *; }
+-keep class com.google.android.play.core.splitcompat.** { *; }
+-keep class com.google.android.play.core.splitinstall.** { *; }

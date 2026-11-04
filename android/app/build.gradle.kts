@@ -90,6 +90,8 @@ android {
     }
 
     assetPacks += listOf(":vision_model")
+    // Downloaded only when someone picks Russian, Ukrainian, Thai or Arabic (ScriptReaders).
+    dynamicFeatures += setOf(":readers")
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -141,6 +143,16 @@ dependencies {
 
     // On-device OCR (bundled model, offline)
     implementation("com.google.mlkit:text-recognition:16.0.1")
+    // Chinese, Japanese and Korean readers: the UNBUNDLED artifacts, so the models are delivered
+    // by Play services only when someone picks one of those languages (ScriptReaders). There is
+    // deliberately no com.google.mlkit.vision.DEPENDENCIES meta-data: nothing downloads at install.
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition-chinese:16.0.1")
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition-japanese:16.0.1")
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition-korean:16.0.1")
+    // ModuleInstallClient (asks Play services for those readers on the tap)
+    implementation("com.google.android.gms:play-services-base:18.5.0")
+    // SplitInstallManager + SplitCompat for the on-demand :readers module
+    implementation("com.google.android.play:feature-delivery:2.1.0")
     // Help Me Aim finds faces with ML Kit here; the iPhone uses Apple's
     // Vision framework for the same job. Same steering either way.
     implementation("com.google.mlkit:face-detection:16.1.7")

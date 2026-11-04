@@ -57,7 +57,7 @@ import androidx.compose.ui.unit.sp
 private val TUTORIAL_TEXT = listOf(
     "Welcome to the RealTime A I Camera.",
     "The home screen has two buttons at the top, Settings and Info and guide, then five tools, then the voice button. Swipe through them, or touch the screen to explore.",
-    "Read. Point at printed text and hear it out loud. The Language button at the top picks English, or one of ${com.mattmacosko.realtimeaicam.translation.ReaderLanguages.all.size} languages to translate into English. Tap it to step to the next one, or with TalkBack swipe up or down on it. The small button next to Speak switches between Auto read, which is on to start and reads new text by itself, Mute, and Tap to read.",
+    "Read. Point at printed text and hear it out loud. The Language button at the top picks English, or one of ${com.mattmacosko.realtimeaicam.translation.ReaderLanguages.all.size} languages to translate into English. Russian, Ukrainian, Chinese, Japanese, Korean, Thai and Arabic need their own reader, downloaded once the first time you pick them, then offline. Tap it to step to the next one, or with TalkBack swipe up or down on it. The small button next to Speak switches between Auto read, which is on to start and reads new text by itself, Mute, and Tap to read.",
     "Object Detection names the things around you as you move the phone.",
     "What's this? takes one careful look. Mail and pages get the point of them, like who sent it and what's due. A room gets a description. Afterwards, hold to ask a follow up question.",
     "Help Me Aim takes a good photo for you. Choose Face, Picture or Page, or Something Else and say what you want. It tells you which way to move, counts down, and saves the photo with a description. For things it doesn't know by sight, like a wallet, it looks closely and tells you where it is. Double tap anywhere to take the picture yourself.",
@@ -244,8 +244,10 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
                 ModeBlock(
                     "📖 Read",
                     "Point at printed text and hear it read out loud. The Language pill at the top picks English or one of " +
-                        "$languageCount languages, like Spanish, French, German or Vietnamese, and translates it into English. " +
-                        "Each language downloads once from Google, then works offline; until then, Spanish still translates " +
+                        "$languageCount languages, like Spanish, French, Russian, Chinese or Arabic, and translates it into English. " +
+                        "Each language downloads once, then works offline. Russian, Ukrainian, Chinese, Japanese, Korean, Thai " +
+                        "and Arabic also download their reader the first time you pick them; tap the card to get it. Until " +
+                        "its pack is on the phone, Spanish still translates " +
                         "with the built-in dictionary. Auto read is on to start: new text is spoken by itself, once. " +
                         "The small button next to Speak switches between Auto read, Mute and Tap to read. Copy keeps the text in your history.",
                 )

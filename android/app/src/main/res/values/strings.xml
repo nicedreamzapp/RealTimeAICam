@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">RealTime AI Cam</string>
+    <!-- Title of the on-demand readers module (Play shows it if it ever asks to confirm) -->
+    <string name="readers_title">Text readers</string>
 </resources>

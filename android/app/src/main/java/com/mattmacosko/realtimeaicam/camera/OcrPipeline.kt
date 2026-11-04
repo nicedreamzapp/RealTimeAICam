@@ -29,7 +29,9 @@ import com.google.mlkit.nl.translate.TranslatorOptions
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.google.mlkit.vision.text.TextRecognizer
 import com.mattmacosko.realtimeaicam.translation.ReaderLanguage
+import com.mattmacosko.realtimeaicam.translation.ScriptReader
 import com.mattmacosko.realtimeaicam.translation.ReaderLanguages
 import com.mattmacosko.realtimeaicam.translation.SpanishIdiomPrepass
 import com.mattmacosko.realtimeaicam.translation.SpanishTranslationEngine
@@ -86,6 +88,31 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
 
     /** Shown in the text card instead of the page while a language pack is needed or downloading. */
     val notice = MutableStateFlow<String?>(null)
+
+    /**
+     * The picked language's reader is not on the phone: the card offers the download and a tap
+     * on it starts it ([downloadReader]). Nothing is fetched before that tap (Matt 2026-11-04).
+     */
+    val readerOffer = MutableStateFlow(false)
+    /** The reader download is running. */
+    val readerDownloading = MutableStateFlow(false)
+
+    /**
+     * What reads camera frames right now. Latin is the built-in reader; the other seven
+     * languages get theirs once it is on the phone. Null = no reader yet (frames are skipped).
+     * Touched on analysisExecutor, swapped through [setFrameReader].
+     */
+    private sealed class FrameReader {
+        object Latin : FrameReader()
+        class MlKit(val reader: ScriptReader, val recognizer: TextRecognizer) : FrameReader()
+        class Tess(val reader: ScriptReader, val page: PageReader) : FrameReader()
+    }
+    @Volatile private var frameReader: FrameReader? = FrameReader.Latin
+    /** Created only to ask Play services whether it is on the phone, or to read once it is. */
+    private var mlKitRecognizer: Pair<ScriptReader, TextRecognizer>? = null
+
+    /** Test builds only: read this picture instead of the camera (`-e readTestImage <path>`). */
+    @Volatile var testImage: android.graphics.Bitmap? = null
 
     // Google's translator for the current language. Touched only on workExecutor.
     private var mlTranslator: Translator? = null
@@ -202,6 +229,7 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
             }
         }, ContextCompat.getMainExecutor(appContext))
         setAutoTicking(readingMode.value == ReadingMode.AUTO)
+        refreshReader(speak = false)
     }
 
     fun stop() {
@@ -219,9 +247,16 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
         stop()
         speaker.shutdown()
         // After any frame already on the analysis thread, not underneath it.
-        analysisExecutor.execute { recognizer.close() }
+        analysisExecutor.execute {
+            recognizer.close()
+            (frameReader as? FrameReader.Tess)?.page?.close()
+            frameReader = null
+        }
         analysisExecutor.shutdown()
-        workExecutor.execute { mlTranslator?.close(); mlTranslator = null }
+        workExecutor.execute {
+            mlTranslator?.close(); mlTranslator = null
+            mlKitRecognizer?.second?.close(); mlKitRecognizer = null
+        }
         workExecutor.shutdown()
     }
 
@@ -249,6 +284,8 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
         notice.value = null
         frozen.value = false
         autoGate.reset()
+        // The download offer stays on the card until it is taken or the language changes.
+        readingLanguage()?.let { if (readerOffer.value) notice.value = ReaderLanguages.offerLine(it.name) }
     }
 
     // ---- Reading mode: Tap to read / Auto read / Mute ----
@@ -306,13 +343,128 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
         if (lang == sourceLanguage.value) return
         prefs.edit().putString("translateFrom", lang.code).apply()
         sourceLanguage.value = lang
+        readerOffer.value = false
         reset()
+        refreshReader(speak = true)
+    }
+
+    /** The language this screen reads frames in: English mode always reads Latin. */
+    private fun readingLanguage(): ReaderLanguage? = if (isSpanish) sourceLanguage.value else null
+
+    private fun mlKitRecognizerFor(reader: ScriptReader): TextRecognizer {
+        mlKitRecognizer?.let { if (it.first == reader) return it.second }
+        mlKitRecognizer?.second?.close()
+        return ScriptReaders.mlKitRecognizer(reader).also { mlKitRecognizer = reader to it }
+    }
+
+    /** Swap what reads frames, closing a Tesseract reader on the thread that uses it. */
+    private fun setFrameReader(next: FrameReader?) {
+        analysisExecutor.execute {
+            val old = frameReader
+            frameReader = next
+            if (old is FrameReader.Tess && old !== next) old.page.close()
+        }
+    }
+
+    /**
+     * Point frame reading at the picked language. If its reader is not on the phone, the card
+     * offers the download; nothing downloads here. [speak] says the offer (the pill moved).
+     */
+    private fun refreshReader(speak: Boolean) {
+        val lang = readingLanguage()
+        if (lang == null || !lang.needsReaderDownload) {
+            readerOffer.value = false
+            setFrameReader(FrameReader.Latin)
+            return
+        }
+        setFrameReader(null)
+        if (readerDownloading.value) return
+        workExecutor.execute {
+            if (readingLanguage() != lang) return@execute
+            if (ScriptReaders.isReady(appContext, lang.reader)) {
+                readerOffer.value = false
+                openReader(lang)
+            } else {
+                Log.i(TAG, "${lang.name} reader not on the phone: offering the download")
+                readerOffer.value = true
+                if (speak) showNotice(ReaderLanguages.offerLine(lang.name)) else notice.value = ReaderLanguages.offerLine(lang.name)
+            }
+        }
+    }
+
+    /** Runs on workExecutor once the reader is on the phone. */
+    private fun openReader(lang: ReaderLanguage) {
+        try {
+            val next = if (lang.reader.isTesseract) {
+                FrameReader.Tess(lang.reader, ScriptReaders.openTesseract(appContext, lang.reader))
+            } else {
+                FrameReader.MlKit(lang.reader, mlKitRecognizerFor(lang.reader))
+            }
+            if (readingLanguage() == lang) setFrameReader(next) else (next as? FrameReader.Tess)?.page?.close()
+            Log.i(TAG, "${lang.name} reader open")
+        } catch (t: Throwable) {
+            Log.e(TAG, "${lang.name} reader failed to open", t)
+            showNotice("The ${lang.name} reader couldn't start. Please close and reopen the app.")
+        }
+    }
+
+    /**
+     * The person tapped the card to get the picked language's reader: download it (and the
+     * language's translation pack in the same go), then start reading. [activity] lets Play
+     * ask for confirmation if it ever wants to.
+     */
+    fun downloadReader(activity: android.app.Activity?) {
+        val lang = readingLanguage() ?: return
+        if (!lang.needsReaderDownload || readerDownloading.value || !readerOffer.value) return
+        if (!isOnline()) {
+            showNotice(ReaderLanguages.offlineLine(lang.name))
+            return
+        }
+        readerOffer.value = false
+        readerDownloading.value = true
+        val first = ReaderLanguages.downloadLine(lang.name)
+        showNotice(first)
+        workExecutor.execute {
+            try {
+                var shown = -1
+                ScriptReaders.install(appContext, activity, lang.reader) { p ->
+                    val pct = ((p ?: 0f) * 100).toInt().coerceIn(0, 100)
+                    if (pct / 5 != shown / 5) {
+                        shown = pct
+                        notice.value = "$first $pct%"
+                    }
+                }
+                // The translation pack too, so the first page translates without a second wait.
+                Tasks.await(
+                    translatorFor(lang.code).downloadModelIfNeeded(DownloadConditions.Builder().build()),
+                    5, TimeUnit.MINUTES,
+                )
+                readerDownloading.value = false
+                Log.i(TAG, "${lang.name} reader downloaded")
+                if (readingLanguage() == lang) {
+                    openReader(lang)
+                    showNotice(ReaderLanguages.readyLine(lang.name))
+                    mainHandler.postDelayed({ if (notice.value == ReaderLanguages.readyLine(lang.name)) notice.value = null }, 3_000)
+                } else {
+                    refreshReader(speak = false) // the pill moved on while this downloaded
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "${lang.name} reader download failed", e)
+                readerDownloading.value = false
+                if (readingLanguage() != lang) { refreshReader(speak = false); return@execute }
+                readerOffer.value = true
+                showNotice(
+                    if (isOnline()) "${lang.name} couldn't download just now. Tap this card to try again."
+                    else ReaderLanguages.offlineLine(lang.name)
+                )
+            }
+        }
     }
 
     /** Translate the current text into English. */
     fun translate() {
         val text = recognizedText.value
-        if (text.isBlank() || isTranslating.value) return
+        if (text.isBlank() || isTranslating.value || readerOffer.value || readerDownloading.value) return
         notice.value = null
         isTranslating.value = true
         frozen.value = true // pause OCR during + after translation (iOS)
@@ -380,7 +532,7 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
                 val units = SpanishTranslationEngine.translationUnits(text).joinToString("\n")
                 SpanishIdiomPrepass.translate(units) { translateLines(translator, it) }
             } else {
-                translateLines(translator, text)
+                translateLines(translator, text, lang)
             }
             english.ifBlank { null } ?: if (spanish) translateWithDictionary(text) else text
         } catch (e: Exception) {
@@ -436,8 +588,8 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
         return t
     }
 
-    private fun translateLines(translator: Translator, text: String): String =
-        SpanishTranslationEngine.translationUnits(text)
+    private fun translateLines(translator: Translator, text: String, lang: ReaderLanguage = ReaderLanguages.spanish): String =
+        ReaderLanguages.translationUnits(lang, text)
             .map { Tasks.await(translator.translate(it)).trim() }
             .filter { it.isNotEmpty() }
             .joinToString("\n")
@@ -485,7 +637,8 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
     private fun analyze(image: ImageProxy) {
         val media = image.image
         val now = SystemClock.elapsedRealtime()
-        if (media == null || busy || frozen.value || isTranslating.value ||
+        val reader = frameReader
+        if (media == null || busy || frozen.value || isTranslating.value || reader == null ||
             now - lastProcessed < MIN_INTERVAL_MS
         ) {
             image.close()
@@ -493,8 +646,26 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
         }
         busy = true
         lastProcessed = now
-        val input = InputImage.fromMediaImage(media, image.imageInfo.rotationDegrees)
-        recognizer.process(input)
+        val test = testImage
+        if (reader is FrameReader.Tess) {
+            // Tesseract is synchronous; this is the analysis thread, and KEEP_ONLY_LATEST drops
+            // the frames that arrive meanwhile.
+            try {
+                val bitmap = test ?: frameBitmap(image)
+                val text = reader.page.read(bitmap).trim()
+                if (!frozen.value && text.isNotEmpty()) recognizedText.value = text
+            } catch (t: Throwable) {
+                Log.w(TAG, "Tesseract read failed", t)
+            } finally {
+                busy = false
+                image.close()
+            }
+            return
+        }
+        val input = if (test != null) InputImage.fromBitmap(test, 0)
+            else InputImage.fromMediaImage(media, image.imageInfo.rotationDegrees)
+        val client = if (reader is FrameReader.MlKit) reader.recognizer else recognizer
+        client.process(input)
             .addOnSuccessListener { result ->
                 if (!frozen.value) {
                     val text = result.text.trim()
@@ -506,5 +677,15 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
                 busy = false
                 image.close()
             }
+    }
+
+    /** The camera frame upright, no bigger than 1600 px on its long side (Tesseract's input). */
+    private fun frameBitmap(image: ImageProxy): android.graphics.Bitmap {
+        val raw = image.toBitmap()
+        val rotation = image.imageInfo.rotationDegrees
+        val scale = minOf(1f, 1600f / maxOf(raw.width, raw.height))
+        if (rotation == 0 && scale >= 1f) return raw
+        val m = android.graphics.Matrix().apply { postRotate(rotation.toFloat()); postScale(scale, scale) }
+        return android.graphics.Bitmap.createBitmap(raw, 0, 0, raw.width, raw.height, m, true)
     }
 }

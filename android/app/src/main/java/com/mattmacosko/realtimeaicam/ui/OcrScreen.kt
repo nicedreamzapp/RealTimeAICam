@@ -3,6 +3,8 @@ package com.mattmacosko.realtimeaicam.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
@@ -138,6 +140,22 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
     val lifecycleOwner = LocalLifecycleOwner.current
 
     val pipeline = remember { OcrPipeline(context, isSpanish) }
+    val activity = remember(context) {
+        var c: Context? = context
+        while (c is android.content.ContextWrapper && c !is android.app.Activity) c = c.baseContext
+        c as? android.app.Activity
+    }
+    // Test builds only: `-e readTestImage page.png` reads that picture (pushed to the app's
+    // external files folder) instead of the camera, so a language can be checked on an emulator.
+    LaunchedEffect(Unit) {
+        val debuggable = (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        val name = activity?.intent?.getStringExtra("readTestImage")
+        if (debuggable && !name.isNullOrBlank()) {
+            pipeline.testImage = withContext(Dispatchers.IO) {
+                android.graphics.BitmapFactory.decodeFile(java.io.File(context.getExternalFilesDir(null), name).path)
+            }
+        }
+    }
     val previewView = remember {
         PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
     }
@@ -164,6 +182,8 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
     val sourceLang by pipeline.sourceLanguage.collectAsState()
     val notice by pipeline.notice.collectAsState()
     val readingMode by pipeline.readingMode.collectAsState()
+    val readerOffer by pipeline.readerOffer.collectAsState()
+    val readerDownloading by pipeline.readerDownloading.collectAsState()
 
     var showSettings by remember { mutableStateOf(false) }
     var showTorchPopup by remember { mutableStateOf(false) }
@@ -275,7 +295,7 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
 
         // Recognized-text card (spec §3.3) — anchored above the FIXED button row
         AnimatedVisibility(
-            visible = text.isNotEmpty(),
+            visible = text.isNotEmpty() || notice != null,
             enter = slideInVertically(tween(250)) { it / 2 } + fadeIn(tween(250)),
             exit = slideOutVertically(tween(200)) { it / 2 } + fadeOut(tween(200)),
             modifier = Modifier
@@ -287,6 +307,7 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
             val isTranslationShown = translated != null && notice == null
             val cardHeading = when {
                 !isSpanish -> "Detected"
+                readerOffer || readerDownloading -> "${sourceLang.name} reader"
                 notice != null -> "Language pack"
                 isTranslationShown -> "Translation"
                 else -> "${sourceLang.name} text"
@@ -297,11 +318,16 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
                     .clip(RoundedCornerShape(16.dp))
                     .background(IosColors.Material.copy(alpha = 0.90f), RoundedCornerShape(16.dp))
                     .clickable(
-                        enabled = isSpanish && isTranslationShown,
+                        enabled = isSpanish && (isTranslationShown || readerOffer),
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClickLabel = "Show copy, continue reading and new scan",
-                    ) { pipeline.showTranslationPopup.value = true }
+                        onClickLabel = if (readerOffer) "Download the ${sourceLang.name} reader"
+                            else "Show copy, continue reading and new scan",
+                    ) {
+                        // The reader downloads only on this tap, never when the pill passes by.
+                        if (readerOffer) pipeline.downloadReader(activity)
+                        else pipeline.showTranslationPopup.value = true
+                    }
                     .padding(16.dp)
                     // Read as one block: a status dot, a heading and a scrolling
                     // body are three separate stops otherwise.
@@ -325,6 +351,7 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
                     Text(
                         when {
                             !isSpanish -> "Detected"
+                            readerOffer || readerDownloading -> "${sourceLang.name} reader"
                             notice != null -> "Language pack"
                             isTranslationShown -> "Translation"
                             else -> "${sourceLang.name} Text"
@@ -334,7 +361,7 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
                         color = Color.White.copy(alpha = 0.9f),
                     )
                     Spacer(Modifier.weight(1f))
-                    if (translating) AnimatedLoader(22.dp)
+                    if (translating || readerDownloading) AnimatedLoader(22.dp)
                 }
                 Text(
                     displayText,
