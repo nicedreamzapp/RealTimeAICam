@@ -124,8 +124,8 @@ final class YourLanguageUITests: XCTestCase {
     func testReadTranslatesAnEnglishPageIntoSpanish() throws {
         continueAfterFailure = false
         let app = launch(["-userLanguage", "es", "-fakeTranslatorPacks", "(es)", "-readerLanguageMode", "english",
-                          "-ocrReadMode", "auto"],
-                         env: ["RTCAM_FAKE_OCR_TRANSLATE": "1.0::Exit||0.6::Exit||0.6::Exit||0.6::Exit"])
+                          "-ocrReadMode", "tap"],
+                         env: ["RTCAM_FAKE_OCR_TRANSLATE": "1.0::Exit"])
         let read = app.buttons["Read"].firstMatch
         XCTAssertTrue(read.waitForExistence(timeout: 20))
         sleep(3)
@@ -133,7 +133,12 @@ final class YourLanguageUITests: XCTestCase {
         let pill = app.buttons["Language"].firstMatch
         XCTAssertTrue(pill.waitForExistence(timeout: 15), "no Language pill")
         XCTAssertEqual(pill.value as? String, "English, translated to Spanish")
-        let salida = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Salida'")).firstMatch
+        // Tap to read: the camera "sees" Exit, then Speak translates and shows it.
+        sleep(4)
+        let speak = app.buttons.matching(NSPredicate(format: "label == 'Read text aloud'")).firstMatch
+        XCTAssertTrue(speak.waitForExistence(timeout: 10), "no Speak button")
+        speak.tap()
+        let salida = app.descendants(matching: .any).matching(NSPredicate(format: "value CONTAINS 'Salida'")).firstMatch
         XCTAssertTrue(salida.waitForExistence(timeout: 20), "English page not translated into Spanish")
         keep(app, "read-en-to-es")
 
