@@ -19,6 +19,9 @@ final class LiveListener {
     var onLevel: ((Float) -> Void)?
     /// The recognizer kept failing the moment it started: listening has stopped for this visit.
     var onGaveUp: (() -> Void)?
+    /// A backed-off retry is due. The owner restarts listening only if it is still waiting for a question
+    /// (never while it is speaking or thinking, or it would hear itself).
+    var onRetry: (() -> Void)?
 
     /// A recognizer failure this soon after listening started, with nothing heard, counts as a quick failure.
     nonisolated static let quickFailure: TimeInterval = 2
@@ -105,6 +108,14 @@ final class LiveListener {
     func startForTest() { if feedMode { isRunning = true } }
 
     func shutdown() {
+        stopMic()
+        guard !feedMode else { return }
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
+    /// The microphone off (engine stopped, tap removed) but the audio session left as it is, so the voice can
+    /// still talk. Used when recognition gave up: the mic indicator goes out, nothing keeps listening.
+    func stopMic() {
         stopListening()
         tap.speaking(false)
         isRunning = false
@@ -114,7 +125,6 @@ final class LiveListener {
         #if !targetEnvironment(simulator)
         try? engine.inputNode.setVoiceProcessingEnabled(false)
         #endif
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
     /// Test feed: one buffer, handled exactly like a mic buffer.
@@ -159,6 +169,8 @@ final class LiveListener {
             while let self, self.isListening, !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 40_000_000)
                 let now = Date()
+                // Listening has held past the quick-failure window: the failures before it were not "in a row".
+                if self.quickFailures > 0, now.timeIntervalSince(self.listenStarted) >= Self.quickFailure { self.quickFailures = 0 }
                 let wordsQuiet = now.timeIntervalSince(self.lastChange), micQuiet = now.timeIntervalSince(self.lastLoudAt)
                 if !self.finishing, LiveTiming.questionEnded(heard: !self.transcript.isEmpty, wordsQuiet: wordsQuiet, micQuiet: micQuiet, text: self.transcript) {
                     self.endReason = wordsQuiet >= LiveTiming.endOfSpeech ? "words stopped" : "mic quiet"
@@ -233,7 +245,7 @@ final class LiveListener {
         retryTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(wait * 1e9))
             guard let self, !Task.isCancelled, self.isRunning, !self.isListening, !self.gaveUp else { return }
-            self.listen()
+            if let onRetry = self.onRetry { onRetry() } else { self.listen() }
         }
     }
 }

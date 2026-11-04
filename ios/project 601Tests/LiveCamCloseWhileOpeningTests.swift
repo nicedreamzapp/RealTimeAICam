@@ -127,6 +127,38 @@ struct LiveListenerBackoffTests {
         #expect(!l.isListening)
     }
 
+    /// Round 2: a due retry goes through the owner, who only restarts listening while it waits for a question.
+    @Test func aDueRetryAsksTheOwnerFirst() async {
+        let l = LiveListener()
+        l.feedMode = true
+        l.startForTest()
+        var retries = 0
+        l.onRetry = { retries += 1 }
+        l.recognizerFailed()
+        #expect(l.lastRetryDelay == 1)
+        try? await Task.sleep(nanoseconds: 1_300_000_000)
+        #expect(retries == 1)
+        #expect(!l.isListening)   // the listener did not restart on its own
+    }
+
+    /// Round 2: giving up turns the mic itself off, not just the recognizer.
+    @Test func givingUpTurnsTheMicOff() async {
+        let call = LiveCallController()
+        call.voice = LiveCamCloseWhileOpeningTests.SilentVoice()
+        call.camera.stillFrame = LiveCallController.noFrame
+        call.steps.releaseOther = {}
+        call.steps.loadEngine = { _ in nil }
+        call.steps.requestCamera = { true }
+        call.steps.willAskPermission = { false }
+        call.steps.startListener = { l in l.feedMode = true; l.startForTest(); return nil }
+        call.start()
+        for _ in 0 ..< 10 where !call.listener.isRunning { try? await Task.sleep(nanoseconds: 50_000_000) }
+        #expect(call.listener.isRunning)
+        call.hearingGaveUp()
+        #expect(!call.listener.isRunning)
+        call.end()
+    }
+
     @Test func gaveUpIsSpokenAndShownWithATypingBox() async {
         let call = LiveCallController()
         let voice = LiveCamCloseWhileOpeningTests.SilentVoice()

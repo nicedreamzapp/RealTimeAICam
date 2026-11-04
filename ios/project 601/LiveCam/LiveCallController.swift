@@ -157,6 +157,10 @@ final class LiveCallController: ObservableObject {
         listener.onQuestion = { [weak self] q, at, conf, fin in self?.heardInTheirLanguage(q, endedAt: at, confidence: conf, isFinal: fin) }
         listener.onBargeIn = { [weak self] in self?.bargeIn() }
         listener.onGaveUp = { [weak self] in self?.hearingGaveUp() }
+        listener.onRetry = { [weak self] in
+            guard let self, self.running, self.phase == .listening, !self.micMuted, !self.hearingStopped else { return }
+            self.listener.listen()
+        }
         listener.onLevel = { [weak self] l in self?.micLevel = l }
         listener.onPartial = { [weak self] t in self?.log(["event": "partial", "text": t]); self?.startPrefill() }
         startTask = Task { await runStart(level) }
@@ -306,9 +310,13 @@ final class LiveCallController: ObservableObject {
         guard running, !hearingStopped else { return }
         hearingStopped = true
         log(["event": "hearing_gave_up", "quick_failures": listener.quickFailures])
-        listener.stopListening()
-        stopTalking()
-        speakAll(LiveCamWords.cantHear)
+        // The mic itself goes off (no indicator, no battery), the voice keeps working.
+        listener.stopMic()
+        if phase == .listening || phase == .starting || phase == .loading {
+            speakAll(LiveCamWords.cantHear)
+        } else {
+            voice.say(LiveCamWords.cantHear)   // after the answer it is giving, never instead of it
+        }
     }
 
     /// Talked over: stop now and take the new question (first words kept).
