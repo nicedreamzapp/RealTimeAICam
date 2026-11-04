@@ -48,6 +48,16 @@ class AnswerTextTest {
         assertFalse(NarratorEngine.hitLimit("", 120))
     }
 
+    @Test fun anApologyBeforeTheRefusalIsStillARefusal() {
+        // 11/04 review: "I'm sorry" counted as a described thing, so the retry never ran.
+        assertTrue(AnswerText.isRefusal("I'm sorry, but I can't see anything clearly in this photo."))
+        assertTrue(AnswerText.isRefusal("I’m sorry, but I cannot make out what this is."))
+        assertTrue(AnswerText.isRefusal("Unfortunately, I can't tell what this is."))
+        assertTrue(AnswerText.isRefusal("I'm afraid I can't see much. Sorry."))
+        // An apology with something described is still kept.
+        assertFalse(AnswerText.isRefusal("I'm sorry, it's dim, but there is a red mug on a table."))
+    }
+
     @Test fun hardToSeeButDescribedIsNotARefusal() {
         assertFalse(AnswerText.isRefusal("It's too dark to see much, but there is a lamp on a table."))
         assertFalse(AnswerText.isRefusal("I can't make out details. A white door is on the right."))

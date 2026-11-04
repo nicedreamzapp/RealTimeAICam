@@ -77,6 +77,9 @@ object AnswerText {
         "image", "photo", "picture", "shot", "camera", "light", "lighting", "detail", "details",
         "sorry", "clearly", "clear", "well", "here", "please", "enough", "thing", "things", "everything",
         "any", "lot", "not", "too", "dark", "dim", "blurry", "unclear", "visible", "seen", "tell",
+        // An apology is not a description: "I'm sorry, but I can't see..." is a refusal (11/04 review).
+        "i'm", "im", "i've", "i'd", "i'll", "you", "your", "unfortunately", "afraid", "apologize",
+        "apologies", "however", "really", "quite", "but",
     )
 
     /** Fragments that are a clause about the photo, not a thing in it ("it's just a blurry"). */
