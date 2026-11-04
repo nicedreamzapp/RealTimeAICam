@@ -19,6 +19,15 @@ final class LiveRepeatGuard: @unchecked Sendable {
     var repeated = false
 }
 
+/// The parts of opening Live Cam that wait on the system (permission prompts, the model load).
+struct LiveStartSteps {
+    var releaseOther: @MainActor () async -> Void = { await OnDeviceVisionNarrator.shared.releaseEngine() }
+    var loadEngine: @Sendable (ModelLevel) -> LiveVisionEngine? = { try? LiveVisionEngine(level: $0) }
+    var requestCamera: @MainActor () async -> Bool = { await LiveCamera.requestAccess() }
+    var willAskPermission: @MainActor () -> Bool = { LiveListener.willAskPermission }
+    var startListener: @MainActor (LiveListener) async -> LiveListener.Failure? = { await $0.start() }
+}
+
 final class LiveStreamBox: @unchecked Sendable {
     private let lock = NSLock()
     private var stream = LiveSentenceStream()
@@ -77,12 +86,18 @@ final class LiveCallController: ObservableObject {
     }
     /// The last question heard (in the person's words), shown above the answer.
     @Published private(set) var heardText = ""
+    /// Speech recognition kept failing the moment it started: the mic is off for this visit and a typing box shows.
+    @Published private(set) var hearingStopped = false
 
     let camera = LiveCamera()
     let listener = LiveListener()
-    let voice: LiveVoiceOutput = LiveAppleVoice()
+    /// A var only so tests can hand in a silent voice before start().
+    var voice: LiveVoiceOutput = LiveAppleVoice()
     private var engine: LiveVisionEngine?
     private var preload: Task<LiveVisionEngine?, Never>?
+    private var startTask: Task<Void, Never>?
+    /// The steps of opening that wait on the system; tests swap them to close Live Cam in the middle of one.
+    var steps = LiveStartSteps()
     /// Test builds: a typed question instead of the mic (LiveCamTest).
     var typedOnly = false
     /// A no-photo turn still runs through look(); this stands in for the frame and is never sent.
@@ -141,40 +156,59 @@ final class LiveCallController: ObservableObject {
         voice.onQuiet = { [weak self] in self?.wentQuiet() }
         listener.onQuestion = { [weak self] q, at, conf, fin in self?.heardInTheirLanguage(q, endedAt: at, confidence: conf, isFinal: fin) }
         listener.onBargeIn = { [weak self] in self?.bargeIn() }
+        listener.onGaveUp = { [weak self] in self?.hearingGaveUp() }
         listener.onLevel = { [weak self] l in self?.micLevel = l }
         listener.onPartial = { [weak self] t in self?.log(["event": "partial", "text": t]); self?.startPrefill() }
-        Task {
-            // What's this? holds its own copy of the model: let it go before Live Cam loads one (never two at once).
-            await OnDeviceVisionNarrator.shared.releaseEngine()
-            // Load the model while the camera, mic and voice start.
-            preload = Task.detached(priority: .userInitiated) { try? LiveVisionEngine(level: level) }
-            if !typedOnly {
-                guard await LiveCamera.requestAccess() else {
-                    fail("Live Cam needs the camera. Allow it in Settings, then open Live Cam again."); return
-                }
-            }
-            camera.onEvent = { [weak self] o in DispatchQueue.main.async { MainActor.assumeIsolated { self?.log(o) } } }
-            camera.start()
-            if !typedOnly {
-                if LiveListener.willAskPermission {
-                    // The first time: say why before iOS asks (blind users hear the reason, then the two prompts).
-                    phase = .speaking
-                    caption = LiveCamWords.permissionLine
-                    voice.say(LiveCamWords.permissionLine)
-                    while voice.isBusy { try? await Task.sleep(nanoseconds: 150_000_000) }
-                }
-                if let f = await listener.start() {
-                    fail(f == .notAllowed ? LiveCamWords.notAllowed : LiveCamWords.noOfflineSpeech)
-                    return
-                }
-            }
-            await prepareModel(level)
-        }
+        startTask = Task { await runStart(level) }
     }
 
-    func end() {
-        guard running else { return }
-        running = false
+    /// Each step of opening Live Cam can await (a permission prompt, the "why" line, the model). Back can be tapped
+    /// during any of them: after every await this checks that the visit is still open, and whatever a step turned on
+    /// after Back was tapped is turned off again, so a closed Live Cam never leaves the camera or mic on.
+    private func runStart(_ level: ModelLevel) async {
+        await steps.releaseOther()
+        guard stillOpen("released") else { return }
+        // Load the model while the camera, mic and voice start.
+        let load = steps.loadEngine
+        preload = Task.detached(priority: .userInitiated) { load(level) }
+        if !typedOnly {
+            let allowed = await steps.requestCamera()
+            guard stillOpen("camera_permission") else { return }
+            guard allowed else {
+                fail("Live Cam needs the camera. Allow it in Settings, then open Live Cam again."); return
+            }
+        }
+        camera.onEvent = { [weak self] o in DispatchQueue.main.async { MainActor.assumeIsolated { self?.log(o) } } }
+        camera.start()
+        if !typedOnly {
+            if steps.willAskPermission() {
+                // The first time: say why before iOS asks (blind users hear the reason, then the two prompts).
+                phase = .speaking
+                caption = LiveCamWords.permissionLine
+                voice.say(LiveCamWords.permissionLine)
+                while running, voice.isBusy { try? await Task.sleep(nanoseconds: 150_000_000) }
+                guard stillOpen("permission_line") else { return }
+            }
+            let failure = await steps.startListener(listener)
+            guard stillOpen("listener") else { return }
+            if let f = failure {
+                fail(f == .notAllowed ? LiveCamWords.notAllowed : LiveCamWords.noOfflineSpeech)
+                return
+            }
+        }
+        await prepareModel(level)
+    }
+
+    /// False once Back was tapped while opening; then everything a step may have turned on since is turned off again.
+    private func stillOpen(_ step: String) -> Bool {
+        if running, !Task.isCancelled { return true }
+        log(["event": "closed_while_opening", "step": step])
+        tearDown()
+        return false
+    }
+
+    /// Camera, mic, recognizer, voice and model off. Safe to call more than once.
+    private func tearDown() {
         watchTask?.cancel()
         current?.cancel(); current = nil
         voice.onQuiet = nil
@@ -185,12 +219,23 @@ final class LiveCallController: ObservableObject {
         preload?.cancel(); preload = nil
         engine = nil
         UIApplication.shared.isIdleTimerDisabled = false
+    }
+
+    /// What's running right now (tests: nothing may be left on after Back).
+    var anythingRunning: Bool { listener.isRunning || listener.isListening || camera.isWanted || engine != nil || preload != nil }
+
+    func end() {
+        guard running else { return }
+        running = false
+        startTask?.cancel(); startTask = nil
+        tearDown()
         phase = .ended
         log(["event": "ended"])
         onEnd?()
     }
 
     private func fail(_ why: String) {
+        guard running else { return }
         phase = .failed
         caption = why
         log(["event": "failed", "why": why])
@@ -203,11 +248,13 @@ final class LiveCallController: ObservableObject {
         let t0 = Date()
         if let p = preload { engine = await p.value }
         preload = nil
-        guard running else { engine = nil; return }
+        guard stillOpen("model") else { return }
         if engine == nil, level != .balanced {
             // The picked level wouldn't load: the bundled Balanced, always on the phone.
             log(["event": "level_fallback", "from": level.rawValue])
-            engine = await Task.detached(priority: .userInitiated) { try? LiveVisionEngine(level: .balanced) }.value
+            let load = steps.loadEngine
+            engine = await Task.detached(priority: .userInitiated) { load(.balanced) }.value
+            guard stillOpen("model_fallback") else { return }
         }
         guard engine != nil else {
             fail("I couldn't start the vision model. Go back and try Live Cam again.")
@@ -215,7 +262,7 @@ final class LiveCallController: ObservableObject {
             return
         }
         log(["event": "loaded", "seconds": Date().timeIntervalSince(t0)])
-        guard running else { return }
+        guard stillOpen("loaded") else { return }
         // Greet like a friend, then wait for cues (11/2 Matt): it only looks when asked.
         phase = .speaking
         listener.watchForBargeIn(true)
@@ -244,13 +291,23 @@ final class LiveCallController: ObservableObject {
         prefillArmed = true
         listener.watchForBargeIn(false)
         phase = .listening
-        if !micMuted, !typedOnly { listener.listen() }
+        if !micMuted, !typedOnly, !hearingStopped { listener.listen() }
         if !typedOnly { startWatch() }
     }
 
     private func micMutedChanged() {
         log(["event": "mic", "muted": micMuted])
-        if micMuted { listener.stopListening() } else if phase == .listening { listener.listen() }
+        if micMuted { listener.stopListening() } else if phase == .listening, !hearingStopped { listener.listen() }
+    }
+
+    /// The recognizer gave up (see LiveListener.recognizerFailed): say so in words, show it, offer typing.
+    func hearingGaveUp() {
+        guard running, !hearingStopped else { return }
+        hearingStopped = true
+        log(["event": "hearing_gave_up", "quick_failures": listener.quickFailures])
+        listener.stopListening()
+        stopTalking()
+        speakAll(LiveCamWords.cantHear)
     }
 
     /// Talked over: stop now and take the new question (first words kept).
@@ -260,7 +317,7 @@ final class LiveCallController: ObservableObject {
     private var lastQuestion = ""
 
     func bargeIn() {
-        guard running, !micMuted, phase == .speaking || phase == .thinking else { return }
+        guard running, !micMuted, !hearingStopped, phase == .speaking || phase == .thinking else { return }
         // Still thinking and they kept talking right after: they weren't done, so keep what they said so far.
         if phase == .thinking, let e = questionEndedAt, Date().timeIntervalSince(e) < 2.5, !lastQuestion.isEmpty {
             cutOff = (lastQuestion, Date())

@@ -17,6 +17,21 @@ final class LiveListener {
     var onBargeIn: (() -> Void)?
     var onPartial: ((String) -> Void)?
     var onLevel: ((Float) -> Void)?
+    /// The recognizer kept failing the moment it started: listening has stopped for this visit.
+    var onGaveUp: (() -> Void)?
+
+    /// A recognizer failure this soon after listening started, with nothing heard, counts as a quick failure.
+    nonisolated static let quickFailure: TimeInterval = 2
+    /// Wait before trying again after the 1st, 2nd, 3rd quick failure in a row; one more and it gives up.
+    nonisolated static let retryDelays: [TimeInterval] = [1, 2, 5]
+    /// The wait before the next try after `failures` quick failures in a row, or nil to stop trying.
+    nonisolated static func retryDelay(afterQuickFailures failures: Int) -> TimeInterval? {
+        (1 ... retryDelays.count).contains(failures) ? retryDelays[failures - 1] : nil
+    }
+    private(set) var quickFailures = 0
+    private(set) var gaveUp = false
+    private(set) var lastRetryDelay: TimeInterval?
+    private var retryTask: Task<Void, Never>?
 
     /// Test aid: no microphone; recorded audio comes in through `inject`.
     var feedMode = false
@@ -86,6 +101,9 @@ final class LiveListener {
         return nil
     }
 
+    /// Tests: mark the ears as started without a microphone (feed mode only).
+    func startForTest() { if feedMode { isRunning = true } }
+
     func shutdown() {
         stopListening()
         tap.speaking(false)
@@ -107,7 +125,8 @@ final class LiveListener {
     }
 
     func listen(replay: Bool = false) {
-        guard isRunning, !isListening, let recognizer else { return }
+        guard isRunning, !isListening, !gaveUp, let recognizer else { return }
+        retryTask?.cancel(); retryTask = nil
         let req = SFSpeechAudioBufferRecognitionRequest()
         req.shouldReportPartialResults = true
         req.requiresOnDeviceRecognition = true   // never the network: airplane mode works
@@ -132,7 +151,7 @@ final class LiveListener {
                     if !self.finishing { self.lastChange = Date() }
                     self.transcript = text; self.onPartial?(text)
                 }
-                if final { self.deliver(confidence: conf, isFinal: true) } else if failed { self.deliver(confidence: nil, isFinal: false) }
+                if final { self.deliver(confidence: conf, isFinal: true) } else if failed { self.recognizerFailed() }
             }
         }
         watchdog?.cancel()
@@ -152,6 +171,7 @@ final class LiveListener {
     }
 
     func stopListening() {
+        retryTask?.cancel(); retryTask = nil
         watchdog?.cancel(); watchdog = nil
         tap.stopFeeding()
         request?.endAudio()
@@ -188,7 +208,33 @@ final class LiveListener {
         finishing = false
         stopListening()
         if heard.isEmpty { listen(); return }
+        quickFailures = 0
         onQuestion?(heard, at, confidence, isFinal)
+    }
+
+    /// The recognizer ended with an error. Words already heard still count as the question. With nothing heard,
+    /// a failure right after starting (the recognizer can't run at all) is retried after 1 s, 2 s, then 5 s, and
+    /// after one more it stops for good and says so (11/04 review: it used to restart in a tight loop, draining the
+    /// battery and saying nothing). A failure after a long listen is ordinary and restarts right away.
+    func recognizerFailed() {
+        let heard = !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if heard, isListening { deliver(confidence: nil, isFinal: false); return }
+        let quick = Date().timeIntervalSince(listenStarted) < Self.quickFailure
+        stopListening()
+        guard quick else { quickFailures = 0; lastRetryDelay = 0; listen(); return }
+        quickFailures += 1
+        guard let wait = Self.retryDelay(afterQuickFailures: quickFailures) else {
+            lastRetryDelay = nil
+            gaveUp = true
+            onGaveUp?()
+            return
+        }
+        lastRetryDelay = wait
+        retryTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(wait * 1e9))
+            guard let self, !Task.isCancelled, self.isRunning, !self.isListening, !self.gaveUp else { return }
+            self.listen()
+        }
     }
 }
 

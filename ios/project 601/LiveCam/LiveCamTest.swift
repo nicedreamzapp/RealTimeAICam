@@ -12,6 +12,8 @@ import UIKit
 enum LiveCamWords {
     static let permissionLine = "Live Cam listens for your questions, so your phone will ask to use the microphone and speech recognition. Everything stays on this phone."
     static let notAllowed = "Live Cam needs the microphone and speech recognition to hear you. Allow them in Settings, then open Live Cam again."
+    static let cantHear = "I can't hear you right now. Speech recognition on this phone keeps stopping. You can type your question in the box, or go back."
+    static let cantHearNote = "Can't hear you: speech recognition keeps stopping. Type a question below, or tap Back."
     static let noOfflineSpeech = "Speech recognition on this phone can't work offline yet, so Live Cam can't hear you here."
 }
 

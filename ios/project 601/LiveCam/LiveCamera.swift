@@ -63,6 +63,9 @@ final class LiveCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
         }
     }
 
+    /// A visit wants the camera on (read off the camera queue, so a pending start or stop has landed).
+    var isWanted: Bool { queue.sync { wanted } }
+
     func stop() {
         queue.async { [self] in
             wanted = false

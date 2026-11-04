@@ -57,7 +57,14 @@ struct LiveCamView: View {
                     topBar
                     Spacer(minLength: 0)
                     words(wide: wide)
-                    if call.typedOnly { typedBox }
+                    if call.hearingStopped {
+                        Text(LiveCamWords.cantHearNote)
+                            .font(.callout.weight(.semibold)).foregroundStyle(.white).multilineTextAlignment(.center)
+                            .padding(.horizontal, 12).padding(.vertical, 8)
+                            .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
+                            .accessibilityIdentifier("liveCamCantHear")
+                    }
+                    if call.typedOnly || call.hearingStopped { typedBox }
                     orb(size: wide ? 96 : 120)
                     bottomBar
                 }
@@ -257,7 +264,7 @@ struct LiveCamView: View {
 
     private var statusLine: String {
         switch call.phase {
-        case .listening: call.micMuted ? "Microphone muted" : (call.typedOnly ? "Type a question" : "Listening · just talk")
+        case .listening: call.micMuted ? "Microphone muted" : (call.typedOnly || call.hearingStopped ? "Type a question" : "Listening · just talk")
         case .thinking: "Looking"
         case .speaking: "Speaking"
         case .downloading, .loading, .starting: "Getting ready"
@@ -268,7 +275,7 @@ struct LiveCamView: View {
 
     private var orbLabel: String {
         switch call.phase {
-        case .listening: call.micMuted ? "Microphone muted" : "Always listening. Just talk."
+        case .listening: call.micMuted ? "Microphone muted" : (call.hearingStopped ? "Not listening. Type a question." : "Always listening. Just talk.")
         case .thinking: "Looking"
         case .speaking: "Speaking"
         case .downloading, .loading, .starting: "Getting ready"
