@@ -69,6 +69,11 @@ sealed class AimSubject {
     object Face : AimSubject()
     object Page : AimSubject()
     data class Obj(val match: AimVocabulary.Match) : AimSubject()
+    /**
+     * A thing the object finder has no name for ("wallet"): the describing
+     * model looks for it instead, slower but never a dead end (2026-11-03).
+     */
+    data class Described(val word: String) : AimSubject()
 
     /** "a face", "a picture or page", "a key". */
     val spokenName: String
@@ -76,13 +81,14 @@ sealed class AimSubject {
             is Face -> "a face"
             is Page -> "a picture or page"
             is Obj -> AimVocabulary.withArticle(match.spokenName)
+            is Described -> AimVocabulary.withArticle(word)
         }
 
     val framing: AimSteering.Framing
         get() = when (this) {
             is Face -> AimSteering.Framing.PERSON
             is Page -> AimSteering.Framing.PAGE
-            is Obj -> AimSteering.Framing.WHOLE
+            is Obj, is Described -> AimSteering.Framing.WHOLE
         }
 }
 
@@ -1328,4 +1334,86 @@ object AimHold {
         // Only a landscape answer is trusted here.
         return if (abs(a) < 1f || abs(a - 180f) < 1f) a else portraitAngle
     }
+}
+
+
+/**
+ * For words the object finder can't name: show the describing model one photo
+ * at a time and ask whether the thing is there and where. Same words as the
+ * iPhone's AimAsk.
+ */
+object AimAsk {
+    enum class Place { LEFT, RIGHT, TOP, BOTTOM, MIDDLE }
+
+    data class Reading(val found: Boolean, val place: Place?)
+
+    /** Photos asked about before giving up. */
+    const val MAX_MISSES = 8
+    /** Steering turns before taking the picture anyway. */
+    const val MAX_STEERS = 4
+
+    fun question(word: String): String =
+        "Is there ${AimVocabulary.withArticle(word)} in this photo? Start your answer with Yes or No. " +
+            "If yes, say where it is in the photo: left, right, top, bottom, or middle."
+
+    /** Yes/no and where, from the model's answer. Anything unsure counts as no. */
+    fun read(answer: String?): Reading {
+        val words = (answer ?: "").lowercase().split(Regex("[^a-z]+")).filter { it.isNotEmpty() }
+        if (words.firstOrNull() != "yes") return Reading(false, null)
+        fun has(w: String) = w in words
+        // "center-left" is left: a side wins over the middle.
+        val place = when {
+            has("left") && !has("right") -> Place.LEFT
+            has("right") && !has("left") -> Place.RIGHT
+            has("middle") || has("center") || has("centre") -> Place.MIDDLE
+            has("top") || has("upper") || has("above") -> Place.TOP
+            has("bottom") || has("lower") || has("below") -> Place.BOTTOM
+            else -> null
+        }
+        return Reading(true, place)
+    }
+
+    fun steer(place: Place): String = when (place) {
+        Place.LEFT -> "It's on the left. Turn the phone a little left."
+        Place.RIGHT -> "It's on the right. Turn the phone a little right."
+        Place.TOP -> "It's near the top. Tilt the phone up a little."
+        Place.BOTTOM -> "It's near the bottom. Tilt the phone down a little."
+        Place.MIDDLE -> "It's right in front of you. Hold still."
+    }
+
+    /**
+     * Asked after the first "yes": the model names what it sees on its own.
+     * The word in that list means sure; otherwise the yes may be made up (a
+     * "lighter" in a wallet photo, iPhone test 2026-11-03), so it is said as a
+     * maybe. Not a gate: inhalers and hearing aids came back as "a blue
+     * device" and "an earbud" though the yes was right.
+     */
+    const val CONFIRM_QUESTION = "Name the objects you can see in this photo, a few words each."
+
+    fun confirms(word: String, listing: String?): Boolean {
+        val text = " " + (listing ?: "").lowercase().replace(Regex("[^a-z]"), " ") + " "
+        val w = word.lowercase()
+        val forms = listOf(w, w + "s", w + "es", if (w.endsWith("y")) w.dropLast(1) + "ies" else w)
+        return forms.any { text.contains(" $it ") }
+    }
+
+    /** [seconds] is this phone's time per look, said when it is slow. */
+    fun intro(word: String, seconds: Int? = null): String {
+        val slow = if (seconds != null && seconds >= 8) " Each look takes about $seconds seconds on this phone." else ""
+        return "I don't know ${AimVocabulary.withArticle(word)} by sight, so I'll look closely every few seconds.$slow " +
+            "Point the phone where it might be and move slowly. Double tap anywhere to take the picture yourself."
+    }
+
+    /** Every other miss, so it is not a stuck record. */
+    fun notYet(word: String, misses: Int): String? = when {
+        misses % 2 == 0 -> null
+        misses == 1 -> "No $word here yet. Turn slowly."
+        else -> "Still no $word. Try another spot."
+    }
+
+    fun gaveUp(word: String): String =
+        "I couldn't find ${AimVocabulary.withArticle(word)}. Point somewhere else and double tap to take a picture, or go back to try another word."
+
+    const val FOUND = "Found it. Hold still."
+    const val FOUND_UNSURE = "I think that's it, but I'm not sure. Hold still, I'll take the picture and tell you what it is."
 }

@@ -29,7 +29,9 @@ import com.mattmacosko.realtimeaicam.detection.YoloDetector
 import com.mattmacosko.realtimeaicam.narrator.NarratorEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -140,6 +142,96 @@ class AimPipeline(
         recentSeen.clear()
         _done.value = null
         _shooting.value = false
+        lookJob?.cancel()
+        if (s is AimSubject.Described) startLooking(s.word, firstWaitMs = 5000)
+    }
+
+    /** True when the describing model is on this phone (Help Me Aim's backup). */
+    fun canDescribe(): Boolean = narrator.hasModel()
+
+    /** This phone's seconds per look with the scene model, or null before the first answer. */
+    fun lookSeconds(): Int? = com.mattmacosko.realtimeaicam.narrator.ModelPicker.estimate(
+        appContext,
+        com.mattmacosko.realtimeaicam.narrator.ModelPicker.level(appContext, com.mattmacosko.realtimeaicam.narrator.PhotoKind.SCENE),
+        com.mattmacosko.realtimeaicam.narrator.PhotoKind.SCENE,
+    )?.let { kotlin.math.round(it).toInt() }
+
+    private var lookJob: Job? = null
+
+    /**
+     * The describing model looks at one photo at a time and steers toward the
+     * thing; a "yes, in the middle" counts down and takes the picture.
+     */
+    private fun startLooking(word: String, firstWaitMs: Long) {
+        lookJob?.cancel()
+        lookJob = scope.launch {
+            delay(firstWaitMs)
+            var misses = 0
+            var steers = 0
+            var sure: Boolean? = null
+            while (isActive && misses < AimAsk.MAX_MISSES) {
+                if (_shooting.value || subject !is AimSubject.Described) return@launch
+                val jpeg = (if (AimFake.word != null) AimFake.next() else null) ?: takeOne()
+                if (jpeg == null) { misses++; delay(1000); continue }
+                val answer = withContext(Dispatchers.IO) { askAbout(jpeg, AimAsk.question(word)) }
+                if (!isActive || subject !is AimSubject.Described || _shooting.value) return@launch
+                Log.i(TAG, "[ask] $word -> $answer")
+                val r = AimAsk.read(answer)
+                if (r.found) {
+                    misses = 0
+                    if (sure == null) {
+                        val listing = withContext(Dispatchers.IO) { askAbout(jpeg, AimAsk.CONFIRM_QUESTION) }
+                        if (!isActive) return@launch
+                        sure = AimAsk.confirms(word, listing)
+                        Log.i(TAG, "[ask] confirm $word sure=$sure -> $listing")
+                    }
+                    val place = r.place
+                    if (place == null || place == AimAsk.Place.MIDDLE || steers >= AimAsk.MAX_STEERS) {
+                        val line = if (sure == true) AimAsk.FOUND else AimAsk.FOUND_UNSURE
+                        _spoken.value = line
+                        Log.i(TAG, "SAY $line")
+                        speaker.speakAndWait(line, timeoutMs = 8000)
+                        if (isActive && subject is AimSubject.Described) countdownAndShoot()
+                        return@launch
+                    }
+                    steers++
+                    val line = AimAsk.steer(place)
+                    _spoken.value = line
+                    Log.i(TAG, "SAY $line")
+                    speaker.speakAndWait(line, timeoutMs = 6000)
+                } else {
+                    misses++
+                    AimAsk.notYet(word, misses)?.let {
+                        _spoken.value = it
+                        Log.i(TAG, "SAY $it")
+                        speaker.speakAndWait(it, timeoutMs = 5000)
+                    }
+                }
+                delay(1200)
+            }
+            if (isActive && subject is AimSubject.Described && !_shooting.value) {
+                val line = AimAsk.gaveUp(word)
+                _spoken.value = line
+                speaker.speak(line)
+            }
+        }
+    }
+
+    /** Blocking. The describing model's answer to [question] about [jpeg]. */
+    private fun askAbout(jpeg: ByteArray, question: String): String? = try {
+        val raw = java.io.File(appContext.cacheDir, "aim-ask-raw.jpg").apply { writeBytes(jpeg) }
+        val shot = java.io.File(appContext.cacheDir, "aim-ask.jpg")
+        if (com.mattmacosko.realtimeaicam.ui.prepareShot(raw, shot) == null) {
+            null
+        } else {
+            narrator.select(com.mattmacosko.realtimeaicam.narrator.ModelPicker.level(
+                appContext, com.mattmacosko.realtimeaicam.narrator.PhotoKind.SCENE))
+            val sized = com.mattmacosko.realtimeaicam.ui.sizedForModel(appContext, shot, false)
+            narrator.describe(sized, question, com.mattmacosko.realtimeaicam.narrator.NarratorPrompt.ASK).trim().ifBlank { null }
+        }
+    } catch (t: Throwable) {
+        Log.e(TAG, "ask failed", t)
+        null
     }
 
     fun start(owner: LifecycleOwner, previewView: PreviewView) {
@@ -164,6 +256,9 @@ class AimPipeline(
                     CameraSelector.DEFAULT_BACK_CAMERA
                 }
                 camera = p.bindToLifecycle(owner, selector, preview, analysis, imageCapture)
+                (subject as? AimSubject.Described)?.let {
+                    if (lookJob?.isActive != true && !_shooting.value) startLooking(it.word, firstWaitMs = 2000)
+                }
                 // A rebind drops the torch, so put it back if it was on.
                 if (_torchOn.value && !_isFront.value) camera?.cameraControl?.enableTorch(true)
             } catch (e: Exception) {
@@ -205,6 +300,8 @@ class AimPipeline(
     }
 
     fun stop() {
+        lookJob?.cancel()
+        lookJob = null
         provider?.unbindAll()
         camera = null
     }
@@ -234,6 +331,8 @@ class AimPipeline(
             if (now - lastFrameAt < MIN_FRAME_GAP_MS || _shooting.value) return
             lastFrameAt = now
             val s = subject ?: return
+            // The describing model does the looking; no detector frames.
+            if (s is AimSubject.Described) return
             val c = coach ?: return
             val rotation = image.imageInfo.rotationDegrees
             val bitmap = image.toBitmap()
@@ -354,6 +453,7 @@ class AimPipeline(
     }
 
     private suspend fun takeOne(): ByteArray? = withContext(Dispatchers.IO) {
+        if (AimFake.word != null) return@withContext AimFake.last()
         val out = ByteArrayOutputStream()
         var result: ByteArray? = null
         val latch = java.util.concurrent.CountDownLatch(1)
@@ -402,7 +502,7 @@ class AimPipeline(
         val scored = frames.map { AimBurst.Frame(box, it.second) }
         val index = AimBurst.pick(scored, s.framing) ?: 0
         val jpeg = frames[index].first
-        val savedUri = withContext(Dispatchers.IO) { saveOne(jpeg, box, s) }
+        val savedUri = if (AimFake.word != null) null else withContext(Dispatchers.IO) { saveOne(jpeg, box, s) }
         val saved = savedUri != null
         _lastPhoto.value = withContext(Dispatchers.IO) {
             // A small copy for the Picture Taken screen; the full one is in the
@@ -442,6 +542,7 @@ class AimPipeline(
                 AimPhrases.pictureTaken + if (saved) AimPhrases.savedSuffix else AimPhrases.notSavedSuffix,
             )
         }
+        Log.i(TAG, "SAY $line")
         say(line)
         _done.value = line
     }
@@ -553,3 +654,33 @@ class AimPipeline(
 }
 
 fun nowSeconds(): Double = SystemClock.elapsedRealtime() / 1000.0
+
+
+/**
+ * Test builds only: `-e aimFakeFind <word>` opens Help Me Aim on that word and
+ * feeds the .jpg files in files/photo-test/flow, in order, as the camera, one photo per
+ * look (the last one repeats, and is the burst). Nothing is saved to the
+ * gallery. Lets a phone walk the describing-model flow unaimed (2026-11-03).
+ */
+object AimFake {
+    @Volatile var word: String? = null
+        private set
+    private var frames: List<ByteArray> = emptyList()
+    private var shown = 0
+
+    fun setUp(context: android.content.Context, word: String) {
+        val dir = java.io.File(context.getExternalFilesDir(null), "photo-test/flow")
+        frames = (dir.listFiles() ?: emptyArray()).filter { it.name.endsWith(".jpg") }
+            .sortedBy { it.name }.map { it.readBytes() }
+        shown = 0
+        this.word = word
+    }
+
+    @Synchronized fun next(): ByteArray? {
+        if (frames.isEmpty()) return null
+        return frames[minOf(shown++, frames.size - 1)]
+    }
+
+    @Synchronized fun last(): ByteArray? =
+        if (frames.isEmpty()) null else frames[minOf(maxOf(shown - 1, 0), frames.size - 1)]
+}

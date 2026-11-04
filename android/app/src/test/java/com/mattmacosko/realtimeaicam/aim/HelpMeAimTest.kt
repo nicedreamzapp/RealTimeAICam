@@ -550,3 +550,39 @@ class AimTonesTest {
         assertEquals(expected, wav.size)
     }
 }
+
+
+class AimAskTest {
+    @Test fun yesWithAPlace() {
+        assertEquals(AimAsk.Reading(true, AimAsk.Place.LEFT), AimAsk.read("Yes, the wallet is on the left side of the table."))
+        assertEquals(AimAsk.Reading(true, AimAsk.Place.MIDDLE), AimAsk.read("Yes. It's in the middle of the photo."))
+        assertEquals(AimAsk.Reading(true, AimAsk.Place.RIGHT), AimAsk.read("yes - near the bottom right"))
+        assertEquals(AimAsk.Reading(true, AimAsk.Place.LEFT), AimAsk.read("Yes, in the center-left area."))
+        assertEquals(AimAsk.Reading(true, null), AimAsk.read("Yes, there is a wallet."))
+    }
+
+    @Test fun noOrUnsureIsNotFound() {
+        assertTrue(!AimAsk.read("No, I don't see a wallet.").found)
+        assertTrue(!AimAsk.read("I can't tell for sure, but there is a table on the left.").found)
+        assertTrue(!AimAsk.read(null).found)
+        assertTrue(!AimAsk.read("Yesterday's mail is on the left").found)
+    }
+
+    @Test fun confirmNeedsTheWordItself() {
+        assertTrue(AimAsk.confirms("wallet", "Yes, a wallet and cards"))
+        assertTrue(AimAsk.confirms("headphone", "white headphones, pink background"))
+        assertTrue(!AimAsk.confirms("lighter", "black leather wallet, credit cards"))
+        assertTrue(!AimAsk.confirms("wallet", null))
+    }
+
+    @Test fun unknownWordsGoToTheDescriber() {
+        assertNull(AimVocabulary.match("wallet", listOf("person", "key", "dog")))
+        assertEquals("a wallet", AimSubject.Described("wallet").spokenName)
+        assertEquals("an inhaler", AimSubject.Described("inhaler").spokenName)
+    }
+
+    @Test fun slowPhonesHearTheTime() {
+        assertTrue(AimAsk.intro("wallet", 90).contains("about 90 seconds"))
+        assertTrue(!AimAsk.intro("wallet", 2).contains("seconds on this phone"))
+    }
+}

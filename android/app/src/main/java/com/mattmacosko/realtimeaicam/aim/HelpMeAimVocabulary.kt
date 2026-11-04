@@ -156,6 +156,7 @@ object AimElsewhere {
         is AimSubject.Obj -> (listOf(subject.match.spokenName) + subject.match.classNames)
             .map { spokenName(it) ?: it.lowercase() }
             .toSet()
+        is AimSubject.Described -> setOf(subject.word)
     }
 
     private fun iou(a: AimRect, b: AimRect): Float {
@@ -229,6 +230,49 @@ object AimVocabulary {
         "mail" to listOf("letter", "envelope"),
         "bill" to listOf("document", "paper", "letter"),
         "page" to listOf("document", "paper"),
+        // Everyday words for things YOLOE names differently (2026-11-03).
+        "headphones" to listOf("earphone", "headset"),
+        "headphone" to listOf("earphone", "headset"),
+        "earphones" to listOf("earphone"),
+        "earbuds" to listOf("earphone"),
+        "earbud" to listOf("earphone"),
+        "airpods" to listOf("earphone"),
+        "sneakers" to listOf("running shoe", "shoe"),
+        "sneaker" to listOf("running shoe", "shoe"),
+        "shoes" to listOf("shoe", "running shoe", "dress shoe", "leather shoe"),
+        "boots" to listOf("boot"),
+        "trash can" to listOf("bin", "waste container", "garbage"),
+        "trash" to listOf("bin", "waste container", "garbage"),
+        "garbage can" to listOf("bin", "waste container", "garbage"),
+        "trash bin" to listOf("bin", "waste container", "garbage"),
+        "wastebasket" to listOf("bin", "waste container"),
+        "outlet" to listOf("socket", "power plugs and sockets", "plug"),
+        "power outlet" to listOf("socket", "power plugs and sockets"),
+        "kid" to listOf("child", "boy", "girl"),
+        "toddler" to listOf("toddler", "child", "baby"),
+        "bike" to listOf("bicycle", "mountain bike"),
+        "refrigerator" to listOf("fridge"),
+        "flashlight" to listOf("torch"),
+        "cane" to listOf("walking cane", "cane"),
+        "white cane" to listOf("walking cane", "cane"),
+        "walking stick" to listOf("walking cane", "cane"),
+        "jewelry" to listOf("jewellery", "necklace", "earring", "ring", "bracelet"),
+        "jewellery" to listOf("jewellery", "necklace", "earring", "ring", "bracelet"),
+        "desk" to listOf("office desk", "writing desk", "computer desk", "table"),
+        "water bottle" to listOf("bottle"),
+        "medicine bottle" to listOf("medicine", "bottle"),
+        "charger" to listOf("charger", "cable", "plug"),
+        "cord" to listOf("cable", "wire"),
+        "cable" to listOf("cable", "wire"),
+        "tissues" to listOf("tissue", "facial tissue holder"),
+        "kleenex" to listOf("tissue", "facial tissue holder"),
+        "toilet" to listOf("toilet bowl", "toilet seat"),
+        "computer" to listOf("laptop", "computer", "desktop computer", "computer monitor"),
+        "monitor" to listOf("computer monitor", "monitor", "television"),
+        "soda" to listOf("soda", "can"),
+        "dog leash" to listOf("leash"),
+        "collar" to listOf("dog collar"),
+        "stove" to listOf("stove", "gas stove", "oven"),
         // A toy bunny is a "stuffed animal" to YOLOE, never a "bunny" (Matt, 2026-11-03).
         "bunny" to listOf("bunny", "rabbit", "easter bunny", "stuffed animal", "stuffed toy"),
         "rabbit" to listOf("rabbit", "bunny", "easter bunny", "stuffed animal", "stuffed toy"),

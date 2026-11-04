@@ -113,11 +113,17 @@ fun HelpMeAimScreen(onBack: () -> Unit) {
     // Test builds only: `-e aimPreviewTaken true` opens Picture Taken with a
     // long description, so a phone check needs no camera aiming (2026-11-03).
     var previewPhoto by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var fakeStart by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
         val debuggable = (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
         var c: Context? = context
         while (c is android.content.ContextWrapper && c !is android.app.Activity) c = c.baseContext
         val activity = c as? android.app.Activity
+        val fakeWord = activity?.intent?.getStringExtra("aimFakeFind")
+        if (debuggable && !fakeWord.isNullOrBlank()) {
+            AimFake.setUp(context, fakeWord)
+            fakeStart = fakeWord
+        }
         if (debuggable && activity?.intent?.getStringExtra("aimPreviewTaken") == "true") {
             previewPhoto = android.graphics.Bitmap.createBitmap(1200, 900, android.graphics.Bitmap.Config.ARGB_8888)
                 .apply { eraseColor(android.graphics.Color.DKGRAY) }
@@ -170,7 +176,8 @@ fun HelpMeAimScreen(onBack: () -> Unit) {
         phase = AimPhase.AIMING
         pipeline.aimAt(s)
         pipeline.start(owner, previewView)
-        scope.launch { speaker.speakAndWait(AimPhrases.intro(s), timeoutMs = 6000) }
+        val intro = if (s is AimSubject.Described) AimAsk.intro(s.word, pipeline.lookSeconds()) else AimPhrases.intro(s)
+        scope.launch { speaker.speakAndWait(intro, timeoutMs = 9000) }
     }
 
     fun backToChoices() {
@@ -184,12 +191,22 @@ fun HelpMeAimScreen(onBack: () -> Unit) {
 
     fun findTyped(word: String) {
         val match = AimVocabulary.match(word, pipeline.classNames)
-        if (match == null) {
+        val said = AimVocabulary.normalize(word)
+        if (match == null && said.isNotBlank() && pipeline.canDescribe()) {
+            // No name for it in the finder: the describing model looks instead.
+            beginAiming(AimSubject.Described(said))
+        } else if (match == null) {
             status = AimPhrases.cantLookFor(AimVocabulary.normalize(word))
             speaker.speak(status)
         } else {
             beginAiming(AimSubject.Obj(match))
         }
+    }
+
+    LaunchedEffect(fakeStart) {
+        val w = fakeStart ?: return@LaunchedEffect
+        delay(2000)
+        findTyped(w)
     }
 
     /** Ask, beep, listen, look it up — the iPhone's Something Else flow. */
@@ -233,8 +250,13 @@ fun HelpMeAimScreen(onBack: () -> Unit) {
     LaunchedEffect(done) {
         if (done != null && phase == AimPhase.AIMING) {
             status = done ?: ""
-            (subject as? AimSubject.Obj)?.let {
-                recent = AimRecent.updated(recent, it.match.spokenName)
+            val word = when (val s = subject) {
+                is AimSubject.Obj -> s.match.spokenName
+                is AimSubject.Described -> s.word
+                else -> null
+            }
+            word?.let {
+                recent = AimRecent.updated(recent, it)
                 AimRecent.save(context, recent)
             }
             phase = AimPhase.TAKEN
