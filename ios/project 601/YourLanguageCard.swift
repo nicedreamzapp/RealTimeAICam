@@ -97,6 +97,19 @@ struct YourLanguageCard: View {
                 }
             }
         }
+        #if DEBUG
+        .overlay(alignment: .bottomTrailing) {
+            // Simulator tests only: how the object names stand.
+            if YourLanguageTranslator.isFake {
+                TimelineView(.periodic(from: .now, by: 1)) { _ in
+                    let status = ObjectLabelCache.shared.status
+                    Text(status).font(.system(size: 9)).foregroundStyle(.secondary)
+                        .accessibilityIdentifier("yourLanguageObjectNames")
+                        .accessibilityLabel(status)
+                }
+            }
+        }
+        #endif
         .padding()
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
         .accessibilityElement(children: .contain)

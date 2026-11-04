@@ -14,6 +14,14 @@ struct project_601App: App {
         if ProcessInfo.processInfo.arguments.contains("-rtcamFreshReadMode") {
             UserDefaults.standard.removeObject(forKey: ReadMode.storageKey)
         }
+        // `-rtcamFreshYourLanguage`: like a new install for Your language (choice,
+        // first-launch line, test packs, saved object names).
+        if ProcessInfo.processInfo.arguments.contains("-rtcamFreshYourLanguage") {
+            for k in [YourLanguage.key, YourLanguage.announcedKey, "fakeTranslatorPacks"] {
+                UserDefaults.standard.removeObject(forKey: k)
+            }
+            try? FileManager.default.removeItem(at: ObjectLabelCache.directory)
+        }
         #endif
     }
 

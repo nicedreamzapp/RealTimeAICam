@@ -176,6 +176,9 @@ final class ObjectLabelCache: @unchecked Sendable {
     private var lang = YourLanguageRules.english
     private var names: [String: String] = [:]
     private var building: String?
+    private var lastStatus = "object names: English"
+    /// "object names: es 605 from file in 9 ms" (logs and simulator tests).
+    var status: String { lock.lock(); defer { lock.unlock() }; return lastStatus }
 
     static var directory: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
@@ -209,19 +212,27 @@ final class ObjectLabelCache: @unchecked Sendable {
         let all = Self.labels + ObjectLabelTranslations.extras
         Task.detached(priority: .utility) { [weak self] in
             let start = Date()
+            let fromFile = ObjectLabelTranslations.load(Self.directory, lang: code, labels: all) != nil
             let built = await ObjectLabelTranslations.loadOrBuild(Self.directory, lang: code, labels: all) { phrases in
                 await YourLanguageTranslator.shared.translateMany(phrases, from: YourLanguageRules.english, to: code)
             }
             guard let self else { return }
             lock.lock()
             building = nil
+            let ms = Int(Date().timeIntervalSince(start) * 1000)
             if let built {
                 names = Dictionary(zip(all, built), uniquingKeysWith: { a, _ in a })
                 lang = code
+                lastStatus = "object names: \(code) \(built.count) \(fromFile ? "from file" : "built") in \(ms) ms"
+            } else {
+                lastStatus = "object names: \(code) failed"
             }
+            let status = lastStatus
             lock.unlock()
-            NSLog("YourLanguage: object names %@ %@ (%d) in %d ms", code, built == nil ? "FAILED" : "ready",
-                  built?.count ?? 0, Int(Date().timeIntervalSince(start) * 1000))
+            NSLog("YourLanguage: %@", status)
+            #if DEBUG
+            SpeakLog.note("objectNames", status + (built.map { " mouse=\($0[all.firstIndex(of: "Mouse") ?? 0]) computer mouse=\($0[all.firstIndex(of: "Computer mouse") ?? 0])" } ?? ""))
+            #endif
         }
     }
 }

@@ -300,6 +300,19 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
             return
         }
 
+        #if DEBUG
+        // Simulator UI tests (-rtcamFakeTranslator): Apple's translator can't run there.
+        if YourLanguageTranslator.isFake, translationTarget != YourLanguageRules.english {
+            translatedText = text.components(separatedBy: "\n").map {
+                $0.isEmpty ? $0 : YourLanguageTranslator.fakeTranslate($0, from: sourceLanguage.code, to: translationTarget)
+            }.joined(separator: "\n")
+            translatedLanguage = translationTarget
+            isTranslated = true
+            completion(true)
+            return
+        }
+        #endif
+
         // Every language goes to Apple's translator on iOS 18+ (LiveOCRView's
         // translationTask takes over). Spanish falls back to the dictionary.
         if #available(iOS 18.0, *) {
