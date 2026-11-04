@@ -98,11 +98,24 @@ struct HomeView: View {
             // Natural spacing that can never overlap: when the six buttons
             // don't fit the screen (iPhone SE), the page scrolls instead of
             // squeezing them together (Matt, 2026-11-03).
-            ViewThatFits(in: .vertical) {
-                homeColumn(scale: scale, screenWidth: screenWidth)
-                ScrollView(showsIndicators: false) {
-                    homeColumn(scale: scale, screenWidth: screenWidth)
+            // Centered on the whole screen, and as wide on both sides as the
+            // side with the camera allows (iPhone Duo folded has an 84 pt
+            // camera strip on one edge; centering in the safe area left the
+            // tools lopsided, 2026-11-04).
+            GeometryReader { outer in
+                let leading = outer.safeAreaInsets.leading
+                let trailing = outer.safeAreaInsets.trailing
+                let usable = outer.size.width + leading + trailing - 2 * max(leading, trailing)
+                ViewThatFits(in: .vertical) {
+                    homeColumn(scale: scale, screenWidth: min(screenWidth, usable))
+                    ScrollView(showsIndicators: false) {
+                        homeColumn(scale: scale, screenWidth: min(screenWidth, usable))
+                    }
                 }
+                .frame(width: usable)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Slide back to the middle of the whole screen.
+                .offset(x: (trailing - leading) / 2)
             }
         }
         .overlay {
@@ -461,10 +474,13 @@ struct HomeView: View {
             VStack(spacing: 18 * scale) {
                 // Centered and first in the swipe order: Settings, Info, the
                 // title, the five tools, the voice (2026-11-03).
-                HStack(spacing: 12) {
-                    settingsButton
-                    infoButton
+                // Never wraps ("INF O / GUID E" on the folded Duo): each pill
+                // keeps its natural width, and the pair may use the side margins.
+                HStack(spacing: 10) {
+                    settingsButton.fixedSize()
+                    infoButton.fixedSize()
                 }
+                .fixedSize()
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.bottom, 10 * scale)
                 HeadingView(animateIn: animationState.heading)
