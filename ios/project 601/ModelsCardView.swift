@@ -144,14 +144,6 @@ struct ModelsChooserView: View {
                     }
                 }
 
-                Section {
-                    Button(setup.checkingSpeed ? "Measuring speed…" : "Measure this phone's speed again") {
-                        if #available(iOS 17.0, *) { Task { await setup.runSpeedCheck() } }
-                    }
-                    .frame(minHeight: 44)
-                    .disabled(setup.checkingSpeed)
-                    .accessibilityHint("Times one test photo, about 10 seconds")
-                }
             }
             .navigationTitle("Models")
             .navigationBarTitleDisplayMode(.inline)
