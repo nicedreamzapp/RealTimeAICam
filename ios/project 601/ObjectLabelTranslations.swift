@@ -161,13 +161,18 @@ enum ObjectLabelTranslations {
     static func loadOrBuild(_ dir: URL, lang: String, labels: [String],
                             translate: ([String]) async -> [String?]) async -> [String]? {
         if let saved = load(dir, lang: lang, labels: labels) { return saved }
-        let answers = await translate(labels.map(sourcePhrase))
-        guard answers.count == labels.count else { return nil }
+        // Hand-fixed names never go to the translator (its answer was thrown away anyway), the same
+        // as Android: only the labels without a fixed name are sent, in order.
+        let fixedNames = exact[lang] ?? [:]
+        let toTranslate = labels.filter { fixedNames[$0] == nil }
+        let answers = toTranslate.isEmpty ? [] : await translate(toTranslate.map(sourcePhrase))
+        guard answers.count == toTranslate.count else { return nil }
+        var next = answers.makeIterator()
         var out: [String] = []
         out.reserveCapacity(labels.count)
-        for (label, answer) in zip(labels, answers) {
-            if let fixed = exact[lang]?[label] { out.append(fixed); continue }
-            guard let answer else { return nil }
+        for label in labels {
+            if let fixed = fixedNames[label] { out.append(fixed); continue }
+            guard let answer = next.next(), let answer else { return nil }
             let c = cleanOutput(answer, lang: lang)
             out.append(c.isEmpty ? label.lowercased() : c)
         }

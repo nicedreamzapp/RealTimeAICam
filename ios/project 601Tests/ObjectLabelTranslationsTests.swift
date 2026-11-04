@@ -37,7 +37,7 @@ struct ObjectLabelTranslationsTests {
 
     @Test func sameContextMapAsAndroid() {
         #expect(ObjectLabelTranslations.context.count == 60)
-        #expect(ObjectLabelTranslations.mapVersion == 2)
+        #expect(ObjectLabelTranslations.mapVersion == 3)   // Android MAP_VERSION 3 (the cup names)
     }
 
     @Test func bracketNotesAreDroppedFromAnswers() {
@@ -70,12 +70,14 @@ struct ObjectLabelTranslationsTests {
     @Test func builtOnceThenReadFromTheFile() async {
         let dir = tempDir()
         let labels = self.labels
+        // Hand-fixed names (the Spanish cups) never go to the translator (11/04 review).
+        let translated = labels.filter { ObjectLabelTranslations.exact["es"]?[$0] == nil }.count
         var calls = 0
         let first = await ObjectLabelTranslations.loadOrBuild(dir, lang: "es", labels: labels) { phrases in
             calls += phrases.count
             return phrases.map { "es:\($0)" }
         }
-        #expect(calls == labels.count)
+        #expect(calls == translated)
         #expect(first?.count == labels.count)
         #expect(first?[labels.firstIndex(of: "Mouse")!] == "es:mouse") // "(animal)" dropped
         #expect(first?[labels.firstIndex(of: "Computer mouse")!] == "es:computer mouse")
@@ -85,7 +87,7 @@ struct ObjectLabelTranslationsTests {
             calls += phrases.count
             return phrases.map { _ in "WRONG" }
         }
-        #expect(calls == labels.count) // no translating the second time
+        #expect(calls == translated) // no translating the second time
         #expect(second == first)
         #expect(Date().timeIntervalSince(start) < 0.5) // read from the file: instant
         try? FileManager.default.removeItem(at: dir)

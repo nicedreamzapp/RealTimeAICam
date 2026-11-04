@@ -128,6 +128,19 @@ struct YourLanguageTests {
         }
         #expect(out == ["taza", "taza", "taza medidora", "cebra"])
         #expect(ObjectLabelTranslations.exact["es"]?["Coffee cup"] == "taza")
-        #expect(asked.count == 4)
+        // Only the label without a hand-fixed name goes to the translator (11/04 review).
+        #expect(asked == ["zebra"])
+    }
+
+    // 11/04 review: a list of only hand-fixed names never calls the translator at all.
+    @Test func onlyHandFixedNamesNeverCallTheTranslator() async {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("cup-\(UUID().uuidString)")
+        var calls = 0
+        let out = await ObjectLabelTranslations.loadOrBuild(dir, lang: "es", labels: ["Coffee cup", "Mug"]) { phrases in
+            calls += 1
+            return phrases.map { _ in nil }
+        }
+        #expect(out == ["taza", "taza"])
+        #expect(calls == 0)
     }
 }
