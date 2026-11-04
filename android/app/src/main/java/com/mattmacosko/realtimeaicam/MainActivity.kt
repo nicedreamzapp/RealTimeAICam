@@ -48,6 +48,10 @@ class MainActivity : ComponentActivity() {
         // Test builds only: `-e userLanguage es` sets Your language.
         if ((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
             intent.getStringExtra("userLanguage")?.let { com.mattmacosko.realtimeaicam.translation.YourLanguage.set(this, it) }
+            // `-e readFrom fr` sets the Read pill's page language (translate mode).
+            intent.getStringExtra("readFrom")?.let {
+                getSharedPreferences("rtcam", MODE_PRIVATE).edit().putString("translateFrom", it).apply()
+            }
         }
         enableEdgeToEdge()
 
