@@ -15,7 +15,7 @@ import java.io.File
  */
 object ObjectLabelTranslations {
     /** Bump when [CONTEXT] changes, so saved files are rebuilt. */
-    const val MAP_VERSION = 1
+    const val MAP_VERSION = 2
 
     val CONTEXT: Map<String, String> = mapOf(
         // The list has "Computer mouse" separately, so "Mouse" is the animal.
@@ -88,6 +88,23 @@ object ObjectLabelTranslations {
     fun cleanOutput(s: String): String =
         s.replace(Regex("""\s*[(（\[][^)）\]]*[)）\]]"""), "").replace(Regex("""\s+"""), " ").trim()
 
+    /** Leading articles a translator adds to a bare noun ("los anteojos", "la souris"): a name is said without one. */
+    private val ARTICLES: Map<String, Regex> = mapOf(
+        "es" to Regex("^(el|la|los|las|un|una|unos|unas) ", RegexOption.IGNORE_CASE),
+        "fr" to Regex("^(le|la|les|un|une|des) |^l['’]", RegexOption.IGNORE_CASE),
+        "de" to Regex("^(der|die|das|ein|eine) ", RegexOption.IGNORE_CASE),
+        "it" to Regex("^(il|lo|la|i|gli|le|un|uno|una) |^l['’]|^un['’]", RegexOption.IGNORE_CASE),
+        "pt" to Regex("^(o|a|os|as|um|uma) ", RegexOption.IGNORE_CASE),
+        "nl" to Regex("^(de|het|een) ", RegexOption.IGNORE_CASE),
+    )
+
+    /** [cleanOutput], then without a leading article for [lang]. */
+    fun cleanOutput(s: String, lang: String): String {
+        val c = cleanOutput(s)
+        val r = ARTICLES[lang] ?: return c
+        return c.replaceFirst(r, "").trim().ifEmpty { c }
+    }
+
     /** Changes when the label list or the context map changes. */
     fun signature(labels: List<String>): String {
         val md = java.security.MessageDigest.getInstance("SHA-256")
@@ -135,7 +152,7 @@ object ObjectLabelTranslations {
         val out = ArrayList<String>(labels.size)
         for (label in labels) {
             val t = translate(sourcePhrase(label)) ?: return null
-            out.add(cleanOutput(t).ifEmpty { label.lowercase() })
+            out.add(cleanOutput(t, lang).ifEmpty { label.lowercase() })
         }
         try {
             dir.mkdirs()

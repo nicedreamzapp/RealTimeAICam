@@ -239,10 +239,12 @@ class DetectionPipeline(
      * and read from the file every time after that. English, or no pack yet: English names.
      */
     private fun prepareNames() {
-        val lang = announcer.outputLanguage()
-        if (lang == "en") { announcer.nameFor = null; announcer.namesLanguage = "en"; return }
-        if (announcer.namesLanguage == lang && announcer.nameFor != null) return
         Thread({
+            // Right after launch Google may not have said yet which packs are on the phone.
+            com.mattmacosko.realtimeaicam.translation.YourLanguage.awaitPacksKnown()
+            val lang = announcer.outputLanguage()
+            if (lang == "en") { announcer.nameFor = null; announcer.namesLanguage = "en"; return@Thread }
+            if (announcer.namesLanguage == lang && announcer.nameFor != null) return@Thread
             try {
                 val labels = appContext.assets.open(YoloDetector.LABELS_ASSET).bufferedReader()
                     .readLines().map { it.trim() }.filter { it.isNotEmpty() }

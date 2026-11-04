@@ -39,6 +39,15 @@ class ObjectLabelTranslationsTest {
         assertEquals("souris d'ordinateur", ObjectLabelTranslations.cleanOutput("souris d'ordinateur"))
     }
 
+    @Test fun leadingArticlesAreDropped() {
+        assertEquals("anteojos", ObjectLabelTranslations.cleanOutput("los anteojos", "es"))
+        assertEquals("souris", ObjectLabelTranslations.cleanOutput("La souris (animal)", "fr"))
+        assertEquals("ordinateur", ObjectLabelTranslations.cleanOutput("l'ordinateur", "fr"))
+        assertEquals("Brille", ObjectLabelTranslations.cleanOutput("die Brille", "de"))
+        assertEquals("la", ObjectLabelTranslations.cleanOutput("la", "es")) // never empty
+        assertEquals("los anteojos", ObjectLabelTranslations.cleanOutput("los anteojos", "ja")) // no rule
+    }
+
     @Test fun serializeParseRoundTrip() {
         val names = listOf("ratón", "dice \"hola\"", "back\\slash", "línea\nnueva", "Ж")
         val json = ObjectLabelTranslations.serialize("es", "abc", names)

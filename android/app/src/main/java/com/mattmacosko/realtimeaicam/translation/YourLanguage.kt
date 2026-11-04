@@ -96,6 +96,16 @@ object YourLanguage {
 
     /** Packs on the phone (from Google's own list; asking never downloads anything). */
     val readyPacks = MutableStateFlow<Set<String>>(emptySet())
+    /** True once Google has answered which packs are on the phone (shortly after launch). */
+    @Volatile var packsKnown = false
+        private set
+
+    /** Wait (off the main thread) until [readyPacks] is known, at most [ms]. */
+    fun awaitPacksKnown(ms: Long = 5_000) {
+        val end = System.currentTimeMillis() + ms
+        while (!packsKnown && System.currentTimeMillis() < end) Thread.sleep(50)
+    }
+
     /** The code whose pack is downloading right now, or null. */
     val downloading = MutableStateFlow<String?>(null)
     /** Bumps when the choice changes, so screens can re-read it. */
@@ -132,8 +142,10 @@ object YourLanguage {
     fun refresh() {
         try {
             RemoteModelManager.getInstance().getDownloadedModels(TranslateRemoteModel::class.java)
+                .addOnFailureListener { packsKnown = true }
                 .addOnSuccessListener { models ->
                     readyPacks.value = models.map { it.language }.toSet()
+                    packsKnown = true
                     Log.i(TAG, "packs on phone: ${readyPacks.value}")
                 }
         } catch (t: Throwable) {
