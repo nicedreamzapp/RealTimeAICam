@@ -132,24 +132,16 @@ fun Modifier.liveSafePadding(
     val density = LocalDensity.current
     val types = if (navOnly) androidx.core.view.WindowInsetsCompat.Type.navigationBars()
     else androidx.core.view.WindowInsetsCompat.Type.systemBars() or androidx.core.view.WindowInsetsCompat.Type.displayCutout()
-    var insets by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(androidx.core.graphics.Insets.NONE) }
-    androidx.compose.runtime.DisposableEffect(view, types, configuration) {
-        val root = view.rootView
-        fun read() {
-            val now = androidx.core.view.ViewCompat.getRootWindowInsets(root)?.getInsets(types) ?: return
-            if (now != insets) insets = now
-        }
-        val listener = android.view.ViewTreeObserver.OnGlobalLayoutListener { read() }
-        root.viewTreeObserver.addOnGlobalLayoutListener(listener)
-        read()
-        // A 180° turn (landscape to seascape) changes no size; look again once it settles.
-        val late = Runnable { read() }
-        root.postDelayed(late, 400)
-        onDispose {
-            root.removeCallbacks(late)
-            if (root.viewTreeObserver.isAlive) root.viewTreeObserver.removeOnGlobalLayoutListener(listener)
-        }
+    // One window watcher per screen, shared by every padded thing on it (11/04 review: each
+    // call used to add its own layout listener, ~10 per camera screen).
+    val watcher = remember(view) { LiveWindowInsets.of(view.rootView) }
+    androidx.compose.runtime.DisposableEffect(watcher) {
+        watcher.acquire()
+        onDispose { watcher.release() }
     }
+    // A 180° turn (landscape to seascape) changes no size; look again once it settles.
+    androidx.compose.runtime.LaunchedEffect(watcher, configuration) { watcher.recheckSoon() }
+    val insets = watcher.insets?.getInsets(types) ?: androidx.core.graphics.Insets.NONE
     with(density) {
         Modifier.absolutePadding(
             left = if (horizontal) insets.left.toDp() else 0.dp,
@@ -157,5 +149,53 @@ fun Modifier.liveSafePadding(
             right = if (horizontal) insets.right.toDp() else 0.dp,
             bottom = if (bottom) insets.bottom.toDp() else 0.dp,
         )
+    }
+}
+
+/**
+ * The window's current insets for one root view, read on every layout by a single listener
+ * that is added when the first [liveSafePadding] appears and removed when the last one goes.
+ * Main thread only.
+ */
+internal class LiveWindowInsets private constructor(private val root: android.view.View) {
+    var insets by androidx.compose.runtime.mutableStateOf<androidx.core.view.WindowInsetsCompat?>(null)
+        private set
+    /** How many padded things on screen use this watcher right now. */
+    var users = 0
+        private set
+    private val listener = android.view.ViewTreeObserver.OnGlobalLayoutListener { read() }
+    private val late = Runnable { read() }
+
+    private fun read() {
+        val now = androidx.core.view.ViewCompat.getRootWindowInsets(root) ?: return
+        if (now != insets) insets = now
+    }
+
+    fun acquire() {
+        if (users++ == 0) {
+            root.viewTreeObserver.addOnGlobalLayoutListener(listener)
+            if (watchers[root] == null) watchers[root] = this
+        }
+        read()
+    }
+
+    fun release() {
+        if (users == 0) return
+        if (--users > 0) return
+        root.removeCallbacks(late)
+        if (root.viewTreeObserver.isAlive) root.viewTreeObserver.removeOnGlobalLayoutListener(listener)
+        watchers.remove(root)
+    }
+
+    fun recheckSoon() {
+        root.removeCallbacks(late)
+        root.postDelayed(late, 400)
+    }
+
+    companion object {
+        private val watchers = java.util.WeakHashMap<android.view.View, LiveWindowInsets>()
+        fun of(root: android.view.View): LiveWindowInsets = watchers.getOrPut(root) { LiveWindowInsets(root) }
+        /** Watchers alive right now (tests). */
+        internal val count: Int get() = watchers.size
     }
 }
