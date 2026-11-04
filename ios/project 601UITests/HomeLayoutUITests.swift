@@ -51,19 +51,32 @@ final class HomeLayoutUITests: XCTestCase {
             XCTAssertGreaterThanOrEqual(gap, 8, "\(tools[k - 1].0) to \(tools[k].0) gap is \(gap) pt")
         }
         // Centered, equal width, big enough to land a finger on.
+        // Wide screens (unfolded iPhone Duo): pills + title on the left, tools on
+        // the right, the two columns mirror each other and nothing needs a scroll.
+        let wide = screen.width > screen.height * 1.2
         let toolFrames = tools.filter { $0.0 != "Voice" }
+        let column = wide ? toolFrames[0].1.midX : screen.midX
         for (name, f) in toolFrames {
-            XCTAssertEqual(f.midX, screen.midX, accuracy: 2, "\(name) not centered")
+            XCTAssertEqual(f.midX, column, accuracy: 2, "\(name) not centered")
             XCTAssertGreaterThanOrEqual(f.height, 56, "\(name) only \(f.height) pt tall")
             XCTAssertEqual(f.width, toolFrames[0].1.width, accuracy: 1, "\(name) width differs")
         }
         let pills = frames.prefix(2).map(\.1)
-        XCTAssertEqual((pills[0].minX + pills[1].maxX) / 2, screen.midX, accuracy: 3, "top pills not centered")
+        let pillsMid = (pills[0].minX + pills[1].maxX) / 2
+        if wide {
+            XCTAssertEqual(pillsMid + column, screen.minX + screen.maxX, accuracy: 4, "columns not mirrored")
+            XCTAssertLessThan(pills[1].maxX, toolFrames[0].1.minX, "pills run into the tools")
+            for (name, f) in tools { XCTAssertLessThanOrEqual(f.maxY, screen.maxY, "\(name) cut off at the bottom") }
+        } else {
+            XCTAssertEqual(pillsMid, screen.midX, accuracy: 3, "top pills not centered")
+        }
 
         // Swipe order: top to bottom, in the same order as on screen.
         // Settings and Info share the top row (left, then right); the rest stack.
         XCTAssertLessThan(frames[0].1.midX, frames[1].1.midX, "Settings should be left of Info")
-        XCTAssertLessThan(max(frames[0].1.maxY, frames[1].1.maxY), frames[2].1.minY, "top row must sit above Read")
+        if !wide {
+            XCTAssertLessThan(max(frames[0].1.maxY, frames[1].1.maxY), frames[2].1.minY, "top row must sit above Read")
+        }
         let ys = frames.dropFirst(2).map(\.1.minY)
         XCTAssertEqual(ys, ys.sorted(), "on-screen order is not \(frames.map(\.0))")
         let treeOrder = app.buttons.allElementsBoundByIndex.map(\.label).filter { order.contains($0) }

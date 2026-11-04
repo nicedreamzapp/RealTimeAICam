@@ -106,10 +106,23 @@ struct HomeView: View {
                 let leading = outer.safeAreaInsets.leading
                 let trailing = outer.safeAreaInsets.trailing
                 let usable = outer.size.width + leading + trailing - 2 * max(leading, trailing)
-                ViewThatFits(in: .vertical) {
-                    homeColumn(scale: scale, screenWidth: min(screenWidth, usable))
-                    ScrollView(showsIndicators: false) {
-                        homeColumn(scale: scale, screenWidth: min(screenWidth, usable))
+                // The unfolded iPhone Duo is a wide, short screen even in
+                // portrait (951 x 669 pt): one column cut Live Cam off at the
+                // bottom, so wide screens put the title on the left and the
+                // tools on the right (2026-11-04). Phones keep the column.
+                Group {
+                    if usable > outer.size.height * 1.2 {
+                        ViewThatFits(in: .vertical) {
+                            homeWide(scale: 1.0)
+                            ScrollView(showsIndicators: false) { homeWide(scale: 1.0) }
+                        }
+                    } else {
+                        ViewThatFits(in: .vertical) {
+                            homeColumn(scale: scale, screenWidth: min(screenWidth, usable))
+                            ScrollView(showsIndicators: false) {
+                                homeColumn(scale: scale, screenWidth: min(screenWidth, usable))
+                            }
+                        }
                     }
                 }
                 .frame(width: usable)
@@ -483,9 +496,7 @@ struct HomeView: View {
                 .fixedSize()
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.bottom, 10 * scale)
-                HeadingView(animateIn: animationState.heading)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityAddTraits(.isHeader)
+                heading
                 VStack(spacing: 28 * scale) {
                     englishOCRButton(scale: scale, screenWidth: screenWidth)
                     objectDetectionButton(scale: scale, screenWidth: screenWidth)
@@ -503,6 +514,53 @@ struct HomeView: View {
             .padding(.bottom, 30)
             Spacer(minLength: 0)
         }
+    }
+
+    /// The title pill, never wider than on the biggest phone.
+    private var heading: some View {
+        HeadingView(animateIn: animationState.heading)
+            .frame(maxWidth: 440)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    /// Wide screens (unfolded iPhone Duo): Settings, Info and the title on the
+    /// left, the five tools and the voice on the right. Swipe order is the same
+    /// as the phone column: Settings, Info, the title, the tools, the voice.
+    private func homeWide(scale: CGFloat) -> some View {
+        HStack(alignment: .center, spacing: 32) {
+            VStack(spacing: 28) {
+                HStack(spacing: 10) {
+                    settingsButton.fixedSize()
+                    infoButton.fixedSize()
+                }
+                .fixedSize()
+                heading
+            }
+            .frame(maxWidth: .infinity)
+            .accessibilityElement(children: .contain)
+            .accessibilitySortPriority(2)
+            VStack(spacing: 18) {
+                VStack(spacing: 28) {
+                    englishOCRButton(scale: scale, screenWidth: 390)
+                    objectDetectionButton(scale: scale, screenWidth: 390)
+                    readMailButton(scale: scale, screenWidth: 390)
+                    helpMeAimButton(scale: scale, screenWidth: 390)
+                    liveCamButton(scale: scale, screenWidth: 390)
+                }
+                visionModelBanner
+                voicePicker
+                    .padding(.top, 10)
+            }
+            .frame(maxWidth: .infinity)
+            .accessibilityElement(children: .contain)
+            .accessibilitySortPriority(1)
+        }
+        .accessibilityElement(children: .contain)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 14)
+        .frame(maxHeight: .infinity)
     }
 
     private var infoButton: some View {
