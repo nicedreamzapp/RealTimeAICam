@@ -313,8 +313,9 @@ fun DetectionChrome(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
+                    // Sides: system bars + cutout (a side nav bar is in there once). Bottom: the nav bar only.
                     .liveSafePadding(horizontal = true)
-                    .liveSafePadding(horizontal = true, bottom = true, navOnly = true)
+                    .liveSafePadding(bottom = true, navOnly = true)
                     .padding(bottom = 32.dp),
             ) {
                 IosSegmentedControl(
