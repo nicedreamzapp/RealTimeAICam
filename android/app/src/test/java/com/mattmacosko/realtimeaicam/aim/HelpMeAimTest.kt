@@ -458,6 +458,15 @@ class AimVocabularyTest {
         "key", "dog", "cat", "samoyed", "persian cat", "cup", "mug", "laptop", "television", "couch",
     )
 
+    @Test fun bunnyAlsoFindsAStuffedAnimal() {
+        val toys = listOf("dog", "rabbit", "stuffed animal", "bunny", "teddy")
+        for (word in listOf("my bunny", "rabbit", "teddy bear", "plushie", "stuffy")) {
+            val m = AimVocabulary.match(word, toys)
+            assertNotNull(word, m)
+            assertTrue(word, m!!.classNames.contains("stuffed animal"))
+        }
+    }
+
     @Test fun aPlainWordMatches() {
         val m = AimVocabulary.match("key", vocab)
         assertNotNull(m)

@@ -110,6 +110,24 @@ fun HelpMeAimScreen(onBack: () -> Unit) {
     var listening by remember { mutableStateOf(false) }
     var recent by remember { mutableStateOf(AimRecent.load(context)) }
 
+    // Test builds only: `-e aimPreviewTaken true` opens Picture Taken with a
+    // long description, so a phone check needs no camera aiming (2026-11-03).
+    var previewPhoto by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    LaunchedEffect(Unit) {
+        val debuggable = (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        var c: Context? = context
+        while (c is android.content.ContextWrapper && c !is android.app.Activity) c = c.baseContext
+        val activity = c as? android.app.Activity
+        if (debuggable && activity?.intent?.getStringExtra("aimPreviewTaken") == "true") {
+            previewPhoto = android.graphics.Bitmap.createBitmap(1200, 900, android.graphics.Bitmap.Config.ARGB_8888)
+                .apply { eraseColor(android.graphics.Color.DKGRAY) }
+            status = List(5) {
+                "A soft white stuffed bunny with long floppy ears sits on a wooden table next to a blue mug, a pair of glasses and a stack of mail."
+            }.joinToString(" ") + " END OF DESCRIPTION. Saved to your photos with its description."
+            phase = AimPhase.TAKEN
+        }
+    }
+
     val spoken by pipeline.spoken.collectAsState()
     val countdownWord by pipeline.countdownWord.collectAsState()
     val lastPhoto by pipeline.lastPhoto.collectAsState()
@@ -267,7 +285,7 @@ fun HelpMeAimScreen(onBack: () -> Unit) {
             )
 
             AimPhase.TAKEN -> Taken(
-                photo = lastPhoto,
+                photo = lastPhoto ?: previewPhoto,
                 statusText = status,
                 subjectName = subject?.spokenName ?: "the same thing",
                 onTakeAnother = {
