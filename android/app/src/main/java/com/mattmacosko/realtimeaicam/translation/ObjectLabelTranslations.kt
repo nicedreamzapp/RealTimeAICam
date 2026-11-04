@@ -15,7 +15,7 @@ import java.io.File
  */
 object ObjectLabelTranslations {
     /** Bump when [CONTEXT] changes, so saved files are rebuilt. */
-    const val MAP_VERSION = 2
+    const val MAP_VERSION = 3
 
     val CONTEXT: Map<String, String> = mapOf(
         // The list has "Computer mouse" separately, so "Mouse" is the animal.
@@ -81,6 +81,23 @@ object ObjectLabelTranslations {
         "Tablet computer" to "tablet computer",
     )
 
+    /**
+     * Names fixed by hand where the translator gets a kitchen word wrong (2026-11-04, the
+     * Cricket: "Mug" came back as the broken "taza de"). A plain cup is "taza"; only a coffee
+     * cup is "taza de café". Used as is, never sent to the translator.
+     */
+    val EXACT: Map<String, Map<String, String>> = mapOf(
+        "es" to mapOf(
+            "Cup" to "taza",
+            "Mug" to "taza",
+            "Coffee cup" to "taza de café",
+            "Measuring cup" to "taza medidora",
+        ),
+    )
+
+    /** The hand-fixed name for [label] in [lang], if there is one. */
+    fun exactName(label: String, lang: String): String? = EXACT[lang]?.get(label)
+
     /** The English phrase the translator sees for a label. */
     fun sourcePhrase(label: String): String = CONTEXT[label] ?: label.lowercase()
 
@@ -111,6 +128,9 @@ object ObjectLabelTranslations {
         md.update("v$MAP_VERSION\n".toByteArray())
         labels.forEach { md.update(it.toByteArray()); md.update(0) }
         CONTEXT.toSortedMap().forEach { (k, v) -> md.update("$k=$v".toByteArray()); md.update(0) }
+        EXACT.toSortedMap().forEach { (lang, names) ->
+            names.toSortedMap().forEach { (k, v) -> md.update("$lang:$k=$v".toByteArray()); md.update(0) }
+        }
         return md.digest().joinToString("") { "%02x".format(it) }.take(16)
     }
 
@@ -151,6 +171,8 @@ object ObjectLabelTranslations {
         load(dir, lang, labels)?.let { return it }
         val out = ArrayList<String>(labels.size)
         for (label in labels) {
+            val fixed = exactName(label, lang)
+            if (fixed != null) { out.add(fixed); continue }
             val t = translate(sourcePhrase(label)) ?: return null
             out.add(cleanOutput(t, lang).ifEmpty { label.lowercase() })
         }

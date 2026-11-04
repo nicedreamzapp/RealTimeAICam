@@ -63,13 +63,15 @@ class ObjectLabelTranslationsTest {
         var calls = 0
         val fake = { s: String -> calls++; "es:$s" }
         val first = ObjectLabelTranslations.loadOrBuild(dir, "es", labels, fake)!!
-        assertEquals(labels.size, calls)
+        val translated = labels.count { ObjectLabelTranslations.exactName(it, "es") == null }
+        assertEquals(translated, calls) // hand-fixed names (cup words) are not translated
+        assertTrue(translated < labels.size)
         assertEquals(labels.size, first.size)
         assertEquals("es:mouse", first[labels.indexOf("Mouse")]) // "(animal)" note dropped
         assertEquals("es:computer mouse", first[labels.indexOf("Computer mouse")])
         assertTrue(ObjectLabelTranslations.cacheFile(dir, "es").exists())
         val second = ObjectLabelTranslations.loadOrBuild(dir, "es", labels, fake)!!
-        assertEquals(labels.size, calls) // no translating the second time
+        assertEquals(translated, calls) // no translating the second time
         assertEquals(first, second)
         dir.deleteRecursively()
     }
@@ -103,5 +105,28 @@ class ObjectLabelTranslationsTest {
         assertEquals(listOf("ratón"), ObjectLabelTranslations.load(dir, "es", listOf("Mouse")))
         assertEquals(listOf("souris"), ObjectLabelTranslations.load(dir, "fr", listOf("Mouse")))
         dir.deleteRecursively()
+    }
+
+    @Test fun cupIsTazaAndOnlyCoffeeCupIsTazaDeCafe() {
+        // 2026-11-04 on the Cricket: cup words came back as "taza de café" and "taza de".
+        assertEquals("taza", ObjectLabelTranslations.exactName("Cup", "es"))
+        assertEquals("taza", ObjectLabelTranslations.exactName("Mug", "es"))
+        assertEquals("taza de café", ObjectLabelTranslations.exactName("Coffee cup", "es"))
+        assertNull(ObjectLabelTranslations.exactName("Coffee cup", "fr"))
+        val dir = Files.createTempDirectory("labels").toFile()
+        val asked = mutableListOf<String>()
+        val names = ObjectLabelTranslations.loadOrBuild(dir, "es", listOf("Coffee cup", "Mug", "Zebra")) {
+            asked.add(it); if (it == "mug") "taza de" else "cebra"
+        }!!
+        assertEquals(listOf("taza de café", "taza", "cebra"), names)
+        assertEquals(listOf("zebra"), asked) // the fixed names never go to the translator
+        dir.deleteRecursively()
+    }
+
+    @Test fun everyExactKeyThatIsALabelIsReal() {
+        // "Cup" is kept for a label list that has it (iOS); the rest must be real labels.
+        val set = labels.toSet()
+        val missing = ObjectLabelTranslations.EXACT.values.flatMap { it.keys }.filter { it != "Cup" && it !in set }
+        assertTrue("not in class_names.txt: $missing", missing.isEmpty())
     }
 }

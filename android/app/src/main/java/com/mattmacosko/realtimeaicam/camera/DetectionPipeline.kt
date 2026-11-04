@@ -258,7 +258,7 @@ class DetectionPipeline(
                 announcer.namesLanguage = lang
                 announcer.nameFor = { map[it] }
                 Log.i(TAG, "object names in $lang: ${map.size} in ${android.os.SystemClock.elapsedRealtime() - t0} ms " +
-                    "(mouse=${map["Mouse"]}, computer mouse=${map["Computer mouse"]}, glasses=${map["Glasses"]}, cup=${map["Coffee cup"]})")
+                    "(mouse=${map["Mouse"]}, computer mouse=${map["Computer mouse"]}, glasses=${map["Glasses"]}, coffee cup=${map["Coffee cup"]}, mug=${map["Mug"]})")
             } catch (t: Throwable) {
                 Log.w(TAG, "object names in $lang failed", t)
             }
