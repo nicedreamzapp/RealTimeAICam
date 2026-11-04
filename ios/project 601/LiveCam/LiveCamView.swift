@@ -55,13 +55,14 @@ struct LiveCamView: View {
                     .ignoresSafeArea().accessibilityHidden(true)
                 VStack(spacing: wide ? 10 : 16) {
                     topBar
-                    if showModes { modeMenu }
                     Spacer(minLength: 0)
                     words(wide: wide)
                     if call.typedOnly { typedBox }
                     orb(size: wide ? 96 : 120)
                     bottomBar
                 }
+                // The menu floats over the view, so Mute and Back never move or leave the screen.
+                .overlay(alignment: .top) { if showModes { modeMenu.padding(.top, 76) } }
                 .frame(maxWidth: 640)
                 .padding(.horizontal, 16)
                 .padding(.bottom, 12)
