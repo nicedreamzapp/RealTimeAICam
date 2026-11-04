@@ -241,8 +241,8 @@ struct SettingsOverlayView: View {
                             }
                             Text("• 🗣️ Speak detected/translated text")
                                 .voiceOverWords("• 🗣️ Speak detected/translated text")
-                            Text("• 🔦 Adjust flashlight")
-                                .voiceOverWords("• 🔦 Adjust flashlight")
+                            Text("• 🔦 Flashlight: one tap on, one tap off")
+                                .voiceOverWords("• 🔦 Flashlight: one tap on, one tap off")
                             // No lens line here: these screens have no lens
                             // toggle at all — it lives in Object Detection, and
                             // only on phones with a second rear lens. Listing it

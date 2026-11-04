@@ -164,8 +164,8 @@ struct AppInstructionsView: View {
                             Text("🌐 Lens toggle, wide or ultra-wide (Object Detection)")
                                 .voiceOverWords("🌐 Lens toggle, wide or ultra-wide (Object Detection)")
                         }
-                        Text("🔦 Flashlight, 25% to 100%")
-                            .voiceOverWords("🔦 Flashlight, 25% to 100%")
+                        Text("🔦 Flashlight, one tap on, one tap off")
+                            .voiceOverWords("🔦 Flashlight, one tap on, one tap off")
                         Text("🤏 Pinch to zoom")
                             .voiceOverWords("🤏 Pinch to zoom")
                     }
