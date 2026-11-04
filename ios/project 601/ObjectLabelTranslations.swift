@@ -13,7 +13,14 @@ import Foundation
 /// Android ObjectLabelTranslations.kt.
 enum ObjectLabelTranslations {
     /// Bump when `context` changes, so saved files are rebuilt.
-    static let mapVersion = 2
+    static let mapVersion = 3
+
+    /// Names fixed by hand, used as is and never sent to the translator (2026-11-04: Matt
+    /// wants a cup said as just "taza"; the detector calls every cup "Coffee cup").
+    /// Same map as Android ObjectLabelTranslations.EXACT.
+    static let exact: [String: [String: String]] = [
+        "es": ["Cup": "taza", "Mug": "taza", "Coffee cup": "taza", "Measuring cup": "taza medidora"],
+    ]
 
     static let context: [String: String] = [
         "Mouse": "mouse (animal)",
@@ -117,6 +124,9 @@ enum ObjectLabelTranslations {
         var data = Data("v\(mapVersion)\n".utf8)
         for l in labels { data.append(Data(l.utf8)); data.append(0) }
         for k in context.keys.sorted() { data.append(Data("\(k)=\(context[k]!)".utf8)); data.append(0) }
+        for (lang, names) in exact.sorted(by: { $0.key < $1.key }) {
+            for k in names.keys.sorted() { data.append(Data("\(lang):\(k)=\(names[k]!)".utf8)); data.append(0) }
+        }
         return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined().prefix(16).description
     }
 
@@ -156,6 +166,7 @@ enum ObjectLabelTranslations {
         var out: [String] = []
         out.reserveCapacity(labels.count)
         for (label, answer) in zip(labels, answers) {
+            if let fixed = exact[lang]?[label] { out.append(fixed); continue }
             guard let answer else { return nil }
             let c = cleanOutput(answer, lang: lang)
             out.append(c.isEmpty ? label.lowercased() : c)

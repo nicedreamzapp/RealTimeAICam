@@ -84,13 +84,13 @@ object ObjectLabelTranslations {
     /**
      * Names fixed by hand where the translator gets a kitchen word wrong (2026-11-04, the
      * Cricket: "Mug" came back as the broken "taza de"). A plain cup is "taza"; only a coffee
-     * cup is "taza de café". Used as is, never sent to the translator.
+     * cup the detector sees is just "taza" too (Matt 2026-11-04: it calls every cup "Coffee cup"). Used as is, never sent to the translator.
      */
     val EXACT: Map<String, Map<String, String>> = mapOf(
         "es" to mapOf(
             "Cup" to "taza",
             "Mug" to "taza",
-            "Coffee cup" to "taza de café",
+            "Coffee cup" to "taza",
             "Measuring cup" to "taza medidora",
         ),
     )

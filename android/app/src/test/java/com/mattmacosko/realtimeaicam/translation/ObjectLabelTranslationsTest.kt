@@ -111,14 +111,14 @@ class ObjectLabelTranslationsTest {
         // 2026-11-04 on the Cricket: cup words came back as "taza de café" and "taza de".
         assertEquals("taza", ObjectLabelTranslations.exactName("Cup", "es"))
         assertEquals("taza", ObjectLabelTranslations.exactName("Mug", "es"))
-        assertEquals("taza de café", ObjectLabelTranslations.exactName("Coffee cup", "es"))
+        assertEquals("taza", ObjectLabelTranslations.exactName("Coffee cup", "es"))
         assertNull(ObjectLabelTranslations.exactName("Coffee cup", "fr"))
         val dir = Files.createTempDirectory("labels").toFile()
         val asked = mutableListOf<String>()
         val names = ObjectLabelTranslations.loadOrBuild(dir, "es", listOf("Coffee cup", "Mug", "Zebra")) {
             asked.add(it); if (it == "mug") "taza de" else "cebra"
         }!!
-        assertEquals(listOf("taza de café", "taza", "cebra"), names)
+        assertEquals(listOf("taza", "taza", "cebra"), names)
         assertEquals(listOf("zebra"), asked) // the fixed names never go to the translator
         dir.deleteRecursively()
     }

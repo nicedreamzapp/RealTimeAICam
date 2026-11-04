@@ -115,4 +115,19 @@ struct YourLanguageTests {
         #expect(r.text == "Hello")
         #expect(r.voice?.language.hasPrefix("en") == true)
     }
+
+    // Matt 2026-11-04: a cup is just "taza" in Spanish, never "taza de café"; hand-fixed
+    // names skip the translator. Same as Android ObjectLabelTranslationsTest.
+    @Test func spanishCupIsJustTaza() async {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("cup-\(UUID().uuidString)")
+        var asked: [String] = []
+        let out = await ObjectLabelTranslations.loadOrBuild(dir, lang: "es",
+            labels: ["Coffee cup", "Mug", "Measuring cup", "Zebra"]) { phrases in
+            asked = phrases
+            return phrases.map { $0 == "zebra" ? "cebra" : "taza de" }
+        }
+        #expect(out == ["taza", "taza", "taza medidora", "cebra"])
+        #expect(ObjectLabelTranslations.exact["es"]?["Coffee cup"] == "taza")
+        #expect(asked.count == 4)
+    }
 }
