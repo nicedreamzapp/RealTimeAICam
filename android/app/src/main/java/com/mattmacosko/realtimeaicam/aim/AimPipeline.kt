@@ -169,10 +169,17 @@ class AimPipeline(
             var misses = 0
             var steers = 0
             var sure: Boolean? = null
+            var saidWhyNoPhoto = false
             while (isActive && misses < AimAsk.MAX_MISSES) {
                 if (_shooting.value || subject !is AimSubject.Described) return@launch
                 val jpeg = (if (AimFake.word != null) AimFake.next() else null) ?: takeOne()
-                if (jpeg == null) { misses++; delay(1000); continue }
+                if (jpeg == null) {
+                    if (!saidWhyNoPhoto) {
+                        saidWhyNoPhoto = true
+                        Log.w(TAG, "no photo to look at: ${noPhotoWhy ?: "unknown"}")
+                    }
+                    misses++; delay(1000); continue
+                }
                 val answer = withContext(Dispatchers.IO) { askAbout(jpeg, AimAsk.question(word)) }
                 if (!isActive || subject !is AimSubject.Described || _shooting.value) return@launch
                 Log.i(TAG, "[ask] $word -> $answer")
@@ -452,8 +459,19 @@ class AimPipeline(
         }
     }
 
+    /** Why the last takeOne() came back empty, logged once per look (2026-11-04). */
+    @Volatile private var noPhotoWhy: String? = null
+
     private suspend fun takeOne(): ByteArray? = withContext(Dispatchers.IO) {
-        if (AimFake.word != null) return@withContext AimFake.last()
+        if (AimFake.word != null) {
+            return@withContext AimFake.last().also {
+                if (it == null) noPhotoWhy = "test photos: 0 frames in ${AimFake.dirs}"
+            }
+        }
+        if (camera == null) {
+            noPhotoWhy = "camera not bound"
+            return@withContext null
+        }
         val out = ByteArrayOutputStream()
         var result: ByteArray? = null
         val latch = java.util.concurrent.CountDownLatch(1)
@@ -477,11 +495,14 @@ class AimPipeline(
 
                 override fun onError(exception: ImageCaptureException) {
                     Log.e(TAG, "capture failed", exception)
+                    noPhotoWhy = "capture failed: ${exception.message}"
                     latch.countDown()
                 }
             },
         )
-        latch.await(6, java.util.concurrent.TimeUnit.SECONDS)
+        if (!latch.await(6, java.util.concurrent.TimeUnit.SECONDS)) {
+            noPhotoWhy = "capture timed out after 6 s (camera unbound or busy)"
+        }
         result
     }
 
@@ -670,10 +691,37 @@ object AimFake {
     private var frames: List<ByteArray> = emptyList()
     private var shown = 0
 
+    /** Where setUp looked, for the log line when no frames load. */
+    @Volatile var dirs: String = ""
+        private set
+
+    /**
+     * Reads files/photo-test/flow FIRST (push with `adb shell run-as <pkg>`):
+     * on Android 13 files adb-pushed into the external app dir belong to the
+     * shell user and the app gets Permission denied. Falls back to the
+     * external dir (older phones). 2026-11-04.
+     */
     fun setUp(context: android.content.Context, word: String) {
-        val dir = java.io.File(context.getExternalFilesDir(null), "photo-test/flow")
-        frames = (dir.listFiles() ?: emptyArray()).filter { it.name.endsWith(".jpg") }
-            .sortedBy { it.name }.map { it.readBytes() }
+        val candidates = listOfNotNull(
+            java.io.File(context.filesDir, "photo-test/flow"),
+            context.getExternalFilesDir(null)?.let { java.io.File(it, "photo-test/flow") },
+        )
+        dirs = candidates.joinToString(" or ") { it.path }
+        var loaded: List<ByteArray> = emptyList()
+        var from = "none"
+        for (dir in candidates) {
+            val files = (dir.listFiles() ?: emptyArray()).filter { it.name.endsWith(".jpg") }
+                .sortedBy { it.name }
+            val bytes = files.mapNotNull { f ->
+                try { f.readBytes() } catch (e: Exception) {
+                    android.util.Log.w("AimPipeline", "AimFake: cannot read ${f.path}: ${e.message}")
+                    null
+                }
+            }
+            if (bytes.isNotEmpty()) { loaded = bytes; from = dir.path; break }
+        }
+        frames = loaded
+        android.util.Log.i("AimPipeline", "AimFake: ${frames.size} frames from $from (looked in $dirs)")
         shown = 0
         this.word = word
     }
