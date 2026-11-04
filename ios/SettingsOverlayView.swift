@@ -19,7 +19,7 @@ struct SettingsOverlayView: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.4)
+            Color.black.opacity(mode == .home ? 0.75 : 0.4)
                 .ignoresSafeArea()
                 .onTapGesture {
                     if buttonDebouncer.canPress("SettingsOverlayView-1") {
@@ -217,6 +217,9 @@ struct SettingsOverlayView: View {
                             )
                         }
 
+                        // Camera-screen tips; from home they would point at
+                        // controls that aren't there (2026-11-03).
+                        if mode != .home {
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
                                 Image(systemName: "info.circle")
@@ -255,6 +258,7 @@ struct SettingsOverlayView: View {
                             RoundedRectangle(cornerRadius: 12)
                                 .fill(.ultraThinMaterial.opacity(0.3))
                         )
+                        }
 
                         ModelsCardView()
                         PrivacyCardView()
@@ -266,7 +270,8 @@ struct SettingsOverlayView: View {
             .frame(maxWidth: 380, maxHeight: 600)
             .background(
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(.ultraThinMaterial.opacity(0.8))
+                    .fill(.ultraThinMaterial.opacity(mode == .home ? 1 : 0.8))
+                    .background(RoundedRectangle(cornerRadius: 20).fill(Color.black.opacity(mode == .home ? 0.55 : 0)))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 20)

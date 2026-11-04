@@ -6,6 +6,9 @@ struct HomeView: View {
     @Binding var animationState: ContentView.AnimationState
     @Binding var mode: AppMode
     @State private var showInstructions = false
+    /// Settings, Models included, right from home; it used to be only inside
+    /// the reader screens (Matt, 2026-11-03).
+    @State private var showSettings = false
     @ObservedObject private var modelDownloader = VisionModelDownloader.shared
     /// Last quarter (25/50/75/100) already spoken aloud, so each is said once.
     @State private var spokenDownloadQuarter = 0
@@ -121,9 +124,18 @@ struct HomeView: View {
             }
         }
         .overlay(alignment: .topTrailing) {
-            infoButton
-                .padding(.top, 8)
-                .padding(.trailing, 16)
+            HStack(spacing: 10) {
+                settingsButton
+                infoButton
+            }
+            .padding(.top, 8)
+            .padding(.trailing, 16)
+        }
+        .overlay {
+            if showSettings {
+                SettingsOverlayView(viewModel: viewModel, isPresented: $showSettings, mode: .home)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            }
         }
         .sheet(isPresented: $showInstructions) {
             AppInstructionsView(selectedVoiceIdentifier: viewModel.selectedVoiceIdentifier)
@@ -226,13 +238,10 @@ struct HomeView: View {
             guard buttonDebouncer.canPress("HomeView-4") else { return }
             onSpanishOCR()
         }) {
-            HStack(spacing: 2 * scale) {
-                Text("🇲🇽").font(.system(size: 31 * scale))
-                OutlinedText(text: "Span", fontSize: 18 * scale)
-                Text("🇺🇸").font(.system(size: 31 * scale))
-                OutlinedText(text: "Eng", fontSize: 18 * scale)
-                Text("🌎").font(.system(size: 31 * scale))
-                OutlinedText(text: "Translate", fontSize: 18 * scale)
+            // 17 languages into English now, not only Spanish (2026-11-03).
+            HStack(spacing: 4 * scale) {
+                Text("🌍").font(.system(size: 32 * scale))
+                OutlinedText(text: "Translate", fontSize: 20 * scale)
             }
             .padding(.vertical, 16 * scale)
         }
@@ -268,7 +277,7 @@ struct HomeView: View {
         .scaleEffect(animationState.button2 ? 1 : 0.7)
         .animation(.easeOut(duration: 0.3), value: animationState.button2)
         .accessibilityLabel("Translator")
-        .accessibilityHint("Point the camera at text in Spanish or another language to hear it in English")
+        .accessibilityHint("Point the camera at text in Spanish, French, Chinese or another language to hear it in English")
         .accessibilityAddTraits(.isButton)
     }
 
@@ -471,6 +480,41 @@ struct HomeView: View {
         .onTapGesture {
             _ = buttonDebouncer.canPress("HomeView-6")
         }
+    }
+
+    private var settingsButton: some View {
+        Button(action: {
+            guard buttonDebouncer.canPress("HomeView-10") else { return }
+            withAnimation { showSettings = true }
+        }) {
+            HStack(spacing: 6) {
+                Text("⚙️").font(.system(size: 14))
+                OutlinedText(text: "SETTINGS", fontSize: 14)
+            }
+            .foregroundColor(.white)
+            .padding(.vertical, 6)
+            .padding(.horizontal, 14)
+        }
+        .background(
+            ZStack {
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.white.opacity(0.23), Color.black.opacity(0.50)]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                Capsule().stroke(Color.white.opacity(0.80), lineWidth: 4.8)
+                Capsule().stroke(Color.black, lineWidth: 2.4)
+            }
+        )
+        .shadow(color: Color.black.opacity(0.38), radius: 12, y: 5)
+        .clipShape(Capsule())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Settings")
+        .accessibilityHint("Models, voice and other settings")
+        .accessibilityAddTraits(.isButton)
     }
 
     private var infoButton: some View {
