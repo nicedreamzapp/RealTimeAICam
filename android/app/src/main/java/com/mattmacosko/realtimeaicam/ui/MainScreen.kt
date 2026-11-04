@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -160,7 +159,10 @@ fun MainScreen(
                     exit = androidx.compose.animation.fadeOut(),
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .navigationBarsPadding()
+                        // The bars and cutout read live from the window, like the Volume-is-off
+                        // banner: Compose kept portrait insets after a rotation, so in landscape
+                        // the note could sit under a side nav bar (11/04 review).
+                        .liveSafePadding(horizontal = true, bottom = true)
                         .padding(bottom = 96.dp, start = 24.dp, end = 24.dp),
                 ) {
                     Text(
