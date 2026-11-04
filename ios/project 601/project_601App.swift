@@ -15,6 +15,8 @@ struct project_601App: App {
         // Dev-install test aid only: `-roomScan N` opens the room census.
         if RoomScan.requestedSeconds > 0 {
             RoomScanView()
+        } else if AimFake.word != nil {
+            HelpMeAimView(voiceIdentifier: "", onBack: {})
         } else {
             ContentView()
         }
@@ -23,6 +25,8 @@ struct project_601App: App {
         // so the card can be screenshotted in a Simulator nobody is driving.
         if ProcessInfo.processInfo.arguments.contains("-rtcamShowModels") {
             VStack { ModelsCardView().padding(); ModelsChooserView() }
+        } else if AimFake.word != nil {
+            HelpMeAimView(voiceIdentifier: "", onBack: {})
         } else {
             ContentView()
         }
@@ -42,6 +46,7 @@ struct project_601App: App {
                     // On-phone photo test: only with the -rtcamPhotoTest launch argument.
                     if #available(iOS 17.0, *), PhotoSetTest.requested { await PhotoSetTest.run() }
                     if #available(iOS 17.0, *), PhotoSetTest.twoAtOnceRequested { await PhotoSetTest.runTwoAtOnce() }
+                    if #available(iOS 17.0, *), PhotoSetTest.askTestRequested { await PhotoSetTest.runAskTest() }
                 }
         }
     }

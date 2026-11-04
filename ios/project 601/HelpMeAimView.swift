@@ -79,6 +79,9 @@ final class AimVoice: NSObject, AVSpeechSynthesizerDelegate {
         utterance.voice = AVSpeechSynthesisVoice(identifier: voiceIdentifier) ?? AVSpeechSynthesisVoice(language: "en-US")
         utterance.rate = 0.52
         utterance.volume = 1.0
+        #if DEBUG
+        if AimFake.word != nil { utterance.volume = 0 } // silent phone test, the log has every line
+        #endif
         current = utterance
         if synth.isSpeaking { synth.stopSpeaking(at: .immediate) }
         synth.speak(utterance)
@@ -312,6 +315,42 @@ final class AimWordListener: ObservableObject {
     }
 }
 
+#if DEBUG
+/// Test builds only: `-aimFakeFind <word>` opens Help Me Aim, asks for the
+/// word, and feeds Documents/photo-test/flow/*.jpg in order as the camera,
+/// one photo per look (the last one repeats). Lets a phone walk the whole
+/// describing-model flow without anyone aiming it (2026-11-03).
+@MainActor
+enum AimFake {
+    static let word: String? = {
+        let a = ProcessInfo.processInfo.arguments
+        guard let i = a.firstIndex(of: "-aimFakeFind"), i + 1 < a.count else { return nil }
+        return a[i + 1]
+    }()
+
+    private static let frames: [Data] = {
+        guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return [] }
+        let dir = docs.appendingPathComponent("photo-test/flow", isDirectory: true)
+        let files = ((try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? [])
+            .filter { $0.pathExtension.lowercased() == "jpg" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        return files.compactMap { try? Data(contentsOf: $0) }
+    }()
+
+    private static var shown = 0
+
+    static func nextFrame() -> Data? {
+        guard !frames.isEmpty else { return nil }
+        defer { shown += 1 }
+        return frames[min(shown, frames.count - 1)]
+    }
+
+    static var lastFrame: Data? {
+        frames.isEmpty ? nil : frames[min(max(shown - 1, 0), frames.count - 1)]
+    }
+}
+#endif
+
 // MARK: Controller
 
 @MainActor
@@ -340,6 +379,7 @@ final class HelpMeAimController: ObservableObject {
     /// Other things YOLOE saw in the last few frames.
     private var recentOthers: [[AimElsewhere.Seen]] = []
     private var countdownTask: Task<Void, Never>?
+    private var lookTask: Task<Void, Never>?
     private var loadTask: Task<Void, Never>?
     private var classNames: [String]?
     private var classIndex: [String: [Int32]] = [:]
@@ -458,6 +498,12 @@ final class HelpMeAimController: ObservableObject {
         let names = vocabulary()
         guard let match = AimVocabulary.match(text, index: classIndex), !names.isEmpty else {
             let said = AimVocabulary.normalize(text)
+            // No name for it in the finder: the describing model looks instead.
+            if !said.isEmpty, OnDeviceVisionNarrator.isBundled {
+                askedWord = said
+                begin(.described(said))
+                return
+            }
             statusText = AimPhrases.capitalized(AimPhrases.cantLookFor(said))
             voice.say(AimPhrases.cantLookFor(said))
             return
@@ -512,7 +558,11 @@ final class HelpMeAimController: ObservableObject {
         statusText = "Looking for \(newSubject.spokenName)"
         if newSubject != .face { cameraPosition = .back }
         voice.warmRoute()
-        sayAfterVoiceOver(AimPhrases.intro(for: newSubject))
+        if case let .described(word) = newSubject {
+            sayAfterVoiceOver(AimAsk.intro(for: word))
+        } else {
+            sayAfterVoiceOver(AimPhrases.intro(for: newSubject))
+        }
         tick.prepare(); beat.prepare(); notify.prepare()
 
         switch newSubject {
@@ -539,6 +589,88 @@ final class HelpMeAimController: ObservableObject {
                 analyzer.configure(kind: .object, classIDs: Set(match.classIDs), finder: finder)
                 coach?.reset(now: Date())
                 if !paused { analyzer.setPaused(false) }
+            }
+        case let .described(word):
+            analyzer.setPaused(true)
+            startLooking(for: word, firstWait: 4)
+        }
+    }
+
+    /// The describing model looks at one frame every few seconds and steers
+    /// toward the thing; a "yes, in the middle" takes the picture.
+    private func startLooking(for word: String, firstWait: Double) {
+        lookTask?.cancel()
+        lookTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(firstWait * 1_000_000_000))
+            var misses = 0
+            var steers = 0
+            var sure: Bool?
+            while !Task.isCancelled, misses < AimAsk.maxMisses {
+                guard let self else { return }
+                guard phase == .aiming, !paused else { return }
+                guard let shot = await grabFrame() else { misses += 1; continue }
+                let answer = await OnDeviceVisionNarrator.shared.ask(AimAsk.question(for: word), about: shot)
+                guard !Task.isCancelled, phase == .aiming, !paused else { return }
+                let reading = AimAsk.read(answer)
+                AimDevLog.note("[ask] \(word) -> \(answer ?? "nil")")
+                if reading.found {
+                    misses = 0
+                    if sure == nil {
+                        let listing = await OnDeviceVisionNarrator.shared.ask(AimAsk.confirmQuestion, about: shot)
+                        guard !Task.isCancelled, phase == .aiming, !paused else { return }
+                        sure = AimAsk.confirms(word, in: listing)
+                        AimDevLog.note("[ask] confirm \(word) sure=\(sure!) -> \(listing ?? "nil")")
+                    }
+                    if reading.place == .middle || reading.place == nil || steers >= AimAsk.maxSteers {
+                        notify.notificationOccurred(.success)
+                        let line = sure == true ? AimAsk.found : AimAsk.foundUnsure
+                        statusText = line
+                        await speakAndWait(line)
+                        guard !Task.isCancelled, phase == .aiming, !paused else { return }
+                        capture()
+                        return
+                    }
+                    steers += 1
+                    tick.impactOccurred()
+                    let line = AimAsk.steer(reading.place!)
+                    statusText = line
+                    await speakAndWait(line)
+                } else {
+                    misses += 1
+                    if let line = AimAsk.notYet(word, misses: misses) {
+                        statusText = AimPhrases.capitalized(line)
+                        await speakAndWait(line)
+                    }
+                }
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+            }
+            guard let self, !Task.isCancelled, phase == .aiming else { return }
+            let line = AimAsk.gaveUp(word)
+            statusText = line
+            notify.notificationOccurred(.warning)
+            voice.say(line)
+        }
+    }
+
+    /// Says the line and waits (up to ~8 s) until it has been spoken, so the
+    /// next frame isn't taken while the person is still listening.
+    private func speakAndWait(_ line: String) async {
+        voice.say(line)
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        for _ in 0 ..< 80 where voice.isBusy {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+    }
+
+    /// One still from the live camera, upright, for the describing model.
+    private func grabFrame() async -> UIImage? {
+        #if DEBUG
+        if AimFake.word != nil { return AimFake.nextFrame().flatMap { UIImage(data: $0) } }
+        #endif
+        guard let camera else { return nil }
+        return await withCheckedContinuation { (cont: CheckedContinuation<UIImage?, Never>) in
+            camera.captureBurst(count: 1, interval: 0) { frames in
+                cont.resume(returning: frames.first.flatMap { UIImage(data: $0) })
             }
         }
     }
@@ -633,11 +765,14 @@ final class HelpMeAimController: ObservableObject {
         analyzer.setPaused(true)
         phase = .capturing
         statusText = "Taking the picture"
-        let snapshot = analyzer.snapshot()
+        // Nothing for the object finder to score when the describing model
+        // found it: keep the sharpest frame of the burst.
+        let snapshot: (kind: AimFrameAnalyzer.Kind, ids: Set<Int32>, finder: AimObjectFinder?)?
+        if case .described = subject { snapshot = nil } else { snapshot = analyzer.snapshot() }
         let framing = subject.framing
         let subjectName = subject.spokenName
         let isPage = subject == .page
-        camera.captureBurst(count: Self.burstCount, interval: Self.burstInterval) { [weak self] frames in
+        burst(camera) { [weak self] frames in
             guard let self, phase == .capturing else { return }
             guard !frames.isEmpty else {
                 voice.say(AimPhrases.captureFailed)
@@ -682,7 +817,7 @@ final class HelpMeAimController: ObservableObject {
                 Self.save(toSave) { [weak self] saved in
                     // Taking another or leaving must not be talked over.
                     guard let self, phase == .taken else { return }
-                    if saved, case .object = subject, let word = askedWord {
+                    if saved, subject.remembersWord, let word = askedWord {
                         AimRecentTargets.remember(word)
                         recentTargets = AimRecentTargets.all()
                     }
@@ -701,6 +836,17 @@ final class HelpMeAimController: ObservableObject {
         }
     }
 
+    private func burst(_ camera: AimCameraView, completion: @escaping ([Data]) -> Void) {
+        #if DEBUG
+        if AimFake.word != nil {
+            let frames = AimFake.lastFrame.map { [$0] } ?? []
+            DispatchQueue.main.async { completion(frames) }
+            return
+        }
+        #endif
+        camera.captureBurst(count: Self.burstCount, interval: Self.burstInterval, completion: completion)
+    }
+
     static let burstCount = 5
     static let burstInterval: TimeInterval = 0.18
 
@@ -711,6 +857,10 @@ final class HelpMeAimController: ObservableObject {
     }
 
     private static func save(_ data: Data, done: @escaping @MainActor (Bool) -> Void) {
+        #if DEBUG
+        // The fake-camera test never puts its stock photos in the library.
+        if AimFake.word != nil { Task { @MainActor in done(true) }; return }
+        #endif
         AimCaption.saveToPhotos(data, done: done)
     }
 
@@ -737,6 +887,7 @@ final class HelpMeAimController: ObservableObject {
     // MARK: Lifecycle
 
     private func stopAiming() {
+        lookTask?.cancel(); lookTask = nil
         countdownTask?.cancel(); countdownTask = nil
         countdownWord = nil
         analyzer.setPaused(true)
@@ -767,6 +918,7 @@ final class HelpMeAimController: ObservableObject {
         sayAfterVoiceOver("Still looking for \(subject.spokenName)")
         switch subject {
         case .object: if finder != nil { analyzer.setPaused(false) }
+        case let .described(word): startLooking(for: word, firstWait: 2)
         default: analyzer.setPaused(false)
         }
     }
@@ -836,7 +988,14 @@ struct HelpMeAimView: View {
             }
         }
         .preferredColorScheme(.dark)
-        .onAppear { controller.setVoice(voiceIdentifier) }
+        .onAppear {
+            controller.setVoice(voiceIdentifier)
+            #if DEBUG
+            if let word = AimFake.word {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { controller.submit(word) }
+            }
+            #endif
+        }
         .onDisappear { controller.shutdown() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { controller.resume() } else { controller.pause() }

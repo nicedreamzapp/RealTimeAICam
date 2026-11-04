@@ -151,6 +151,22 @@ struct AimVocabularyTests {
         }
     }
 
+    @Test func everydayWordsReachARealClass() throws {
+        let url = try #require(Bundle.main.url(forResource: "yoloe_classes", withExtension: "json"))
+        let real = try JSONDecoder().decode([String].self, from: Data(contentsOf: url))
+        let expected: [String: String] = [
+            "headphones": "earphone", "airpods": "earphone", "sneakers": "running shoe",
+            "trash can": "bin", "outlet": "socket", "kids": "child", "bike": "bicycle",
+            "refrigerator": "fridge", "flashlight": "torch", "white cane": "walking cane",
+            "jewelry": "jewellery", "desk": "office desk", "water bottle": "bottle",
+            "my charger": "charger", "tissues": "tissue", "toilet": "toilet bowl",
+        ]
+        for (word, cls) in expected {
+            let m = try #require(AimVocabulary.match(word, classNames: real), "\(word)")
+            #expect(m.classNames.contains(cls), "\(word) -> \(m.classNames)")
+        }
+    }
+
     @Test func unknownWordHasNoMatch() {
         #expect(AimVocabulary.match("zebra", classNames: names) == nil)
         #expect(AimVocabulary.match("zebras", classNames: names) == nil)
@@ -226,5 +242,53 @@ struct AimVocabularyTests {
         #expect(AimVocabulary.withArticle("apple") == "an apple")
         #expect(AimVocabulary.withArticle("Umbrella") == "an Umbrella")
         #expect(AimVocabulary.withArticle("") == "")
+    }
+}
+
+
+// MARK: - Describing-model backup
+
+struct AimAskTests {
+    @Test func yesWithAPlace() {
+        #expect(AimAsk.read("Yes, the wallet is on the left side of the table.") == .init(found: true, place: .left))
+        #expect(AimAsk.read("Yes. It's in the middle of the photo.") == .init(found: true, place: .middle))
+        #expect(AimAsk.read("yes - near the bottom right") == .init(found: true, place: .right))
+        #expect(AimAsk.read("Yes, at the top.") == .init(found: true, place: .top))
+        #expect(AimAsk.read("Yes, there is a wallet.") == .init(found: true, place: nil))
+    }
+
+    @Test func noOrUnsureIsNotFound() {
+        #expect(AimAsk.read("No, I don't see a wallet.").found == false)
+        #expect(AimAsk.read("I can't tell for sure, but there is a table on the left.").found == false)
+        #expect(AimAsk.read(nil).found == false)
+        #expect(AimAsk.read("").found == false)
+        #expect(AimAsk.read("Yesterday's mail is on the left").found == false)
+    }
+
+    @Test func unknownWordsGoToTheDescriber() {
+        let names = ["person", "key", "dog"]
+        #expect(AimVocabulary.match("wallet", classNames: names) == nil)
+        #expect(AimSubject.described("wallet").spokenName == "a wallet")
+        #expect(AimSubject.described("inhaler").spokenName == "an inhaler")
+        #expect(AimSubject.described("wallet").remembersWord)
+    }
+
+    @Test func centerLeftIsLeft() {
+        #expect(AimAsk.read("Yes, a hearing aid is in the center-left area.").place == .left)
+        #expect(AimAsk.read("Yes, in the center.").place == .middle)
+    }
+
+    @Test func confirmNeedsTheWordItself() {
+        #expect(AimAsk.confirms("wallet", in: "Yes, a wallet and cards"))
+        #expect(AimAsk.confirms("headphone", in: "white headphones, pink background"))
+        #expect(!AimAsk.confirms("lighter", in: "black leather wallet, credit cards"))
+        #expect(!AimAsk.confirms("ring", in: "a red string on a table"))
+        #expect(!AimAsk.confirms("wallet", in: nil))
+    }
+
+    @Test func quietEveryOtherMiss() {
+        #expect(AimAsk.notYet("wallet", misses: 1) != nil)
+        #expect(AimAsk.notYet("wallet", misses: 2) == nil)
+        #expect(AimAsk.notYet("wallet", misses: 3) != nil)
     }
 }

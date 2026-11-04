@@ -19,6 +19,41 @@ enum PhotoSetTest {
     /// second request lands while "Working it out" is still running. Before the
     /// engine lock both reached one llama context and the app aborted; now the
     /// second waits. One JSON line per answer in Documents/photo-test/twoatonce.jsonl.
+    static var askTestRequested: Bool { ProcessInfo.processInfo.arguments.contains("-rtcamAskTest") }
+    /// `-rtcamAskTest`: Help Me Aim's describing-model backup (2026-11-03).
+    /// Every Documents/photo-test/ask/NN__word__expect.jpg (expect = left,
+    /// right, middle or NO) gets the exact AimAsk question; one JSON line per
+    /// photo in ask/results.jsonl with the answer and how it was read.
+    static func runAskTest() async {
+        await MainActor.run { UIApplication.shared.isIdleTimerDisabled = true }
+        defer { Task { @MainActor in UIApplication.shared.isIdleTimerDisabled = false } }
+        let fm = FileManager.default
+        guard let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
+        let dir = docs.appendingPathComponent("photo-test/ask", isDirectory: true)
+        let out = dir.appendingPathComponent("results.jsonl")
+        try? fm.removeItem(at: out)
+        let photos = ((try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? [])
+            .filter { $0.pathExtension.lowercased() == "jpg" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        write(["event": "start", "photos": photos.count], to: out)
+        for url in photos {
+            let parts = url.deletingPathExtension().lastPathComponent.components(separatedBy: "__")
+            guard parts.count == 3, let ui = UIImage(contentsOfFile: url.path), let cg = upright(ui) else { continue }
+            let word = parts[1].replacingOccurrences(of: "-", with: " ")
+            let started = Date()
+            let answer = await OnDeviceVisionNarrator.shared.ask(AimAsk.question(for: word), about: UIImage(cgImage: cg))
+            let r = AimAsk.read(answer)
+            let place = r.place.map { "\($0)" } ?? "none"
+            let firstMs = Int(Date().timeIntervalSince(started) * 1000)
+            let listing = await OnDeviceVisionNarrator.shared.ask(AimAsk.confirmQuestion, about: UIImage(cgImage: cg))
+            write(["image": url.lastPathComponent, "word": word, "expect": parts[2], "answer": answer ?? "",
+                   "found": r.found, "place": place, "ms": firstMs, "listing": listing ?? "",
+                   "confirmed": AimAsk.confirms(word, in: listing),
+                   "totalMs": Int(Date().timeIntervalSince(started) * 1000)], to: out)
+        }
+        write(["event": "done"], to: out)
+    }
+
     static func runTwoAtOnce() async {
         let fm = FileManager.default
         guard let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first else { return }

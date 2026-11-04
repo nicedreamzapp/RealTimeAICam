@@ -23,6 +23,9 @@ enum AimSubject: Equatable {
     case face
     case page
     case object(AimVocabulary.Match)
+    /// A thing the object finder has no name for ("wallet"): the describing
+    /// model looks for it instead, slower but never a dead end (2026-11-03).
+    case described(String)
 
     /// "a face", "a picture or page", "a key".
     var spokenName: String {
@@ -30,6 +33,15 @@ enum AimSubject: Equatable {
         case .face: "a face"
         case .page: "a picture or page"
         case let .object(match): AimVocabulary.withArticle(match.spokenName)
+        case let .described(word): AimVocabulary.withArticle(word)
+        }
+    }
+
+    /// Found by a word the person said, so it goes in the recent buttons.
+    var remembersWord: Bool {
+        switch self {
+        case .object, .described: true
+        case .face, .page: false
         }
     }
 
@@ -37,7 +49,7 @@ enum AimSubject: Equatable {
         switch self {
         case .face: .person
         case .page: .page
-        case .object: .whole
+        case .object, .described: .whole
         }
     }
 }
@@ -1110,6 +1122,8 @@ enum AimElsewhere {
         case .page: return ["document", "paper", "picture", "photo", "picture frame", "photo frame", "poster"]
         case let .object(m):
             return Set(([m.spokenName] + m.classNames).map { spokenName($0) ?? $0.lowercased() })
+        case let .described(word):
+            return [word]
         }
     }
 
@@ -1119,6 +1133,91 @@ enum AimElsewhere {
         let inter = i.width * i.height
         return inter / (a.width * a.height + b.width * b.height - inter)
     }
+}
+
+// MARK: - Looking with the describing model
+
+/// For words the object finder can't name: show the describing model one
+/// frame at a time and ask whether the thing is there and where.
+enum AimAsk {
+    enum Place: Equatable { case left, right, top, bottom, middle }
+
+    struct Reading: Equatable {
+        var found: Bool
+        var place: Place?
+    }
+
+    /// Frames asked about before giving up.
+    static let maxMisses = 8
+    /// Steering turns before taking the picture anyway.
+    static let maxSteers = 4
+
+    static func question(for word: String) -> String {
+        "Is there \(AimVocabulary.withArticle(word)) in this photo? Start your answer with Yes or No. "
+            + "If yes, say where it is in the photo: left, right, top, bottom, or middle."
+    }
+
+    /// Yes/no and where, from the model's answer. Anything unsure counts as no.
+    static func read(_ answer: String?) -> Reading {
+        let a = (answer ?? "").lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let words = a.split(whereSeparator: { !$0.isLetter }).map(String.init)
+        guard words.first == "yes" else { return Reading(found: false, place: nil) }
+        let has: (String) -> Bool = { words.contains($0) }
+        let place: Place?
+        // "center-left" is left: a side wins over the middle.
+        if has("left"), !has("right") { place = .left }
+        else if has("right"), !has("left") { place = .right }
+        else if has("middle") || has("center") || has("centre") { place = .middle }
+        else if has("top") || has("upper") || has("above") { place = .top }
+        else if has("bottom") || has("lower") || has("below") { place = .bottom }
+        else { place = nil }
+        return Reading(found: true, place: place)
+    }
+
+    /// Which way to move the phone to bring it to the middle.
+    static func steer(_ place: Place) -> String {
+        switch place {
+        case .left: "It's on the left. Turn the phone a little left."
+        case .right: "It's on the right. Turn the phone a little right."
+        case .top: "It's near the top. Tilt the phone up a little."
+        case .bottom: "It's near the bottom. Tilt the phone down a little."
+        case .middle: "It's right in front of you. Hold still."
+        }
+    }
+
+    /// Asked after the first "yes": the model names what it sees on its own.
+    /// The word in that list means sure; otherwise the yes may be made up
+    /// (a "lighter" in a wallet photo, on-phone test 2026-11-03), so it is
+    /// said as a maybe. Not a gate: inhalers and hearing aids came back as
+    /// "a blue device" and "an earbud" though the yes was right.
+    static let confirmQuestion = "Name the objects you can see in this photo, a few words each."
+
+    static func confirms(_ word: String, in listing: String?) -> Bool {
+        let text = " " + (listing ?? "").lowercased().map { $0.isLetter ? String($0) : " " }.joined() + " "
+        let w = word.lowercased()
+        let forms = [w, w + "s", w + "es", w.hasSuffix("y") ? String(w.dropLast()) + "ies" : w]
+        return forms.contains { text.contains(" \($0) ") }
+    }
+
+    static func intro(for word: String) -> String {
+        "I don't know \(AimVocabulary.withArticle(word)) by sight, so I'll look closely every few seconds. "
+            + "Point the phone where it might be and move slowly. Double tap anywhere to take the picture yourself."
+    }
+
+    static func notYet(_ word: String, misses: Int) -> String? {
+        // Every other miss, so it is not a stuck record.
+        guard misses % 2 == 1 else { return nil }
+        return misses == 1 ? "No \(word) here yet. Turn slowly." : "Still no \(word). Try another spot."
+    }
+
+    static func gaveUp(_ word: String) -> String {
+        "I couldn't find \(AimVocabulary.withArticle(word)). Point somewhere else and double tap to take a picture, or go back to try another word."
+    }
+
+    static let found = "Found it. Hold still."
+    /// The model said yes but didn't name it on its own: say so, take the
+    /// picture anyway, and the description tells them what it really is.
+    static let foundUnsure = "I think that's it, but I'm not sure. Hold still, I'll take the picture and tell you what it is."
 }
 
 // MARK: - Spoken word -> YOLOE class
@@ -1173,6 +1272,49 @@ enum AimVocabulary {
         "mail": ["letter", "envelope"],
         "bill": ["document", "paper", "letter"],
         "page": ["document", "paper"],
+        // Everyday words for things YOLOE names differently (2026-11-03).
+        "headphones": ["earphone", "headset"],
+        "headphone": ["earphone", "headset"],
+        "earphones": ["earphone"],
+        "earbuds": ["earphone"],
+        "earbud": ["earphone"],
+        "airpods": ["earphone"],
+        "sneakers": ["running shoe", "shoe"],
+        "sneaker": ["running shoe", "shoe"],
+        "shoes": ["shoe", "running shoe", "dress shoe", "leather shoe"],
+        "boots": ["boot"],
+        "trash can": ["bin", "waste container", "garbage"],
+        "trash": ["bin", "waste container", "garbage"],
+        "garbage can": ["bin", "waste container", "garbage"],
+        "trash bin": ["bin", "waste container", "garbage"],
+        "wastebasket": ["bin", "waste container"],
+        "outlet": ["socket", "power plugs and sockets", "plug"],
+        "power outlet": ["socket", "power plugs and sockets"],
+        "kid": ["child", "boy", "girl"],
+        "toddler": ["toddler", "child", "baby"],
+        "bike": ["bicycle", "mountain bike"],
+        "refrigerator": ["fridge"],
+        "flashlight": ["torch"],
+        "cane": ["walking cane", "cane"],
+        "white cane": ["walking cane", "cane"],
+        "walking stick": ["walking cane", "cane"],
+        "jewelry": ["jewellery", "necklace", "earring", "ring", "bracelet"],
+        "jewellery": ["jewellery", "necklace", "earring", "ring", "bracelet"],
+        "desk": ["office desk", "writing desk", "computer desk", "table"],
+        "water bottle": ["bottle"],
+        "medicine bottle": ["medicine", "bottle"],
+        "charger": ["charger", "cable", "plug"],
+        "cord": ["cable", "wire"],
+        "cable": ["cable", "wire"],
+        "tissues": ["tissue", "facial tissue holder"],
+        "kleenex": ["tissue", "facial tissue holder"],
+        "toilet": ["toilet bowl", "toilet seat"],
+        "computer": ["laptop", "computer", "desktop computer", "computer monitor"],
+        "monitor": ["computer monitor", "monitor", "television"],
+        "soda": ["soda", "can"],
+        "dog leash": ["leash"],
+        "collar": ["dog collar"],
+        "stove": ["stove", "gas stove", "oven"],
         // A toy bunny is a "stuffed animal" to YOLOE, never a "bunny", so
         // asking for one found nothing (Matt, 2026-11-03).
         "bunny": ["bunny", "rabbit", "easter bunny", "stuffed animal", "stuffed toy"],
