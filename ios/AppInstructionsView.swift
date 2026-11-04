@@ -152,6 +152,9 @@ struct AppInstructionsView: View {
                     guideSection("⚙️", "Settings",
                         "The Settings button at the top of the home screen. Models: the app picks the best describing AI for your phone by itself and downloads it once, on Wi-Fi. Mail, money and medicine always get the most accurate one your phone can run. In Settings, then Models, you can choose Most accurate or Fastest, or pick one yourself. The voice button at the bottom of the home screen changes the voice.")
 
+                    guideSection("🌍", "Your language",
+                        String(YourLanguageRules.guide.dropFirst("Your language: ".count)).capitalizedFirst)
+
                     // Camera controls (inside each tool)
                     Group {
                         Text("🎛️ **Camera controls**")
@@ -228,7 +231,12 @@ struct AppInstructionsView: View {
         lines.append("Help Me Aim takes a good photo for you. Choose Face, Picture or Page, or Something Else and say what you want. It tells you which way to move, counts down, and saves the photo with a description. For things it doesn't know by sight, like a wallet, it looks closely and tells you where it is. Double tap anywhere to take the picture yourself.")
         lines.append("Live Cam lets you talk with the camera. Ask out loud about what's in front of you and hear the answer.")
         lines.append("In Settings, Models, the app already picked the best A I for your phone. You can choose Most accurate or Fastest there.")
+        lines.append(YourLanguageRules.guide)
         lines.append("Everything runs on your phone and works offline. No accounts and no tracking.")
         return lines.joined(separator: " ")
     }
+}
+
+private extension String {
+    var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
 }

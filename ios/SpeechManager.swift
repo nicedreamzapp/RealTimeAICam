@@ -191,7 +191,9 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
 
     private func buildSpeechText(for detection: YOLODetection, lidarManager: LiDARManager) -> String {
         // "Bat (Animal)" was read out with its label note; say just "bat".
-        let objectName = SpeakableText.className(detection.className)
+        // In Your language once its names are built (translated once, from a file after).
+        let translated = ObjectLabelCache.shared.name(for: detection.className)
+        let objectName = translated ?? SpeakableText.className(detection.className)
 
         // Check if LiDAR is active and enabled
         if lidarManager.isEnabled, lidarManager.isRunning {
@@ -205,6 +207,11 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
                 let position = LiDARManager.horizontalBucket(forNormalizedX: center.x)
                 let positionWord = convertPositionToWord(position)
 
+                if translated != nil {
+                    let cache = ObjectLabelCache.shared
+                    let side = cache.name(for: position == "L" ? "to the left" : (position == "R" ? "to the right" : "in the center")) ?? positionWord
+                    return "\(objectName) \(side) \(distanceFeet) \(cache.name(for: "feet") ?? "feet")"
+                }
                 // Format: "bottle left 3 feet"
                 return "\(objectName) \(positionWord) \(distanceFeet) \(distanceFeet == 1 ? "foot" : "feet")"
             }
@@ -264,10 +271,16 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
     private func announceObject(_ text: String) {
         guard !isSpeaking else { return }
 
-        let utterance = AVSpeechUtterance(string: text)
-        if let chosenVoice = AVSpeechSynthesisVoice(identifier: selectedVoiceIdentifier) {
+        // Names in Your language get a voice for that language.
+        let lang = ObjectLabelCache.shared.name(for: "feet") != nil ? YourLanguage.activeCode : YourLanguageRules.english
+        let prepared = YourLanguageVoice.prepare(text, lang: lang, selected: selectedVoiceIdentifier)
+        let utterance = AVSpeechUtterance(string: prepared.text)
+        if let chosenVoice = prepared.voice {
             utterance.voice = chosenVoice
         }
+        #if DEBUG
+        if lang != YourLanguageRules.english { SpeakLog.note("object[\(lang)]", prepared.text) }
+        #endif
         utterance.rate = 0.56
         utterance.pitchMultiplier = 1.0
         utterance.volume = 0.9
@@ -387,6 +400,7 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
             "Pinch the screen to zoom in or out.",
             "Toggle text overlay on or off.",
             "Speak detected or translated text aloud.",
+            YourLanguageRules.guide,
             "Copy text to the history for later use.",
             "Tap 'Play Complete Audio Tutorial' any time to hear these instructions again.",
         ])

@@ -7,7 +7,20 @@ import SwiftUI
 /// Which way the merged Read button opens: English, or translating.
 enum ReaderLanguage {
     static let key = "readerLanguageMode"
-    static var opensTranslating: Bool { UserDefaults.standard.string(forKey: key) == "translate" }
+    static let fromKey = "translateFromLanguage"
+    /// Translating, or reading English as it is. With Your language other than
+    /// English (2026-11-04) an English page is translated too: the screen opens
+    /// translating from English. With Your language English nothing changes.
+    static var opensTranslating: Bool {
+        let d = UserDefaults.standard
+        let yours = YourLanguage.activeCode
+        if d.string(forKey: key) == "translate" {
+            return d.string(forKey: fromKey) == "en" ? yours != YourLanguageRules.english : true
+        }
+        guard yours != YourLanguageRules.english else { return false }
+        d.set("en", forKey: fromKey)
+        return true
+    }
 }
 
 enum OCRMode {
@@ -249,12 +262,15 @@ struct LiveOCRView: View {
     @State private var scannedSummary = ""
     @State private var scannedText = ""
     @State private var isScanning = false
+    /// Bumps on Next shot, so a translation that lands late is never said over the new one.
+    @State private var sayGeneration = 0
     // The still we just captured, held on screen (and soon, asked about)
     // until Next shot. nil means the live camera is showing.
     @State private var frozenPhoto: UIImage?
     @State private var isListening = false
     @State private var isAsking = false
     @StateObject private var listener = SpeechRecognizer()
+    @ObservedObject private var yourLanguage = YourLanguage.shared
     /// A question typed instead of spoken (Kareen, 2026-09-25).
     @State private var typedQuestion = ""
     @FocusState private var typingQuestion: Bool
@@ -537,10 +553,28 @@ struct LiveOCRView: View {
     /// One place where a sentence becomes speech, so the model path and the
     /// fallback path can never drift apart.
     private func say(_ sentence: String) {
+        // The model writes English; Your language gets it translated first, shown
+        // and said in that language (~1 s, 2026-11-04). English: no change.
+        guard YourLanguage.activeCode != YourLanguageRules.english else {
+            sayNow(sentence, language: YourLanguageRules.english)
+            return
+        }
+        let generation = sayGeneration
+        Task {
+            let out = await YourLanguage.intoActive(sentence)
+            await MainActor.run {
+                guard generation == sayGeneration else { return }
+                sayNow(out.text, language: out.lang)
+            }
+        }
+    }
+
+    private func sayNow(_ sentence: String, language: String) {
         isScanning = false
         scannedSummary = sentence
         // Spoken without being asked — the whole point is not having to find a
         // button after pointing the camera.
+        viewModel.nextSpeechLanguage = language
         viewModel.speak(text: sentence, voiceIdentifier: selectedVoiceIdentifier) {
             isSpeaking = false
         }
@@ -549,6 +583,7 @@ struct LiveOCRView: View {
 
     /// Let go of the frozen shot and return to the live camera for a new one.
     private func nextShot() {
+        sayGeneration += 1
         viewModel.stopSpeaking()
         isSpeaking = false
         scannedText = ""
@@ -598,7 +633,12 @@ struct LiveOCRView: View {
     private func answer(_ q: String) async {
         guard let photo = frozenPhoto else { return }
         await MainActor.run { isAsking = true; scannedSummary = "Thinking…" }
-        let answer = await OnDeviceVisionNarrator.shared.ask(q, about: photo)
+        // Asked in Your language: the model gets it in English.
+        let english = await YourLanguage.toEnglish(q)
+        #if DEBUG
+        if english != q { SpeakLog.note("question[\(YourLanguage.activeCode)>en]", english) }
+        #endif
+        let answer = await OnDeviceVisionNarrator.shared.ask(english, about: photo)
         await MainActor.run {
             isAsking = false
             if answer != nil { RatePrompt.noteResult() }
@@ -1179,18 +1219,27 @@ struct LiveOCRView: View {
     /// pattern as What to look for on the detection screen.
     private var translateFromControl: some View {
         let languages = TranslateLanguage.available
-        // nil = English, read as it is; anything else is translated into English.
+        // nil = an English page; anything else is the page's language. It is
+        // translated into Your language (English unless set in Settings).
+        let target = yourLanguage.active
         let choices: [TranslateLanguage?] = [nil] + languages
-        let current: TranslateLanguage? = ocrMode == .english ? nil : viewModel.sourceLanguage
+        let current: TranslateLanguage? = (ocrMode == .english || viewModel.sourceLanguage == .english)
+            ? nil : viewModel.sourceLanguage
+        let menuName: (TranslateLanguage?) -> String = { page in
+            if target == YourLanguageRules.english { return page.map { "\($0.name) → English" } ?? "English" }
+            let from = page?.name ?? "English"
+            let to = YourLanguageRules.name(target)
+            return from == to ? to : "\(from) → \(to)"
+        }
         return Menu {
-            Button("English") { pickReaderLanguage(nil) }
+            Button(menuName(nil)) { pickReaderLanguage(nil) }
             ForEach(languages, id: \.code) { language in
-                Button("\(language.name) → English") { pickReaderLanguage(language) }
+                Button(menuName(language)) { pickReaderLanguage(language) }
             }
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "globe")
-                Text(current.map { "\($0.name) → Eng" } ?? "English")
+                Text(YourLanguageRules.pillLabel(page: current?.code, target: target))
                     .lineLimit(1)
             }
             .font(.system(size: 14, weight: .medium))
@@ -1205,7 +1254,7 @@ struct LiveOCRView: View {
             .fixedSize()
         }
         .accessibilityLabel("Language")
-        .accessibilityValue(current.map { "\($0.name), translated to English" } ?? "English")
+        .accessibilityValue(YourLanguageRules.pillSpoken(page: current?.code, target: target))
         .accessibilityHint("Swipe up or down to change, or double tap for the list")
         .accessibilityAdjustableAction { direction in
             let i = choices.firstIndex(of: current) ?? 0
@@ -1220,8 +1269,10 @@ struct LiveOCRView: View {
     /// English reads as it is; another language turns the same screen into the
     /// translator. Remembered, so Read opens the way it was left.
     private func pickReaderLanguage(_ language: TranslateLanguage?) {
-        if let language { viewModel.setSourceLanguage(language) }
-        let wantsEnglish = language == nil
+        // Your language isn't English: an English page is translated too.
+        let page = language ?? (yourLanguage.active != YourLanguageRules.english ? TranslateLanguage.english : nil)
+        if let page { viewModel.setSourceLanguage(page) }
+        let wantsEnglish = page == nil
         UserDefaults.standard.set(wantsEnglish ? "english" : "translate", forKey: ReaderLanguage.key)
         guard wantsEnglish != (ocrMode == .english) else { return }
         viewModel.stopSpeaking()
@@ -1262,7 +1313,7 @@ struct LiveOCRView: View {
                 .disabled(isTranslating)
                 .opacity(isTranslating ? 0.6 : 1)
                 .accessibilityLabel("Translate")
-                .accessibilityHint("Translates the \(viewModel.sourceLanguage.name) text on screen into English")
+                .accessibilityHint("Translates the \(viewModel.sourceLanguage.name) text on screen into \(YourLanguageRules.name(yourLanguage.active))")
                 .accessibilityValue(isTranslating ? "Translating" : "")
             } else {
                 Button(action: {
@@ -1535,10 +1586,12 @@ private struct AppleSpanishTranslationModifier: ViewModifier {
             .onChange(of: viewModel.appleTranslationRequest) { _, request in
                 guard request != nil else { return }
                 let source = Locale.Language(identifier: viewModel.sourceLanguage.code)
-                if configuration == nil || configuration?.source != source {
+                // Into Your language when it is on the phone, else English (2026-11-04).
+                let target = Locale.Language(identifier: viewModel.translationTarget)
+                if configuration == nil || configuration?.source != source || configuration?.target != target {
                     configuration = TranslationSession.Configuration(
                         source: source,
-                        target: Locale.Language(identifier: "en")
+                        target: target
                     )
                 } else {
                     // Same config object → invalidate to re-fire the task.
@@ -1548,10 +1601,11 @@ private struct AppleSpanishTranslationModifier: ViewModifier {
             .translationTask(configuration) { session in
                 guard let text = viewModel.appleTranslationRequest else { return }
                 let language = viewModel.sourceLanguage
+                let targetCode = viewModel.translationTarget
                 let isSpanish = language == .spanish
                 let status = await LanguageAvailability().status(
                     from: Locale.Language(identifier: language.code),
-                    to: Locale.Language(identifier: "en"))
+                    to: Locale.Language(identifier: targetCode))
                 if isSpanish, status == .unsupported {
                     viewModel.completeAppleTranslation(nil) // dictionary
                     return
@@ -1565,7 +1619,7 @@ private struct AppleSpanishTranslationModifier: ViewModifier {
                         try await session.prepareTranslation()
                     }
                     let english: String
-                    if isSpanish {
+                    if isSpanish, targetCode == "en" {
                         // Whole idioms first ("No hay mal que por bien no venga" →
                         // "Every cloud has a silver lining"), the rest through Apple.
                         english = try await SpanishIdiomPrepass.translate(text) {
@@ -1604,13 +1658,15 @@ private struct AppleSpanishTranslationModifier: ViewModifier {
 final class SpeechRecognizer: ObservableObject {
     @Published private(set) var isRunning = false
 
-    private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+    /// Your language when the phone can listen to it offline, else English.
+    private var recognizer: SFSpeechRecognizer?
     private let engine = AVAudioEngine()
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
     private var transcript = ""
 
     func start() async {
+        recognizer = YourLanguageVoice.recognizer()
         guard await Self.authorize(), let recognizer, recognizer.isAvailable else { return }
         transcript = ""
         let req = SFSpeechAudioBufferRecognitionRequest()

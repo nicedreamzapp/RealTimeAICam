@@ -212,8 +212,6 @@ struct ContentView: View {
         switchToMode(.home)
 
         viewModel.reinitialize()
-        // Back from a camera screen: a calm moment to ask for a rating, if one is due.
-        RatePrompt.askIfDue()
     }
 
     private func cleanupCurrentMode() {

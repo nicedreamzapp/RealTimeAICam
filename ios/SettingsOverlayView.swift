@@ -260,6 +260,7 @@ struct SettingsOverlayView: View {
                         )
                         }
 
+                        YourLanguageCard()
                         ModelsCardView()
                         PrivacyCardView()
                         CreditsCardView()

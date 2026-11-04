@@ -46,7 +46,9 @@ final class AimVoice: NSObject, AVSpeechSynthesizerDelegate {
         return !speaksAloud && UIAccessibility.isVoiceOverRunning
     }
 
-    var isBusy: Bool { synth.isSpeaking || announcementPending }
+    var isBusy: Bool { synth.isSpeaking || announcementPending || translatingLine }
+    /// A line is being put into Your language (2026-11-04); counts as busy.
+    private var translatingLine = false
 
     func warmRoute() {
         let audio = AVAudioSession.sharedInstance()
@@ -56,8 +58,31 @@ final class AimVoice: NSObject, AVSpeechSynthesizerDelegate {
     }
 
     func say(_ text: String, then done: (() -> Void)? = nil) {
+        // Your language: every guidance line and the description are translated
+        // first (cached, so repeated lines are instant). English: no change.
+        guard YourLanguage.activeCode != YourLanguageRules.english else {
+            speakLine(text, language: YourLanguageRules.english, then: done)
+            return
+        }
+        token += 1
+        let mine = token
+        finished = done
+        translatingLine = true
+        if synth.isSpeaking { synth.stopSpeaking(at: .immediate) }
+        Task { @MainActor [weak self] in
+            let out = await YourLanguage.intoActive(AimPhrases.capitalized(text))
+            guard let self, token == mine else { return }
+            translatingLine = false
+            speakLine(out.text, language: out.lang, then: done)
+        }
+    }
+
+    private func speakLine(_ text: String, language: String, then done: (() -> Void)?) {
         let line = SpeakableText.spoken(AimPhrases.capitalized(text))
         AimDevLog.note((usesVoiceOver ? "SAY(voiceover) " : "SAY ") + line)
+        #if DEBUG
+        if language != YourLanguageRules.english { SpeakLog.note("aim[\(language)]", line) }
+        #endif
         token += 1
         let mine = token
         finished = done
@@ -75,8 +100,9 @@ final class AimVoice: NSObject, AVSpeechSynthesizerDelegate {
             return
         }
         announcementPending = false
-        let utterance = AVSpeechUtterance(string: line)
-        utterance.voice = AVSpeechSynthesisVoice(identifier: voiceIdentifier) ?? AVSpeechSynthesisVoice(language: "en-US")
+        let prepared = YourLanguageVoice.prepare(line, lang: language, selected: voiceIdentifier)
+        let utterance = AVSpeechUtterance(string: prepared.text)
+        utterance.voice = prepared.voice ?? AVSpeechSynthesisVoice(language: "en-US")
         utterance.rate = 0.52
         utterance.volume = 1.0
         #if DEBUG
@@ -89,6 +115,7 @@ final class AimVoice: NSObject, AVSpeechSynthesizerDelegate {
 
     func stop() {
         finished = nil
+        translatingLine = false
         token += 1
         if synth.isSpeaking { synth.stopSpeaking(at: .immediate) }
         announcementPending = false
@@ -184,7 +211,8 @@ final class AimWordListener: ObservableObject {
     @Published private(set) var isRunning = false
     @Published private(set) var transcript = ""
 
-    private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+    /// Your language when the phone can listen to it offline, else English.
+    private var recognizer: SFSpeechRecognizer?
     private let engine = AVAudioEngine()
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
@@ -200,6 +228,7 @@ final class AimWordListener: ObservableObject {
         starting = true
         defer { starting = false }
         guard await Self.authorize() else { done(.notAllowed); return }
+        recognizer = YourLanguageVoice.recognizer()
         guard let recognizer, recognizer.isAvailable, recognizer.supportsOnDeviceRecognition else {
             done(.unavailable); return
         }
@@ -495,6 +524,23 @@ final class HelpMeAimController: ObservableObject {
         // Typed while the mic was open: close it now, or it hears the app's
         // own "Looking for…" line (seen in the 2026-09-16 live runs).
         if listener.isRunning { listener.stop(deliver: false) }
+        // Said or typed in Your language ("taza"): into English first, the word
+        // matching below stays English (2026-11-04).
+        if YourLanguage.activeCode != YourLanguageRules.english {
+            Task { @MainActor [weak self] in
+                let english = await AimLanguage.wordForMatching(text)
+                AimDevLog.note("YOUR LANGUAGE \(text) -> \(english)")
+                #if DEBUG
+                SpeakLog.note("aimWord[\(YourLanguage.activeCode)>en]", "\(text) -> \(english)")
+                #endif
+                self?.submitEnglish(english)
+            }
+            return
+        }
+        submitEnglish(text)
+    }
+
+    private func submitEnglish(_ text: String) {
         let names = vocabulary()
         guard let match = AimVocabulary.match(text, index: classIndex), !names.isEmpty else {
             let said = AimVocabulary.normalize(text)
@@ -830,7 +876,11 @@ final class HelpMeAimController: ObservableObject {
                             AimPhrases.pictureTaken + (saved ? AimPhrases.savedSuffix : AimPhrases.notSavedSuffix))
                     }
                     statusText = line
-                    voice.say(line)
+                    // A description heard to the end is a success (rating prompt).
+                    let described = description != nil
+                    voice.say(line) {
+                        if described { RatePrompt.resultSpoken(viaVoiceOver: false) }
+                    }
                 }
             }
         }
@@ -1518,3 +1568,16 @@ enum TestShotLog {
     }
 }
 #endif
+
+
+/// Help Me Aim in Your language: the thing to find is put into English before the
+/// existing (English) word matching. Pure around `translate`, unit tested.
+enum AimLanguage {
+    static func wordForMatching(_ text: String, lang: String = YourLanguage.activeCode,
+                                translate: AnswerLanguage.Translate = YourLanguage.translate) async -> String {
+        let english = await AnswerLanguage.questionForModel(text, lang: lang, translate: translate)
+        // Translators answer a bare noun with an article ("a cup", "the mug").
+        return english.replacingOccurrences(of: #"^(?i)(a|an|the)\s+"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+    }
+}

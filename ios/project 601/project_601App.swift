@@ -7,6 +7,8 @@ struct project_601App: App {
         // without this touch the singleton never exists and the app has no
         // response to memory pressure at all.
         _ = MemoryManager.shared
+        // Rating prompt: never during the first launch.
+        RatePrompt.noteLaunch()
         #if DEBUG
         // UI tests: `-rtcamFreshReadMode` forgets the saved Read mode, like a new install.
         if ProcessInfo.processInfo.arguments.contains("-rtcamFreshReadMode") {
@@ -44,6 +46,8 @@ struct project_601App: App {
     var body: some Scene {
         WindowGroup {
             rootView
+                // Your language: one invisible host serves Apple's translator to every screen.
+                .yourLanguageHost()
                 // Volume all the way down: say so, on every screen (2026-11-04).
                 .overlay(alignment: .top) { VolumeOffNote() }
                 .preferredColorScheme(.dark)
@@ -51,6 +55,17 @@ struct project_601App: App {
                 .task {
                     // 1.4.0: speed check once, then fetch this phone's level.
                     ModelSetup.shared.launch()
+                    // Your language: ask Apple what's on the phone (never downloads), then,
+                    // once on a first launch in a supported non-English language, say so.
+                    await YourLanguage.shared.refresh()
+                    if let line = YourLanguage.shared.firstLaunchLineIfDue() {
+                        try? await Task.sleep(nanoseconds: 2_500_000_000)
+                        NSLog("YourLanguage: first launch line")
+                        #if DEBUG
+                        SpeakLog.note("firstLaunch", line)
+                        #endif
+                        SpeechManager.shared.speak(line)
+                    }
                     // On-phone photo test: only with the -rtcamPhotoTest launch argument.
                     if #available(iOS 17.0, *), PhotoSetTest.requested { await PhotoSetTest.run() }
                     if #available(iOS 17.0, *), PhotoSetTest.twoAtOnceRequested { await PhotoSetTest.runTwoAtOnce() }

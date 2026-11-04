@@ -70,9 +70,12 @@ struct TranslateLanguage: Equatable {
     let vision: [String]  // Vision recognitionLanguages
 
     static let spanish = TranslateLanguage(code: "es", name: "Spanish", vision: ["es-ES", "es"])
+    /// An English page translated into Your language (2026-11-04). Only used when
+    /// Your language isn't English; never in the pill's list of page languages.
+    static let english = TranslateLanguage(code: "en", name: "English", vision: ["en-US"])
 
     /// Languages both Vision can read and Apple's translator can turn into English.
-    private static let appleCandidates: [TranslateLanguage] = [
+    static let appleCandidates: [TranslateLanguage] = [
         .init(code: "fr", name: "French", vision: ["fr-FR"]),
         .init(code: "de", name: "German", vision: ["de-DE"]),
         .init(code: "it", name: "Italian", vision: ["it-IT"]),
@@ -99,13 +102,17 @@ struct TranslateLanguage: Equatable {
         return [spanish] + appleCandidates.filter { readable.contains($0.vision[0]) }
     }()
 
+    /// All 17 Read languages, whatever this phone supports (Your language's list).
+    static var all: [TranslateLanguage] { [spanish] + appleCandidates }
+
     /// Said (and shown) the first time a language downloads. Same words on Android.
     static func downloadLine(_ name: String) -> String {
         "Downloading \(name), one time only. After that it works offline."
     }
 
     static func named(_ code: String) -> TranslateLanguage {
-        available.first { $0.code == code } ?? spanish
+        if code == english.code { return english }
+        return available.first { $0.code == code } ?? spanish
     }
 }
 
@@ -252,6 +259,15 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
     /// Non-nil while a request is waiting on Apple's translator; observed by
     /// LiveOCRView's translationTask modifier (iOS 18+ only).
     @Published var appleTranslationRequest: String?
+    /// The language the translation goes INTO: Your language when it is on the
+    /// phone, else English (2026-11-04). Read once per request.
+    private(set) var translationTarget = YourLanguageRules.english
+    /// The language `translatedText` is in, so it is spoken with a matching voice.
+    @Published private(set) var translatedLanguage = YourLanguageRules.english
+    /// Set by the screen for text it speaks that isn't the translation (What's this? answers).
+    var nextSpeechLanguage: String?
+    /// The utterance whose end counts as a success for the rating prompt.
+    private var ratedUtterance: AVSpeechUtterance?
     /// Apple's Spanish download was declined or failed (offline) this launch:
     /// go straight to the dictionary instead of asking again on every scan.
     static var spanishDownloadDeclined = false
@@ -273,11 +289,21 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
         guard !recognizedText.isEmpty else { completion(false); return }
         isFrozen = true
         let text = recognizedText
+        translationTarget = YourLanguage.activeCode
+
+        // The page is already in Your language: nothing to translate.
+        if sourceLanguage.code == translationTarget {
+            translatedText = text
+            translatedLanguage = translationTarget
+            isTranslated = true
+            completion(true)
+            return
+        }
 
         // Every language goes to Apple's translator on iOS 18+ (LiveOCRView's
         // translationTask takes over). Spanish falls back to the dictionary.
         if #available(iOS 18.0, *) {
-            if sourceLanguage == .spanish, Self.spanishDownloadDeclined {
+            if sourceLanguage == .spanish, Self.spanishDownloadDeclined, translationTarget == YourLanguageRules.english {
                 translateWithEngine(text, completion: completion)
                 return
             }
@@ -303,6 +329,7 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
 
         if let result, !result.isEmpty {
             translatedText = result
+            translatedLanguage = translationTarget
             isTranslated = true
             completion?(true)
         } else if sourceLanguage != .spanish {
@@ -310,6 +337,7 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
             // translation would be, so the speak button says it out loud.
             translatedText = failure
                 ?? "Couldn't translate this \(sourceLanguage.name) text. Try again."
+            translatedLanguage = YourLanguageRules.english
             isTranslated = true
             completion?(true)
         } else if let requested {
@@ -344,6 +372,7 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
 
             // Heavy regex work runs right here on the background executor.
             let translation = engine.translate(text)
+            await MainActor.run { self?.translatedLanguage = YourLanguageRules.english }
             await MainActor.run {
                 self?.translatedText = translation
                 self?.isTranslated = true
@@ -539,12 +568,19 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
         // Only the spoken copy changes; the screen and the clipboard keep the text
         // exactly as it was read.
         let text = SpeakableText.spoken(rawText)
+        let rated = RatePrompt.takePendingResult()
+        // Which language this is in: the translation's own, a screen's override
+        // (What's this? answers), else English. The voice follows it.
+        let language = nextSpeechLanguage
+            ?? ((isTranslated && rawText == translatedText) ? translatedLanguage : YourLanguageRules.english)
+        nextSpeechLanguage = nil
         guard !text.isEmpty else { completion(); return }
         #if DEBUG
-        SpeakLog.note("speak", rawText)
+        SpeakLog.note("speak[\(language)]", rawText)
         #endif
         if !Self.speaksAloud {
             announceInstead(text)
+            if rated { RatePrompt.resultSpoken(viaVoiceOver: true) }
             completion()
             return
         }
@@ -557,10 +593,12 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
         if speechSynthesizer.isSpeaking { speechSynthesizer.stopSpeaking(at: .immediate) }
         speechCompletionHandler = completion
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            let utterance = AVSpeechUtterance(string: text)
-            if let voice = AVSpeechSynthesisVoice(identifier: voiceIdentifier) { utterance.voice = voice }
+            let prepared = YourLanguageVoice.prepare(text, lang: language, selected: voiceIdentifier)
+            let utterance = AVSpeechUtterance(string: prepared.text)
+            if let voice = prepared.voice { utterance.voice = voice }
             utterance.rate = 0.5
             utterance.volume = 0.9
+            self.ratedUtterance = rated ? utterance : nil
             self.speechSynthesizer.speak(utterance)
         }
     }
@@ -669,6 +707,10 @@ extension LiveOCRViewModel: AVSpeechSynthesizerDelegate {
             #if DEBUG
             SpeakLog.note("finished", utterance.speechString)
             #endif
+            if let rated = self.ratedUtterance, rated === utterance {
+                self.ratedUtterance = nil
+                RatePrompt.resultSpoken(viaVoiceOver: false)
+            }
             self.speechCompletionHandler?()
             self.speechCompletionHandler = nil
         }
