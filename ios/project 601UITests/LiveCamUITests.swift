@@ -47,7 +47,7 @@ final class LiveCamUITests: XCTestCase {
 
     /// Opens Live Cam from Home and waits for the greeting.
     private func openLiveCam(_ app: XCUIApplication, greeting: String = "Hey there") {
-        let button = app.buttons["Live Cam"].firstMatch
+        let button = app.buttons["Live Cam, experimental"].firstMatch
         XCTAssertTrue(button.waitForExistence(timeout: 20), "no Live Cam button on Home")
         sleep(3) // buttons animate in
         if !button.isHittable { app.swipeUp() }
@@ -69,7 +69,7 @@ final class LiveCamUITests: XCTestCase {
         XCTAssertTrue(back.waitForExistence(timeout: 10), "no Back button")
         XCTAssertGreaterThanOrEqual(back.frame.width, 56, "Back is smaller than 56 pt")
         back.tap()
-        XCTAssertTrue(app.buttons["Live Cam"].firstMatch.waitForExistence(timeout: 15), "Back did not return Home")
+        XCTAssertTrue(app.buttons["Live Cam, experimental"].firstMatch.waitForExistence(timeout: 15), "Back did not return Home")
     }
 
     /// Every control big enough, on screen, and not on top of another.
@@ -152,7 +152,7 @@ final class LiveCamUITests: XCTestCase {
         continueAfterFailure = false
         let app = launch(["-userLanguage", "es", "-fakeTranslatorPacks", "(es)"],
                          env: ["RTCAM_FAKE_LIVE_ANSWER": "The cup is white."])
-        openLiveCam(app, greeting: "[es] Hey there")
+        openLiveCam(app, greeting: "[es] Welcome to Live Cam")
         ask(app, "De que color es la taza")
         let answered = NSPredicate { _, _ in self.captionText(app).contains("La taza es blanca") }
         expectation(for: answered, evaluatedWith: NSObject())

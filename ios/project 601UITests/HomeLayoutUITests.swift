@@ -11,7 +11,7 @@ import XCTest
 
 final class HomeLayoutUITests: XCTestCase {
     private let order = ["Settings", "Info and guide", "Read", "Object Detection", "What's this?",
-                         "Help Me Aim", "Live Cam"]
+                         "Help Me Aim", "Live Cam, experimental"]
 
     private func keep(_ shot: XCUIScreenshot, _ name: String) {
         let a = XCTAttachment(screenshot: shot)
