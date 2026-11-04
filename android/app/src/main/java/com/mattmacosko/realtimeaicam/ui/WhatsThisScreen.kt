@@ -413,8 +413,9 @@ fun WhatsThisScreen(
                 // "I can't tell for sure, but I can see..." is the trained honest
                 // answer, so no refusal retry. Only advice a blind person cannot
                 // act on ("move closer, turn on a light") is cut.
-                val said = engine.describe(photo, english, NarratorPrompt.ASK)
-                cutOff = engine.lastHitTokenLimit
+                val reply = engine.describeAnswer(photo, english, NarratorPrompt.ASK)
+                val said = reply.text
+                cutOff = reply.hitTokenLimit
                 if (tellsThemToRetake(said)) withoutRetakeAdvice(said) else said
             }
             isAsking = false
@@ -996,17 +997,21 @@ internal fun describeNeverRefusing(
     val started = android.os.SystemClock.elapsedRealtime()
     fun elapsed() = (android.os.SystemClock.elapsedRealtime() - started) / 1000.0
     var passes = 0
-    // Whether the last pass ran into the token limit (its answer may stop mid-sentence).
-    var cutOff = false
-    fun pass(photo: File, q: String, system: String = NarratorPrompt.SYSTEM): String {
+    // Every answer carries its own token-limit flag (it may stop mid-sentence), so the flag
+    // always belongs to the very answer being finished, whichever pass came after it.
+    fun pass(photo: File, q: String, system: String = NarratorPrompt.SYSTEM): NarratorEngine.Answer {
         passes++
-        return engine.describe(photo, q, system).also { cutOff = engine.lastHitTokenLimit }
+        return engine.describeAnswer(photo, q, system)
     }
-    fun done(answer: String, why: String, fromLastPass: Boolean = true): String {
+    fun done(answer: String, why: String, hitTokenLimit: Boolean = false): String {
         Log.i(TAG, "describe: ${engine.loadedLevel?.key} $passes pass(es) in ${"%.1f".format(elapsed())} s ($why)")
         val clean = if (tellsThemToRetake(answer)) withoutRetakeAdvice(answer) else answer
-        return AnswerText.completeSentences(clean, hitTokenLimit = fromLastPass && cutOff)
+        return AnswerText.completeSentences(clean, hitTokenLimit)
     }
+    fun doneWith(answer: NarratorEngine.Answer, why: String) = done(answer.text, why, answer.hitTokenLimit)
+    /** The answer's own sentences with the excuses taken out (a cut-off end trimmed first). */
+    fun excusesOut(answer: NarratorEngine.Answer) =
+        AnswerText.strippingExcuses(AnswerText.completeSentences(answer.text, answer.hitTokenLimit))
 
     // A dim shot is brightened BEFORE the first pass (2026-11-04): on a budget phone each
     // retry costs the whole answer time again, and brightening was all the retries did.
@@ -1026,36 +1031,36 @@ internal fun describeNeverRefusing(
     }
     // "It's hard to see, but there's a lamp on a table" is the answer the prompt asks for,
     // not a refusal. Only an answer with nothing described in it is retried.
-    if (!AnswerText.isRefusal(said)) return done(said, "first answer")
-    Log.i(TAG, "first pass balked: $said")
+    if (!AnswerText.isRefusal(said.text)) return doneWith(said, "first answer")
+    Log.i(TAG, "first pass balked: ${said.text}")
     // Every retry must fit the time budget: a phone that needs ~100 s a pass answers with
     // what the first pass saw instead of spending seven more minutes (456 s on the Cricket).
     fun canRetry() = AnswerText.retryFits(elapsed(), passSeconds)
     val firstSaid = said
 
-    if (!canRetry()) return done(AnswerText.strippingExcuses(AnswerText.completeSentences(firstSaid, cutOff)), "slow phone, no retry")
+    if (!canRetry()) return done(excusesOut(firstSaid), "slow phone, no retry")
     // Every retry photo is at least as bright as the one before it, measured, never darker.
     val brighterFactor = AnswerText.retryFactor(firstFactor, 1.8f)
     val brighter = atLeastAsBright(brightenedCopy(context, shot, "whats-this-bright.jpg", brighterFactor), first)
     said = pass(brighter, NarratorPrompt.forcedDescribe(isPage))
-    if (!AnswerText.isRefusal(said)) return done(said, "forced retry")
+    if (!AnswerText.isRefusal(said.text)) return doneWith(said, "forced retry")
 
-    if (!canRetry()) return done(AnswerText.strippingExcuses(AnswerText.completeSentences(said, cutOff)), "budget spent")
+    if (!canRetry()) return done(excusesOut(said), "budget spent")
     val brightest = atLeastAsBright(
         brightenedCopy(context, shot, "whats-this-brightest.jpg", AnswerText.retryFactor(brighterFactor, 2.4f)), brighter,
     )
     said = pass(brightest, NarratorPrompt.PLAIN_DESCRIBE, NarratorPrompt.DESCRIBE_ONLY)
-    if (!AnswerText.isRefusal(said)) return done(said, "describe-only retry")
+    if (!AnswerText.isRefusal(said.text)) return doneWith(said, "describe-only retry")
 
     if (canRetry()) {
         val listed = pass(brightest, NarratorPrompt.LIST_THINGS, NarratorPrompt.DESCRIBE_ONLY)
-        AnswerText.thingsOnly(listed)?.let {
+        AnswerText.thingsOnly(listed.text)?.let {
             // Matt's words for how this should sound: "I'm having a hard time seeing
             // it, but this is what I think it is."
             return done("It's hard to see clearly, but I think I can make out $it.", "noun list")
         }
     }
-    return done(AnswerText.strippingExcuses(AnswerText.completeSentences(said, cutOff)), "nothing described", fromLastPass = false)
+    return done(excusesOut(said), "nothing described")
 }
 
 /** Mean brightness (0-255) of [file], measured on an 1/8 copy, or null when it can't be read. */

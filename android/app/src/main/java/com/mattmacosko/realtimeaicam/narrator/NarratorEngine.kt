@@ -24,9 +24,23 @@ class NarratorEngine private constructor(private val appContext: Context) {
 
     /** Seconds the last describe call spent in the model itself. */
     @Volatile var lastPassSeconds = 0.0
+        private set
     /** The last answer used every token it was allowed, so it may stop mid-sentence. */
     @Volatile var lastHitTokenLimit = false
         private set
+
+    /** An answer and whether it ran into the token limit (so it may stop mid-sentence). */
+    data class Answer(val text: String, val hitTokenLimit: Boolean)
+
+    /**
+     * [describe] and its token-limit flag read together under the same lock, so another
+     * caller's pass (Help Me Aim, the speed check) can never swap in its own flag.
+     */
+    @Synchronized
+    fun describeAnswer(photo: File, question: String, system: String = NarratorPrompt.SYSTEM): Answer {
+        val text = describe(photo, question, system)
+        return Answer(text, text.isNotBlank() && lastHitTokenLimit)
+    }
 
     /**
      * Picks the level for the next answers. Lets go of a different level first so
@@ -103,6 +117,7 @@ class NarratorEngine private constructor(private val appContext: Context) {
     @JvmOverloads
     @Synchronized
     fun describe(photo: File, question: String, system: String = NarratorPrompt.SYSTEM): String {
+        lastHitTokenLimit = false
         if (!ensureLoaded()) return ""
         val first = describeOnce(photo, question, system)
         if (first.isNotBlank()) return first
@@ -116,6 +131,7 @@ class NarratorEngine private constructor(private val appContext: Context) {
     }
 
     private fun describeOnce(photo: File, question: String, system: String): String {
+        lastHitTokenLimit = false
         return try {
             NarratorNative.nativeDescribe(
                 handle, photo.absolutePath,
