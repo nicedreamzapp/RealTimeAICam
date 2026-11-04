@@ -46,7 +46,7 @@ final class ShotTests: XCTestCase {
         }
 
         // English reader, fed from a picture already on the iPad.
-        let english = app.buttons["English Text to Speech"].firstMatch
+        let english = app.buttons["Read"].firstMatch
         if english.waitForExistence(timeout: 8) {
             english.tap()
             sleep(4)

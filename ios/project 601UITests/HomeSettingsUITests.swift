@@ -20,9 +20,9 @@ final class HomeSettingsUITests: XCTestCase {
         app.launch()
         let settings = app.buttons["Settings"].firstMatch
         XCTAssertTrue(settings.waitForExistence(timeout: 20), "Settings pill not on home")
-        XCTAssertTrue(app.buttons["Translator"].firstMatch.exists, "Translate button missing")
-        XCTAssertTrue(app.buttons["Live Cam"].firstMatch.exists, "Live Cam button missing")
-        sleep(3)
+        sleep(4) // the buttons animate in
+        XCTAssertTrue(app.buttons["Read"].firstMatch.exists, "Read button missing")
+        XCTAssertTrue(app.buttons["Live Cam"].firstMatch.waitForExistence(timeout: 5), "Live Cam button missing")
         keep(app.screenshot(), "home")
         settings.tap()
         let models = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Models'")).firstMatch

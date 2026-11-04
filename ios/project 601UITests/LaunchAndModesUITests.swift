@@ -67,7 +67,7 @@ final class LaunchAndModesUITests: XCTestCase {
             back(app, "round \(round) object detection")
 
             // Reading mode.
-            let tts = app.buttons["English Text to Speech"].firstMatch
+            let tts = app.buttons["Read"].firstMatch
             XCTAssertTrue(tts.waitForExistence(timeout: 10), "round \(round): no Text to Speech")
             tts.tap()
             sleep(8)

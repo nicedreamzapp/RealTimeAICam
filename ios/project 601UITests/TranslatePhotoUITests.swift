@@ -33,15 +33,17 @@ final class TranslatePhotoUITests: XCTestCase {
     func testTranslateLibraryPhotoEveryLanguage() throws {
         continueAfterFailure = false
         let app = XCUIApplication()
-        app.launchArguments += ["-hasShownInstructions", "YES", "-translateFromLanguage", "es"]
+        app.launchArguments += ["-hasShownInstructions", "YES", "-translateFromLanguage", "es", "-readerLanguageMode", "translate"]
         app.launch()
 
-        let translator = app.buttons["Translator"].firstMatch
-        XCTAssertTrue(translator.waitForExistence(timeout: 20), "no Translator on home")
+        // Read and Translate are one button since 2026-11-03; Read opens
+        // translating when that is how it was left.
+        let translator = app.buttons["Read"].firstMatch
+        XCTAssertTrue(translator.waitForExistence(timeout: 20), "no Read on home")
         translator.tap()
 
-        let pill = app.buttons["Translate from"].firstMatch
-        XCTAssertTrue(pill.waitForExistence(timeout: 15), "no Translate from pill")
+        let pill = app.buttons["Language"].firstMatch
+        XCTAssertTrue(pill.waitForExistence(timeout: 15), "no Language pill")
         sleep(2)
         let screen = app.windows.firstMatch.frame
         probe("PILL frame=\(pill.frame) screen=\(screen) label=\(pill.label) value=\(pill.value ?? "")")
@@ -53,7 +55,7 @@ final class TranslatePhotoUITests: XCTestCase {
             let stopReading = app.buttons["Stop reading"].firstMatch
             if stopReading.exists { stopReading.tap(); sleep(1) }
             // Pick the language from the pill's menu.
-            let item = app.buttons[name].firstMatch
+            let item = app.buttons["\(name) → English"].firstMatch
             for _ in 0..<3 {
                 pill.tap()
                 if item.waitForExistence(timeout: 4) { break }
@@ -62,12 +64,13 @@ final class TranslatePhotoUITests: XCTestCase {
             shot(String(format: "%02d-menu-%@", index + 2, name))
             item.tap()
             sleep(1)
-            for _ in 0..<3 where (pill.value as? String) != name {
+            let want = "\(name), translated to English"
+            for _ in 0..<3 where (pill.value as? String) != want {
                 sleep(2)
-                pill.tap(); if app.buttons[name].firstMatch.waitForExistence(timeout: 5) { app.buttons[name].firstMatch.tap() }; sleep(1)
+                pill.tap(); if item.waitForExistence(timeout: 5) { item.tap() }; sleep(1)
             }
-            if (pill.value as? String) != name { probe("MENU_TREE \(name)\n\(app.debugDescription)") }
-            XCTAssertEqual(pill.value as? String, name, "From pill did not switch to \(name)")
+            if (pill.value as? String) != want { probe("MENU_TREE \(name)\n\(app.debugDescription)") }
+            XCTAssertEqual(pill.value as? String, want, "Language pill did not switch to \(name)")
             probe("LANG \(name) pillValue=\(pill.value ?? "")")
 
             // Pick the sign from the library.

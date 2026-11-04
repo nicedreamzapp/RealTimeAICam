@@ -18,9 +18,10 @@ final class ReadModeUITests: XCTestCase {
         return button
     }
 
-    private func launch(_ env: [String: String] = [:]) -> XCUIApplication {
+    /// Read opens English unless `translating` (Read and Translate merged 2026-11-03).
+    private func launch(_ env: [String: String] = [:], translating: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments += ["-hasShownInstructions", "YES"]
+        app.launchArguments += ["-hasShownInstructions", "YES", "-readerLanguageMode", translating ? "translate" : "english"]
         app.launchEnvironment.merge(env) { $1 }
         app.launch()
         return app
@@ -32,7 +33,7 @@ final class ReadModeUITests: XCTestCase {
 
         // 1. Cycle through all three, in order, label stays "Read mode".
         var app = launch()
-        var button = openReader(app, "English Text to Speech")
+        var button = openReader(app, "Read")
         XCTAssertEqual(button.label, "Read mode")
         let order = ["Tap to read", "Auto read", "Mute"]
         var seen: [String] = [button.value as? String ?? ""]
@@ -51,7 +52,7 @@ final class ReadModeUITests: XCTestCase {
         // 2. Persists across a relaunch.
         app.terminate()
         app = launch()
-        button = openReader(app, "English Text to Speech")
+        button = openReader(app, "Read")
         XCTAssertEqual(button.value as? String, "Auto read", "mode did not survive relaunch")
         print("READMODE_PERSISTED \(button.value ?? "")")
         app.terminate()
@@ -72,7 +73,7 @@ final class ReadModeUITests: XCTestCase {
             "0.6::Thank you for shopping with us", "0.6::Thank you for shopping with us",
         ].joined(separator: "||")
         app = launch(["RTCAM_FAKE_OCR": wobble])
-        _ = openReader(app, "English Text to Speech")
+        _ = openReader(app, "Read")
         sleep(30)
         XCTAssertEqual(app.state, .runningForeground)
         app.terminate()
@@ -82,8 +83,8 @@ final class ReadModeUITests: XCTestCase {
             "0.5::Salida de emergencia", "0.6::Salida de emergencia", "0.6::Salida de emergenc",
             "0.6::Salida de emergencia", "0.6::Salida de emergencia",
         ].joined(separator: "||") + "||" + Array(repeating: "0.6::Prohibido fumar", count: 10).joined(separator: "||")
-        app = launch(["RTCAM_FAKE_OCR_TRANSLATE": spanish])
-        _ = openReader(app, "Translator")
+        app = launch(["RTCAM_FAKE_OCR_TRANSLATE": spanish], translating: true)
+        _ = openReader(app, "Read")
         sleep(25)
         XCTAssertEqual(app.state, .runningForeground)
 

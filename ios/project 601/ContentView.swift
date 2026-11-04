@@ -177,10 +177,7 @@ struct ContentView: View {
             mode: $mode,
             buttonDebouncer: buttonDebouncer,
             onEnglishOCR: {
-                switchToMode(.ocrEnglish)
-            },
-            onSpanishOCR: {
-                switchToMode(.ocrSpanish)
+                switchToMode(ReaderLanguage.opensTranslating ? .ocrSpanish : .ocrEnglish)
             },
             onObjectDetection: {
                 switchToMode(.objectDetection)

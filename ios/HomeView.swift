@@ -16,7 +16,6 @@ struct HomeView: View {
     @StateObject var buttonDebouncer: ButtonPressDebouncer
 
     let onEnglishOCR: () -> Void
-    let onSpanishOCR: () -> Void
     let onObjectDetection: () -> Void
     let onReadMail: () -> Void
     let onHelpMeAim: () -> Void
@@ -96,40 +95,15 @@ struct HomeView: View {
         return ZStack {
             splashBackground
 
-            VStack {
-                Spacer(minLength: 52)
-                VStack(spacing: 12) {
-                    HeadingView(animateIn: animationState.heading)
-                    Spacer()
-                    GeometryReader { _ in
-                        VStack(spacing: 10) {
-                            englishOCRButton(scale: scale, screenWidth: screenWidth)
-                            spanishOCRButton(scale: scale, screenWidth: screenWidth)
-                            objectDetectionButton(scale: scale, screenWidth: screenWidth)
-                            readMailButton(scale: scale, screenWidth: screenWidth)
-                            helpMeAimButton(scale: scale, screenWidth: screenWidth)
-                            liveCamButton(scale: scale, screenWidth: screenWidth)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        // GeometryReader used for vertical spacing only
-                    }
-                    .frame(height: 340 + 98 * scale)
-                    Spacer()
-                    visionModelBanner
-                    voicePicker
-                    Spacer(minLength: 25)
+            // Natural spacing that can never overlap: when the six buttons
+            // don't fit the screen (iPhone SE), the page scrolls instead of
+            // squeezing them together (Matt, 2026-11-03).
+            ViewThatFits(in: .vertical) {
+                homeColumn(scale: scale, screenWidth: screenWidth)
+                ScrollView(showsIndicators: false) {
+                    homeColumn(scale: scale, screenWidth: screenWidth)
                 }
-                .padding(.horizontal)
-                Spacer(minLength: 50)
             }
-        }
-        .overlay(alignment: .topTrailing) {
-            HStack(spacing: 10) {
-                settingsButton
-                infoButton
-            }
-            .padding(.top, 8)
-            .padding(.trailing, 16)
         }
         .overlay {
             if showSettings {
@@ -191,14 +165,18 @@ struct HomeView: View {
             onEnglishOCR()
         }) {
             HStack(spacing: 4 * scale) {
-                Text("📖").font(.system(size: 34 * scale))
-                OutlinedText(text: "Eng Text2Speech", fontSize: 20 * scale)
-                ShadedEmoji(emoji: "🗣️", size: 29 * scale)
+                // Read + Translate in one: English, or 17 languages into
+                // English from the pill at the top (2026-11-03).
+                Text("📖").font(.system(size: 32 * scale))
+                OutlinedText(text: "Read", fontSize: 20 * scale)
+                Text("🌍").font(.system(size: 26 * scale))
             }
-            .padding(.vertical, 16 * scale)
+            .padding(.vertical, 14 * scale)
+            .frame(maxWidth: .infinity)
         }
         // Adaptive width with maxWidth capped at 340 * scale or screen width minus 36
-        .frame(maxWidth: min(340 * scale, screenWidth - 36), alignment: .center)
+        .frame(width: min(320 * scale, screenWidth - 64), alignment: .center)
+        .contentShape(Capsule())
         .padding(.horizontal, 8 * scale)
         .background(
             ZStack {
@@ -228,56 +206,8 @@ struct HomeView: View {
         .shadow(color: Color.blue.opacity(0.50), radius: 12 * scale)
         .scaleEffect(animationState.button1 ? 1 : 0.7)
         .animation(.easeOut(duration: 0.3), value: animationState.button1)
-        .accessibilityLabel("English Text to Speech")
-        .accessibilityHint("Point camera at English text to read it aloud")
-        .accessibilityAddTraits(.isButton)
-    }
-
-    private func spanishOCRButton(scale: CGFloat, screenWidth: CGFloat) -> some View {
-        Button(action: {
-            guard buttonDebouncer.canPress("HomeView-4") else { return }
-            onSpanishOCR()
-        }) {
-            // 17 languages into English now, not only Spanish (2026-11-03).
-            HStack(spacing: 4 * scale) {
-                Text("🌍").font(.system(size: 32 * scale))
-                OutlinedText(text: "Translate", fontSize: 20 * scale)
-            }
-            .padding(.vertical, 16 * scale)
-        }
-        // Adaptive width with maxWidth capped at 340 * scale or screen width minus 36
-        .frame(maxWidth: min(340 * scale, screenWidth - 36), alignment: .center)
-        .padding(.horizontal, 8 * scale)
-        .background(
-            ZStack {
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            gradient: Gradient(colors: [Color.white.opacity(0.23), Color.green.opacity(0.50)]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                Capsule()
-                    .fill(Color.white.opacity(0.13))
-                    .frame(height: 24 * scale)
-                    .offset(y: -18 * scale)
-                Capsule().stroke(Color.white.opacity(0.80), lineWidth: 4.8 * scale)
-                Capsule().stroke(Color.green, lineWidth: 2.4 * scale)
-                Capsule()
-                    .fill(Color.black.opacity(0.12))
-                    .blur(radius: 7 * scale)
-                    .offset(y: 16 * scale)
-            }
-        )
-        .shadow(color: Color.black.opacity(0.38), radius: 15 * scale, y: 5 * scale)
-        .clipShape(Capsule())
-        .opacity(animationState.button2 ? 1 : 0)
-        .shadow(color: Color.green.opacity(0.50), radius: 12 * scale)
-        .scaleEffect(animationState.button2 ? 1 : 0.7)
-        .animation(.easeOut(duration: 0.3), value: animationState.button2)
-        .accessibilityLabel("Translator")
-        .accessibilityHint("Point the camera at text in Spanish, French, Chinese or another language to hear it in English")
+        .accessibilityLabel("Read")
+        .accessibilityHint("Reads text out loud. Pick another language at the top to translate it into English")
         .accessibilityAddTraits(.isButton)
     }
 
@@ -290,10 +220,12 @@ struct HomeView: View {
                 Text("🐶").font(.system(size: 35 * scale))
                 OutlinedText(text: "Object Detection", fontSize: 20 * scale)
             }
-            .padding(.vertical, 16 * scale)
+            .padding(.vertical, 14 * scale)
+            .frame(maxWidth: .infinity)
         }
         // Adaptive width with maxWidth capped at 340 * scale or screen width minus 36
-        .frame(maxWidth: min(340 * scale, screenWidth - 36), alignment: .center)
+        .frame(width: min(320 * scale, screenWidth - 64), alignment: .center)
+        .contentShape(Capsule())
         .padding(.horizontal, 8 * scale)
         .background(
             ZStack {
@@ -337,9 +269,11 @@ struct HomeView: View {
                 Text("\u{1F4C4}").font(.system(size: 32 * scale))
                 OutlinedText(text: "What's this?", fontSize: 20 * scale)
             }
-            .padding(.vertical, 16 * scale)
+            .padding(.vertical, 14 * scale)
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: min(340 * scale, screenWidth - 36), alignment: .center)
+        .frame(width: min(320 * scale, screenWidth - 64), alignment: .center)
+        .contentShape(Capsule())
         .padding(.horizontal, 8 * scale)
         .background(
             ZStack {
@@ -385,9 +319,11 @@ struct HomeView: View {
                 Text("\u{1F3AF}").font(.system(size: 32 * scale))
                 OutlinedText(text: "Help Me Aim", fontSize: 20 * scale)
             }
-            .padding(.vertical, 16 * scale)
+            .padding(.vertical, 14 * scale)
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: min(340 * scale, screenWidth - 36), alignment: .center)
+        .frame(width: min(320 * scale, screenWidth - 64), alignment: .center)
+        .contentShape(Capsule())
         .padding(.horizontal, 8 * scale)
         .background(
             ZStack {
@@ -433,9 +369,11 @@ struct HomeView: View {
                 Text("\u{1F4AC}").font(.system(size: 32 * scale))
                 OutlinedText(text: "Live Cam", fontSize: 20 * scale)
             }
-            .padding(.vertical, 16 * scale)
+            .padding(.vertical, 14 * scale)
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: min(340 * scale, screenWidth - 36), alignment: .center)
+        .frame(width: min(320 * scale, screenWidth - 64), alignment: .center)
+        .contentShape(Capsule())
         .padding(.horizontal, 8 * scale)
         .background(
             ZStack {
@@ -492,7 +430,7 @@ struct HomeView: View {
                 OutlinedText(text: "SETTINGS", fontSize: 14)
             }
             .foregroundColor(.white)
-            .padding(.vertical, 6)
+            .padding(.vertical, 12)
             .padding(.horizontal, 14)
         }
         .background(
@@ -517,6 +455,40 @@ struct HomeView: View {
         .accessibilityAddTraits(.isButton)
     }
 
+    private func homeColumn(scale: CGFloat, screenWidth: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            VStack(spacing: 18 * scale) {
+                // Centered and first in the swipe order: Settings, Info, the
+                // title, the five tools, the voice (2026-11-03).
+                HStack(spacing: 12) {
+                    settingsButton
+                    infoButton
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.bottom, 10 * scale)
+                HeadingView(animateIn: animationState.heading)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isHeader)
+                VStack(spacing: 28 * scale) {
+                    englishOCRButton(scale: scale, screenWidth: screenWidth)
+                    objectDetectionButton(scale: scale, screenWidth: screenWidth)
+                    readMailButton(scale: scale, screenWidth: screenWidth)
+                    helpMeAimButton(scale: scale, screenWidth: screenWidth)
+                    liveCamButton(scale: scale, screenWidth: screenWidth)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                visionModelBanner
+                voicePicker
+                    .padding(.top, 10)
+            }
+            .padding(.horizontal)
+            .padding(.top, 14)
+            .padding(.bottom, 30)
+            Spacer(minLength: 0)
+        }
+    }
+
     private var infoButton: some View {
         Button(action: {
             guard buttonDebouncer.canPress("HomeView-7") else { return }
@@ -528,7 +500,7 @@ struct HomeView: View {
                 OutlinedText(text: "GUIDE", fontSize: 14)
             }
             .foregroundColor(.white)
-            .padding(.vertical, 6)
+            .padding(.vertical, 12)
             .padding(.horizontal, 18)
         }
         .background(

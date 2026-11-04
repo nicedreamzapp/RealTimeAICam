@@ -4,6 +4,12 @@ import PhotosUI
 import Speech
 import SwiftUI
 
+/// Which way the merged Read button opens: English, or translating.
+enum ReaderLanguage {
+    static let key = "readerLanguageMode"
+    static var opensTranslating: Bool { UserDefaults.standard.string(forKey: key) == "translate" }
+}
+
 enum OCRMode {
     case english
     case spanishToEnglish
@@ -743,7 +749,9 @@ struct LiveOCRView: View {
 
                         // With several languages the From menu doubles as the mode
                         // indicator; two pills side by side ran under the Dynamic Island.
-                        if ocrMode == .spanishToEnglish, TranslateLanguage.available.count > 1 {
+                        // One Read screen: the pill picks English or a language
+                        // to translate from (Read + Translate merged, 2026-11-03).
+                        if ocrMode != .mail, TranslateLanguage.available.count > 0 {
                             translateFromControl
                         } else {
                         // Mode indicator (right side)
@@ -1171,14 +1179,18 @@ struct LiveOCRView: View {
     /// pattern as What to look for on the detection screen.
     private var translateFromControl: some View {
         let languages = TranslateLanguage.available
+        // nil = English, read as it is; anything else is translated into English.
+        let choices: [TranslateLanguage?] = [nil] + languages
+        let current: TranslateLanguage? = ocrMode == .english ? nil : viewModel.sourceLanguage
         return Menu {
+            Button("English") { pickReaderLanguage(nil) }
             ForEach(languages, id: \.code) { language in
-                Button(language.name) { viewModel.setSourceLanguage(language) }
+                Button("\(language.name) → English") { pickReaderLanguage(language) }
             }
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "globe")
-                Text("\(viewModel.sourceLanguage.name) → Eng")
+                Text(current.map { "\($0.name) → Eng" } ?? "English")
                     .lineLimit(1)
             }
             .font(.system(size: 14, weight: .medium))
@@ -1192,17 +1204,30 @@ struct LiveOCRView: View {
             )
             .fixedSize()
         }
-        .accessibilityLabel("Translate from")
-        .accessibilityValue(viewModel.sourceLanguage.name)
+        .accessibilityLabel("Language")
+        .accessibilityValue(current.map { "\($0.name), translated to English" } ?? "English")
         .accessibilityHint("Swipe up or down to change, or double tap for the list")
         .accessibilityAdjustableAction { direction in
-            let i = languages.firstIndex(of: viewModel.sourceLanguage) ?? 0
+            let i = choices.firstIndex(of: current) ?? 0
             switch direction {
-            case .increment: viewModel.setSourceLanguage(languages[min(i + 1, languages.count - 1)])
-            case .decrement: viewModel.setSourceLanguage(languages[max(i - 1, 0)])
+            case .increment: pickReaderLanguage(choices[min(i + 1, choices.count - 1)])
+            case .decrement: pickReaderLanguage(choices[max(i - 1, 0)])
             @unknown default: break
             }
         }
+    }
+
+    /// English reads as it is; another language turns the same screen into the
+    /// translator. Remembered, so Read opens the way it was left.
+    private func pickReaderLanguage(_ language: TranslateLanguage?) {
+        if let language { viewModel.setSourceLanguage(language) }
+        let wantsEnglish = language == nil
+        UserDefaults.standard.set(wantsEnglish ? "english" : "translate", forKey: ReaderLanguage.key)
+        guard wantsEnglish != (ocrMode == .english) else { return }
+        viewModel.stopSpeaking()
+        viewModel.stopSession()
+        viewModel.clearText()
+        mode = wantsEnglish ? .ocrEnglish : .ocrSpanish
     }
 
     // Helper views to break up complex expressions
