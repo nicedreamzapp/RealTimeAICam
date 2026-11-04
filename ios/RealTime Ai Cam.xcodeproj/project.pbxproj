@@ -642,9 +642,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "RealTimeAiCam-Info.plist";
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to detect objects in real-time, perform OCR text recognition, and translate text. No images are stored or transmitted";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "The mic is used only while you hold the ask button, to hear your question about the photo. Nothing is recorded or sent.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "The mic hears the questions you ask out loud: while you hold the ask button, and the whole time Live Cam is open. Nothing is recorded or sent.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Help Me Aim saves the pictures you take to your photo library. Nothing is uploaded.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Your spoken question is turned into text on this phone, offline. Nothing is sent anywhere.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Your spoken questions are turned into text on this phone, offline. Nothing is sent anywhere.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -684,9 +684,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "RealTimeAiCam-Info.plist";
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to detect objects in real-time, perform OCR text recognition, and translate text. No images are stored or transmitted";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "The mic is used only while you hold the ask button, to hear your question about the photo. Nothing is recorded or sent.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "The mic hears the questions you ask out loud: while you hold the ask button, and the whole time Live Cam is open. Nothing is recorded or sent.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Help Me Aim saves the pictures you take to your photo library. Nothing is uploaded.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Your spoken question is turned into text on this phone, offline. Nothing is sent anywhere.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Your spoken questions are turned into text on this phone, offline. Nothing is sent anywhere.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
