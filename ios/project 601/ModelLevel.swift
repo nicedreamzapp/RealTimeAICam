@@ -73,6 +73,19 @@ enum ModelLevel: String, CaseIterable, Codable, Identifiable {
         }
     }
 
+    /// The real model behind the level, for people who want to know (shown small,
+    /// after the plain sentence, so VoiceOver users hear the easy part first).
+    var modelName: String {
+        switch self {
+        case .sharp: "LFM3-Omni 2B, 8-bit"
+        case .clear: "LFM3-Omni 2B, 3-bit"
+        case .balanced: "LFM3-Omni 2B, 2-bit"
+        case .quick: "Vision Narrator 0.8B, 4-bit"
+        }
+    }
+
+    var technicalLine: String { "Model: \(modelName), \(sizeDescription)." }
+
     var sizeDescription: String {
         ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }

@@ -197,6 +197,7 @@ struct ModelsChooserView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(level.name).font(.headline)
                     Text(sentence).font(.subheadline).foregroundStyle(.secondary)
+                    Text(level.technicalLine).font(.caption).foregroundStyle(.secondary)
                     if downloading, downloader.current == level {
                         ProgressView(value: downloader.progress).tint(.teal)
                     }
@@ -209,7 +210,7 @@ struct ModelsChooserView: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(level.name + ". " + sentence)
+        .accessibilityLabel(level.name + ". " + sentence + " " + level.technicalLine)
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
         .accessibilityHint(level.fitsThisPhone && !selected ? "Double-tap to use \(level.name)." : "")
         // Delete is the swipe-left action and a VoiceOver action (swipe up or
