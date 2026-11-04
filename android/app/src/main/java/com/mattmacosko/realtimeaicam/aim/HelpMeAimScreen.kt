@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -603,7 +604,10 @@ private fun Taken(
     onBack: () -> Unit,
 ) {
     Column(
-        Modifier.fillMaxSize().navigationBarsPadding().padding(horizontal = 16.dp),
+        // Scrolls: a long description was cut off under the photo (Matt, 2026-11-03).
+        Modifier.fillMaxSize().navigationBarsPadding()
+            .verticalScroll(androidx.compose.foundation.rememberScrollState())
+            .padding(horizontal = 16.dp).padding(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         TopBar("Picture Taken", "Back to choices", onBack)
@@ -629,7 +633,6 @@ private fun Taken(
         )
         AimBigButton("📸", "Take Another", IosGreen, "Aim at $subjectName again", onTakeAnother)
         AimBigButton("↩️", "Back", IosGray, "Back to the three choices", onBack)
-        Spacer(Modifier.weight(1f))
     }
 }
 

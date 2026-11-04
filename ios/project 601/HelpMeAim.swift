@@ -1173,6 +1173,17 @@ enum AimVocabulary {
         "mail": ["letter", "envelope"],
         "bill": ["document", "paper", "letter"],
         "page": ["document", "paper"],
+        // A toy bunny is a "stuffed animal" to YOLOE, never a "bunny", so
+        // asking for one found nothing (Matt, 2026-11-03).
+        "bunny": ["bunny", "rabbit", "easter bunny", "stuffed animal", "stuffed toy"],
+        "rabbit": ["rabbit", "bunny", "easter bunny", "stuffed animal", "stuffed toy"],
+        "teddy bear": ["teddy", "stuffed animal", "stuffed toy"],
+        "teddy": ["teddy", "stuffed animal", "stuffed toy"],
+        "stuffed animal": ["stuffed animal", "stuffed toy", "teddy"],
+        "stuffy": ["stuffed animal", "stuffed toy", "teddy"],
+        "plushie": ["stuffed animal", "stuffed toy", "teddy"],
+        "plush": ["stuffed animal", "stuffed toy", "teddy"],
+        "plush toy": ["stuffed animal", "stuffed toy", "teddy"],
         "person": ["person"],
         "me": ["person", "face"],
         "myself": ["person", "face"],

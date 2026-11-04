@@ -1011,6 +1011,9 @@ struct HelpMeAimView: View {
     // MARK: Taken
 
     private var taken: some View {
+        // Scrolls: a long description was cut to "..." on a phone screen
+        // with the photo above it (Matt, 2026-11-03).
+        ScrollView {
         VStack(spacing: 18) {
             topBar(title: "Picture Taken", back: { controller.backToChoices() }, backLabel: "Back to choices")
             if let photo = controller.lastPhoto {
@@ -1024,6 +1027,7 @@ struct HelpMeAimView: View {
             Text(controller.statusText)
                 .foregroundColor(.white)
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
             AimBigButton(emoji: "📸", title: "Take Another", color: .green,
                          hint: "Aim at \(controller.subject?.spokenName ?? "the same thing") again") {
                 controller.takeAnother()
@@ -1031,9 +1035,10 @@ struct HelpMeAimView: View {
             AimBigButton(emoji: "↩️", title: "Back", color: .gray, hint: "Back to the three choices") {
                 controller.backToChoices()
             }
-            Spacer()
         }
         .padding(.horizontal, 16)
+        .padding(.bottom, 24)
+        }
     }
 
     // MARK: Pieces

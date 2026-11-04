@@ -131,6 +131,16 @@ struct AimVocabularyTests {
         #expect(m.classIDs == [2, 3])
     }
 
+    @Test func bunnyAlsoFindsAStuffedAnimal() throws {
+        let toys = ["dog", "rabbit", "stuffed animal", "bunny", "teddy"]
+        let m = try #require(AimVocabulary.match("my bunny", classNames: toys))
+        #expect(m.spokenName == "bunny")
+        #expect(m.classNames == ["bunny", "rabbit", "stuffed animal"])
+        #expect(m.classIDs == [3, 1, 2])
+        let t = try #require(AimVocabulary.match("teddy bear", classNames: toys))
+        #expect(t.classNames == ["teddy", "stuffed animal"])
+    }
+
     @Test func unknownWordHasNoMatch() {
         #expect(AimVocabulary.match("zebra", classNames: names) == nil)
         #expect(AimVocabulary.match("zebras", classNames: names) == nil)
