@@ -1010,7 +1010,11 @@ internal fun describeNeverRefusing(
 
     // A dim shot is brightened BEFORE the first pass (2026-11-04): on a budget phone each
     // retry costs the whole answer time again, and brightening was all the retries did.
-    val first = dimShotBrightened(context, shot) ?: shot
+    val firstFactor = meanLuma(shot)?.let { AnswerText.brightenFactor(it) }
+    val first = firstFactor?.let { factor ->
+        Log.i(TAG, "dim shot, brightened x${"%.1f".format(factor)} before the first pass")
+        brightenedCopy(context, shot, "whats-this-lit.jpg", factor)
+    } ?: shot
     var said = pass(first, question)
     val passSeconds = engine.lastPassSeconds.takeIf { it > 0 } ?: elapsed()
     // The first pass of every photo is this phone's speed check: the first one
@@ -1030,12 +1034,16 @@ internal fun describeNeverRefusing(
     val firstSaid = said
 
     if (!canRetry()) return done(AnswerText.strippingExcuses(AnswerText.completeSentences(firstSaid, cutOff)), "slow phone, no retry")
-    val brighter = brightenedCopy(context, shot, "whats-this-bright.jpg", 1.8f) ?: first
+    // Every retry photo is at least as bright as the one before it, measured, never darker.
+    val brighterFactor = AnswerText.retryFactor(firstFactor, 1.8f)
+    val brighter = atLeastAsBright(brightenedCopy(context, shot, "whats-this-bright.jpg", brighterFactor), first)
     said = pass(brighter, NarratorPrompt.forcedDescribe(isPage))
     if (!AnswerText.isRefusal(said)) return done(said, "forced retry")
 
     if (!canRetry()) return done(AnswerText.strippingExcuses(AnswerText.completeSentences(said, cutOff)), "budget spent")
-    val brightest = brightenedCopy(context, shot, "whats-this-brightest.jpg", 2.4f) ?: brighter
+    val brightest = atLeastAsBright(
+        brightenedCopy(context, shot, "whats-this-brightest.jpg", AnswerText.retryFactor(brighterFactor, 2.4f)), brighter,
+    )
     said = pass(brightest, NarratorPrompt.PLAIN_DESCRIBE, NarratorPrompt.DESCRIBE_ONLY)
     if (!AnswerText.isRefusal(said)) return done(said, "describe-only retry")
 
@@ -1050,24 +1058,30 @@ internal fun describeNeverRefusing(
     return done(AnswerText.strippingExcuses(AnswerText.completeSentences(said, cutOff)), "nothing described", fromLastPass = false)
 }
 
-/** A brightened copy when the shot is dim (mean brightness under [AnswerText.DIM_LUMA]), else null. */
-private fun dimShotBrightened(context: Context, shot: File): File? = try {
-    val small = BitmapFactory.decodeFile(shot.path, BitmapFactory.Options().apply { inSampleSize = 8 })
+/** Mean brightness (0-255) of [file], measured on an 1/8 copy, or null when it can't be read. */
+private fun meanLuma(file: File): Double? = try {
+    val small = BitmapFactory.decodeFile(file.path, BitmapFactory.Options().apply { inSampleSize = 8 })
     if (small == null) null else {
         val px = IntArray(small.width * small.height)
         small.getPixels(px, 0, small.width, 0, 0, small.width, small.height)
         small.recycle()
         var sum = 0.0
         for (c in px) sum += 0.299 * ((c shr 16) and 0xff) + 0.587 * ((c shr 8) and 0xff) + 0.114 * (c and 0xff)
-        val mean = if (px.isEmpty()) 255.0 else sum / px.size
-        AnswerText.brightenFactor(mean)?.let { factor ->
-            Log.i(TAG, "dim shot (mean ${mean.roundToInt()}), brightened x${"%.1f".format(factor)} before the first pass")
-            brightenedCopy(context, shot, "whats-this-lit.jpg", factor)
-        }
+        if (px.isEmpty()) null else sum / px.size
     }
 } catch (t: Throwable) {
     Log.e(TAG, "could not measure the shot", t)
     null
+}
+
+/** [retry] when it measures at least as bright as [earlier], else [earlier] (never a darker retry). */
+private fun atLeastAsBright(retry: File?, earlier: File): File {
+    if (retry == null) return earlier
+    val r = meanLuma(retry)
+    val e = meanLuma(earlier)
+    if (AnswerText.retryIsBrighter(r, e)) return retry
+    Log.i(TAG, "retry copy darker than the earlier photo (${r?.roundToInt()} < ${e?.roundToInt()}), keeping the earlier one")
+    return earlier
 }
 
 /**

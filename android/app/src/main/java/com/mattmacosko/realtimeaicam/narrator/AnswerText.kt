@@ -203,6 +203,22 @@ object AnswerText {
         return (TARGET_LUMA / meanLuma).coerceIn(1.2, 2.4).toFloat()
     }
 
+    /**
+     * The brightening for a retry pass: at least [wanted], and always a step brighter than the
+     * pass before it ([previousFactor], null when that photo was not brightened). A dim shot is
+     * already brightened up to 2.4x before the first pass, so a flat 1.8x "brighter" retry was
+     * darker than the first try (11/04 review).
+     */
+    fun retryFactor(previousFactor: Float?, wanted: Float): Float =
+        maxOf(wanted, (previousFactor ?: 1f) * RETRY_STEP).coerceAtMost(MAX_FACTOR).coerceAtLeast(previousFactor ?: 1f)
+
+    /** Use the retry copy only when its measured mean brightness is at least the earlier photo's. */
+    fun retryIsBrighter(retryLuma: Double?, earlierLuma: Double?): Boolean =
+        retryLuma != null && (earlierLuma == null || retryLuma >= earlierLuma)
+
+    private const val RETRY_STEP = 1.3f
+    private const val MAX_FACTOR = 4f
+
     const val DIM_LUMA = 70.0
     private const val TARGET_LUMA = 110.0
 }

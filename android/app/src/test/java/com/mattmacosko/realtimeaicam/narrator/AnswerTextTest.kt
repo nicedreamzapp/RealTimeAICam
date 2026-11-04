@@ -68,6 +68,23 @@ class AnswerTextTest {
         assertNull(AnswerText.thingsOnly("dark, dim lighting, too dark to tell"))
     }
 
+    @Test fun aRetryIsNeverDarkerThanTheTryBeforeIt() {
+        // 11/04 review: a dim shot brightened 2.2x first, then the "brighter" retry used 1.8x.
+        val first = AnswerText.brightenFactor(50.0)!!          // 2.2x before the first pass
+        val brighter = AnswerText.retryFactor(first, 1.8f)
+        assertTrue(brighter > first)
+        val brightest = AnswerText.retryFactor(brighter, 2.4f)
+        assertTrue(brightest >= brighter)
+        // A normal shot (not brightened first) still gets the usual 1.8x and 2.4x.
+        assertEquals(1.8f, AnswerText.retryFactor(null, 1.8f), 0.001f)
+        assertEquals(2.4f, AnswerText.retryFactor(1.8f, 2.4f), 0.001f)
+        // Measured: a retry copy darker than the earlier photo is not used.
+        assertTrue(AnswerText.retryIsBrighter(120.0, 110.0))
+        assertTrue(AnswerText.retryIsBrighter(110.0, 110.0))
+        assertFalse(AnswerText.retryIsBrighter(90.0, 110.0))
+        assertFalse(AnswerText.retryIsBrighter(null, 110.0))
+    }
+
     @Test fun hardToSeeButDescribedIsNotARefusal() {
         assertFalse(AnswerText.isRefusal("It's too dark to see much, but there is a lamp on a table."))
         assertFalse(AnswerText.isRefusal("I can't make out details. A white door is on the right."))
