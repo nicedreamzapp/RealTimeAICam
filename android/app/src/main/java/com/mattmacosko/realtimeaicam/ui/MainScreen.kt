@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -107,6 +109,16 @@ fun MainScreen(
     // A voice for the home screen's own lines (Live Cam coming soon), made on first use.
     var homeVoice by remember { androidx.compose.runtime.mutableStateOf<com.mattmacosko.realtimeaicam.camera.SpeechAnnouncer?>(null) }
     DisposableEffect(Unit) { onDispose { homeVoice?.shutdown() } }
+    // Live Cam's "coming soon", also on screen: with the volume at 0 the spoken line alone
+    // left the tap with no feedback at all (Cricket, 2026-11-04). Each tap restarts it.
+    var liveCamTaps by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    var liveCamNoteShown by remember { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(liveCamTaps) {
+        if (liveCamTaps == 0) return@LaunchedEffect
+        liveCamNoteShown = true
+        kotlinx.coroutines.delay(LIVE_CAM_NOTE_MS)
+        liveCamNoteShown = false
+    }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         when (mode) {
@@ -133,12 +145,37 @@ fun MainScreen(
                     onLiveCam = {
                         val voice = homeVoice ?: com.mattmacosko.realtimeaicam.camera.SpeechAnnouncer(context)
                             .also { homeVoice = it }
-                        voice.speak("Live Cam is coming soon.")
+                        // Spoken by the app's voice, or by TalkBack when it is on (the announcer
+                        // routes it), and shown on screen below.
+                        voice.speak(LIVE_CAM_COMING_SOON)
+                        liveCamTaps++
                     },
                     onSettings = { showHomeSettings = true },
                     onInfo = { showInstructions = true },
                     onVoicePicker = { showVoiceGrid = true },
                 )
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = liveCamNoteShown,
+                    enter = androidx.compose.animation.fadeIn(),
+                    exit = androidx.compose.animation.fadeOut(),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(bottom = 96.dp, start = 24.dp, end = 24.dp),
+                ) {
+                    Text(
+                        LIVE_CAM_COMING_SOON,
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color(0xF0202024), RoundedCornerShape(16.dp))
+                            .padding(horizontal = 20.dp, vertical = 14.dp)
+                            .testTag("liveCamComingSoon"),
+                    )
+                }
                 if (showVoiceGrid) {
                     VoiceGridPopup(voiceModel, onDismiss = { showVoiceGrid = false })
                 }
@@ -186,6 +223,9 @@ fun MainScreen(
         )
     }
 }
+
+private const val LIVE_CAM_COMING_SOON = "Live Cam is coming soon."
+private const val LIVE_CAM_NOTE_MS = 3_000L
 
 @Composable
 private fun CameraGate(

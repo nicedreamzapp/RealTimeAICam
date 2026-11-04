@@ -1,5 +1,6 @@
 package com.mattmacosko.realtimeaicam.ui
 
+import androidx.compose.animation.ExitTransition
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import android.speech.tts.TextToSpeech
@@ -8,9 +9,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -64,7 +63,7 @@ private val TUTORIAL_TEXT = listOf(
     "Object Detection names the things around you as you move the phone.",
     "What's this? takes one careful look. Mail and pages get the point of them, like who sent it and what's due. A room gets a description. Afterwards, hold to ask a follow up question.",
     "Help Me Aim takes a good photo for you. Choose Face, Picture or Page, or Something Else and say what you want. It tells you which way to move, counts down, and saves the photo with a description. For things it doesn't know by sight, like a wallet, it looks closely and tells you where it is. Double tap anywhere to take the picture yourself.",
-    "Live Cam is coming soon. It lets you talk with the camera. Ask out loud about what's in front of you and hear the answer.",
+    "Live Cam is experimental and coming soon. It lets you talk with the camera. Ask out loud about what's in front of you and hear the answer.",
     "In Settings, Models, the app already picked the best A I for your phone. You can choose Most accurate or Fastest there.",
     YOUR_LANGUAGE_GUIDE,
     "Everything runs on your phone and works offline. No accounts and no tracking.",
@@ -122,7 +121,9 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
     AnimatedVisibility(
         visible = visible,
         enter = slideInVertically(tween(300)) { it } + fadeIn(tween(200)),
-        exit = slideOutVertically(tween(250)) { it } + fadeOut(tween(150)),
+        // Gone the moment Done is pressed (2026-11-04): while the sheet slid out it still
+        // covered the home screen and swallowed the next tap, on Read for example.
+        exit = ExitTransition.None,
     ) {
         Column(
             Modifier
@@ -274,8 +275,8 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
                         "Double tap anywhere to take the picture yourself.",
                 )
                 ModeBlock(
-                    "💬 Live Cam",
-                    "Coming soon. Talk with the camera. Ask out loud about what's in front of you and hear the answer, then keep asking.",
+                    "💬 Live Cam (experimental)",
+                    "Experimental, coming soon. Talk with the camera. Ask out loud about what's in front of you and hear the answer, then keep asking.",
                 )
                 ModeBlock(
                     "⚙️ Settings",

@@ -200,7 +200,7 @@ fun HomeScreen(
                     ModeButton(
                         HomePink, scale, screenWidth,
                         onClick = { if (debouncer.tryFire()) onLiveCam() },
-                        label = "Live Cam",
+                        label = "Live Cam, experimental",
                         clickLabel = "Talk with the camera. Ask out loud about what's in front of you and hear the answer",
                     ) {
                         Row(
@@ -209,6 +209,22 @@ fun HomeScreen(
                         ) {
                             Text("\uD83D\uDCAC", fontSize = (32 * scale).sp)
                             OutlinedText("Live Cam", (20 * scale).sp)
+                            // Experimental (Matt, 2026-11-04): a small tag inside the button, so the
+                            // button keeps the same height as the other four.
+                            Text(
+                                "Experimental",
+                                fontSize = (11 * scale).coerceAtLeast(9f).sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White,
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier
+                                    .padding(start = 4.dp)
+                                    .clip(CapsuleShape)
+                                    .background(Color.Black.copy(alpha = 0.35f), CapsuleShape)
+                                    .border(1.dp, Color.White.copy(alpha = 0.7f), CapsuleShape)
+                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                            )
                         }
                     }
                 }
