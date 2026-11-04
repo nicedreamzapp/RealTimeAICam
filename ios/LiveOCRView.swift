@@ -268,8 +268,8 @@ struct LiveOCRView: View {
     /// Tap to read / Auto read / Mute, the small button next to Speak (Matt,
     /// 2026-10-23). Shared by the text reader and the translator, remembered
     /// across launches.
-    @AppStorage(ReadMode.storageKey) private var readModeRaw = ReadMode.tap.rawValue
-    private var readMode: ReadMode { ReadMode(rawValue: readModeRaw) ?? .tap }
+    @AppStorage(ReadMode.storageKey) private var readModeRaw = ReadMode.defaultMode.rawValue
+    private var readMode: ReadMode { ReadMode.from(stored: readModeRaw) }
     /// Decides when Auto read has genuinely new, steady text to say.
     @State private var autoGate = AutoReadGate()
     @State private var autoReadTask: Task<Void, Never>?

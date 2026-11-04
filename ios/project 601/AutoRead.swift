@@ -4,7 +4,7 @@ import Foundation
 /// phones"). One small button next to Speak cycles through the three. Android
 /// has the same three, with the same words.
 enum ReadMode: String, CaseIterable {
-    /// Today's behavior: nothing is said until Speak is tapped.
+    /// Nothing is said until Speak is tapped.
     case tap
     /// New, steady text is spoken by itself, once.
     case auto
@@ -38,8 +38,17 @@ enum ReadMode: String, CaseIterable {
         }
     }
 
+    /// A new install starts in Auto read (2026-11-04, Play review: a first-time user heard
+    /// nothing until they found Speak). Anyone who already picked a mode keeps it: only
+    /// "nothing saved" (or a value this version doesn't know) means Auto read.
+    static let defaultMode: ReadMode = .auto
+
+    static func from(stored: String?) -> ReadMode {
+        stored.flatMap(ReadMode.init(rawValue:)) ?? defaultMode
+    }
+
     static var saved: ReadMode {
-        ReadMode(rawValue: UserDefaults.standard.string(forKey: storageKey) ?? "") ?? .tap
+        from(stored: UserDefaults.standard.string(forKey: storageKey))
     }
 }
 

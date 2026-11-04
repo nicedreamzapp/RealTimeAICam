@@ -7,6 +7,12 @@ struct project_601App: App {
         // without this touch the singleton never exists and the app has no
         // response to memory pressure at all.
         _ = MemoryManager.shared
+        #if DEBUG
+        // UI tests: `-rtcamFreshReadMode` forgets the saved Read mode, like a new install.
+        if ProcessInfo.processInfo.arguments.contains("-rtcamFreshReadMode") {
+            UserDefaults.standard.removeObject(forKey: ReadMode.storageKey)
+        }
+        #endif
     }
 
     @ViewBuilder
@@ -38,6 +44,8 @@ struct project_601App: App {
     var body: some Scene {
         WindowGroup {
             rootView
+                // Volume all the way down: say so, on every screen (2026-11-04).
+                .overlay(alignment: .top) { VolumeOffNote() }
                 .preferredColorScheme(.dark)
                 .statusBarHidden(true)
                 .task {

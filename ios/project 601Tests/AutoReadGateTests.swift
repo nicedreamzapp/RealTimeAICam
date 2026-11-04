@@ -69,4 +69,16 @@ struct AutoReadGateTests {
         #expect(ReadMode.mute.next == .tap)
         #expect(ReadMode.allCases.map(\.title) == ["Tap to read", "Auto read", "Mute"])
     }
+
+    @Test func newInstallStartsInAutoRead() {
+        #expect(ReadMode.defaultMode == .auto)
+        #expect(ReadMode.from(stored: nil) == .auto)
+        #expect(ReadMode.from(stored: "something-new") == .auto)
+    }
+
+    @Test func aSavedChoiceIsKept() {
+        #expect(ReadMode.from(stored: "tap") == .tap)
+        #expect(ReadMode.from(stored: "auto") == .auto)
+        #expect(ReadMode.from(stored: "mute") == .mute)
+    }
 }

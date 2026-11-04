@@ -40,8 +40,9 @@ final class InstructionsSpeaker: NSObject, ObservableObject, AVSpeechSynthesizer
             utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
         }
 
-        // Activate audio (mix with others so it doesn't kill other audio)
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
+        // Same session as every other spoken line in the app (2026-11-04): .playback is heard
+        // with the ring/silent switch on silent, .spokenAudio + duckOthers lowers music under it.
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
         try? AVAudioSession.sharedInstance().setActive(true)
 
         synth.speak(utterance)
@@ -135,7 +136,7 @@ struct AppInstructionsView: View {
                     // (rewritten for the 2026-11-03 home: Read and Translate
                     // merged, Settings on home, Help Me Aim, Live Cam).
                     guideSection("📖", "Read",
-                        "Point at printed text and hear it read out loud. The Language pill at the top picks English or one of 17 languages, like Spanish, French, Chinese or Arabic, and translates it into English. Spanish works right away; other languages download once from Apple, then work offline (iOS 18 or later). The small button next to Speak switches between Tap to read, Auto read (new text is spoken by itself, once) and Mute. Copy keeps the text in your history.")
+                        "Point at printed text and hear it read out loud. The Language pill at the top picks English or one of 17 languages, like Spanish, French, Chinese or Arabic, and translates it into English. Spanish works right away; other languages download once from Apple, then work offline (iOS 18 or later). Auto read is on to start: new text is spoken by itself, once. The small button next to Speak switches between Auto read, Mute and Tap to read. Copy keeps the text in your history.")
                     guideSection("🐶", "Object Detection",
                         "Names the things around you as you move the phone, nonstop, fast and offline." + (supportsLiDAR
                             ? " On phones with LiDAR, tap the white ruler (it turns green) to hear distances, like Dog, 3 feet."
@@ -218,7 +219,7 @@ struct AppInstructionsView: View {
         var lines: [String] = []
         lines.append("Welcome to the RealTime A I Camera.")
         lines.append("The home screen has two buttons at the top, Settings and Info and guide, then five tools, then the voice button. Swipe through them, or touch the screen to explore.")
-        lines.append("Read. Point at printed text and hear it out loud. The Language button at the top picks English, or one of 17 languages to translate into English. Swipe up or down on it to change. The small button next to Speak switches between Tap to read, Auto read, and Mute.")
+        lines.append("Read. Point at printed text and hear it out loud. The Language button at the top picks English, or one of 17 languages to translate into English. Swipe up or down on it to change. The small button next to Speak switches between Auto read, which is on to start and reads new text by itself, Mute, and Tap to read.")
         lines.append("Object Detection names the things around you as you move the phone.")
         if liDARAvailable {
             lines.append("Tap the white ruler to add distances, for example, Dog, three feet.")

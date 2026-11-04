@@ -88,9 +88,9 @@ final class ReadModeUITests: XCTestCase {
         sleep(25)
         XCTAssertEqual(app.state, .runningForeground)
 
-        // 5. Back to Tap to read for whoever uses this simulator next.
+        // 5. Back to Auto read (the default since 2026-11-04) for whoever uses this simulator next.
         button = app.buttons["readModeButton"].firstMatch
-        while (button.value as? String) != "Tap to read" { button.tap(); sleep(2) }
+        while (button.value as? String) != "Auto read" { button.tap(); sleep(2) }
         app.terminate()
     }
 }
