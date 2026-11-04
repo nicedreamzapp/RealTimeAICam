@@ -18,9 +18,11 @@ class LiveWindowInsetsTest {
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
             val root = View(InstrumentationRegistry.getInstrumentation().targetContext)
             val before = LiveWindowInsets.count
-            val watchers = (1..10).map { LiveWindowInsets.of(root) }
-            watchers.forEach { assertSame(watchers[0], it) }
-            watchers.forEach { it.acquire() }
+            // The first padded thing acquires; every later one gets that same watcher.
+            val firstOne = LiveWindowInsets.of(root).also { it.acquire() }
+            assertEquals(before + 1, LiveWindowInsets.count)
+            val watchers = listOf(firstOne) + (2..10).map { LiveWindowInsets.of(root).also { it.acquire() } }
+            watchers.forEach { assertSame(firstOne, it) }
             assertEquals(10, watchers[0].users)
             assertEquals(before + 1, LiveWindowInsets.count)
             watchers.forEach { it.release() }
@@ -29,6 +31,15 @@ class LiveWindowInsetsTest {
             // An extra release never goes below zero.
             watchers[0].release()
             assertEquals(0, watchers[0].users)
+            // An old watcher released late never removes the one now in use.
+            val now = LiveWindowInsets.of(root).also { it.acquire() }
+            watchers[0].release()
+            assertSame(now, LiveWindowInsets.of(root))
+            now.release()
+            assertEquals(before, LiveWindowInsets.count)
+            // Never acquired: never kept.
+            LiveWindowInsets.of(root)
+            assertEquals(before, LiveWindowInsets.count)
         }
     }
 }

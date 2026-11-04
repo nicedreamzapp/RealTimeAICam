@@ -174,6 +174,8 @@ internal class LiveWindowInsets private constructor(private val root: android.vi
     fun acquire() {
         if (users++ == 0) {
             root.viewTreeObserver.addOnGlobalLayoutListener(listener)
+            // Only a watcher in use is kept (the map's value holds its key, so a never-used one
+            // would pin the view).
             if (watchers[root] == null) watchers[root] = this
         }
         read()
@@ -184,7 +186,7 @@ internal class LiveWindowInsets private constructor(private val root: android.vi
         if (--users > 0) return
         root.removeCallbacks(late)
         if (root.viewTreeObserver.isAlive) root.viewTreeObserver.removeOnGlobalLayoutListener(listener)
-        watchers.remove(root)
+        if (watchers[root] === this) watchers.remove(root)
     }
 
     fun recheckSoon() {
@@ -194,7 +196,8 @@ internal class LiveWindowInsets private constructor(private val root: android.vi
 
     companion object {
         private val watchers = java.util.WeakHashMap<android.view.View, LiveWindowInsets>()
-        fun of(root: android.view.View): LiveWindowInsets = watchers.getOrPut(root) { LiveWindowInsets(root) }
+        /** The watcher in use for [root], or a new one (kept only once something acquires it). */
+        fun of(root: android.view.View): LiveWindowInsets = watchers[root] ?: LiveWindowInsets(root)
         /** Watchers alive right now (tests). */
         internal val count: Int get() = watchers.size
     }
