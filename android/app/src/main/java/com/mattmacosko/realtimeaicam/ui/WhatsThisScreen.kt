@@ -438,6 +438,15 @@ fun WhatsThisScreen(
         val fullWidth = maxWidth
         AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
 
+        // Can't be heard? Say why, under the top bar (2026-11-04).
+        SpeechProblemBanner(
+            speaker,
+            Modifier
+                .align(Alignment.TopCenter)
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top))
+                .padding(top = 90.dp, start = 20.dp, end = 20.dp),
+        )
+
         // Pinch-to-zoom (live camera only)
         if (frozenPhoto == null) {
             Box(

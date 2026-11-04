@@ -86,7 +86,19 @@ class AutoReadGateTest {
         assertEquals(ReadingMode.AUTO, ReadingMode.TAP.next)
         assertEquals(ReadingMode.MUTE, ReadingMode.AUTO.next)
         assertEquals(ReadingMode.TAP, ReadingMode.MUTE.next)
-        assertEquals(ReadingMode.TAP, ReadingMode.fromKey(null))
+        assertEquals(ReadingMode.MUTE, ReadingMode.fromKey("mute"))
+    }
+
+    @Test fun newInstallStartsInAutoRead() {
+        // Nothing saved (a new install) or an unknown value: Auto read.
+        assertEquals(ReadingMode.AUTO, ReadingMode.fromKey(null))
+        assertEquals(ReadingMode.AUTO, ReadingMode.fromKey("something-new"))
+        assertEquals(ReadingMode.AUTO, ReadingMode.DEFAULT)
+    }
+
+    @Test fun aSavedChoiceIsKept() {
+        assertEquals(ReadingMode.TAP, ReadingMode.fromKey("tap"))
+        assertEquals(ReadingMode.AUTO, ReadingMode.fromKey("auto"))
         assertEquals(ReadingMode.MUTE, ReadingMode.fromKey("mute"))
     }
 }

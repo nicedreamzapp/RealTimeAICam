@@ -322,6 +322,14 @@ fun HelpMeAimScreen(onBack: () -> Unit) {
                 onBack = { backToChoices() },
             )
         }
+        // Can't be heard? Say why (2026-11-04). The beeps play on the same volume.
+        com.mattmacosko.realtimeaicam.ui.SpeechProblemBanner(
+            speaker,
+            Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(top = 90.dp, start = 20.dp, end = 20.dp),
+        )
     }
 }
 

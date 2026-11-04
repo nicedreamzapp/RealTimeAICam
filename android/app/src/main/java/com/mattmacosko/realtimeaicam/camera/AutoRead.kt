@@ -3,8 +3,11 @@ package com.mattmacosko.realtimeaicam.camera
 /**
  * The text reader's speech mode (Matt, 2026-10-23): one small button next to Speak cycles
  * these, and the choice is remembered.
- *  - TAP:  today's behavior. Nothing is read until Speak is tapped.
+ *  - TAP:  nothing is read until Speak is tapped.
  *  - AUTO: new, steady text is read by itself (like Object Detection names what it sees).
+ *          The default for a new install (2026-11-04, Play review: a first-time user heard
+ *          nothing in Read until they found the Speak button). Anyone who already picked a
+ *          mode keeps it: only "nothing saved" means Auto.
  *  - MUTE: text on screen only, nothing said by itself. Speak still works when tapped.
  */
 enum class ReadingMode(val key: String, val label: String) {
@@ -16,7 +19,9 @@ enum class ReadingMode(val key: String, val label: String) {
 
     companion object {
         const val PREF_KEY = "readingMode"
-        fun fromKey(key: String?): ReadingMode = entries.firstOrNull { it.key == key } ?: TAP
+        /** Mode for a new install, or a saved value this version doesn't know. */
+        val DEFAULT = AUTO
+        fun fromKey(key: String?): ReadingMode = entries.firstOrNull { it.key == key } ?: DEFAULT
     }
 }
 

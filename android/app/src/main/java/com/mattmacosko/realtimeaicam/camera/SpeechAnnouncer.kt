@@ -1,6 +1,8 @@
 package com.mattmacosko.realtimeaicam.camera
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -10,6 +12,19 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityManager
 import com.mattmacosko.realtimeaicam.detection.Detection
 import kotlinx.coroutines.flow.MutableStateFlow
+
+/**
+ * Why the app's voice can't be heard right now, for the banner on each camera screen
+ * (2026-11-04, Play review: "no voice output, complete silence").
+ */
+enum class SpeechProblem {
+    /** The volume of the stream the app's voice plays on is at 0. */
+    VOLUME_OFF,
+    /** No text-to-speech engine started (none installed, or it never answered). */
+    NO_ENGINE,
+    /** The engine started but has no voice it can use (language data missing). */
+    NO_VOICE,
+}
 
 /**
  * Live Object Detection speech. Started as a port of the iOS SpeechManager
@@ -43,7 +58,15 @@ class SpeechAnnouncer(context: Context) {
         const val CLEANUP_AGE_MS = 60_000L
         const val MAX_PER_CYCLE = 3
         const val GOOGLE_TTS = "com.google.android.tts"
+        /** An engine that hasn't answered by then is treated as missing (banner + TalkBack). */
+        const val ENGINE_START_LIMIT_MS = 8_000L
     }
+
+    /**
+     * What stands between the app's voice and the person's ears, or null when nothing does.
+     * Shown as a banner by [com.mattmacosko.realtimeaicam.ui.SpeechProblemBanner].
+     */
+    val problem = MutableStateFlow<SpeechProblem?>(null)
 
     val enabled = MutableStateFlow(false)
 
@@ -84,7 +107,28 @@ class SpeechAnnouncer(context: Context) {
      */
     @Volatile private var pendingLine: Pair<String, String>? = null
     @Volatile private var engineFailed = false
+    /** The engine started but couldn't get a usable voice (setLanguage failed, voice data missing). */
+    @Volatile private var voiceFailed = false
+    /** The engine hasn't answered within [ENGINE_START_LIMIT_MS]; lines go to TalkBack meanwhile. */
+    @Volatile private var engineSlow = false
     private var triedGoogleEngine = false
+    private var volumeWasOff = false
+    /** Last line handed to the engine, so an engine error can still reach TalkBack. */
+    @Volatile private var lastLine: Pair<String, String>? = null
+
+    /**
+     * The voice plays as accessibility speech (2026-11-04). On media volume, which many TalkBack
+     * users keep at 0, the app was silent. With TalkBack on this follows TalkBack's own volume;
+     * with it off Android routes it with media volume, which [checkVolume] watches.
+     */
+    private val speechAttributes: AudioAttributes = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
+        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+        .build()
+
+    /** The app's own voice can't be used right now; send lines to TalkBack instead. */
+    private val voiceUnavailable: Boolean
+        get() = engineFailed || voiceFailed || (!ready && engineSlow)
 
     private fun createEngine(enginePackage: String?): TextToSpeech {
         val holder = arrayOfNulls<TextToSpeech>(1)
@@ -94,6 +138,7 @@ class SpeechAnnouncer(context: Context) {
         val engine = if (enginePackage == null) TextToSpeech(appContext, onInit)
         else TextToSpeech(appContext, onInit, enginePackage)
         holder[0] = engine
+        try { engine.setAudioAttributes(speechAttributes) } catch (_: Throwable) {}
         engine.setOnUtteranceProgressListener(progressListener)
         return engine
     }
@@ -110,10 +155,13 @@ class SpeechAnnouncer(context: Context) {
             engineFailed = true
             pendingLine?.let { announceToScreenReader(it.first) }
             pendingLine = null
+            updateProblem()
             return
         }
         ensureLanguage(engine)
         ready = true
+        engineSlow = false
+        updateProblem()
         val line = pendingLine
         pendingLine = null
         if (line != null) {
@@ -125,14 +173,18 @@ class SpeechAnnouncer(context: Context) {
         }
     }
 
-    /** No voice data for the phone's language (or none picked yet): fall back to US English. */
+    /**
+     * No voice data for the phone's language (or none picked yet): fall back to US English.
+     * If that fails too, the engine can't say anything: lines go to TalkBack and the banner
+     * offers the phone's text-to-speech settings, where a voice can be downloaded.
+     */
     private fun ensureLanguage(engine: TextToSpeech) {
-        try {
+        voiceFailed = try {
             val current = engine.voice?.locale ?: java.util.Locale.getDefault()
             val ok = engine.isLanguageAvailable(current) >= TextToSpeech.LANG_AVAILABLE &&
                 engine.voice?.features?.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) != true
-            if (!ok) engine.setLanguage(java.util.Locale.US)
-        } catch (_: Throwable) {}
+            if (ok) false else !SpeechChecks.languageUsable(engine.setLanguage(java.util.Locale.US))
+        } catch (_: Throwable) { false }
     }
 
     private val progressListener: UtteranceProgressListener by lazy {
@@ -154,10 +206,11 @@ class SpeechAnnouncer(context: Context) {
 
             @Deprecated("Deprecated in Java")
             override fun onError(utteranceId: String?) {
-                lastFinishedId = utteranceId
-                this@SpeechAnnouncer.isSpeaking = false
-                speakingNow.value = false
-                isProcessingQueue = false
+                onUtteranceError(utteranceId, TextToSpeech.ERROR)
+            }
+
+            override fun onError(utteranceId: String?, errorCode: Int) {
+                onUtteranceError(utteranceId, errorCode)
             }
 
             override fun onStop(utteranceId: String?, interrupted: Boolean) {
@@ -168,8 +221,76 @@ class SpeechAnnouncer(context: Context) {
         }
     }
 
+    /**
+     * The engine couldn't say a line (no voice data, output failed, service died). Before
+     * 2026-11-04 only the old one-argument onError was handled and the line just vanished.
+     * Now the line still reaches TalkBack, and a missing voice raises the banner.
+     */
+    private fun onUtteranceError(utteranceId: String?, errorCode: Int) {
+        lastFinishedId = utteranceId
+        isSpeaking = false
+        speakingNow.value = false
+        isProcessingQueue = false
+        android.util.Log.w("RTCamSpeech", "speech error $errorCode on $utteranceId")
+        if (utteranceId == null || utteranceId.startsWith("warm") || utteranceId.startsWith("wake")) return
+        mainHandler.post {
+            if (SpeechChecks.meansNoVoice(errorCode)) {
+                voiceFailed = true
+                updateProblem()
+            }
+            val line = lastLine
+            if (line != null && line.second == utteranceId) announceToScreenReader(line.first)
+        }
+    }
+
     // Declared after progressListener: createEngine() reads it while this initialises.
     private var tts: TextToSpeech = createEngine(null)
+
+    init {
+        // An engine that never answers used to leave the app waiting in silence forever.
+        mainHandler.postDelayed({
+            if (!ready && !engineFailed) {
+                engineSlow = true
+                pendingLine?.let { announceToScreenReader(it.first) }
+                pendingLine = null
+                updateProblem()
+            }
+        }, ENGINE_START_LIMIT_MS)
+        mainHandler.post { checkVolume() }
+    }
+
+    /**
+     * Re-check the volume (the camera screens call this about once a second while shown).
+     * When the speech stream is at 0 the banner shows, and TalkBack says so once, since the
+     * app's own voice can't be heard.
+     */
+    fun checkVolume() {
+        val off = SpeechChecks.volumeOff(speaksAloud, currentSpeechVolume())
+        if (off && !volumeWasOff) announceToScreenReader(SpeechChecks.VOLUME_OFF_LINE)
+        volumeWasOff = off
+        updateProblem()
+    }
+
+    /** Volume of the stream the app's voice is heard on: TalkBack's when it runs, else media. */
+    private fun currentSpeechVolume(): Int? = try {
+        val audio = appContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        val stream = if (screenReaderOn()) AudioManager.STREAM_ACCESSIBILITY else AudioManager.STREAM_MUSIC
+        audio?.getStreamVolume(stream)
+    } catch (_: Throwable) { null }
+
+    private fun updateProblem() {
+        problem.value = SpeechChecks.problem(
+            speaksAloud = speaksAloud,
+            engineFailed = engineFailed || (!ready && engineSlow),
+            voiceFailed = voiceFailed,
+            volumeOff = volumeWasOff,
+        )
+    }
+
+    private fun screenReaderOn(): Boolean {
+        val am = appContext.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
+        return am != null && am.isEnabled && am.isTouchExplorationEnabled
+    }
 
     /** iOS setSpeechEnabled/handleToggleSpeech behavior. */
     fun setEnabled(on: Boolean) {
@@ -187,7 +308,12 @@ class SpeechAnnouncer(context: Context) {
 
     /** iOS processDetectionsForSpeech — called once per processed frame. */
     fun announce(detections: List<Detection>) {
-        if (!enabled.value || !ready) return
+        if (!enabled.value) return
+        // The voice isn't up yet: with TalkBack on, names go to TalkBack instead of waiting in
+        // silence (2026-11-04). With nobody to hear them, wait as before so no name is used up.
+        val viaVoice = speaksAloud && !voiceUnavailable
+        if (viaVoice && !ready) return
+        if (!viaVoice && speaksAloud && !screenReaderOn()) return
 
         val now = SystemClock.elapsedRealtime()
         inView = detections.mapTo(HashSet()) { it.className }
@@ -216,7 +342,7 @@ class SpeechAnnouncer(context: Context) {
         lastAnnouncementTime = now
 
         if (toAnnounce.isNotEmpty()) {
-            if (!speaksAloud) {
+            if (!viaVoice) {
                 // TalkBack gets the cycle as one line; announcing each name as it
                 // came made every announcement interrupt the one before it.
                 val line = toAnnounce.joinToString(", ") { it.second }
@@ -278,9 +404,9 @@ class SpeechAnnouncer(context: Context) {
 
     suspend fun prepareToSpeak(timeoutMs: Long = 8000) {
         val start = SystemClock.elapsedRealtime()
-        while (!ready && SystemClock.elapsedRealtime() - start < timeoutMs) kotlinx.coroutines.delay(50)
-        if (!ready || !speaksAloud) return
-        // "ready" only means the engine is bound. The voice itself loads on the first real
+        while (!ready && !voiceUnavailable && SystemClock.elapsedRealtime() - start < timeoutMs) kotlinx.coroutines.delay(50)
+        if (!ready || !speaksAloud || voiceUnavailable) return
+        // "ready only means the engine is bound. The voice itself loads on the first real
         // synthesis (about a second, longer after Android frees it for memory), and while it
         // loaded, "two" flushed "three" before it was ever heard. So synthesise a word at zero
         // volume first, wait for it to finish, then a short silence to wake the speaker.
@@ -299,8 +425,12 @@ class SpeechAnnouncer(context: Context) {
 
     suspend fun speakAndWait(text: String, timeoutMs: Long = 3000) {
         val start = SystemClock.elapsedRealtime()
-        while (!ready && SystemClock.elapsedRealtime() - start < timeoutMs) kotlinx.coroutines.delay(50)
-        if (!ready) return
+        while (!ready && !voiceUnavailable && SystemClock.elapsedRealtime() - start < timeoutMs) kotlinx.coroutines.delay(50)
+        if (!ready || voiceUnavailable) {
+            // The countdown used to give up here in silence. TalkBack says it instead.
+            announceToScreenReader(text)
+            return
+        }
         val id = "wait-${utteranceSeq++}"
         speakInternal(text, id)
         if (!speaksAloud) return  // TalkBack says it; no callback to wait for
@@ -323,7 +453,7 @@ class SpeechAnnouncer(context: Context) {
     private fun sayOrHold(text: String, id: String) {
         when {
             ready -> speakInternal(text, id)
-            engineFailed || !speaksAloud -> announceToScreenReader(text)
+            voiceUnavailable || !speaksAloud -> announceToScreenReader(text)
             else -> pendingLine = text to id
         }
     }
@@ -341,7 +471,7 @@ class SpeechAnnouncer(context: Context) {
     private fun speakInternal(text: String, id: String) {
         // Debug builds log every spoken line so a cable test can read what was said.
         if ((appContext.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) android.util.Log.d("RTCamSpeech", text)
-        if (!speaksAloud || engineFailed) {
+        if (!speaksAloud || voiceUnavailable) {
             // TalkBack reads this in the user's OWN voice and rate, which is the
             // whole point of the setting. Also the fallback when no speech engine works.
             announceToScreenReader(text)
@@ -353,7 +483,11 @@ class SpeechAnnouncer(context: Context) {
             com.mattmacosko.realtimeaicam.ui.VoicePrefs.apply(appContext, tts)
             appliedVoice = wanted
         }
-        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, id)
+        lastLine = text to id
+        if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, id) == TextToSpeech.ERROR) {
+            // Refused outright (engine died, bad state): don't let the line vanish.
+            announceToScreenReader(text)
+        }
     }
 
     /**
@@ -392,6 +526,29 @@ class SpeechAnnouncer(context: Context) {
     fun shutdown() {
         stop()
         tts.shutdown()
+    }
+}
+
+/** The pure parts of the "can the voice be heard" checks, kept apart so they can be unit tested. */
+object SpeechChecks {
+    const val VOLUME_OFF_LINE = "Volume is off. Turn it up to hear the app."
+
+    /** setLanguage's answer means a voice will actually speak. */
+    fun languageUsable(result: Int): Boolean = result >= TextToSpeech.LANG_AVAILABLE
+
+    /** Engine error codes that mean no usable voice is installed. */
+    fun meansNoVoice(errorCode: Int): Boolean = errorCode == TextToSpeech.ERROR_NOT_INSTALLED_YET
+
+    /** Only the app's own voice is affected by its volume; TalkBack users get TalkBack's. */
+    fun volumeOff(speaksAloud: Boolean, volume: Int?): Boolean = speaksAloud && volume == 0
+
+    /** Most important first: no engine, then no voice, then volume. */
+    fun problem(speaksAloud: Boolean, engineFailed: Boolean, voiceFailed: Boolean, volumeOff: Boolean): SpeechProblem? = when {
+        !speaksAloud -> null
+        engineFailed -> SpeechProblem.NO_ENGINE
+        voiceFailed -> SpeechProblem.NO_VOICE
+        volumeOff -> SpeechProblem.VOLUME_OFF
+        else -> null
     }
 }
 

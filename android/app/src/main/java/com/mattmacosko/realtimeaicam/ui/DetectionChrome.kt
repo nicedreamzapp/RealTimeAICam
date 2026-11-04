@@ -110,6 +110,14 @@ fun DetectionChrome(
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val fullWidth = maxWidth
+        // Can't be heard? Say why, under the top row (2026-11-04).
+        SpeechProblemBanner(
+            pipeline.announcer,
+            Modifier
+                .align(Alignment.TopCenter)
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top))
+                .padding(top = if (isLandscape) 64.dp else 110.dp, start = 28.dp, end = 28.dp),
+        )
         // ---- Top row (spec §2.1) ----
         // Landscape: chrome hugs the top edge (minimal padding past the
         // safe/cutout inset) to maximize visible camera area.

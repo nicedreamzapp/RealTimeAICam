@@ -243,6 +243,15 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
             )
         }
 
+        // Can't be heard? Say why, under the top bar (2026-11-04).
+        SpeechProblemBanner(
+            pipeline.speaker,
+            Modifier
+                .align(Alignment.TopCenter)
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                .padding(top = 100.dp, start = 20.dp, end = 20.dp),
+        )
+
         // Zoom pill
         AnimatedVisibility(
             visible = zoom < 0.95f || zoom > 1.05f,
