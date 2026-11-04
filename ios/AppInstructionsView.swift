@@ -128,95 +128,57 @@ struct AppInstructionsView: View {
                     .accessibilityHint(speaker.isSpeaking ? "Stops the spoken instructions" : "Speaks a detailed guide for screen-reader users")
 
                     // Tagline
-                    Text("Snap, Detect, Translate — all on-device.")
+                    Text("Your camera, out loud. Everything runs on your phone.")
                         .font(.title3)
 
-                    // Modes (exact button names)
+                    // The five tools, in the same order as the home screen
+                    // (rewritten for the 2026-11-03 home: Read and Translate
+                    // merged, Settings on home, Help Me Aim, Live Cam).
+                    guideSection("📖", "Read",
+                        "Point at printed text and hear it read out loud. The Language pill at the top picks English or one of 17 languages, like Spanish, French, Chinese or Arabic, and translates it into English. Spanish works right away; other languages download once from Apple, then work offline (iOS 18 or later). The small button next to Speak switches between Tap to read, Auto read (new text is spoken by itself, once) and Mute. Copy keeps the text in your history.")
+                    guideSection("🐶", "Object Detection",
+                        "Names the things around you as you move the phone, nonstop, fast and offline." + (supportsLiDAR
+                            ? " On phones with LiDAR, tap the white ruler (it turns green) to hear distances, like Dog, 3 feet."
+                            : ""))
+                    guideSection("📄", "What's this?",
+                        "One careful look. Point at a page, a bill, a package or a room and press the button. Mail and pages get the point of them: who sent it, what it is, what's due. A room or a thing gets a description. Afterwards, hold to ask a follow-up question about the same photo.")
+                    guideSection("🎯", "Help Me Aim",
+                        "Takes a good photo for you. Choose Face, Picture or Page, or Something Else and say or type what you want, like keys, a mug or your dog. The app tells you which way to move, counts down and takes the picture, then saves it to Photos with a description written into it. It knows thousands of everyday things; for anything else, like a wallet, it looks closely with the describing AI and tells you where it is. Double tap anywhere to take the picture yourself.")
+                    guideSection("💬", "Live Cam",
+                        "Talk with the camera. Ask out loud about what's in front of you and hear the answer, then keep asking.")
+
+                    // Settings and models
+                    guideSection("⚙️", "Settings",
+                        "The Settings button at the top of the home screen. Models: the app picks the best describing AI for your phone by itself and downloads it once, on Wi-Fi. Mail, money and medicine always get the most accurate one your phone can run. In Settings, then Models, you can choose Most accurate or Fastest, or pick one yourself. The voice button at the bottom of the home screen changes the voice.")
+
+                    // Camera controls (inside each tool)
                     Group {
-                        Text("✨ **Modes**")
-                            .voiceOverWords("✨ **Modes**")
+                        Text("🎛️ **Camera controls**")
+                            .voiceOverWords("🎛️ **Camera controls**")
                             .font(.headline)
-
-                        // 🐕 Object Detection + 📏 LiDAR sub-feature
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("🐕 **Object Detection**")
-                                .voiceOverWords("🐕 **Object Detection**")
-                                .font(.title2).fontWeight(.semibold)
-                            Text("Live identification of objects (up to 601 classes) — fast, private, and works offline.")
-                            Text("📏 **LiDAR Distance Assist** — In Object Detection on supported devices, tap the white ruler (turns green when active) to add distance after detections, e.g., **“Dog — 3 ft.”**")
-                                .voiceOverWords("📏 **LiDAR Distance Assist** — In Object Detection on supported devices, tap the white ruler (turns green when active) to add distance after detections, e.g., **“Dog — 3 ft.”**")
-                        }
-                        .padding(.top, 4)
-
-                        // 🔠 English OCR
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("🔠 **English OCR**")
-                                .voiceOverWords("🔠 **English OCR**")
-                                .font(.title2).fontWeight(.semibold)
-                            Text("Scan printed English text and hear it read aloud or copy it to history.")
-                        }
-                        .padding(.top, 8)
-
-                        // 🇲🇽→🇺🇸 Spanish → English
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("🇲🇽→🇺🇸 **Spanish to English Translate**")
-                                .voiceOverWords("🇲🇽→🇺🇸 **Spanish to English Translate**")
-                                .font(.title2).fontWeight(.semibold)
-                            Text("Point at printed Spanish to see instant English translation, spoken aloud and ready to copy. The globe button at the top picks another language, like French or German. Each language, Spanish included, downloads once for the best translation, then works offline. Until then, Spanish still translates with the built-in dictionary. Other languages need iOS 18 or later.")
-                        }
-                        .padding(.top, 8)
-
-                        // 🧠 What's this? models (1.4.0)
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("🧠 **What's this? models**")
-                                .voiceOverWords("🧠 **What's this? models**")
-                                .font(.title2).fontWeight(.semibold)
-                            Text("What's this? describes photos with an AI model that lives on your phone. You don't have to set anything up. The first time you open the app it times one test photo, then picks the most accurate model your phone can run and downloads it once, on Wi-Fi. Until it arrives, the built-in model answers. Mail, money and medicine always get the most accurate model your phone can handle. To change it, open Settings, then Models: choose Most accurate or Fastest, or pick a model yourself. Every model works offline once it's on your phone.")
-                        }
-                        .padding(.top, 8)
-                    }
-
-                    // Controls
-                    Group {
-                        Text("🎛️ **Controls**")
-                            .voiceOverWords("🎛️ **Controls**")
-                            .font(.headline)
+                            .accessibilityAddTraits(.isHeader)
                             .padding(.top, 6)
-                        Text("🔄 Switch Camera — Front / Rear")
-                            .voiceOverWords("🔄 Switch Camera — Front / Rear")
-                        // Only phones with a second rear lens have this button.
+                        Text("🔄 Switch camera, front or back")
+                            .voiceOverWords("🔄 Switch camera, front or back")
                         if CameraCapabilities.hasUltraWideRear {
-                            Text("🌐 Lens Toggle — Wide ↔ Ultra-wide")
-                                .voiceOverWords("🌐 Lens Toggle — Wide ↔ Ultra-wide")
+                            Text("🌐 Lens toggle, wide or ultra-wide (Object Detection)")
+                                .voiceOverWords("🌐 Lens toggle, wide or ultra-wide (Object Detection)")
                         }
-                        Text("🔦 Torch — 25% / 50% / 75% / 100%")
-                            .voiceOverWords("🔦 Torch — 25% / 50% / 75% / 100%")
-                        Text("🤏 Pinch to Zoom")
-                            .voiceOverWords("🤏 Pinch to Zoom")
-                        HStack {
-                            Image(systemName: "arrow.clockwise")
-                            Text("Reset/Stop — Clears text, translation, and stops speaking")
-                        }
-                        Text("🗣️ Speak Detected / Translated Text")
-                            .voiceOverWords("🗣️ Speak Detected / Translated Text")
-                        Text("🔁 The small button next to Speak switches between Tap to read, Auto read (new text is spoken by itself, once) and Mute (text on screen only).")
-                            .voiceOverWords("🔁 The small button next to Speak switches between Tap to read, Auto read (new text is spoken by itself, once) and Mute (text on screen only).")
-                        Text("📋 Copy to History")
-                            .voiceOverWords("📋 Copy to History")
-                        Text("⚙️ Settings")
-                            .voiceOverWords("⚙️ Settings")
+                        Text("🔦 Flashlight, 25% to 100%")
+                            .voiceOverWords("🔦 Flashlight, 25% to 100%")
+                        Text("🤏 Pinch to zoom")
+                            .voiceOverWords("🤏 Pinch to zoom")
                     }
 
                     // Privacy
                     Group {
-                        Text("🔒 **Privacy First**")
-                            .voiceOverWords("🔒 **Privacy First**")
+                        Text("🔒 **Private by design**")
+                            .voiceOverWords("🔒 **Private by design**")
                             .font(.headline)
+                            .accessibilityAddTraits(.isHeader)
                             .padding(.top, 6)
-                        Text("Works 100% offline — no internet required.")
-                        Text("No data collection. No tracking. No location access.")
-                        Text("Runs perfectly in Airplane Mode.")
-                        Text("Built for iPhone — all processing stays on your device.")
+                        Text("Everything runs on your phone and works offline, even in Airplane Mode. The bigger AI models and translation languages download once, then stay on your phone.")
+                        Text("No accounts, no tracking, no location access. Nothing you point the camera at is uploaded.")
                     }
                     .foregroundColor(.secondary)
                 }
@@ -238,27 +200,34 @@ struct AppInstructionsView: View {
         .onDisappear { speaker.stop() }
     }
 
+    /// One tool: a heading VoiceOver can jump to, then what it does.
+    private func guideSection(_ emoji: String, _ title: String, _ text: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("\(emoji) **\(title)**")
+                .voiceOverWords(title)
+                .font(.title2).fontWeight(.semibold)
+                .accessibilityAddTraits(.isHeader)
+            Text(text)
+        }
+        .padding(.top, 8)
+    }
+
     // MARK: - Audio script (richer than on-screen text; avoids overlap issues)
 
     private func audioScript(liDARAvailable: Bool) -> String {
         var lines: [String] = []
         lines.append("Welcome to the RealTime A I Camera.")
-        lines.append("There are three main modes. Object Detection. English O C R. And Spanish to English Translate.")
+        lines.append("The home screen has two buttons at the top, Settings and Info and guide, then five tools, then the voice button. Swipe through them, or touch the screen to explore.")
+        lines.append("Read. Point at printed text and hear it out loud. The Language button at the top picks English, or one of 17 languages to translate into English. Swipe up or down on it to change. The small button next to Speak switches between Tap to read, Auto read, and Mute.")
+        lines.append("Object Detection names the things around you as you move the phone.")
         if liDARAvailable {
-            lines.append("In Object Detection, you can turn on LiDAR Distance Assist by tapping the white ruler. It turns green when active and adds an approximate distance after the item, for example, Dog, three feet.")
-        } else {
-            lines.append("LiDAR Distance Assist is not available on this device.")
+            lines.append("Tap the white ruler to add distances, for example, Dog, three feet.")
         }
-        lines.append("English O C R reads printed English aloud, and you can copy the text to history.")
-        lines.append("Spanish to English Translate lets you point at printed Spanish and hear a natural English translation while also displaying it on screen. The Translate from control at the top picks another language, like French or German. Swipe up or down on it to change. Each language, Spanish included, downloads once for the best translation, then works offline. Until then, Spanish still translates with the built-in dictionary. Other languages need iOS 18 or later.")
-        lines.append("In the text reader and the translator, the small button next to Speak switches between Tap to read, Auto read, which speaks new text by itself once, and Mute, which keeps the text on screen only.")
-        if CameraCapabilities.hasUltraWideRear {
-            lines.append("You can switch cameras, toggle wide or ultra wide lenses, change torch brightness, and pinch to zoom. You can show or hide the on screen text, speak the text again, and copy it.")
-        } else {
-            // This phone has one rear lens, so never promise a lens toggle.
-            lines.append("You can switch cameras, change torch brightness, and pinch to zoom. You can show or hide the on screen text, speak the text again, and copy it.")
-        }
-        lines.append("This app is built for iPhone and designed for privacy. Everything runs entirely offline. There is no data collection, no tracking, and no location access. It works perfectly in Airplane Mode.")
+        lines.append("What's this? takes one careful look. Mail and pages get the point of them, like who sent it and what's due. A room gets a description. Afterwards, hold to ask a follow up question.")
+        lines.append("Help Me Aim takes a good photo for you. Choose Face, Picture or Page, or Something Else and say what you want. It tells you which way to move, counts down, and saves the photo with a description. For things it doesn't know by sight, like a wallet, it looks closely and tells you where it is. Double tap anywhere to take the picture yourself.")
+        lines.append("Live Cam lets you talk with the camera. Ask out loud about what's in front of you and hear the answer.")
+        lines.append("In Settings, Models, the app already picked the best A I for your phone. You can choose Most accurate or Fastest there.")
+        lines.append("Everything runs on your phone and works offline. No accounts and no tracking.")
         return lines.joined(separator: " ")
     }
 }
