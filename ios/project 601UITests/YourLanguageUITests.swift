@@ -211,4 +211,33 @@ final class YourLanguageUITests: XCTestCase {
         keep(app, "whatsthis-followup-es")
         app.terminate()
     }
+
+    /// Rating prompt: never during the first launch, asked only right after a result
+    /// has been read aloud to the end, from the 3rd success on. The ask itself is
+    /// logged (-rtcamRatePromptLog) and checked in Documents/speak_log.txt.
+    @MainActor
+    func testRatePromptOnlyAfterSpokenSuccessesNotOnFirstLaunch() throws {
+        func run(_ extra: [String], shots: Int) {
+            let app = launch(extra + ["-rtcamRatePromptLog", "-countdownBeforeCapture", "NO"],
+                             env: ["RTCAM_FAKE_ANSWER": "A white coffee mug on a wooden table."])
+            let home = app.buttons["What's this?"].firstMatch
+            XCTAssertTrue(home.waitForExistence(timeout: 20))
+            sleep(3)
+            home.tap()
+            for i in 0 ..< shots {
+                let capture = app.buttons["What's this?"].firstMatch
+                XCTAssertTrue(capture.waitForExistence(timeout: 15), "no capture button, shot \(i)")
+                sleep(1)
+                capture.tap()
+                sleep(6) // the answer is read aloud to the end
+                let next = app.buttons["Next shot"].firstMatch
+                if next.waitForExistence(timeout: 5) { next.tap() }
+                sleep(1)
+            }
+            keep(app, "rate-prompt-after-\(shots)")
+            app.terminate()
+        }
+        run(["-rtcamFreshRatePrompt"], shots: 3) // first launch: never
+        run([], shots: 1) // second launch: asks after this success (4th)
+    }
 }

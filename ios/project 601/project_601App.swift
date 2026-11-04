@@ -7,6 +7,10 @@ struct project_601App: App {
         // without this touch the singleton never exists and the app has no
         // response to memory pressure at all.
         _ = MemoryManager.shared
+        #if DEBUG
+        // `-rtcamFreshRatePrompt`: the rating prompt as on a new install.
+        if ProcessInfo.processInfo.arguments.contains("-rtcamFreshRatePrompt") { RatePrompt.resetForTests() }
+        #endif
         // Rating prompt: never during the first launch.
         RatePrompt.noteLaunch()
         #if DEBUG

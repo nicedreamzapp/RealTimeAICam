@@ -32,6 +32,12 @@ enum RatePrompt {
             && results - resultsAtLastAsk >= moreResultsBeforeAskingAgain
     }
 
+    #if DEBUG
+    static func resetForTests() {
+        for k in [countKey, askedAtKey, countAtAskKey, launchesKey] { UserDefaults.standard.removeObject(forKey: k) }
+    }
+    #endif
+
     /// Once per app start.
     static func noteLaunch() {
         let d = UserDefaults.standard
@@ -56,6 +62,11 @@ enum RatePrompt {
         let results = d.integer(forKey: countKey) + 1
         d.set(results, forKey: countKey)
         let now = Date()
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-rtcamRatePromptLog") {
+            SpeakLog.note("ratePromptCount", "results \(results) launches \(d.integer(forKey: launchesKey))")
+        }
+        #endif
         guard shouldAsk(results: results, launches: d.integer(forKey: launchesKey),
                         lastAskedAt: d.object(forKey: askedAtKey) as? Date,
                         resultsAtLastAsk: d.integer(forKey: countAtAskKey), now: now) else { return }
