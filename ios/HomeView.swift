@@ -17,6 +17,8 @@ struct HomeView: View {
     let onObjectDetection: () -> Void
     let onReadMail: () -> Void
     let onHelpMeAim: () -> Void
+    /// Live Cam: talk with the camera, it answers out loud (from Moonstone, 2026-11-03).
+    var onLiveCam: () -> Void = {}
     let onVoiceChange: () -> Void
     let speechSynthesizer: AVSpeechSynthesizer
 
@@ -92,22 +94,23 @@ struct HomeView: View {
             splashBackground
 
             VStack {
-                Spacer(minLength: 80)
+                Spacer(minLength: 52)
                 VStack(spacing: 12) {
                     HeadingView(animateIn: animationState.heading)
                     Spacer()
                     GeometryReader { _ in
-                        VStack(spacing: 14) {
+                        VStack(spacing: 10) {
                             englishOCRButton(scale: scale, screenWidth: screenWidth)
                             spanishOCRButton(scale: scale, screenWidth: screenWidth)
                             objectDetectionButton(scale: scale, screenWidth: screenWidth)
                             readMailButton(scale: scale, screenWidth: screenWidth)
                             helpMeAimButton(scale: scale, screenWidth: screenWidth)
+                            liveCamButton(scale: scale, screenWidth: screenWidth)
                         }
                         .frame(maxWidth: .infinity, alignment: .center)
                         // GeometryReader used for vertical spacing only
                     }
-                    .frame(height: 300 + 80 * scale)
+                    .frame(height: 340 + 98 * scale)
                     Spacer()
                     visionModelBanner
                     voicePicker
@@ -407,6 +410,54 @@ struct HomeView: View {
         .animation(.easeOut(duration: 0.3), value: animationState.button5)
         .accessibilityLabel("Help Me Aim")
         .accessibilityHint("Tell the camera what you want a picture of. It talks you into the shot, then takes the photo")
+        .accessibilityAddTraits(.isButton)
+    }
+
+    /// Live Cam: a live conversation with the camera. Ask out loud, it looks
+    /// and answers, and keeps talking about what it sees.
+    private func liveCamButton(scale: CGFloat, screenWidth: CGFloat) -> some View {
+        Button(action: {
+            guard buttonDebouncer.canPress("HomeView-9") else { return }
+            onLiveCam()
+        }) {
+            HStack(spacing: 4 * scale) {
+                Text("\u{1F4AC}").font(.system(size: 32 * scale))
+                OutlinedText(text: "Live Cam", fontSize: 20 * scale)
+            }
+            .padding(.vertical, 16 * scale)
+        }
+        .frame(maxWidth: min(340 * scale, screenWidth - 36), alignment: .center)
+        .padding(.horizontal, 8 * scale)
+        .background(
+            ZStack {
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.white.opacity(0.23), Color.pink.opacity(0.50)]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                Capsule()
+                    .fill(Color.white.opacity(0.13))
+                    .frame(height: 24 * scale)
+                    .offset(y: -18 * scale)
+                Capsule().stroke(Color.white.opacity(0.80), lineWidth: 4.8 * scale)
+                Capsule().stroke(Color.pink, lineWidth: 2.4 * scale)
+                Capsule()
+                    .fill(Color.black.opacity(0.12))
+                    .blur(radius: 7 * scale)
+                    .offset(y: 16 * scale)
+            }
+        )
+        .shadow(color: Color.black.opacity(0.38), radius: 15 * scale, y: 5 * scale)
+        .clipShape(Capsule())
+        .opacity(animationState.button5 ? 1 : 0)
+        .shadow(color: Color.pink.opacity(0.50), radius: 12 * scale)
+        .scaleEffect(animationState.button5 ? 1 : 0.7)
+        .animation(.easeOut(duration: 0.3), value: animationState.button5)
+        .accessibilityLabel("Live Cam")
+        .accessibilityHint("Talk with the camera. Ask out loud about what's in front of you and hear the answer")
         .accessibilityAddTraits(.isButton)
     }
 
