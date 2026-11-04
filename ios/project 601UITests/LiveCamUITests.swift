@@ -146,6 +146,32 @@ final class LiveCamUITests: XCTestCase {
         app.terminate()
     }
 
+    /// 11/04 review: speech recognition that keeps failing stops retrying, says so, and shows a note and a typing
+    /// box. Both must be on screen and clear of the controls on every size.
+    @MainActor
+    func testCantHearNoteAndTypingBox() throws {
+        continueAfterFailure = false
+        let app = launch(["-liveCamCantHear"])
+        openLiveCam(app, greeting: "can't hear you")
+        let screen = app.windows.firstMatch.frame
+        let note = app.descendants(matching: .any).matching(identifier: "liveCamCantHear").firstMatch
+        XCTAssertTrue(note.waitForExistence(timeout: 10), "no can't-hear note")
+        XCTAssertTrue(screen.contains(note.frame), "note off screen: \(note.frame) in \(screen)")
+        let field = app.textFields["liveCamTyped"].firstMatch
+        XCTAssertTrue(field.exists, "no typing box")
+        XCTAssertTrue(screen.contains(field.frame), "typing box off screen: \(field.frame)")
+        XCTAssertFalse(note.frame.intersects(field.frame), "note overlaps the typing box")
+        for n in ["Back", "Mute microphone", "Flip camera"] {
+            let b = app.buttons[n].firstMatch
+            XCTAssertFalse(note.frame.intersects(b.frame), "note overlaps \(n)")
+            XCTAssertFalse(field.frame.intersects(b.frame), "typing box overlaps \(n)")
+        }
+        checkLayout(app)
+        keep(app, "livecam-cant-hear")
+        goBack(app)
+        app.terminate()
+    }
+
     /// Your language Spanish: the question goes to the model in English, the answer is shown and said in Spanish.
     @MainActor
     func testAnswerInYourLanguage() throws {

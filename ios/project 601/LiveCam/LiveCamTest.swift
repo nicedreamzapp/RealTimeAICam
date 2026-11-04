@@ -3,6 +3,7 @@
 //   -liveCamTest      no camera and no mic: a still photo stands in for the camera (Documents/live-cam/frame.jpg,
 //                     else the bundled SpeedCheckPhoto.jpg) and questions are typed into a box on screen
 //   -liveCamMute      the voice runs its whole queue and timing with no sound (a real phone on a desk)
+//   -liveCamCantHear  acts as if speech recognition kept failing (the "can't hear you" note and typing box)
 //   RTCAM_FAKE_LIVE_ANSWER (environment) stands in for the model's answer, for a Simulator that can't run it
 // Debug builds also write a timing log (Documents/live-cam/log.jsonl, a new file each visit). Release builds
 // write nothing anywhere: no log, no recording.
@@ -23,11 +24,14 @@ enum LiveCamTest {
     static var active: Bool { args.contains("-liveCamTest") }
     static var mute: Bool { args.contains("-liveCamMute") }
     static var openAtLaunch: Bool { args.contains("-liveCamOpen") }
+    /// Acts as if speech recognition kept failing, right after the greeting (layout of the "can't hear you" note).
+    static var forceCantHear: Bool { args.contains("-liveCamCantHear") }
     static var fakeAnswer: String? { ProcessInfo.processInfo.environment["RTCAM_FAKE_LIVE_ANSWER"] }
     #else
     static let active = false
     static let mute = false
     static let openAtLaunch = false
+    static let forceCantHear = false
     #endif
 
     #if DEBUG

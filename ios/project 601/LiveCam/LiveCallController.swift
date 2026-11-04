@@ -271,6 +271,7 @@ final class LiveCallController: ObservableObject {
         voice.say(LiveWords.firstGreeting)
         if !typedOnly { look(prompt: LiveWords.openingLook, unprompted: false, first: true) }   // what's around, once (11/2 Matt)
         else { answerDone = true }
+        if LiveCamTest.forceCantHear { hearingGaveUp() }
     }
 
     // MARK: Turn taking
