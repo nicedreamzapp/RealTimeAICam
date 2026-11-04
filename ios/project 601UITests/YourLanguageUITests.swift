@@ -180,4 +180,35 @@ final class YourLanguageUITests: XCTestCase {
         keep(app, "aim-taza-cup")
         app.terminate()
     }
+
+    /// What's this? with Your language Spanish: the model's English answer is shown
+    /// and said in Spanish, and a question typed in Spanish reaches the model in English.
+    /// (No camera or model in the Simulator: RTCAM_FAKE_ANSWER / RTCAM_FAKE_FOLLOWUP
+    /// stand in for what the model said.)
+    @MainActor
+    func testWhatsThisAnswerInSpanish() throws {
+        continueAfterFailure = false
+        let app = launch(["-userLanguage", "es", "-fakeTranslatorPacks", "(es)", "-countdownBeforeCapture", "NO"],
+                         env: ["RTCAM_FAKE_ANSWER": "A white coffee mug on a wooden table.",
+                               "RTCAM_FAKE_FOLLOWUP": "The cup is white."])
+        let home = app.buttons["What's this?"].firstMatch
+        XCTAssertTrue(home.waitForExistence(timeout: 20))
+        sleep(3)
+        home.tap()
+        let capture = app.buttons["What's this?"].firstMatch
+        XCTAssertTrue(capture.waitForExistence(timeout: 15))
+        sleep(2)
+        capture.tap()
+        let answer = app.descendants(matching: .any).matching(NSPredicate(format: "value CONTAINS 'Una taza de café blanca'")).firstMatch
+        XCTAssertTrue(answer.waitForExistence(timeout: 20), "answer not in Spanish")
+        keep(app, "whatsthis-es")
+        let field = app.textFields["Or type a question about this photo"].firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 10), "no question field")
+        field.tap()
+        field.typeText("De que color es la taza\n")
+        let followUp = app.descendants(matching: .any).matching(NSPredicate(format: "value CONTAINS 'La taza es blanca'")).firstMatch
+        XCTAssertTrue(followUp.waitForExistence(timeout: 20), "follow-up answer not in Spanish")
+        keep(app, "whatsthis-followup-es")
+        app.terminate()
+    }
 }

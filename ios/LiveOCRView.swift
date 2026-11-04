@@ -353,6 +353,19 @@ struct LiveOCRView: View {
         scannedText = ""
         scannedSummary = "Working it out…"
 
+        #if DEBUG
+        // Simulator only (no camera, no model there): RTCAM_FAKE_ANSWER is what the
+        // model "said", so the path from the answer to the person can be tested.
+        if let fake = ProcessInfo.processInfo.environment["RTCAM_FAKE_ANSWER"], !fake.isEmpty {
+            frozenPhoto = UIImage(systemName: "cup.and.saucer")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                RatePrompt.noteResult()
+                say(fake)
+            }
+            return
+        }
+        #endif
+
         cameraPreviewRef?.capturePhoto { image in
             guard let image else {
                 isScanning = false
@@ -638,7 +651,16 @@ struct LiveOCRView: View {
         #if DEBUG
         if english != q { SpeakLog.note("question[\(YourLanguage.activeCode)>en]", english) }
         #endif
-        let answer = await OnDeviceVisionNarrator.shared.ask(english, about: photo)
+        var answer: String?
+        #if DEBUG
+        if let fake = ProcessInfo.processInfo.environment["RTCAM_FAKE_FOLLOWUP"], !fake.isEmpty {
+            answer = fake
+        } else {
+            answer = await OnDeviceVisionNarrator.shared.ask(english, about: photo)
+        }
+        #else
+        answer = await OnDeviceVisionNarrator.shared.ask(english, about: photo)
+        #endif
         await MainActor.run {
             isAsking = false
             if answer != nil { RatePrompt.noteResult() }

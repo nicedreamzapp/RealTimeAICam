@@ -309,11 +309,12 @@ final class YourLanguageTranslator: ObservableObject {
                    "a white coffee mug on a wooden table.": "Una taza de café blanca sobre una mesa de madera.",
                    "chair": "silla", "dog": "perro", "person": "persona", "computer mouse": "ratón de ordenador",
                    "mouse (animal)": "ratón (animal)", "eyeglasses": "anteojos", "coffee cup": "taza de café",
-                   "move left.": "Muévete a la izquierda."],
+                   "move left.": "Muévete a la izquierda.", "the cup is white.": "La taza es blanca."],
             "fr": ["exit": "Sortie", "hello world": "Bonjour le monde", "open daily": "Ouvert tous les jours",
                    "chair": "chaise", "dog": "chien", "person": "personne", "computer mouse": "souris d'ordinateur",
                    "mouse (animal)": "souris (animal)", "eyeglasses": "lunettes"],
             "en": ["taza": "cup", "una taza": "a cup", "¿de qué color es la taza?": "What color is the cup?",
+                   "de que color es la taza": "What color is the cup?",
                    "tasse": "cup", "salida": "exit", "sortie": "exit"],
         ]
         let key = text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
