@@ -58,6 +58,16 @@ class AnswerTextTest {
         assertFalse(AnswerText.isRefusal("I'm sorry, it's dim, but there is a red mug on a table."))
     }
 
+    @Test fun aDarkThingInTheListIsKept() {
+        // 11/04 review: "dark"/"dim" anywhere dropped real things.
+        assertEquals("a dark blue mug, a dim lamp and a chair", AnswerText.thingsOnly("a dark blue mug, a dim lamp, a chair"))
+        assertEquals("a very dark sofa", AnswerText.thingsOnly("a very dark sofa"))
+        // Only words about the photo itself are dropped.
+        assertEquals("a mug", AnswerText.thingsOnly("a mug, the photo is dark"))
+        assertEquals("a mug and a door", AnswerText.thingsOnly("too dim to see, a mug, dark, a door, very dark and blurry"))
+        assertNull(AnswerText.thingsOnly("dark, dim lighting, too dark to tell"))
+    }
+
     @Test fun hardToSeeButDescribedIsNotARefusal() {
         assertFalse(AnswerText.isRefusal("It's too dark to see much, but there is a lamp on a table."))
         assertFalse(AnswerText.isRefusal("I can't make out details. A white door is on the right."))

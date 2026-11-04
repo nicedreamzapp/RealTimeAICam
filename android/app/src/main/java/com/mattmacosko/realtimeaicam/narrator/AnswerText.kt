@@ -82,13 +82,33 @@ object AnswerText {
         "apologies", "however", "really", "quite", "but",
     )
 
-    /** Fragments that are a clause about the photo, not a thing in it ("it's just a blurry"). */
+    /**
+     * Fragments that are a clause about the photo, not a thing in it ("it's just a blurry",
+     * "the photo is dark", "too dim to see"). A thing that is dark is still a thing: "a dark
+     * blue mug" and "a dim lamp" stay (11/04 review).
+     */
     private fun isPhotoTalk(fragment: String): Boolean {
         val f = fragment.lowercase().replace('’', '\'').trim()
-        if (PHOTO_TALK.containsMatchIn(f)) return true
+        if (PHOTO_TALK_FRAGMENT.containsMatchIn(f)) return true
         if (Regex("^(it|this|that|there|they|these|those|i|we|you)\\b").containsMatchIn(f)) return true
-        return Regex("\\b(image|photo|picture|dark|dim|blur\\w*|unclear|nothing)\\b").containsMatchIn(f)
+        if (PHOTO_STATE_ONLY.matches(f)) return true
+        return Regex("\\b(image|photo|picture|unclear|nothing)\\b").containsMatchIn(f)
     }
+
+    /** Talk about the photo inside a fragment: [PHOTO_TALK] without the bare "very dark"/"blurry". */
+    private val PHOTO_TALK_FRAGMENT = Regex(
+        "\\b(it'?s|it is|this is|the (image|photo|picture|shot|scene)|hard to see|hard to tell|" +
+            "out of focus|i think|i can make out|i can see|" +
+            "(too|so) (dark|dim|blurry|blurred|grainy|fuzzy)|(dark|dim|blurry|blurred) to (see|tell|make))\\b"
+    )
+
+    /** A fragment that is nothing but how the photo looks: "dark", "very dim", "dark and blurry". */
+    private val PHOTO_STATE_ONLY = Regex(
+        "^(?:(?:just|too|very|quite|really|so|a bit|a little|kind of|pretty|rather|and|or|a)\\s+)*" +
+            "(?:dark|dim|blurry|blurred|grainy|fuzzy|murky|shadowy|unclear)" +
+            "(?:\\s+(?:and|or)\\s+(?:(?:too|very|quite|a bit)\\s+)?(?:dark|dim|blurry|blurred|grainy|fuzzy|murky|shadowy|unclear))*" +
+            "(?:\\s+(?:image|photo|picture|shot|scene|lighting|light))?$"
+    )
 
     private val INSTRUCTION_VERBS = listOf(
         "hold", "move", "turn", "take", "try", "use", "ensure", "make sure",
