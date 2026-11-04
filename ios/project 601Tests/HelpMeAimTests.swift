@@ -141,6 +141,16 @@ struct AimVocabularyTests {
         #expect(t.classNames == ["teddy", "stuffed animal"])
     }
 
+    @Test func bunnyFindsAStuffedAnimalInTheRealVocabulary() throws {
+        let url = try #require(Bundle.main.url(forResource: "yoloe_classes", withExtension: "json"))
+        let real = try JSONDecoder().decode([String].self, from: Data(contentsOf: url))
+        #expect(real.count > 4000)
+        for word in ["bunny", "my bunny", "rabbit", "teddy bear", "plushie", "stuffed animal"] {
+            let m = try #require(AimVocabulary.match(word, classNames: real), "\(word)")
+            #expect(m.classNames.contains("stuffed animal"), "\(word)")
+        }
+    }
+
     @Test func unknownWordHasNoMatch() {
         #expect(AimVocabulary.match("zebra", classNames: names) == nil)
         #expect(AimVocabulary.match("zebras", classNames: names) == nil)

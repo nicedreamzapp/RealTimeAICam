@@ -355,6 +355,17 @@ final class HelpMeAimController: ObservableObject {
         analyzer.onObservation = { [weak self] obs in
             MainActor.assumeIsolated { self?.handle(obs) }
         }
+        #if DEBUG
+        // Test builds only: open on Picture Taken with a long description, so
+        // the simulator can check it scrolls without a camera.
+        if ProcessInfo.processInfo.arguments.contains("-aimPreviewTaken") {
+            lastPhoto = UIGraphicsImageRenderer(size: CGSize(width: 1200, height: 900)).image { ctx in
+                UIColor.darkGray.setFill(); ctx.fill(CGRect(x: 0, y: 0, width: 1200, height: 900))
+            }
+            statusText = Array(repeating: "A soft white stuffed bunny with long floppy ears sits on a wooden table next to a blue mug, a pair of glasses and a stack of mail.", count: 5).joined(separator: " ") + " END OF DESCRIPTION. Saved to your photos with its description."
+            phase = .taken
+        }
+        #endif
     }
 
     func setVoice(_ identifier: String) {
