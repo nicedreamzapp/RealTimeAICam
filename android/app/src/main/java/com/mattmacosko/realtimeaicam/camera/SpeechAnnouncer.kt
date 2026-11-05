@@ -352,10 +352,7 @@ class SpeechAnnouncer(context: Context) {
         return YL_EN
     }
 
-    private fun screenReaderOn(): Boolean {
-        val am = appContext.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
-        return am != null && am.isEnabled && am.isTouchExplorationEnabled
-    }
+    private fun screenReaderOn(): Boolean = UiCue.screenReaderOn(appContext)
 
     /** iOS setSpeechEnabled/handleToggleSpeech behavior. */
     fun setEnabled(on: Boolean) {
@@ -523,12 +520,26 @@ class SpeechAnnouncer(context: Context) {
      * app's voice says it when it is off (2026-11-04: "Live Cam is coming soon" was heard twice).
      */
     fun cue(text: String) {
+        // Your language (11/04 review): the cue is put into it first when its pack is on the
+        // phone, and said in that language; otherwise English, as everywhere else.
+        val lang = com.mattmacosko.realtimeaicam.translation.YourLanguage.active(appContext)
+        if (lang == YL_EN) { cueIn(text, YL_EN); return }
+        val mine = ++cueSeq
+        com.mattmacosko.realtimeaicam.translation.YourLanguage.translateAsync(text, YL_EN, lang) { said ->
+            if (mine != cueSeq) return@translateAsync
+            if (said.isNullOrBlank()) cueIn(text, YL_EN) else cueIn(said, lang)
+        }
+    }
+
+    @Volatile private var cueSeq = 0L
+
+    private fun cueIn(text: String, lang: String) {
         when (UiCue.route(UiCue.screenReaderOn(appContext))) {
             UiCue.Route.SCREEN_READER -> {
                 if (debuggable) android.util.Log.i("RTCamSpeech", "via TalkBack: $text")
                 announceToScreenReader(text)
             }
-            UiCue.Route.APP_VOICE -> speak(text)
+            UiCue.Route.APP_VOICE -> speakIn(text, lang)
         }
     }
 

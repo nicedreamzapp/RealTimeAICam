@@ -55,12 +55,13 @@ object A11yFocus {
      * Waits until this window has focus again (the camera permission dialog, for one, sits on
      * top at first launch); focus moved under a dialog would pull TalkBack off the dialog.
      */
-    suspend fun awaitWindowFocus(view: View, timeoutMs: Long = 60_000L) {
+    suspend fun awaitWindowFocus(view: View, timeoutMs: Long = 60_000L): Boolean {
         var waited = 0L
         while (!view.hasWindowFocus() && waited < timeoutMs) {
             delay(150)
             waited += 150
         }
+        return view.hasWindowFocus()
     }
 
     private fun find(node: SemanticsNode, tag: String): SemanticsNode? {

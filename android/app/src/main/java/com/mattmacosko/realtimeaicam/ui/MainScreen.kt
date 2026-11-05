@@ -117,13 +117,15 @@ fun MainScreen(
     // TalkBack's focus on nothing. Now "Home" is said, then TalkBack lands on Settings.
     val view = androidx.compose.ui.platform.LocalView.current
     var guideClosed by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    // The mode now, not when the guide closed: leaving home during the waits drops the cue.
+    val currentMode by androidx.compose.runtime.rememberUpdatedState(mode)
     androidx.compose.runtime.LaunchedEffect(guideClosed) {
-        if (guideClosed == 0 || mode != AppMode.Home) return@LaunchedEffect
-        A11yFocus.awaitWindowFocus(view)
+        if (guideClosed == 0 || currentMode != AppMode.Home) return@LaunchedEffect
+        if (!A11yFocus.awaitWindowFocus(view) || currentMode != AppMode.Home) return@LaunchedEffect
         homeCue(com.mattmacosko.realtimeaicam.camera.UiCue.HOME)
         if (com.mattmacosko.realtimeaicam.camera.UiCue.screenReaderOn(context)) {
             kotlinx.coroutines.delay(com.mattmacosko.realtimeaicam.camera.UiCue.HOME_FOCUS_DELAY_MS)
-            A11yFocus.moveToSoon(view, HOME_FIRST_CONTROL_TAG)
+            if (currentMode == AppMode.Home) A11yFocus.moveToSoon(view, HOME_FIRST_CONTROL_TAG)
         }
     }
     // Live Cam's "coming soon", also on screen: with the volume at 0 the spoken line alone

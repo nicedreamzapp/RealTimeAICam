@@ -1,6 +1,5 @@
 package com.mattmacosko.realtimeaicam.camera
 
-import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
 import android.view.accessibility.AccessibilityManager
 
@@ -25,18 +24,13 @@ object UiCue {
     fun route(screenReaderOn: Boolean): Route = if (screenReaderOn) Route.SCREEN_READER else Route.APP_VOICE
 
     /**
-     * TalkBack (or another screen reader) is running: explore by touch is on, or an enabled
-     * service gives spoken feedback (TalkBack with explore by touch off still speaks).
+     * TalkBack (or another screen reader) is running: explore by touch is on. Not "any spoken
+     * service": Select to Speak is one too, and never says announcements, so a cue sent its way
+     * was silence (11/04 review). The one definition the announcer uses as well.
      */
     fun screenReaderOn(context: Context): Boolean {
         val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
-        if (am == null || !am.isEnabled) return false
-        if (am.isTouchExplorationEnabled) return true
-        return try {
-            am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_SPOKEN).isNotEmpty()
-        } catch (_: Throwable) {
-            false
-        }
+        return am != null && am.isEnabled && am.isTouchExplorationEnabled
     }
 
     /**
