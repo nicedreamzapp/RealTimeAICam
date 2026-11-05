@@ -497,8 +497,13 @@ class SpeechAnnouncer(context: Context) {
             return
         }
         val id = "wait-${utteranceSeq++}"
+        val app = com.mattmacosko.realtimeaicam.AppLang.code()
         val lang = localizeTarget()
-        if (lang != YL_EN) {
+        if (app != YL_EN) {
+            // The app's own line, already in the app's language (Spanish ships in the app).
+            utteranceLanguage[id] = app
+            speakInternal(text, id)
+        } else if (lang != YL_EN) {
             val said = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 com.mattmacosko.realtimeaicam.translation.YourLanguage.translateBlocking(text, YL_EN, lang)
             }
@@ -522,7 +527,11 @@ class SpeechAnnouncer(context: Context) {
     fun cue(text: String, stillWanted: () -> Boolean = { true }) {
         // Your language (11/04 review): the cue is put into it first when its pack is on the
         // phone, and said in that language; otherwise English, as everywhere else.
+        // The app's own Spanish ships in the app (2026-11-05): a cue already in the app's
+        // language is said as is; Your language in another language still goes through the translator.
+        val app = com.mattmacosko.realtimeaicam.AppLang.code()
         val lang = com.mattmacosko.realtimeaicam.translation.YourLanguage.active(appContext)
+        if (app != YL_EN) { cueIn(text, app); return }
         if (lang == YL_EN) { cueIn(text, YL_EN); return }
         val mine = ++cueSeq
         com.mattmacosko.realtimeaicam.translation.YourLanguage.translateAsync(text, YL_EN, lang) { said ->
@@ -579,6 +588,11 @@ class SpeechAnnouncer(context: Context) {
     }
 
     private fun speakLine(text: String, result: Boolean, localize: Boolean = true) {
+        // The app's own lines ([speak]) come already in the app's language (AppLang.str): a
+        // Spanish app says them in a Spanish voice with no translating. Results are content
+        // (English from the camera or the model) and keep the Your-language path below.
+        val app = com.mattmacosko.realtimeaicam.AppLang.code()
+        if (!result && localize && app != YL_EN) { speakIn(text, app); return }
         cueSeq++ // a cue still being translated never cuts into a newer line
         announcementQueue.clear()
         isProcessingQueue = false

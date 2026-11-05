@@ -14,7 +14,7 @@
 
     <!-- SplitCompat: code from the on-demand readers module is usable the moment it installs. -->
     <application
-        android:name="com.google.android.play.core.splitcompat.SplitCompatApplication"
+        android:name=".RTCamApp"
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
