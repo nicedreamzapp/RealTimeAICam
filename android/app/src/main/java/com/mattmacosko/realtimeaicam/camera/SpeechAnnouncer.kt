@@ -212,11 +212,6 @@ class SpeechAnnouncer(context: Context) {
             override fun onStart(utteranceId: String?) {
                 this@SpeechAnnouncer.isSpeaking = true
                 speakingNow.value = true
-                // Debug builds log every line the app's voice actually starts saying, so a cable
-                // test reads what was heard. Logged at the request, a line the engine then
-                // refused (and handed to TalkBack) read as said twice (2026-11-04).
-                val line = utteranceId?.let { loggedLines.remove(it) }
-                if (line != null) android.util.Log.d("RTCamSpeech", line)
             }
 
             override fun onDone(utteranceId: String?) {
@@ -537,9 +532,6 @@ class SpeechAnnouncer(context: Context) {
         }
     }
 
-    /** Debug builds: lines handed to the engine, logged once it starts saying them. */
-    private val loggedLines = java.util.concurrent.ConcurrentHashMap<String, String>()
-
     private val debuggable: Boolean
         get() = (appContext.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
@@ -660,10 +652,9 @@ class SpeechAnnouncer(context: Context) {
             }
         }
         lastLine = text to id
-        if (debuggable) {
-            if (loggedLines.size > 32) loggedLines.clear()
-            loggedLines[id] = text
-        }
+        // Debug builds log every line handed to the app's voice, so a cable test can read it
+        // (lines sent to TalkBack are logged as "via TalkBack" instead, at info level).
+        if (debuggable) android.util.Log.d("RTCamSpeech", text)
         if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, id) == TextToSpeech.ERROR) {
             // Refused outright (engine died, bad state): don't let the line vanish.
             announceToScreenReader(text)
