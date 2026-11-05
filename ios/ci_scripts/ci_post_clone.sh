@@ -3,6 +3,10 @@
 # expects them, like tools/stage-models.sh does on our own Macs. The weights are too big for git, so Xcode Cloud
 # downloads the built-in ("balanced") vision model and the llama.cpp xcframework and checks every file against vision-model-manifest.json
 # (size + sha256). Real folders and real files only: a symlinked VisionModel is rejected by Apple (ITMS-90332).
+# Xcode Cloud blocks Swift package plugins/macros (mlx-swift's CudaBuild) until they are trusted; trust them here.
+defaults write com.apple.dt.Xcode IDESkipPackagePluginFingerprintValidatation -bool YES
+defaults write com.apple.dt.Xcode IDESkipMacroFingerprintValidation -bool YES
+
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
