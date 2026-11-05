@@ -127,7 +127,7 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
         if (!visible) return@LaunchedEffect
         kotlinx.coroutines.delay(INSTRUCTIONS_FOCUS_DELAY_MS)
         A11yFocus.awaitWindowFocus(view)
-        A11yFocus.moveTo(view, INSTRUCTIONS_TITLE_TAG)
+        A11yFocus.moveToSoon(view, INSTRUCTIONS_TITLE_TAG)
     }
 
     BackHandler(enabled = visible) {

@@ -123,7 +123,7 @@ fun MainScreen(
         homeCue(com.mattmacosko.realtimeaicam.camera.UiCue.HOME)
         if (com.mattmacosko.realtimeaicam.camera.UiCue.screenReaderOn(context)) {
             kotlinx.coroutines.delay(com.mattmacosko.realtimeaicam.camera.UiCue.HOME_FOCUS_DELAY_MS)
-            A11yFocus.moveTo(view, HOME_FIRST_CONTROL_TAG)
+            A11yFocus.moveToSoon(view, HOME_FIRST_CONTROL_TAG)
         }
     }
     // Live Cam's "coming soon", also on screen: with the volume at 0 the spoken line alone
