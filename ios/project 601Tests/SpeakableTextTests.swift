@@ -20,7 +20,7 @@ struct SpeakableTextTests {
     }
 
     @Test func phoneNumbersAreSaidDigitByDigit() {
-        #expect(say("Cell 805-895-8967") == "Cell eight zero five, eight nine five, eight nine six seven")
+        #expect(say("Cell 805-555-0100") == "Cell eight zero five, five five five, zero one zero zero")
         #expect(say("(707) 555-0142") == "seven zero seven, five five five, zero one four two")
         #expect(say("1-800-555-1234") == "one, eight zero zero, five five five, one two three four")
     }
