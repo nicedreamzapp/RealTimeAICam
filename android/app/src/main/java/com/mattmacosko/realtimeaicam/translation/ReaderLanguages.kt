@@ -129,6 +129,8 @@ object ReaderChoice {
 
     /** A tap steps to the next choice and wraps back to English. */
     fun next(index: Int): Int = (index + 1) % count
+    /** One back, wrapping from English to the last language (TalkBack's "Previous language"). */
+    fun previous(index: Int): Int = (index - 1 + count) % count
 
     fun opensTranslating(context: android.content.Context): Boolean =
         context.getSharedPreferences(PREF_FILE, android.content.Context.MODE_PRIVATE)

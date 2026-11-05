@@ -105,9 +105,27 @@ fun MainScreen(
 
     var showVoiceGrid by remember { androidx.compose.runtime.mutableStateOf(false) }
     var showHomeSettings by remember { androidx.compose.runtime.mutableStateOf(false) }
-    // A voice for the home screen's own lines (Live Cam coming soon), made on first use.
+    // A voice for the home screen's own lines (Live Cam coming soon, Home), made on first use.
     var homeVoice by remember { androidx.compose.runtime.mutableStateOf<com.mattmacosko.realtimeaicam.camera.SpeechAnnouncer?>(null) }
     DisposableEffect(Unit) { onDispose { homeVoice?.shutdown() } }
+    fun homeCue(line: String) {
+        val voice = homeVoice ?: com.mattmacosko.realtimeaicam.camera.SpeechAnnouncer(context)
+            .also { homeVoice = it }
+        voice.cue(line)
+    }
+    // Done on the guide (first-time-user test, 2026-11-04): home came back in silence with
+    // TalkBack's focus on nothing. Now "Home" is said, then TalkBack lands on Settings.
+    val view = androidx.compose.ui.platform.LocalView.current
+    var guideClosed by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    androidx.compose.runtime.LaunchedEffect(guideClosed) {
+        if (guideClosed == 0 || mode != AppMode.Home) return@LaunchedEffect
+        A11yFocus.awaitWindowFocus(view)
+        homeCue(com.mattmacosko.realtimeaicam.camera.UiCue.HOME)
+        if (com.mattmacosko.realtimeaicam.camera.UiCue.screenReaderOn(context)) {
+            kotlinx.coroutines.delay(com.mattmacosko.realtimeaicam.camera.UiCue.HOME_FOCUS_DELAY_MS)
+            A11yFocus.moveTo(view, HOME_FIRST_CONTROL_TAG)
+        }
+    }
     // Live Cam's "coming soon", also on screen: with the volume at 0 the spoken line alone
     // left the tap with no feedback at all (Cricket, 2026-11-04). Each tap restarts it.
     var liveCamTaps by remember { androidx.compose.runtime.mutableIntStateOf(0) }
@@ -142,11 +160,9 @@ fun MainScreen(
                     onHelpMeAim = { onModeChange(AppMode.HelpMeAim) },
                     // Layout only for now: the button is there, Live Cam itself is not built yet.
                     onLiveCam = {
-                        val voice = homeVoice ?: com.mattmacosko.realtimeaicam.camera.SpeechAnnouncer(context)
-                            .also { homeVoice = it }
-                        // Spoken by the app's voice, or by TalkBack when it is on (the announcer
-                        // routes it), and shown on screen below.
-                        voice.speak(LIVE_CAM_COMING_SOON)
+                        // Said once: by TalkBack when it is on, else by the app's voice (it was
+                        // heard twice, 2026-11-04). Also shown on screen below.
+                        homeCue(LIVE_CAM_COMING_SOON)
                         liveCamTaps++
                     },
                     onSettings = { showHomeSettings = true },
@@ -221,12 +237,17 @@ fun MainScreen(
         // Instructions sheet over Home (first launch + INFO button)
         InstructionsSheet(
             visible = showInstructions && mode == AppMode.Home,
-            onDismiss = { showInstructions = false },
+            onDismiss = {
+                showInstructions = false
+                guideClosed++
+            },
         )
     }
 }
 
-private const val LIVE_CAM_COMING_SOON = "Live Cam is coming soon."
+private const val LIVE_CAM_COMING_SOON = com.mattmacosko.realtimeaicam.camera.UiCue.LIVE_CAM_COMING_SOON
+/** The home screen's first control, where TalkBack lands after the guide closes. */
+const val HOME_FIRST_CONTROL_TAG = "homeSettings"
 private const val LIVE_CAM_NOTE_MS = 3_000L
 
 @Composable

@@ -47,6 +47,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -59,7 +60,7 @@ const val YOUR_LANGUAGE_GUIDE = "Your language: in Settings, pick the language y
 private val TUTORIAL_TEXT = listOf(
     "Welcome to the RealTime A I Camera.",
     "The home screen has two buttons at the top, Settings and Info and guide, then five tools, then the voice button. Swipe through them, or touch the screen to explore.",
-    "Read. Point at printed text and hear it out loud. The Language button at the top picks English, or one of ${com.mattmacosko.realtimeaicam.translation.ReaderLanguages.all.size} languages to translate into English. Russian, Ukrainian, Chinese, Japanese, Korean, Thai and Arabic need their own reader, downloaded once the first time you pick them, then offline. Tap it to step to the next one, or with TalkBack swipe up or down on it. The small button next to Speak switches between Auto read, which is on to start and reads new text by itself, Mute, and Tap to read.",
+    "Read. Point at printed text and hear it out loud. The Language button at the top picks English, or one of ${com.mattmacosko.realtimeaicam.translation.ReaderLanguages.all.size} languages to translate into English. Russian, Ukrainian, Chinese, Japanese, Korean, Thai and Arabic need their own reader, downloaded once the first time you pick them, then offline. Tap it to step to the next one. The small button next to Speak switches between Auto read, which is on to start and reads new text by itself, Mute, and Tap to read.",
     "Object Detection names the things around you as you move the phone.",
     "What's this? takes one careful look. Mail and pages get the point of them, like who sent it and what's due. A room gets a description. Afterwards, hold to ask a follow up question.",
     "Help Me Aim takes a good photo for you. Choose Face, Picture or Page, or Something Else and say what you want. It tells you which way to move, counts down, and saves the photo with a description. For things it doesn't know by sight, like a wallet, it looks closely and tells you where it is. Double tap anywhere to take the picture yourself.",
@@ -68,6 +69,10 @@ private val TUTORIAL_TEXT = listOf(
     YOUR_LANGUAGE_GUIDE,
     "Everything runs on your phone and works offline. No accounts and no tracking.",
 ).joinToString(" ")
+
+const val INSTRUCTIONS_TITLE_TAG = "instructionsTitle"
+/** The sheet slides up in 300 ms; focus moves once it is in place. */
+private const val INSTRUCTIONS_FOCUS_DELAY_MS = 450L
 
 /** iOS AppInstructionsView (UI_SPEC §4) as a slide-up sheet. */
 @Composable
@@ -111,6 +116,18 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
     fun stopAudio() {
         tts.stop()
         speaking = false
+    }
+
+    // Opening (first-time-user test, 2026-11-04): TalkBack only read the app's name, then the
+    // scrolls were silent. Now its focus lands on the "Instructions" heading as the sheet opens,
+    // so it says the heading and swipes go on through the guide. Waits out the camera permission
+    // dialog that covers the sheet at first launch.
+    val view = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.LaunchedEffect(visible) {
+        if (!visible) return@LaunchedEffect
+        kotlinx.coroutines.delay(INSTRUCTIONS_FOCUS_DELAY_MS)
+        A11yFocus.awaitWindowFocus(view)
+        A11yFocus.moveTo(view, INSTRUCTIONS_TITLE_TAG)
     }
 
     BackHandler(enabled = visible) {
@@ -165,7 +182,12 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
                     fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White,
-                    modifier = Modifier.align(Alignment.Center),
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .semantics {
+                            heading()
+                            testTag = INSTRUCTIONS_TITLE_TAG
+                        },
                 )
             }
 

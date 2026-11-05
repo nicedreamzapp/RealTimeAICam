@@ -87,14 +87,14 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.semantics.progressBarRangeInfo
-import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -165,10 +165,26 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
         onDispose { pipeline.shutdown() }
     }
     // The language pill just switched modes: say the new choice from this screen.
+    // Otherwise, opened from home: "Point the camera at some text", once, unless text is already
+    // found or being read by then (first-time-user test, 2026-11-04: a few seconds of silence).
+    var readHintDone by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        ReaderChoice.pendingAnnouncement?.let {
+        val pillLine = ReaderChoice.pendingAnnouncement
+        if (pillLine != null) {
             ReaderChoice.pendingAnnouncement = null
-            pipeline.speaker.speak(it)
+            pipeline.speaker.speak(pillLine)
+        }
+        if (readHintDone) return@LaunchedEffect
+        readHintDone = true
+        if (pillLine != null) return@LaunchedEffect
+        kotlinx.coroutines.delay(com.mattmacosko.realtimeaicam.camera.UiCue.READ_HINT_DELAY_MS)
+        if (com.mattmacosko.realtimeaicam.camera.UiCue.shouldSayReadHint(
+                hasText = pipeline.recognizedText.value.isNotBlank() || pipeline.notice.value != null,
+                speaking = pipeline.isSpeaking.value,
+                openedByLanguagePill = false,
+            )
+        ) {
+            pipeline.speaker.cue(com.mattmacosko.realtimeaicam.camera.UiCue.READ_HINT)
         }
     }
 
@@ -317,27 +333,40 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
                 isTranslationShown -> "Translation"
                 else -> "${sourceLang.name} text"
             }
+            val cardTappable = isSpanish && (isTranslationShown || readerOffer)
+            val cardClickLabel = if (readerOffer) "Download the ${sourceLang.name} reader"
+                else "Show copy, continue reading and new scan"
+            val onCardTap = {
+                // The reader downloads only on this tap, never when the pill passes by.
+                if (readerOffer) pipeline.downloadReader(activity)
+                else pipeline.showTranslationPopup.value = true
+            }
             Column(
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
                     .background(IosColors.Material.copy(alpha = 0.90f), RoundedCornerShape(16.dp))
-                    .clickable(
-                        enabled = isSpanish && (isTranslationShown || readerOffer),
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClickLabel = if (readerOffer) "Download the ${sourceLang.name} reader"
-                            else "Show copy, continue reading and new scan",
-                    ) {
-                        // The reader downloads only on this tap, never when the pill passes by.
-                        if (readerOffer) pipeline.downloadReader(activity)
-                        else pipeline.showTranslationPopup.value = true
-                    }
+                    // Only a card that does something is a button. A plain reading card was a
+                    // disabled clickable, heard as "button, disabled" (2026-11-04).
+                    .then(
+                        if (cardTappable) Modifier.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClickLabel = cardClickLabel,
+                            onClick = onCardTap,
+                        ) else Modifier
+                    )
                     .padding(16.dp)
-                    // Read as one block: a status dot, a heading and a scrolling
-                    // body are three separate stops otherwise.
-                    .semantics(mergeDescendants = true) {
-                        contentDescription = "$cardHeading. $displayText"
+                    // Read as one block, once: a status dot, a heading and a scrolling body are
+                    // three separate stops otherwise, and a merged label on top of the merged
+                    // text read the letter twice (2026-11-04). The tap stays an action.
+                    .clearAndSetSemantics {
+                        contentDescription = OcrCardSemantics.label(cardHeading, displayText)
+                        testTag = "readTextCard"
+                        if (cardTappable) {
+                            role = Role.Button
+                            onClick(label = cardClickLabel) { onCardTap(); true }
+                        }
                     },
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -977,9 +1006,9 @@ private fun TipLine(text: String) {
 
 /**
  * The Read language pill (2026-09-21 "Translate from", merged with English 2026-11-03).
- * A screen reader hears one control, "Language, English" or "Language, Spanish, translated
- * to English", and adjusts it like a slider (volume keys or TalkBack's adjust gesture);
- * a double tap or a sighted tap steps to the next choice, wrapping back to English.
+ * A screen reader hears one button, "Language, English" or "Language, Spanish, translated
+ * to English"; a double tap or a sighted tap steps to the next choice, wrapping back to
+ * English, and TalkBack's actions menu has "Previous language".
  */
 @Composable
 private fun LanguagePill(index: Int, target: String = "en", onSelect: (Int) -> Unit) {
@@ -997,18 +1026,19 @@ private fun LanguagePill(index: Int, target: String = "en", onSelect: (Int) -> U
             .background(IosColors.Material.copy(alpha = 0.85f), RoundedCornerShape(20.dp))
             .clickable { next() }
             .padding(horizontal = 12.dp, vertical = 10.dp)
+            // A button, not a slider (first-time-user test, 2026-11-04: "Language, slider"
+            // didn't match what it looks like): "Language, English, button, double tap to change".
+            // Going back one is an action in TalkBack's actions menu.
             .clearAndSetSemantics {
-                contentDescription = "Language"
-                stateDescription = pillSpoken
-                progressBarRangeInfo = ProgressBarRangeInfo(
-                    i.toFloat(), 0f..(count - 1).toFloat(), steps = count - 2,
+                contentDescription = OcrCardSemantics.languageLabel(pillSpoken)
+                role = Role.Button
+                testTag = "readLanguagePill"
+                onClick(label = "change") { next(); true }
+                customActions = listOf(
+                    androidx.compose.ui.semantics.CustomAccessibilityAction("Previous language") {
+                        onSelect(ReaderChoice.previous(i)); true
+                    },
                 )
-                setProgress { v ->
-                    val to = Math.round(v).coerceIn(0, count - 1)
-                    if (to != i) onSelect(to)
-                    true
-                }
-                onClick(label = "Next language") { next(); true }
             },
     ) {
         Text("🌍", fontSize = 14.sp)
@@ -1020,4 +1050,14 @@ private fun LanguagePill(index: Int, target: String = "en", onSelect: (Int) -> U
             maxLines = 1,
         )
     }
+}
+
+
+/** The spoken words of Read's text card and language pill, kept apart so they can be unit tested. */
+object OcrCardSemantics {
+    /** "Detected. <the text>": the heading, then the text, each once. */
+    fun label(heading: String, text: String): String = if (text.isBlank()) heading else "$heading. $text"
+
+    /** "Language, English" (TalkBack adds "button, double tap to change"). */
+    fun languageLabel(spoken: String): String = "Language, $spoken"
 }

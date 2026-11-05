@@ -519,6 +519,23 @@ class SpeechAnnouncer(context: Context) {
     fun speak(text: String) = speakLine(text, result = false)
 
     /**
+     * A short screen cue, said once ([UiCue]): TalkBack announces it when TalkBack is on, the
+     * app's voice says it when it is off (2026-11-04: "Live Cam is coming soon" was heard twice).
+     */
+    fun cue(text: String) {
+        when (UiCue.route(screenReaderOn())) {
+            UiCue.Route.SCREEN_READER -> {
+                if (debuggable) android.util.Log.i("RTCamSpeech", "via TalkBack: $text")
+                announceToScreenReader(text)
+            }
+            UiCue.Route.APP_VOICE -> speak(text)
+        }
+    }
+
+    private val debuggable: Boolean
+        get() = (appContext.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
+    /**
      * A result (a read page, a translation, an answer, a description). Same as [speak], but when
      * the voice finishes it to the end it counts as a success for the rating card.
      */
@@ -599,10 +616,11 @@ class SpeechAnnouncer(context: Context) {
             .getBoolean("speakAnswersAloud", true)
 
     private fun speakInternal(text: String, id: String) {
-        // Debug builds log every spoken line so a cable test can read what was said.
-        if ((appContext.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) android.util.Log.d("RTCamSpeech", text)
         val lang = utteranceLanguage.remove(id) ?: YL_EN
         if (!speaksAloud || voiceUnavailable) {
+            // Debug builds log each line by the way it was said: a TalkBack line logged as the
+            // app's voice read as the same words said twice (first-time-user test, 2026-11-04).
+            if (debuggable) android.util.Log.i("RTCamSpeech", "via TalkBack: $text")
             // TalkBack reads this in the user's OWN voice and rate, which is the
             // whole point of the setting. Also the fallback when no speech engine works.
             announceToScreenReader(text)
@@ -634,6 +652,8 @@ class SpeechAnnouncer(context: Context) {
             }
         }
         lastLine = text to id
+        // Debug builds log every line the app's voice says, so a cable test can read it.
+        if (debuggable) android.util.Log.d("RTCamSpeech", text)
         if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, id) == TextToSpeech.ERROR) {
             // Refused outright (engine died, bad state): don't let the line vanish.
             announceToScreenReader(text)

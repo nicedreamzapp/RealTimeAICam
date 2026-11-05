@@ -54,6 +54,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -485,7 +486,11 @@ private fun SettingsPill(onClick: () -> Unit) {
                 onClickLabel = "Open models, voice and other settings",
                 onClick = onClick,
             )
-            .clearAndSetSemantics { contentDescription = "Settings" },
+            .clearAndSetSemantics {
+                contentDescription = "Settings"
+                // TalkBack lands here when the guide closes (MainScreen).
+                testTag = HOME_FIRST_CONTROL_TAG
+            },
         contentAlignment = Alignment.Center,
     ) {
         Box(
