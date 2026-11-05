@@ -237,6 +237,8 @@ struct LiveOCRView: View {
 
     @State private var showTextOverlay = true
     @State private var isSpeaking = false
+    /// Read's opening hint, waiting its moment; cancelled when Read is left (11/04 review).
+    @State private var readHintTask: Task<Void, Never>?
     @State private var showSettings = false
     @State private var cameraPreviewRef: CameraPreviewView?
     @State private var showTranslationPopup = false
@@ -572,13 +574,16 @@ struct LiveOCRView: View {
         let byPill = UICue.readerSwitchedByPill
         UICue.readerSwitchedByPill = false
         guard ocrMode != .mail, !byPill else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + UICue.readHintDelay) {
-            guard UICue.shouldSayReadHint(
+        readHintTask?.cancel()
+        readHintTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(UICue.readHintDelay * 1_000_000_000))
+            guard !Task.isCancelled, UICue.shouldSayReadHint(
                 hasText: !viewModel.recognizedText.isEmpty,
                 speaking: isSpeaking || viewModel.isSpeakingNow,
                 openedByLanguagePill: byPill) else { return }
-            UICue.say(UICue.readHint) {
-                viewModel.speak(text: UICue.readHint, voiceIdentifier: selectedVoiceIdentifier) {}
+            await UICue.say(UICue.readHint) { text, lang in
+                viewModel.nextSpeechLanguage = lang
+                viewModel.speak(text: text, voiceIdentifier: selectedVoiceIdentifier) {}
             }
         }
     }
@@ -1234,6 +1239,8 @@ struct LiveOCRView: View {
             // view that is already going away.
             cameraPreviewRef?.setTorchLevel(0)
             cancelCountdown()
+            readHintTask?.cancel()
+            readHintTask = nil
             autoReadTask?.cancel()
             autoReadTask = nil
             viewModel.stopSession()

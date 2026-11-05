@@ -178,15 +178,23 @@ struct HomeView: View {
     /// Done on the guide (first-time-user test, 2026-11-04): home came back in silence with
     /// focus on nothing. "Home" is said once, then VoiceOver lands on Settings, the first control.
     private func guideClosed() {
-        UICue.say(UICue.home) {
-            let utterance = AVSpeechUtterance(string: UICue.home)
-            utterance.voice = AVSpeechSynthesisVoice(identifier: viewModel.selectedVoiceIdentifier)
-                ?? AVSpeechSynthesisVoice(language: "en-US")
-            utterance.rate = 0.5
-            speechSynthesizer.speak(utterance)
-        }
-        guard UIAccessibility.isVoiceOverRunning else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + UICue.homeFocusDelay) {
+        let voiceId = viewModel.selectedVoiceIdentifier
+        let synth = speechSynthesizer
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(UICue.homeCueDelay * 1_000_000_000))
+            // Still home (not straight into a tool): otherwise say nothing.
+            guard mode == .home, !showInstructions else { return }
+            await UICue.say(UICue.home) { text, lang in
+                let utterance = AVSpeechUtterance(string: text)
+                utterance.voice = lang == YourLanguageRules.english
+                    ? (AVSpeechSynthesisVoice(identifier: voiceId) ?? AVSpeechSynthesisVoice(language: "en-US"))
+                    : AVSpeechSynthesisVoice(language: lang)
+                utterance.rate = 0.5
+                synth.speak(utterance)
+            }
+            guard UIAccessibility.isVoiceOverRunning else { return }
+            try? await Task.sleep(nanoseconds: UInt64(UICue.homeFocusDelay * 1_000_000_000))
+            guard mode == .home, !showInstructions else { return }
             settingsFocused = true
         }
     }

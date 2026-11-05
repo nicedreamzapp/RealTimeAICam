@@ -27,13 +27,26 @@ enum UICue {
         !hasText && !speaking && !openedByLanguagePill
     }
 
-    /// Says `line` once: a VoiceOver announcement when VoiceOver runs, else `appVoice()`.
-    static func say(_ line: String, appVoice: () -> Void) {
+    /// Delay before "Home" after the guide closes: VoiceOver's own screen change after a sheet
+    /// dismiss swallows an announcement posted right away (11/04 review).
+    static let homeCueDelay: TimeInterval = 0.6
+
+    /// Says `english` once, in Your language when it is set (11/04 review): a VoiceOver
+    /// announcement when VoiceOver runs, else `appVoice(text, language)`. Nothing is said if
+    /// the calling task was cancelled meanwhile (the screen was left).
+    @MainActor
+    static func say(_ english: String, appVoice: (_ text: String, _ language: String) -> Void) async {
+        let out: (text: String, lang: String) = YourLanguage.activeCode == YourLanguageRules.english
+            ? (english, YourLanguageRules.english)
+            : await YourLanguage.intoActive(english)
+        guard !Task.isCancelled else { return }
         switch route(voiceOverRunning: UIAccessibility.isVoiceOverRunning) {
         case .voiceOver:
+            let line = NSAttributedString(string: out.text,
+                                          attributes: [.accessibilitySpeechLanguage: out.lang])
             UIAccessibility.post(notification: .announcement, argument: line)
         case .appVoice:
-            appVoice()
+            appVoice(out.text, out.lang)
         }
     }
 }
