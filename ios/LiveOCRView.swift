@@ -565,6 +565,24 @@ struct LiveOCRView: View {
 
     /// One place where a sentence becomes speech, so the model path and the
     /// fallback path can never drift apart.
+    /// Read opening (first-time-user test, 2026-11-04: a few seconds of silence): "Point the
+    /// camera at some text", once, unless text is already found or being read by then, and not
+    /// when the Language pill just swapped readers.
+    private func sayReadHintIfQuiet() {
+        let byPill = UICue.readerSwitchedByPill
+        UICue.readerSwitchedByPill = false
+        guard ocrMode != .mail, !byPill else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + UICue.readHintDelay) {
+            guard UICue.shouldSayReadHint(
+                hasText: !viewModel.recognizedText.isEmpty,
+                speaking: isSpeaking || viewModel.isSpeakingNow,
+                openedByLanguagePill: byPill) else { return }
+            UICue.say(UICue.readHint) {
+                viewModel.speak(text: UICue.readHint, voiceIdentifier: selectedVoiceIdentifier) {}
+            }
+        }
+    }
+
     private func say(_ sentence: String) {
         // The model writes English; Your language gets it translated first, shown
         // and said in that language (~1 s, 2026-11-04). English: no change.
@@ -1183,6 +1201,7 @@ struct LiveOCRView: View {
             #if DEBUG
             startFakeOCRIfAsked()
             #endif
+            sayReadHintIfQuiet()
         }
         .onChange(of: viewModel.recognizedText) { text in
             guard ocrMode != .mail, readMode == .auto else { return }
@@ -1297,6 +1316,7 @@ struct LiveOCRView: View {
         let wantsEnglish = page == nil
         UserDefaults.standard.set(wantsEnglish ? "english" : "translate", forKey: ReaderLanguage.key)
         guard wantsEnglish != (ocrMode == .english) else { return }
+        UICue.readerSwitchedByPill = true
         viewModel.stopSpeaking()
         viewModel.stopSession()
         viewModel.clearText()

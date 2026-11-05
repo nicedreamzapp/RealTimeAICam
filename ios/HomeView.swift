@@ -9,6 +9,8 @@ struct HomeView: View {
     /// Settings, Models included, right from home; it used to be only inside
     /// the reader screens (Matt, 2026-11-03).
     @State private var showSettings = false
+    /// VoiceOver lands on Settings when the guide closes (first-time-user test, 2026-11-04).
+    @AccessibilityFocusState private var settingsFocused: Bool
     @ObservedObject private var modelDownloader = VisionModelDownloader.shared
     /// Last quarter (25/50/75/100) already spoken aloud, so each is said once.
     @State private var spokenDownloadQuarter = 0
@@ -137,7 +139,7 @@ struct HomeView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
             }
         }
-        .sheet(isPresented: $showInstructions) {
+        .sheet(isPresented: $showInstructions, onDismiss: guideClosed) {
             AppInstructionsView(selectedVoiceIdentifier: viewModel.selectedVoiceIdentifier)
                 .onAppear {
                     if buttonDebouncer.canPress("HomeView-1") {
@@ -170,6 +172,22 @@ struct HomeView: View {
                 showInstructions = true
                 UserDefaults.standard.set(true, forKey: "hasShownInstructions")
             }
+        }
+    }
+
+    /// Done on the guide (first-time-user test, 2026-11-04): home came back in silence with
+    /// focus on nothing. "Home" is said once, then VoiceOver lands on Settings, the first control.
+    private func guideClosed() {
+        UICue.say(UICue.home) {
+            let utterance = AVSpeechUtterance(string: UICue.home)
+            utterance.voice = AVSpeechSynthesisVoice(identifier: viewModel.selectedVoiceIdentifier)
+                ?? AVSpeechSynthesisVoice(language: "en-US")
+            utterance.rate = 0.5
+            speechSynthesizer.speak(utterance)
+        }
+        guard UIAccessibility.isVoiceOverRunning else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + UICue.homeFocusDelay) {
+            settingsFocused = true
         }
     }
 
@@ -489,6 +507,7 @@ struct HomeView: View {
         .accessibilityLabel("Settings")
         .accessibilityHint("Models, voice and other settings")
         .accessibilityAddTraits(.isButton)
+        .accessibilityFocused($settingsFocused)
     }
 
     private func homeColumn(scale: CGFloat, screenWidth: CGFloat) -> some View {

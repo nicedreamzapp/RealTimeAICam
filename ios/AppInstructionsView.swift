@@ -80,6 +80,8 @@ final class InstructionsSpeaker: NSObject, ObservableObject, AVSpeechSynthesizer
 struct AppInstructionsView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var speaker = InstructionsSpeaker()
+    /// VoiceOver starts on the guide's heading (first-time-user test, 2026-11-04).
+    @AccessibilityFocusState private var titleFocused: Bool
     let selectedVoiceIdentifier: String // Make it non-optional with default
 
     // Only used to slightly tailor the audio line
@@ -106,6 +108,9 @@ struct AppInstructionsView: View {
                     Text("👋 Welcome to RealTime AI Camera!")
                         .voiceOverWords("👋 Welcome to RealTime AI Camera!")
                         .font(.largeTitle.bold())
+                        .accessibilityAddTraits(.isHeader)
+                        .accessibilityIdentifier("guideTitle")
+                        .accessibilityFocused($titleFocused)
 
                     // Play / Stop toggle
                     DebouncedButton {
@@ -202,6 +207,14 @@ struct AppInstructionsView: View {
         }
         // Also stop if user swipes down to dismiss
         .onDisappear { speaker.stop() }
+        // The guide opening was heard as nothing but the app's name: VoiceOver now starts on
+        // its heading, then swipes go on through the guide.
+        .onAppear {
+            guard UIAccessibility.isVoiceOverRunning else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + UICue.guideFocusDelay) {
+                titleFocused = true
+            }
+        }
     }
 
     /// One tool: a heading VoiceOver can jump to, then what it does.

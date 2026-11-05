@@ -140,6 +140,8 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
     let cameraManager = ZoomCameraManager()
 
     private let speechSynthesizer = AVSpeechSynthesizer()
+    /// The app's voice is talking right now (Read's opening hint waits for it).
+    var isSpeakingNow: Bool { speechSynthesizer.isSpeaking }
     private var textRecognitionRequest: VNRecognizeTextRequest?
     private var lastProcessedTime = Date()
     private var currentLanguage: [String]?

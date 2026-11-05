@@ -35,6 +35,31 @@ final class GuideUITests: XCTestCase {
         XCTAssertEqual(found, ["Read", "Object Detection", "What's this?", "Help Me Aim", "Live Cam", "Settings"],
                        "tool headings in the guide")
     }
+
+    /// First-time-user test, 2026-11-04: the guide starts on its heading, and Done brings back a
+    /// home screen whose first control (where VoiceOver lands) is Settings.
+    @MainActor
+    func testGuideHeadingThenDoneBackToSettings() throws {
+        let app = XCUIApplication()
+        app.launchArguments += ["-hasShownInstructions", "YES"]
+        app.launch()
+        let info = app.buttons["Info and guide"].firstMatch
+        XCTAssertTrue(info.waitForExistence(timeout: 20))
+        sleep(3)
+        info.tap()
+        let title = app.staticTexts["guideTitle"].firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 10), "guide title")
+        XCTAssertTrue(title.isHeader, "guide title is a heading")
+        keep(app.screenshot(), "guide-open")
+        let done = app.buttons["Done"].firstMatch
+        XCTAssertTrue(done.waitForExistence(timeout: 5))
+        done.tap()
+        let settings = app.buttons["Settings"].firstMatch
+        XCTAssertTrue(settings.waitForExistence(timeout: 10), "home Settings after Done")
+        XCTAssertFalse(title.waitForExistence(timeout: 2), "guide gone after Done")
+        XCTAssertTrue(settings.isHittable, "Settings reachable after Done")
+        keep(app.screenshot(), "guide-done-home")
+    }
 }
 
 private extension XCUIElement {
