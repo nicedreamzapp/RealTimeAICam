@@ -10,10 +10,13 @@ package com.mattmacosko.realtimeaicam.camera
  *          mode keeps it: only "nothing saved" means Auto.
  *  - MUTE: text on screen only, nothing said by itself. Speak still works when tapped.
  */
-enum class ReadingMode(val key: String, val label: String) {
-    TAP("tap", "Tap to read"),
-    AUTO("auto", "Auto read"),
-    MUTE("mute", "Mute");
+enum class ReadingMode(val key: String, private val labelRes: Int) {
+    TAP("tap", com.mattmacosko.realtimeaicam.R.string.f_mode_tap),
+    AUTO("auto", com.mattmacosko.realtimeaicam.R.string.f_mode_auto),
+    MUTE("mute", com.mattmacosko.realtimeaicam.R.string.f_mode_mute);
+
+    /** The mode's name in the app's language ("Auto read" / "Lectura automática"), shown and said. */
+    val label: String get() = com.mattmacosko.realtimeaicam.AppLang.str(labelRes)
 
     val next: ReadingMode get() = entries[(ordinal + 1) % entries.size]
 

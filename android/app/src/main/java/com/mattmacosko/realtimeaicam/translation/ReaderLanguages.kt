@@ -1,6 +1,8 @@
 package com.mattmacosko.realtimeaicam.translation
 
 import com.google.mlkit.nl.translate.TranslateLanguage
+import com.mattmacosko.realtimeaicam.AppLang
+import com.mattmacosko.realtimeaicam.R
 
 /**
  * The languages the Translator reads (2026-09-21, Enes Deniz on AppleVis asked for more than
@@ -22,6 +24,44 @@ data class ReaderLanguage(
 ) {
     /** True when reading this language needs a one-time download first. */
     val needsReaderDownload: Boolean get() = reader != ScriptReader.LATIN
+
+    /** [name] in the app's language, as a label ("Francés" in Spanish). [name] stays English for logic and logs. */
+    val displayName: String get() = LanguageNames.name(code)
+
+    /** [displayName] inside a sentence: Spanish writes language names in lowercase ("en francés"). */
+    val nameInSentence: String get() = LanguageNames.inSentence(code)
+}
+
+/**
+ * Language names in the app's language (Spanish UI, 2026-11-05): what the Read pill, its
+ * TalkBack label and the reader lines say. Shipped in the app's strings, so nothing downloads.
+ */
+object LanguageNames {
+    fun name(code: String): String = AppLang.str(res(code))
+
+    fun inSentence(code: String): String =
+        if (AppLang.isSpanish) name(code).lowercase(AppLang.locale()) else name(code)
+
+    private fun res(code: String): Int = when (code) {
+        "es" -> R.string.f_lang_es
+        "fr" -> R.string.f_lang_fr
+        "de" -> R.string.f_lang_de
+        "it" -> R.string.f_lang_it
+        "pt" -> R.string.f_lang_pt
+        "nl" -> R.string.f_lang_nl
+        "pl" -> R.string.f_lang_pl
+        "tr" -> R.string.f_lang_tr
+        "id" -> R.string.f_lang_id
+        "vi" -> R.string.f_lang_vi
+        "ru" -> R.string.f_lang_ru
+        "uk" -> R.string.f_lang_uk
+        "zh" -> R.string.f_lang_zh
+        "ja" -> R.string.f_lang_ja
+        "ko" -> R.string.f_lang_ko
+        "th" -> R.string.f_lang_th
+        "ar" -> R.string.f_lang_ar
+        else -> R.string.f_lang_en
+    }
 }
 
 /** Which text reader sees a language's writing. */
@@ -60,21 +100,25 @@ object ReaderLanguages {
 
     val spanish = all[0]
 
-    /** Said (and shown) the first time a language downloads. Same words on iOS. */
-    fun downloadLine(name: String): String = "Downloading $name, one time only. After that it works offline."
+    /**
+     * Said (and shown) the first time a language downloads. Same words on iOS. [name] is the
+     * language's name in the app's language, as it sits inside a sentence ([ReaderLanguage.nameInSentence]).
+     */
+    fun downloadLine(name: String): String = AppLang.str(R.string.f_reader_downloading, name)
 
     fun byCode(code: String?): ReaderLanguage = all.firstOrNull { it.code == code } ?: spanish
 
-    /** Shown and said when a picked language's reader is not on the phone yet. Nothing downloads until the tap. */
-    fun offerLine(name: String): String =
-        "$name needs a one-time download to read its writing. Tap this card to download it."
+    /**
+     * Shown and said when a picked language's reader is not on the phone yet. Nothing downloads until the tap.
+     * [name] starts the sentence ([ReaderLanguage.displayName]); same for [offlineLine] and [readyLine].
+     */
+    fun offerLine(name: String): String = AppLang.str(R.string.f_reader_offer, name)
 
     /** Said when the picked language's reader needs a connection it does not have. */
-    fun offlineLine(name: String): String =
-        "$name needs a one-time download. Connect to the internet once, then it works offline."
+    fun offlineLine(name: String): String = AppLang.str(R.string.f_reader_offline, name)
 
     /** Said once the reader (and its translation pack) is on the phone. */
-    fun readyLine(name: String): String = "$name is ready. Point at the text."
+    fun readyLine(name: String): String = AppLang.str(R.string.f_reader_ready, name)
 
     /**
      * Sign and page lines to translate one at a time. Scripts with capital letters keep the
@@ -122,6 +166,29 @@ object ReaderChoice {
     /** What a screen reader hears, and what is said when the choice changes. */
     fun spoken(index: Int): String =
         if (index <= 0) "English" else "${ReaderLanguages.all[index - 1].name}, translated to English"
+
+    /**
+     * The pill as shown, in the app's language. An English app keeps exactly
+     * [YourLanguageRules.pillLabel]; a Spanish one names the languages in Spanish
+     * ("Francés → Ing", "Francés → Español"), the same as iOS.
+     */
+    fun pillLabel(page: ReaderLanguage?, target: String): String {
+        if (!AppLang.isSpanish) return YourLanguageRules.pillLabel(page, target)
+        val en = YourLanguageRules.ENGLISH
+        if (target == en) return if (page == null) LanguageNames.name(en)
+            else AppLang.str(R.string.f_pill_to_eng, page.displayName)
+        val from = page?.code ?: en
+        return if (from == target) LanguageNames.name(target)
+            else "${LanguageNames.name(from)} → ${LanguageNames.name(target)}"
+    }
+
+    /** What TalkBack hears for the pill, and what is said when it changes, in the app's language. */
+    fun pillSpoken(page: ReaderLanguage?, target: String): String {
+        if (!AppLang.isSpanish) return YourLanguageRules.pillSpoken(page, target)
+        val from = page?.code ?: YourLanguageRules.ENGLISH
+        if (from == target) return LanguageNames.name(target)
+        return AppLang.str(R.string.f_pill_translated, LanguageNames.name(from), LanguageNames.inSentence(target))
+    }
 
     /** The pill's position for the current screen. */
     fun indexOf(translating: Boolean, language: ReaderLanguage): Int =

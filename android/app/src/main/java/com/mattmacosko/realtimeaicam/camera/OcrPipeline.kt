@@ -30,6 +30,8 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.google.mlkit.vision.text.TextRecognizer
+import com.mattmacosko.realtimeaicam.AppLang
+import com.mattmacosko.realtimeaicam.R
 import com.mattmacosko.realtimeaicam.translation.ReaderLanguage
 import com.mattmacosko.realtimeaicam.translation.ScriptReader
 import com.mattmacosko.realtimeaicam.translation.ReaderLanguages
@@ -324,7 +326,7 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
         frozen.value = false
         autoGate.reset()
         // The download offer stays on the card until it is taken or the language changes.
-        readingLanguage()?.let { if (readerOffer.value) notice.value = ReaderLanguages.offerLine(it.name) }
+        readingLanguage()?.let { if (readerOffer.value) notice.value = ReaderLanguages.offerLine(it.displayName) }
     }
 
     // ---- Reading mode: Tap to read / Auto read / Mute ----
@@ -426,7 +428,8 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
             } else {
                 Log.i(TAG, "${lang.name} reader not on the phone: offering the download")
                 readerOffer.value = true
-                if (speak) showNotice(ReaderLanguages.offerLine(lang.name)) else notice.value = ReaderLanguages.offerLine(lang.name)
+                val offer = ReaderLanguages.offerLine(lang.displayName)
+                if (speak) showNotice(offer) else notice.value = offer
             }
         }
     }
@@ -443,7 +446,7 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
             Log.i(TAG, "${lang.name} reader open")
         } catch (t: Throwable) {
             Log.e(TAG, "${lang.name} reader failed to open", t)
-            showNotice("The ${lang.name} reader couldn't start. Please close and reopen the app.")
+            showNotice(AppLang.str(R.string.f_reader_start_failed, lang.nameInSentence))
         }
     }
 
@@ -456,12 +459,12 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
         val lang = readingLanguage() ?: return
         if (!lang.needsReaderDownload || readerDownloading.value || !readerOffer.value) return
         if (!isOnline()) {
-            showNotice(ReaderLanguages.offlineLine(lang.name))
+            showNotice(ReaderLanguages.offlineLine(lang.displayName))
             return
         }
         readerOffer.value = false
         readerDownloading.value = true
-        val first = ReaderLanguages.downloadLine(lang.name)
+        val first = ReaderLanguages.downloadLine(lang.nameInSentence)
         showNotice(first)
         workExecutor.execute {
             try {
@@ -482,8 +485,9 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
                 Log.i(TAG, "${lang.name} reader downloaded")
                 if (readingLanguage() == lang) {
                     openReader(lang)
-                    showNotice(ReaderLanguages.readyLine(lang.name))
-                    mainHandler.postDelayed({ if (notice.value == ReaderLanguages.readyLine(lang.name)) notice.value = null }, 3_000)
+                    val ready = ReaderLanguages.readyLine(lang.displayName)
+                    showNotice(ready)
+                    mainHandler.postDelayed({ if (notice.value == ready) notice.value = null }, 3_000)
                 } else {
                     refreshReader(speak = false) // the pill moved on while this downloaded
                 }
@@ -493,8 +497,8 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
                 if (readingLanguage() != lang) { refreshReader(speak = false); return@execute }
                 readerOffer.value = true
                 showNotice(
-                    if (isOnline()) "${lang.name} couldn't download just now. Tap this card to try again."
-                    else ReaderLanguages.offlineLine(lang.name)
+                    if (isOnline()) AppLang.str(R.string.f_reader_dl_failed, lang.displayName)
+                    else ReaderLanguages.offlineLine(lang.displayName)
                 )
             }
         }
@@ -560,17 +564,17 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
                 if (spanish) {
                     // Say it even offline (iOS announces before trying): the person learns the
                     // better translation is one download away, and still gets English now.
-                    showNotice(ReaderLanguages.downloadLine(lang.name))
+                    showNotice(ReaderLanguages.downloadLine(lang.nameInSentence))
                     if (!isOnline()) {
                         spanishDownloadFailed = true
                         Log.i(TAG, "Spanish pack not on the phone and offline: dictionary")
                         return translateWithDictionary(text)
                     }
                 } else if (!isOnline()) {
-                    showNotice("${lang.name} needs a one-time download from Google. Connect to the internet once, then it works offline.")
+                    showNotice(AppLang.str(R.string.f_pack_offline, lang.displayName))
                     return null
                 } else {
-                    showNotice(ReaderLanguages.downloadLine(lang.name))
+                    showNotice(ReaderLanguages.downloadLine(lang.nameInSentence))
                 }
                 downloading = true
                 Tasks.await(
@@ -597,16 +601,22 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
                 if (downloading) spanishDownloadFailed = true
                 translateWithDictionary(text)
             } else {
-                showNotice("${lang.name} couldn't be translated just now. Please try again.")
+                showNotice(AppLang.str(R.string.f_translate_failed, lang.nameInSentence))
                 null
             }
         }
     }
 
-    /** The built-in Spanish engine (fallback). Loads it on first use. Runs on workExecutor. */
-    private fun translateWithDictionary(text: String): String {
-        val engine = dictionaryEngine()
-            ?: return "Translation data couldn't load. Please close and reopen the app."
+    /**
+     * The built-in Spanish engine (fallback). Loads it on first use. Runs on workExecutor.
+     * If it can't load, the reason is shown and said as the app's own line (in the app's
+     * language, in a voice for it) and null comes back: it is not a translation to read out.
+     */
+    private fun translateWithDictionary(text: String): String? {
+        val engine = dictionaryEngine() ?: run {
+            showNotice(AppLang.str(R.string.f_dictionary_failed))
+            return null
+        }
         return try {
             // Translate the lines, not one run-on: a sign's lines are separate
             // phrases, and the engine reordered words across them (iOS 2026-09-16).
