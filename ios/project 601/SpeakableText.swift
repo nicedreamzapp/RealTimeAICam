@@ -27,6 +27,15 @@ enum SpeakableText {
             && text.contains(where: { $0.isLetter || $0.isNumber }) ? text : said
     }
 
+    /// The door for a line in a known language. The number rewrites are English words
+    /// ("eight zero five", "number"), so any other language only gets the formatting
+    /// clean-up and keeps its digits for its own voice to read.
+    static func spoken(_ text: String, lang: String) -> String {
+        guard lang != YourLanguageRules.english else { return spoken(text) }
+        let said = joinLines(stripFormatting(text)).trimmingCharacters(in: .whitespacesAndNewlines)
+        return said.isEmpty ? text : said
+    }
+
     /// Hand a line to VoiceOver, rewritten for speech.
     static func announce(_ text: String) {
         guard !text.isEmpty else { return }

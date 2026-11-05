@@ -27,8 +27,17 @@ enum YourLanguageRules {
 
     static var codes: [String] { languages.map(\.code) }
 
-    static func name(_ code: String) -> String {
-        languages.first { $0.code == code }?.name ?? "English"
+    /// The language's name in the app's language: "Spanish" in English, "Español" in Spanish.
+    static func name(_ code: String, in ui: String = AppLang.code) -> String {
+        let englishName = languages.first { $0.code == code }?.name ?? "English"
+        guard ui != english, let local = Locale(identifier: ui).localizedString(forIdentifier: code)
+        else { return englishName }
+        return local.prefix(1).uppercased() + local.dropFirst()
+    }
+
+    /// The name inside a sentence: Spanish writes language names in lowercase ("en español").
+    static func nameInSentence(_ code: String) -> String {
+        AppLang.isSpanish ? name(code).lowercased(with: AppLang.locale) : name(code)
     }
 
     /// A phone language ("es-MX", "zh-Hans-CN", "pt-BR", "in") to one of our codes, or nil.
@@ -65,19 +74,24 @@ enum YourLanguageRules {
     }
 
     static func firstLaunchLine(_ code: String) -> String {
-        let n = name(code)
-        return "Your language is \(n). Spoken results can be translated into \(n) after a one-time download. You can change this in Settings."
+        let n = nameInSentence(code)
+        return L("Your language is %@. Spoken results can be translated into %@ after a one-time download. You can change this in Settings.", n, n)
     }
 
-    static func downloadRow(_ code: String) -> String { "Download \(name(code)) once, then it works offline" }
-    static func downloadingLine(_ code: String) -> String { "Downloading \(name(code)), one time only." }
-    static func stillDownloadingLine(_ code: String) -> String { "Still downloading \(name(code))." }
-    static func readyLine(_ code: String) -> String { "\(name(code)) is ready, it works offline now." }
+    static func downloadRow(_ code: String) -> String { L("Download %@ once, then it works offline", nameInSentence(code)) }
+    static func downloadingLine(_ code: String) -> String { L("Downloading %@, one time only.", nameInSentence(code)) }
+    static func stillDownloadingLine(_ code: String) -> String { L("Still downloading %@.", nameInSentence(code)) }
+    static func readyLine(_ code: String) -> String { L("%@ is ready, it works offline now.", name(code)) }
     static func failedLine(_ code: String) -> String {
-        "\(name(code)) didn't download. Connect to the internet, then tap the download button again."
+        L("%@ didn't download. Connect to the internet, then tap the download button again.", name(code))
     }
+    /// Read by the English voice when no voice for `code` is installed, so it stays English
+    /// out loud; `noVoiceShown` is the same line for the screen in the app's language.
     static func noVoiceLine(_ code: String) -> String {
-        "No \(name(code)) voice is installed on this phone. You can add one in the phone's settings, under Accessibility, Spoken Content, Voices."
+        "No \(name(code, in: english)) voice is installed on this phone. You can add one in the phone's settings, under Accessibility, Spoken Content, Voices."
+    }
+    static func noVoiceShown(_ code: String) -> String {
+        L("No %@ voice is installed on this phone. You can add one in the phone's settings, under Accessibility, Spoken Content, Voices.", nameInSentence(code))
     }
 
     /// The Read pill. `page` is the page's language code (nil = English page). With
@@ -86,7 +100,8 @@ enum YourLanguageRules {
     /// "Spanish" when they match.
     static func pillLabel(page: String?, target: String) -> String {
         if target == english {
-            guard let page, page != english else { return "English" }
+            guard let page, page != english else { return name(english) }
+            if AppLang.isSpanish { return L("%@ → Eng", name(page)) }
             return page == "es" ? "Span → Eng" : "\(name(page)) → Eng"
         }
         let from = name(page ?? english)
@@ -98,12 +113,14 @@ enum YourLanguageRules {
     static func pillSpoken(page: String?, target: String) -> String {
         let from = name(page ?? english)
         let to = name(target)
-        if target == english { return page == nil || page == english ? "English" : "\(from), translated to English" }
-        return from == to ? to : "\(from), translated to \(to)"
+        if target == english { return page == nil || page == english ? name(english) : L("%@, translated to %@", from, nameInSentence(english)) }
+        return from == to ? to : L("%@, translated to %@", from, nameInSentence(target))
     }
 
     /// One short paragraph, same words in the INFO GUIDE and the spoken tutorial (and on Android).
-    static let guide = "Your language: in Settings, pick the language you want to hear. The first time, tap Download once; after that it works offline. Read, Object Detection, Help Me Aim and What's this? then speak in your language. Buttons stay in English for now."
+    static var guide: String {
+        L("Your language: in Settings, pick the language you want to hear. The first time, tap Download once; after that it works offline. Read, Object Detection, Help Me Aim and What's this? then speak in your language. Buttons, menus and this guide are in Spanish when your phone or Your language is Spanish, and in English otherwise.")
+    }
 }
 
 /// What's this? in Your language. The vision model reads and writes English, so its
@@ -513,6 +530,17 @@ enum YourLanguageVoice {
         return all.max { score($0) < score($1) }
     }
 
+    /// True when `voice` is a voice for language `code` ("es" matches es-MX, es-ES, ...).
+    static func speaks(_ voice: AVSpeechSynthesisVoice, _ code: String) -> Bool {
+        let prefix = voicePrefix(code)
+        return voice.language == prefix || voice.language.hasPrefix(prefix + "-")
+    }
+
+    /// Every installed voice for a language, alphabetical (the voice picker's list).
+    static func all(for code: String) -> [AVSpeechSynthesisVoice] {
+        AVSpeechSynthesisVoice.speechVoices().filter { speaks($0, code) }.sorted { $0.name < $1.name }
+    }
+
     private static var warned = Set<String>()
     private static let lock = NSLock()
 
@@ -521,8 +549,14 @@ enum YourLanguageVoice {
     /// gets one English sentence in front saying so (once per launch), and the
     /// chosen voice reads it.
     static func prepare(_ text: String, lang: String, selected: String) -> (text: String, voice: AVSpeechSynthesisVoice?) {
-        let chosen = AVSpeechSynthesisVoice(identifier: selected) ?? AVSpeechSynthesisVoice(language: "en-US")
-        guard lang != YourLanguageRules.english else { return (text, chosen) }
+        let picked = AVSpeechSynthesisVoice(identifier: selected)
+        // The picked voice reads its own language only (the picker lists the app language's
+        // voices, so a Spanish speaker may have picked a Spanish one): English text in a
+        // Spanish voice, or the reverse, falls to the best voice for that language.
+        if let picked, speaks(picked, lang) { return (text, picked) }
+        let fallbackEnglish = best(for: YourLanguageRules.english) ?? AVSpeechSynthesisVoice(language: "en-US")
+        let chosen = picked ?? fallbackEnglish
+        guard lang != YourLanguageRules.english else { return (text, fallbackEnglish) }
         if let v = best(for: lang) { return (text, v) }
         lock.lock()
         let first = warned.insert(lang).inserted

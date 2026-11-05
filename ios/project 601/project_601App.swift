@@ -2,6 +2,9 @@ import SwiftUI
 
 @main
 struct project_601App: App {
+    /// The app's language (AppLang): Spanish or English, follows Your language live.
+    @ObservedObject private var appLang = AppLangObserver.shared
+
     init() {
         // MemoryManager registers its memory-warning observer in its init;
         // without this touch the singleton never exists and the app has no
@@ -65,6 +68,8 @@ struct project_601App: App {
                 .yourLanguageHost()
                 // Volume all the way down: say so, on every screen (2026-11-04).
                 .overlay(alignment: .top) { VolumeOffNote() }
+                // Dates, numbers and system controls in the app's language too.
+                .environment(\.locale, Locale(identifier: appLang.code))
                 .preferredColorScheme(.dark)
                 .statusBarHidden(true)
                 .task {

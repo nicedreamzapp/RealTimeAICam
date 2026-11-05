@@ -78,7 +78,9 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
     // MARK: - Initialization
 
     override init() {
+        // Nothing picked yet: the best voice for the app's language (Spanish for a Spanish phone).
         selectedVoiceIdentifier = UserDefaults.standard.string(forKey: Constants.defaultVoiceKey)
+            ?? YourLanguageVoice.best(for: AppLang.code)?.identifier
             ?? AVSpeechSynthesisVoice(language: "en-US")?.identifier ?? ""
         super.init()
 
@@ -308,11 +310,13 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
         UserDefaults.standard.object(forKey: "speakAnswersAloud") as? Bool ?? true
     }
 
-    func speak(_ rawText: String) {
-        let text = SpeakableText.spoken(rawText)
+    /// Says one of the app's own lines. `lang` is the language the line is in: the app's
+    /// language by default (lines built with `L`), so a Spanish line gets a Spanish voice.
+    func speak(_ rawText: String, lang: String = AppLang.code) {
+        let text = SpeakableText.spoken(rawText, lang: lang)
         guard !text.isEmpty else { return }
         if !speaksAloud {
-            UIAccessibility.post(notification: .announcement, argument: text)
+            UIAccessibility.post(notification: .announcement, argument: Self.voiceOverLine(text, lang: lang))
             return
         }
         setupAudioSession() // re-assert the loudspeaker route before talking
@@ -325,25 +329,32 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
         announcementQueue.removeAll()
         isProcessingQueue = false
 
-        let utterance = AVSpeechUtterance(string: text)
-        if let chosenVoice = AVSpeechSynthesisVoice(identifier: selectedVoiceIdentifier) {
-            utterance.voice = chosenVoice
-        } else {
-            utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
-        }
+        let prepared = YourLanguageVoice.prepare(text, lang: lang, selected: selectedVoiceIdentifier)
+        let utterance = AVSpeechUtterance(string: prepared.text)
+        utterance.voice = prepared.voice
         utterance.rate = 0.5
+        #if DEBUG
+        SpeakLog.note("speak[\(lang)]", prepared.text)
+        #endif
         speechSynthesizer.speak(utterance)
     }
+
+    /// A VoiceOver announcement tagged with its language, so VoiceOver reads Spanish in Spanish.
+    static func voiceOverLine(_ text: String, lang: String) -> NSAttributedString {
+        NSAttributedString(string: text, attributes: [.accessibilitySpeechLanguage: lang])
+    }
+
+    /// The voices the picker offers: the app language's (Spanish voices when the app is in Spanish).
+    var availableVoices: [AVSpeechSynthesisVoice] { YourLanguageVoice.all(for: AppLang.code) }
 
     func announceSpeechEnabled() {
         // Clear any existing queue
         announcementQueue.removeAll()
         isProcessingQueue = false
 
-        let utterance = AVSpeechUtterance(string: "Speech enabled")
-        if let chosenVoice = AVSpeechSynthesisVoice(identifier: selectedVoiceIdentifier) {
-            utterance.voice = chosenVoice
-        }
+        let prepared = YourLanguageVoice.prepare(L("Speech enabled"), lang: AppLang.code, selected: selectedVoiceIdentifier)
+        let utterance = AVSpeechUtterance(string: prepared.text)
+        utterance.voice = prepared.voice
         utterance.rate = 0.52
         utterance.volume = 0.9
         speechSynthesizer.speak(utterance)
@@ -359,10 +370,10 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
         isProcessingQueue = false
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            let utterance = AVSpeechUtterance(string: "Welcome to the real-time AI iOS Detection app. Thank you for choosing this voice!")
-            if let chosenVoice = AVSpeechSynthesisVoice(identifier: self.selectedVoiceIdentifier) {
-                utterance.voice = chosenVoice
-            }
+            let prepared = YourLanguageVoice.prepare(L("Welcome to the real-time AI iOS Detection app. Thank you for choosing this voice!"),
+                                                     lang: AppLang.code, selected: self.selectedVoiceIdentifier)
+            let utterance = AVSpeechUtterance(string: prepared.text)
+            utterance.voice = prepared.voice
             utterance.rate = 0.5
             utterance.volume = 0.9
             self.speechSynthesizer.speak(utterance)
@@ -373,36 +384,36 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
 
     func speakInstructions(supportsLiDAR: Bool) {
         var instructions = [
-            "Welcome to the RealTime AI Camera.",
-            "Object Detection mode detects and labels up to six hundred and one objects in real time.",
-            "English OCR mode reads printed English text aloud.",
-            "The translator turns printed Spanish into English and reads it aloud. On iOS 18 and later it can translate other languages too, after a one-time download from Apple.",
-            "What's this? picks the most accurate model your phone can run by itself, and downloads it once on Wi-Fi. You can change it in Settings, under Models.",
+            L("Welcome to the RealTime AI Camera."),
+            L("Object Detection mode detects and labels up to six hundred and one objects in real time."),
+            L("English OCR mode reads printed English text aloud."),
+            L("The translator turns printed Spanish into English and reads it aloud. On iOS 18 and later it can translate other languages too, after a one-time download from Apple."),
+            L("What's this? picks the most accurate model your phone can run by itself, and downloads it once on Wi-Fi. You can change it in Settings, under Models."),
         ]
 
         if supportsLiDAR {
             instructions.append(
-                "Tap the white ruler icon - it turns green when active - to enable LiDAR Distance Assist. This measures object distance, filters far-away objects, and stabilizes bounding boxes."
+                L("Tap the white ruler icon - it turns green when active - to enable LiDAR Distance Assist. This measures object distance, filters far-away objects, and stabilizes bounding boxes.")
             )
         } else {
             instructions.append(
-                "LiDAR Distance Assist is available only on LiDAR-equipped iPhone and iPad Pro models."
+                L("LiDAR Distance Assist is available only on LiDAR-equipped iPhone and iPad Pro models.")
             )
         }
 
-        instructions.append("You can switch between front and back cameras.")
+        instructions.append(L("You can switch between front and back cameras."))
         if CameraCapabilities.hasUltraWideRear {
-            instructions.append("Toggle wide and ultra-wide lenses.")
+            instructions.append(L("Toggle wide and ultra-wide lenses."))
         }
 
         instructions.append(contentsOf: [
-            "Adjust torch brightness between twenty five, fifty, seventy five, and one hundred percent.",
-            "Pinch the screen to zoom in or out.",
-            "Toggle text overlay on or off.",
-            "Speak detected or translated text aloud.",
+            L("Adjust torch brightness between twenty five, fifty, seventy five, and one hundred percent."),
+            L("Pinch the screen to zoom in or out."),
+            L("Toggle text overlay on or off."),
+            L("Speak detected or translated text aloud."),
             YourLanguageRules.guide,
-            "Copy text to the history for later use.",
-            "Tap 'Play Complete Audio Tutorial' any time to hear these instructions again.",
+            L("Copy text to the history for later use."),
+            L("Tap 'Play Complete Audio Tutorial' any time to hear these instructions again."),
         ])
 
         speak(instructions.joined(separator: " "))
@@ -434,13 +445,14 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
     /// Speaks the given text by splitting it into segments based on punctuation marks,
     /// queuing each segment as a separate utterance with pauses after each segment depending on punctuation.
     /// - Parameter text: The input string to be spoken with pauses.
-    func speakWithPauses(_ rawText: String) {
-        let text = SpeakableText.spoken(rawText)
+    func speakWithPauses(_ rawText: String, lang: String = AppLang.code) {
+        let text = SpeakableText.spoken(rawText, lang: lang)
         guard !text.isEmpty else { return }
         if !speaksAloud {
-            UIAccessibility.post(notification: .announcement, argument: text)
+            UIAccessibility.post(notification: .announcement, argument: Self.voiceOverLine(text, lang: lang))
             return
         }
+        let voice = YourLanguageVoice.prepare("", lang: lang, selected: selectedVoiceIdentifier).voice
         // Stop current speech if any
         if speechSynthesizer.isSpeaking {
             speechSynthesizer.stopSpeaking(at: .immediate)
@@ -491,11 +503,7 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
 
             // Create utterance
             let utterance = AVSpeechUtterance(string: segment)
-            if let chosenVoice = AVSpeechSynthesisVoice(identifier: selectedVoiceIdentifier) {
-                utterance.voice = chosenVoice
-            } else {
-                utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
-            }
+            utterance.voice = voice
             utterance.rate = 0.5
             utterance.pitchMultiplier = 1.0
             utterance.volume = 0.9

@@ -12,6 +12,8 @@ struct ContentView: View {
     // Correct singleton pattern: use @ObservedObject for ResourceManager.shared in SwiftUI views.
     @ObservedObject private var resourceManager = ResourceManager.shared
     @ObservedObject private var shortcutRouter = ShortcutRouter.shared
+    /// Redraws the screens when the app's language changes (Your language picked in Settings).
+    @ObservedObject private var appLang = AppLangObserver.shared
 
     private var normalizedOrientation: UIDeviceOrientation {
         switch orientation {

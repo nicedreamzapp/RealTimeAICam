@@ -4,6 +4,7 @@ import UIKit
 /// announces it when VoiceOver is running, the app's own voice says it when it is not.
 /// Mirrors Android's UiCue.
 enum UICue {
+    /// English keys: `say` puts them in the app's language.
     static let home = "Home"
     static let readHint = "Point the camera at some text"
     /// How long Read waits after opening before its hint, so text found right away wins.
@@ -31,6 +32,18 @@ enum UICue {
     /// dismiss swallows an announcement posted right away (11/04 review).
     static let homeCueDelay: TimeInterval = 0.6
 
+    /// The cue's words and their language. The app's own Spanish ships in the app, so a Spanish
+    /// app says the bundled line with no download (2026-11-05); Your language in another language
+    /// still goes through the translator; English otherwise.
+    static func line(_ english: String) async -> (text: String, lang: String) {
+        let app = AppLang.code
+        let yours = YourLanguage.activeCode
+        if yours == YourLanguageRules.english || yours == app {
+            return (AppLang.text(english, in: app), app)
+        }
+        return await YourLanguage.intoActive(english)
+    }
+
     /// Says `english` once, in Your language when it is set (11/04 review): a VoiceOver
     /// announcement when VoiceOver runs, else `appVoice(text, language)`. Nothing is said if
     /// the calling task was cancelled meanwhile (the screen was left).
@@ -39,9 +52,7 @@ enum UICue {
     @MainActor
     static func say(_ english: String, stillWanted: () -> Bool = { true },
                     appVoice: (_ text: String, _ language: String) -> Void) async {
-        let out: (text: String, lang: String) = YourLanguage.activeCode == YourLanguageRules.english
-            ? (english, YourLanguageRules.english)
-            : await YourLanguage.intoActive(english)
+        let out = await line(english)
         guard !Task.isCancelled, stillWanted() else { return }
         switch route(voiceOverRunning: UIAccessibility.isVoiceOverRunning) {
         case .voiceOver:
