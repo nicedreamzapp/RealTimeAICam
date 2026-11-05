@@ -581,7 +581,11 @@ struct LiveOCRView: View {
                 hasText: !viewModel.recognizedText.isEmpty,
                 speaking: isSpeaking || viewModel.isSpeakingNow,
                 openedByLanguagePill: byPill) else { return }
-            await UICue.say(UICue.readHint) { text, lang in
+            await UICue.say(UICue.readHint, stillWanted: {
+                UICue.shouldSayReadHint(hasText: !viewModel.recognizedText.isEmpty,
+                                        speaking: isSpeaking || viewModel.isSpeakingNow,
+                                        openedByLanguagePill: false)
+            }) { text, lang in
                 viewModel.nextSpeechLanguage = lang
                 viewModel.speak(text: text, voiceIdentifier: selectedVoiceIdentifier) {}
             }

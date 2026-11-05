@@ -184,7 +184,7 @@ struct HomeView: View {
             try? await Task.sleep(nanoseconds: UInt64(UICue.homeCueDelay * 1_000_000_000))
             // Still home (not straight into a tool): otherwise say nothing.
             guard mode == .home, !showInstructions else { return }
-            await UICue.say(UICue.home) { text, lang in
+            await UICue.say(UICue.home, stillWanted: { mode == .home && !showInstructions }) { text, lang in
                 let utterance = AVSpeechUtterance(string: text)
                 utterance.voice = lang == YourLanguageRules.english
                     ? (AVSpeechSynthesisVoice(identifier: voiceId) ?? AVSpeechSynthesisVoice(language: "en-US"))

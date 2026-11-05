@@ -34,12 +34,15 @@ enum UICue {
     /// Says `english` once, in Your language when it is set (11/04 review): a VoiceOver
     /// announcement when VoiceOver runs, else `appVoice(text, language)`. Nothing is said if
     /// the calling task was cancelled meanwhile (the screen was left).
+    /// `stillWanted` is asked again once the translation is back (round-2 review): a cue that
+    /// comes back late, after leaving the screen or once reading started, is dropped.
     @MainActor
-    static func say(_ english: String, appVoice: (_ text: String, _ language: String) -> Void) async {
+    static func say(_ english: String, stillWanted: () -> Bool = { true },
+                    appVoice: (_ text: String, _ language: String) -> Void) async {
         let out: (text: String, lang: String) = YourLanguage.activeCode == YourLanguageRules.english
             ? (english, YourLanguageRules.english)
             : await YourLanguage.intoActive(english)
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled, stillWanted() else { return }
         switch route(voiceOverRunning: UIAccessibility.isVoiceOverRunning) {
         case .voiceOver:
             let line = NSAttributedString(string: out.text,
