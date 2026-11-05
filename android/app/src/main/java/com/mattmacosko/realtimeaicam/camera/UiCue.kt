@@ -1,5 +1,6 @@
 package com.mattmacosko.realtimeaicam.camera
 
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
 import android.view.accessibility.AccessibilityManager
 
@@ -23,10 +24,19 @@ object UiCue {
 
     fun route(screenReaderOn: Boolean): Route = if (screenReaderOn) Route.SCREEN_READER else Route.APP_VOICE
 
-    /** TalkBack (or another touch-exploration screen reader) is running. */
+    /**
+     * TalkBack (or another screen reader) is running: explore by touch is on, or an enabled
+     * service gives spoken feedback (TalkBack with explore by touch off still speaks).
+     */
     fun screenReaderOn(context: Context): Boolean {
         val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
-        return am != null && am.isEnabled && am.isTouchExplorationEnabled
+        if (am == null || !am.isEnabled) return false
+        if (am.isTouchExplorationEnabled) return true
+        return try {
+            am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_SPOKEN).isNotEmpty()
+        } catch (_: Throwable) {
+            false
+        }
     }
 
     /**
