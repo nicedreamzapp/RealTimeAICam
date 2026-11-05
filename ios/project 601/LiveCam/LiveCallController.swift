@@ -512,6 +512,23 @@ final class LiveCallController: ObservableObject {
                 return
             }
         }
+        // 11/4 Matt's money videos: "$600", "$7 total", "$36" for $129. Money is counted in code (LiveMoney), never
+        // guessed by the model, and a follow-up ("how many ones?") is answered from the last count.
+        // "Again" or "now" always counts afresh.
+        let fresh = [" again ", " now ", " recount ", " re count "].contains { (" " + LiveWords.normalize(q) + " ").contains($0) }
+        if let last = moneyMemory.recent(), !fresh, LiveMoney.askedDenomination(q) != nil || moneyFollowUpWindow(q) {
+            let line = LiveMoney.followUp(q, last: last)
+            log(["event": "money_follow_up", "question": q, "answer": line])
+            memory.note(question: q, answer: line)
+            speakAll(line)
+            lastUsedPhoto = true
+            return
+        }
+        if LiveMoney.isMoneyQuestion(q) || (moneyMemory.recent() != nil && LiveMoney.isFollowUp(q)) {   // "count it" after a count
+            lastUsedPhoto = true
+            countMoney(q)
+            return
+        }
         // 11/1 Matt: "it should always be taking in the photo". Every question goes with the live frame; a
         // general one keeps the chat voice and only uses the photo if it helps.
         if !LiveWords.needsPhoto(q, lastUsedPhoto: lastUsedPhoto) {
@@ -534,6 +551,71 @@ final class LiveCallController: ObservableObject {
         if camera.isFront { prompt += " The person in front of the camera is the one talking to you: call them \"you\"." }
         else if LiveWords.isAboutThem(q) { prompt += LiveWords.backCameraSelf }
         look(prompt: prompt, unprompted: false, question: q)
+    }
+
+    // MARK: Money
+
+    private var moneyMemory = MoneyMemory()
+
+    /// "Count it" / "what's the total" right after a count, without a money word.
+    private func moneyFollowUpWindow(_ q: String) -> Bool {
+        let t = " " + LiveWords.normalize(q) + " "
+        return [" are you sure ", " what s the total ", " whats the total ", " what is the total ", " how much is that ",
+                " how much total ", " add it up ", " add them up "].contains { t.contains($0) }
+    }
+
+    /// Counts the bills in view: the full camera frame (1280 x 720, not the 512 px look), each bill found and read
+    /// on its own, the total added in code. One frame, a second only if a bill couldn't be read.
+    private func countMoney(_ q: String) {
+        guard let engine else { speakAll("I'm still getting ready. Ask me again in a second."); return }
+        if UIApplication.shared.applicationState != .active {
+            speakAll("I can't see while the phone is locked or another app is open. Open RealTime AI Cam again and ask me.")
+            return
+        }
+        current?.cancel()
+        current = nil
+        turn += 1
+        let my = turn
+        answerDone = false
+        prefilled = nil   // the model's context is about to be used for the bills
+        phase = .thinking
+        listener.stopListening()
+        listener.watchForBargeIn(true)
+        voice.say("Let me count.")
+        phase = .speaking
+        modelBusy = true
+        let camera = camera
+        let asked = Date()
+        Task.detached(priority: .userInitiated) { [weak self] in
+            var first = true
+            let count = LiveMoney.countBurst(maxFrames: 2, frame: { () -> CGImage? in
+                if !first { Thread.sleep(forTimeInterval: 0.3) }   // a moment apart, so the next frame isn't the same one
+                first = false
+                return camera.current()
+            }, ask: { img, question in
+                engine.respond(system: LiveMoney.modelSystem, question: question, image: img,
+                               longSide: LiveMoney.modelLongSide, maxTokens: 4)?.text
+            }, onLook: { c, log in
+                let doubts = c.doubts.map(\.rawValue)
+                Task { @MainActor in
+                    self?.log(["event": "money_look", "bills": c.bills.count, "values": c.values, "pile": c.pileValues,
+                               "doubts": doubts, "detail": log.map { $0.mapValues { "\($0)" } }])
+                }
+            })
+            let line = LiveMoney.sentence(count)
+            await MainActor.run {
+                guard let self else { return }
+                self.modelBusy = false
+                guard self.running, self.turn == my else { return }
+                self.log(["event": "money_answer", "question": q, "answer": line, "sure": count.sure, "total": count.total,
+                          "seconds": Date().timeIntervalSince(asked)])
+                self.moneyMemory.note(count)
+                self.memory.note(question: q, answer: line)
+                self.sayPart(line, turn: my)
+                self.answerDone = true
+                if !self.voice.isBusy { self.wentQuiet() }
+            }
+        }
     }
 
     /// `say`: what to say instead of the usual confirm; `quiet`: say nothing (the answer follows). `goal`: Coach's topic.

@@ -218,11 +218,13 @@ enum LiveWords {
         return t.contains(" am i ") || t.contains(" my ") || t.contains(" do i look ") || t.contains(" i m ")
     }
 
-    /// Small print, counting, far or small things: the 768 px photo; everything else 512 px (about half the image tokens).
+    /// Small print, counting, money, far or small things: the 768 px photo; everything else 512 px (about half the image tokens).
     static func needsDetail(_ q: String) -> Bool {
         let t = " " + normalize(q) + " "
         return [" read", " say on ", " says ", " sign", " label", " text", " written", " word", " how many ", " count", " small",
-                " tiny", " far ", " distance", " number", " price", " brand", " logo", " ingredient", " serial", " model number"].contains { t.contains($0) }
+                " tiny", " far ", " distance", " number", " price", " brand", " logo", " ingredient", " serial", " model number",
+                // 11/4: money went out at 512 px and a $100's corner numerals read as four $100s.
+                " money", " cash", " bill", " dollar", " coin", " total", " how much "].contains { t.contains($0) }
     }
 
     static func chatQuestion(_ q: String, history: [LiveExchange]) -> String {
