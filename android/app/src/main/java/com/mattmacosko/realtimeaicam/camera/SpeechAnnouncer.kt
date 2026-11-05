@@ -519,14 +519,16 @@ class SpeechAnnouncer(context: Context) {
      * A short screen cue, said once ([UiCue]): TalkBack announces it when TalkBack is on, the
      * app's voice says it when it is off (2026-11-04: "Live Cam is coming soon" was heard twice).
      */
-    fun cue(text: String) {
+    fun cue(text: String, stillWanted: () -> Boolean = { true }) {
         // Your language (11/04 review): the cue is put into it first when its pack is on the
         // phone, and said in that language; otherwise English, as everywhere else.
         val lang = com.mattmacosko.realtimeaicam.translation.YourLanguage.active(appContext)
         if (lang == YL_EN) { cueIn(text, YL_EN); return }
         val mine = ++cueSeq
         com.mattmacosko.realtimeaicam.translation.YourLanguage.translateAsync(text, YL_EN, lang) { said ->
-            if (mine != cueSeq) return@translateAsync
+            // A late translation is dropped after a stop, a newer line or leaving the screen
+            // (round-2 review): it must never cut into a page being read.
+            if (mine != cueSeq || !stillWanted()) return@translateAsync
             if (said.isNullOrBlank()) cueIn(text, YL_EN) else cueIn(said, lang)
         }
     }
@@ -537,7 +539,7 @@ class SpeechAnnouncer(context: Context) {
         when (UiCue.route(UiCue.screenReaderOn(appContext))) {
             UiCue.Route.SCREEN_READER -> {
                 if (debuggable) android.util.Log.i("RTCamSpeech", "via TalkBack: $text")
-                announceToScreenReader(text)
+                announceToScreenReader(text, lang)
             }
             UiCue.Route.APP_VOICE -> speakIn(text, lang)
         }
@@ -557,6 +559,7 @@ class SpeechAnnouncer(context: Context) {
      * English goes through the usual number/address rewrite; other languages only lose markdown.
      */
     fun speakIn(text: String, lang: String, result: Boolean = false) {
+        if (result) cueSeq++ // a cue still being translated never cuts into a page
         if (lang == YL_EN) { speakLine(text, result, localize = false); return }
         announcementQueue.clear()
         isProcessingQueue = false
@@ -576,6 +579,7 @@ class SpeechAnnouncer(context: Context) {
     }
 
     private fun speakLine(text: String, result: Boolean, localize: Boolean = true) {
+        cueSeq++ // a cue still being translated never cuts into a newer line
         announcementQueue.clear()
         isProcessingQueue = false
         val lang = if (localize) localizeTarget() else YL_EN
@@ -677,19 +681,24 @@ class SpeechAnnouncer(context: Context) {
      * force-disable speech (exactly like iOS — prevents late callbacks from
      * speaking again). Called on camera flip, Back navigation, mode changes.
      */
-    private fun announceToScreenReader(text: String) {
+    private fun announceToScreenReader(text: String, lang: String = YL_EN) {
         val am = appContext.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
         if (am == null || !am.isEnabled) return
         val event = AccessibilityEvent.obtain(AccessibilityEvent.TYPE_ANNOUNCEMENT)
         event.className = SpeechAnnouncer::class.java.name
         event.packageName = appContext.packageName
-        event.text.add(text)
+        // A line in Your language carries its language, so TalkBack reads it in that voice
+        // (round-2 review: "Inicio" in TalkBack's English voice).
+        event.text.add(if (lang == YL_EN) text else android.text.SpannableString(text).apply {
+            setSpan(android.text.style.LocaleSpan(java.util.Locale.forLanguageTag(lang)), 0, length, 0)
+        })
         am.sendAccessibilityEvent(event)
     }
 
     fun stop() {
         pendingLine = null
         speakSeq++ // a line still being translated is not said after a stop
+        cueSeq++
         tts.stop()
         isSpeaking = false
         speakingNow.value = false

@@ -108,10 +108,10 @@ fun MainScreen(
     // A voice for the home screen's own lines (Live Cam coming soon, Home), made on first use.
     var homeVoice by remember { androidx.compose.runtime.mutableStateOf<com.mattmacosko.realtimeaicam.camera.SpeechAnnouncer?>(null) }
     DisposableEffect(Unit) { onDispose { homeVoice?.shutdown() } }
-    fun homeCue(line: String) {
+    fun homeCue(line: String, stillWanted: () -> Boolean = { true }) {
         val voice = homeVoice ?: com.mattmacosko.realtimeaicam.camera.SpeechAnnouncer(context)
             .also { homeVoice = it }
-        voice.cue(line)
+        voice.cue(line, stillWanted)
     }
     // Done on the guide (first-time-user test, 2026-11-04): home came back in silence with
     // TalkBack's focus on nothing. Now "Home" is said, then TalkBack lands on Settings.
@@ -122,7 +122,7 @@ fun MainScreen(
     androidx.compose.runtime.LaunchedEffect(guideClosed) {
         if (guideClosed == 0 || currentMode != AppMode.Home) return@LaunchedEffect
         if (!A11yFocus.awaitWindowFocus(view) || currentMode != AppMode.Home) return@LaunchedEffect
-        homeCue(com.mattmacosko.realtimeaicam.camera.UiCue.HOME)
+        homeCue(com.mattmacosko.realtimeaicam.camera.UiCue.HOME) { currentMode == AppMode.Home }
         if (com.mattmacosko.realtimeaicam.camera.UiCue.screenReaderOn(context)) {
             kotlinx.coroutines.delay(com.mattmacosko.realtimeaicam.camera.UiCue.HOME_FOCUS_DELAY_MS)
             if (currentMode == AppMode.Home) A11yFocus.moveToSoon(view, HOME_FIRST_CONTROL_TAG)
