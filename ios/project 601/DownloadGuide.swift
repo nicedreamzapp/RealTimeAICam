@@ -11,30 +11,50 @@ struct DownloadGuide {
     enum Line: Equatable {
         case sheetOpened, sheetWaiting, stillDownloading
         case ready, sheetClosed, failed
+
+        /// Said again and again: with VoiceOver it waits its turn but is dropped if stale.
+        var isReminder: Bool { self == .sheetWaiting || self == .stillDownloading }
     }
 
     /// Reminder gaps while the window stays up: three at 15 s, then one a minute.
     static func waitingGap(after reminders: Int) -> TimeInterval { reminders < 3 ? 15 : 60 }
     /// With no window (already allowed, or a background download): the old 15 s line.
     static let stillGap: TimeInterval = 15
+    /// The window counts as gone only after this long away (a presentation flicker is not a close).
+    static let goneAfter: TimeInterval = 1.5
+    /// A gap between ticks longer than this means the phone slept (locked): start the wait over.
+    static let sleptAfter: TimeInterval = 5
+    /// Apple still working this long after its window went means the person had tapped it.
+    static let tappedAfter: TimeInterval = 3
 
     /// Seconds that keep counting while the phone sleeps (a lock mid-download).
     static func clock() -> TimeInterval { Double(clock_gettime_nsec_np(CLOCK_MONOTONIC)) / 1e9 }
 
     private(set) var sheetSeen = false
-    private var sheetUp = false
+    /// The window is up now (after the flicker filter).
+    private(set) var sheetUp = false
+    private var awaySince: TimeInterval?
+    private var closedAt: TimeInterval?
     private var reminders = 0
     private var lastLineAt: TimeInterval
+    private var lastTickAt: TimeInterval
 
     /// `start`: when the "Downloading" line was said.
-    init(start: TimeInterval) { lastLineAt = start }
+    init(start: TimeInterval) { lastLineAt = start; lastTickAt = start }
 
     /// Called about once a second while the download runs.
     mutating func tick(sheetShowing: Bool, now: TimeInterval) -> Line? {
+        // Back from a lock: never a line on the first tick after waking.
+        if now - lastTickAt > Self.sleptAfter { lastLineAt = now }
+        lastTickAt = now
         if sheetShowing {
-            sheetUp = true
-            if !sheetSeen {
+            awaySince = nil
+            if !sheetUp {
+                // Opened, or opened again after it had gone: where the button is.
+                sheetUp = true
                 sheetSeen = true
+                closedAt = nil
+                reminders = 0
                 lastLineAt = now
                 return .sheetOpened
             }
@@ -43,24 +63,30 @@ struct DownloadGuide {
             lastLineAt = now
             return .sheetWaiting
         }
-        // The window just went (tapped and finished, or closed): a fresh 15 s before any
-        // progress line, so "still downloading" never lands on the moment it closes.
         if sheetUp {
+            let since = awaySince ?? now
+            awaySince = since
+            guard now - since >= Self.goneAfter else { return nil }
+            // Gone for real: a fresh 15 s before any progress line.
             sheetUp = false
+            awaySince = nil
+            closedAt = since
             lastLineAt = now
             return nil
         }
-        // No window (or it has gone and Apple keeps downloading in the background): the
-        // plain progress line, 15 s after the last thing said.
         guard now - lastLineAt >= Self.stillGap else { return nil }
         lastLineAt = now
         return .stillDownloading
     }
 
-    /// The last line once Apple's prepare returns.
-    func finished(ok: Bool) -> Line {
+    /// The last line once Apple's prepare returns. A window closed and Apple done right away:
+    /// it closed without the download. Apple still working a while after it closed: the person
+    /// tapped and the download itself failed.
+    func finished(ok: Bool, now: TimeInterval) -> Line {
         if ok { return .ready }
-        return sheetSeen ? .sheetClosed : .failed
+        guard sheetSeen else { return .failed }
+        if let closedAt, now - closedAt >= Self.tappedAfter { return .failed }
+        return .sheetClosed
     }
 
     static func text(_ line: Line, code: String) -> String {
@@ -99,4 +125,66 @@ final class DownloadGuideState {
     var guide: DownloadGuide
     var done = false
     init(_ guide: DownloadGuide) { self.guide = guide }
+}
+
+/// Download lines under VoiceOver (2026-11-06): one at a time, each queued behind what
+/// VoiceOver is reading. A reminder waiting its turn is dropped when a newer line comes or
+/// when it went stale (`isStale` is asked again right before it is posted).
+@MainActor
+final class VoiceOverLineQueue {
+    static let shared = VoiceOverLineQueue()
+
+    private struct Item {
+        let text: String
+        let lang: String
+        let isReminder: Bool
+        let isStale: () -> Bool
+    }
+
+    private var pending: [Item] = []
+    private var inFlight: String?
+    private var watchdog: Task<Void, Never>?
+    private var observer: NSObjectProtocol?
+
+    private init() {
+        observer = NotificationCenter.default.addObserver(
+            forName: UIAccessibility.announcementDidFinishNotification, object: nil, queue: .main) { [weak self] note in
+            let said = note.userInfo?[UIAccessibility.announcementStringValueUserInfoKey] as? String
+            MainActor.assumeIsolated { self?.finished(said) }
+        }
+    }
+
+    func say(_ text: String, lang: String, isReminder: Bool, isStale: @escaping () -> Bool = { false }) {
+        // A newer line makes any reminder still waiting stale.
+        pending.removeAll { $0.isReminder }
+        pending.append(Item(text: text, lang: lang, isReminder: isReminder, isStale: isStale))
+        postNext()
+    }
+
+    private func finished(_ said: String?) {
+        guard let inFlight, said == nil || said == inFlight else { return }
+        self.inFlight = nil
+        postNext()
+    }
+
+    private func postNext() {
+        guard inFlight == nil else { return }
+        while let next = pending.first {
+            pending.removeFirst()
+            if next.isStale() { continue }
+            inFlight = next.text
+            UIAccessibility.post(notification: .announcement,
+                                 argument: SpeechManager.voiceOverLine(next.text, lang: next.lang, queue: true))
+            // If VoiceOver never reports back (turned off, interrupted), move on anyway.
+            watchdog?.cancel()
+            let text = next.text
+            watchdog = Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 20_000_000_000)
+                guard !Task.isCancelled, self?.inFlight == text else { return }
+                self?.inFlight = nil
+                self?.postNext()
+            }
+            return
+        }
+    }
 }

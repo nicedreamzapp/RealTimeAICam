@@ -9,17 +9,18 @@ struct YourLanguageCard: View {
     @ObservedObject private var yourLanguage = YourLanguage.shared
     @ObservedObject private var appLang = AppLangObserver.shared
 
-    /// `queue`: with VoiceOver on, wait for VoiceOver instead of being dropped (lines said
-    /// once); repeated reminders are not queued, so they never pile up and play late.
-    private func say(_ line: String, queue: Bool = true) {
+    /// `isStale`: nil for a line said once; for a repeated reminder, whether it still holds.
+    /// VoiceOver on: announcements one at a time, each waiting its turn behind VoiceOver, so
+    /// the app's voice never talks over VoiceOver reading Apple's download window; a reminder
+    /// that went stale while waiting is dropped. Otherwise the app's voice.
+    private func say(_ line: String, isStale: (() -> Bool)?) {
+        if let isStale, isStale() { return }
         #if DEBUG
         SpeakLog.note("yourLanguage", line)
         #endif
-        // VoiceOver on: an announcement, so the app's voice doesn't talk over VoiceOver
-        // reading Apple's download window. Otherwise the app's voice.
         if UIAccessibility.isVoiceOverRunning {
-            UIAccessibility.post(notification: .announcement,
-                                 argument: SpeechManager.voiceOverLine(line, lang: AppLang.code, queue: queue))
+            VoiceOverLineQueue.shared.say(line, lang: AppLang.code, isReminder: isStale != nil,
+                                          isStale: isStale ?? { false })
         } else {
             SpeechManager.shared.speak(line)
         }
@@ -75,7 +76,7 @@ struct YourLanguageCard: View {
             if code != YourLanguageRules.english, !yourLanguage.isReady(code) {
                 let busy = yourLanguage.downloading == code
                 Button {
-                    yourLanguage.download(say: { say($0, queue: $1) })
+                    yourLanguage.download(say: { say($0, isStale: $1) })
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: "arrow.down.circle.fill")
@@ -139,11 +140,11 @@ struct YourLanguageCard: View {
 
     private func announce(_ new: String) {
         if new == YourLanguageRules.english {
-            say(L("Your language is English."))
+            say(L("Your language is English."), isStale: nil)
         } else if yourLanguage.isReady(new) {
-            say(L("Your language is %@.", YourLanguageRules.nameInSentence(new)))
+            say(L("Your language is %@.", YourLanguageRules.nameInSentence(new)), isStale: nil)
         } else {
-            say(L("Your language is %@. Tap %@.", YourLanguageRules.nameInSentence(new), YourLanguageRules.downloadRow(new)))
+            say(L("Your language is %@. Tap %@.", YourLanguageRules.nameInSentence(new), YourLanguageRules.downloadRow(new)), isStale: nil)
         }
     }
 }

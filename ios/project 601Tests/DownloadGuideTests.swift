@@ -40,10 +40,58 @@ final class DownloadGuideTests: XCTestCase {
         for t in stride(from: 2.0, through: 45, by: 1) {
             if let l = g.tick(sheetShowing: false, now: t) { after.append(l) }
         }
+        // Closed at 2 (counted after 1.5 s away), progress line 15 s after that is noticed.
         XCTAssertEqual(after, [.stillDownloading, .stillDownloading])
-        XCTAssertEqual(g.finished(ok: false), .sheetClosed)
-        XCTAssertEqual(g.finished(ok: true), .ready)
-        XCTAssertEqual(DownloadGuide(start: 0).finished(ok: false), .failed)
+        XCTAssertEqual(g.finished(ok: true, now: 46), .ready)
+        XCTAssertEqual(DownloadGuide(start: 0).finished(ok: false, now: 10), .failed)
+    }
+
+    /// X on the window: Apple answers right away, so it closed without the language.
+    func testClosedWithXSaysClosed() {
+        var g = DownloadGuide(start: 0)
+        _ = g.tick(sheetShowing: true, now: 1)
+        _ = g.tick(sheetShowing: false, now: 2)
+        XCTAssertEqual(g.finished(ok: false, now: 2.5), .sheetClosed)
+        // Apple gave up with the window still open: also closed.
+        var h = DownloadGuide(start: 0)
+        _ = h.tick(sheetShowing: true, now: 1)
+        XCTAssertEqual(h.finished(ok: false, now: 450), .sheetClosed)
+    }
+
+    /// Tapped, the window went, Apple kept going and then failed: the download failed.
+    func testFailureAfterTheTapIsADownloadFailure() {
+        var g = DownloadGuide(start: 0)
+        _ = g.tick(sheetShowing: true, now: 1)
+        for t in stride(from: 2.0, through: 5, by: 1) { _ = g.tick(sheetShowing: false, now: t) }
+        XCTAssertEqual(g.finished(ok: false, now: 30), .failed)
+    }
+
+    /// A window that comes back gets the where-the-button-is line again.
+    func testReopenedWindowSaysWhereTheButtonIsAgain() {
+        var g = DownloadGuide(start: 0)
+        XCTAssertEqual(g.tick(sheetShowing: true, now: 1), .sheetOpened)
+        for t in stride(from: 2.0, through: 5, by: 1) { _ = g.tick(sheetShowing: false, now: t) }
+        XCTAssertEqual(g.tick(sheetShowing: true, now: 6), .sheetOpened)
+    }
+
+    /// Away for under 1.5 s is a flicker: no new opened line, reminders keep their schedule.
+    func testFlickerIsNotAClose() {
+        var g = DownloadGuide(start: 0)
+        _ = g.tick(sheetShowing: true, now: 1)
+        XCTAssertNil(g.tick(sheetShowing: false, now: 2))
+        XCTAssertNil(g.tick(sheetShowing: true, now: 3))
+        XCTAssertTrue(g.sheetUp)
+        for t in stride(from: 4.0, through: 15, by: 1) { XCTAssertNil(g.tick(sheetShowing: true, now: t)) }
+        XCTAssertEqual(g.tick(sheetShowing: true, now: 16), .sheetWaiting)
+    }
+
+    /// Locked for two minutes: no line on the first tick after waking, the wait starts over.
+    func testNoLineRightAfterAnUnlock() {
+        var g = DownloadGuide(start: 0)
+        _ = g.tick(sheetShowing: true, now: 1)
+        XCTAssertNil(g.tick(sheetShowing: true, now: 121))
+        for t in stride(from: 122.0, through: 135, by: 1) { XCTAssertNil(g.tick(sheetShowing: true, now: t)) }
+        XCTAssertEqual(g.tick(sheetShowing: true, now: 136), .sheetWaiting)
     }
 
     /// Up for minutes, then gone: no progress line on the very tick it closes.
@@ -51,10 +99,12 @@ final class DownloadGuideTests: XCTestCase {
         var g = DownloadGuide(start: 0)
         _ = g.tick(sheetShowing: true, now: 1)
         for t in stride(from: 2.0, through: 150, by: 1) { _ = g.tick(sheetShowing: true, now: t) }
-        // Last reminder at 106; closed at 151 (45 s later).
+        // Last reminder at 106; away from 151, counted closed at 153 (after 1.5 s).
         XCTAssertNil(g.tick(sheetShowing: false, now: 151))
-        XCTAssertNil(g.tick(sheetShowing: false, now: 165))
-        XCTAssertEqual(g.tick(sheetShowing: false, now: 166), .stillDownloading)
+        XCTAssertNil(g.tick(sheetShowing: false, now: 152))
+        XCTAssertNil(g.tick(sheetShowing: false, now: 153))
+        for t in stride(from: 154.0, through: 167, by: 1) { XCTAssertNil(g.tick(sheetShowing: false, now: t)) }
+        XCTAssertEqual(g.tick(sheetShowing: false, now: 168), .stillDownloading)
     }
 
     func testLinesInEnglishAndSpanish() {

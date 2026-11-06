@@ -235,13 +235,14 @@ final class YourLanguage: ObservableObject {
 
     /// The person tapped the download row. The ONLY place Your language downloads.
     /// `say` gets the spoken progress lines.
-    /// `say(line, once)`: once is false for the repeated reminders.
-    func download(say: @escaping (String, Bool) -> Void) {
+    /// `say(line, isStale)`: isStale is nil for lines said once; a reminder's tells whether it
+    /// still holds when its turn comes (VoiceOver's queue, DownloadGuide.Line.isReminder).
+    func download(say: @escaping (String, (() -> Bool)?) -> Void) {
         let c = code
         guard c != YourLanguageRules.english, !isReady(c), downloading == nil else { return }
         downloading = c
         NSLog("YourLanguage: download requested by tap: %@", c)
-        say(YourLanguageRules.downloadingLine(c), true)
+        say(YourLanguageRules.downloadingLine(c), nil)
         let baseline = DownloadSheetWatch.stack().depth
         let state = DownloadGuideState(DownloadGuide(start: DownloadGuide.clock()))
         // Watches for Apple's download window and says where its button is (DownloadGuide).
@@ -256,7 +257,11 @@ final class YourLanguage: ObservableObject {
                     NSLog("YourLanguage: over the app now: %@ (depth %d, was %d)", now.top, now.depth, baseline)
                 }
                 if let line = state.guide.tick(sheetShowing: now.depth > baseline, now: DownloadGuide.clock()) {
-                    say(DownloadGuide.text(line, code: c), line == .sheetOpened)
+                    let stale: (() -> Bool)? = line.isReminder ? { [weak self] in
+                        // Window gone, language ready, or the download over: the reminder no longer holds.
+                        state.done || self?.downloading != c || (line == .sheetWaiting && !state.guide.sheetUp)
+                    } : nil
+                    say(DownloadGuide.text(line, code: c), stale)
                 }
             }
         }
@@ -268,7 +273,7 @@ final class YourLanguage: ObservableObject {
             if ok { readyCodes.insert(c) }
             publish()
             NSLog("YourLanguage: download %@ ok=%d", c, ok ? 1 : 0)
-            say(DownloadGuide.text(state.guide.finished(ok: ok), code: c), true)
+            say(DownloadGuide.text(state.guide.finished(ok: ok, now: DownloadGuide.clock()), code: c), nil)
         }
     }
 
