@@ -594,12 +594,22 @@ final class LiveCallController: ObservableObject {
         phase = .thinking
         listener.stopListening()
         listener.watchForBargeIn(true)
-        voice.sayOwn("Let me count.")
+        // Balanced users never download a vision pack, so the 8 MB money reader comes with the first money
+        // question (Matt 11/6). Without internet the honest code count below runs without it, never a guessed total.
+        let needsPack = MoneyDetector.models == nil && MoneyPack.installedFolder == nil
+        if needsPack { sayMoney(moneyLang == .es ? MoneyWordsES.gettingReader : LiveMoney.gettingReader, english: LiveMoney.gettingReader) }
+        else { voice.sayOwn("Let me count.") }
         phase = .speaking
         modelBusy = true
         let camera = camera
         let asked = Date()
         Task.detached(priority: .userInitiated) { [weak self] in
+            if needsPack {
+                let cfg = URLSessionConfiguration.ephemeral
+                cfg.timeoutIntervalForRequest = 8; cfg.timeoutIntervalForResource = 25
+                let installed = (try? await MoneyPack.install(session: URLSession(configuration: cfg))) != nil
+                await MainActor.run { self?.log(["event": "money_pack", "installed": installed]) }
+            }
             var first = true
             let count = LiveMoney.countBurst(maxFrames: 2, frame: { () -> CGImage? in
                 guard box.isAlive else { return nil }   // cancelled: no more looks

@@ -228,8 +228,28 @@ enum MoneyDetector {
     // MARK: - Running the models
 
     /// Every bill in the frame, or nil when the models aren't there (the old patch/rectangle search runs instead).
-    static func detect(_ image: CGImage) -> [Found]? {
+    /// What one look found: the bills, and whether anything in the frame still suggests money when no bill was
+    /// found (a weak or vetoed bill box, a numeral, or the classifier on the whole frame), so "no bills" is never
+    /// said about a frame that may hold money.
+    struct Detection { var found: [Found]; var maybeMoney: Bool }
+
+    /// Debug trace (MONEY_TRACE=1 on the Mac replay, or a test's own sink).
+    nonisolated(unsafe) static var traceSink: ((String) -> Void)?
+    static var traceOn: Bool { traceSink != nil || ProcessInfo.processInfo.environment["MONEY_TRACE"] != nil }
+    static func trace(_ s: String) {
+        if let traceSink { traceSink(s) } else { FileHandle.standardError.write((s + "\n").data(using: .utf8)!) }
+    }
+
+    static func detect(_ image: CGImage) -> Detection? {
         guard let m = models else { return nil }
+        return detect(image, models: m)
+    }
+
+    static func detect(_ image: CGImage, models m: Models) -> Detection? {
+        autoreleasepool { detectOnce(image, m) }   // Core ML, Core Image and Vision buffers go when the look ends
+    }
+
+    private static func detectOnce(_ image: CGImage, _ m: Models) -> Detection? {
         let W = CGFloat(image.width), H = CGFloat(image.height)
         let side: CGFloat = 640, scale = min(side / W, side / H)
         let padX = (side - W * scale) / 2, padY = (side - H * scale) / 2
@@ -281,18 +301,116 @@ enum MoneyDetector {
         }
         let c = config
         var found: [Found] = []
+        var kept: [Det] = []
         for (d, votes, merged) in billsMerged(dets, c) {
             let probs = look(src, d.box, H, m)
             let (keep, val, lk) = value(votes: votes, probs: probs, c)
             guard keep else { continue }
+            // A bill's mirror image on a glossy table (CC0 xh_18: one $1 counted as three) is not a bill.
+            if kept.contains(where: { isReflection(of: $0, d, in: src, H) }) { continue }
+            // Laid against a kept bill's long side like a reflection, but the pixels can't tell: it may be a mirror
+            // image, so it never adds to the sure count and is never named (the count becomes "at least").
+            let maybeMirror = kept.contains { mirrorGeometry($0, d) }
+            if traceOn { for k in kept { trace("MONEY_TRACE refl? \(reflectionTrace(k, d, src, H))") } }
+            kept.append(d)
             let q = LiveMoney.Quad(corners: d.poly.map { CGPoint(x: $0.x, y: H - $0.y) })
-            found.append(Found(quad: q, conf: d.conf, value: val, look: lk, numerals: votes, sure: d.conf >= sureConf && !merged))
+            found.append(Found(quad: q, conf: d.conf, value: maybeMirror ? nil : val, look: lk, numerals: votes,
+                               sure: d.conf >= sureConf && !merged && !maybeMirror))
         }
-        if ProcessInfo.processInfo.environment["MONEY_TRACE"] != nil {
+        var maybe = !found.isEmpty
+        if !maybe {
+            maybe = dets.contains { ($0.cls == 0 && $0.conf >= 0.1) || ($0.cls != 0 && $0.conf >= 0.25) }
+            if !maybe {
+                let all = look(src, (W / 2, H / 2, W, H, 0), H, m)
+                if let top = all.max(by: { $0.value < $1.value }), top.key != "none", top.value >= 0.5 { maybe = true }
+            }
+        }
+        if traceOn {
             let b = dets.filter { $0.cls == 0 && $0.conf >= c.billConf }
-            FileHandle.standardError.write("MONEY_TRACE raw=\(raw.count) nms=\(dets.count) bills>=conf=\(b.count) kept=\(bills(dets, c).count) found=\(found.count) confs=\(b.map { String(format: "%.2f", $0.conf) })\n".data(using: .utf8)!)
+            trace("MONEY_TRACE raw=\(raw.count) nms=\(dets.count) bills>=conf=\(b.count) kept=\(bills(dets, c).count) found=\(found.count) confs=\(b.map { String(format: "%.2f", $0.conf) })")
         }
-        return found
+        return Detection(found: found, maybeMoney: maybe)
+    }
+
+    /// `b` is the mirror image of `a`: about the same size and angle, lying against `a`'s long side, and its crop
+    /// matches `a`'s crop flipped (a mirror) clearly better than turned (a real bill upside down).
+    static func isReflection(of a: Det, _ b: Det, in src: CIImage, _ H: CGFloat) -> Bool {
+        guard mirrorGeometry(a, b), let ga = grey(src, a.box, H), let gb = grey(src, b.box, H) else { return false }
+        return mirrorScore(ga, gb)
+    }
+
+    /// Pure: `b` lies where `a`'s mirror image would: about the same size and angle, against `a`'s long side
+    /// (centres a short side apart, across the long axis, barely shifted along it).
+    static func mirrorGeometry(_ a: Det, _ b: Det) -> Bool {
+        let la = max(a.box.w, a.box.h), sa = min(a.box.w, a.box.h), lb = max(b.box.w, b.box.h), sb = min(b.box.w, b.box.h)
+        guard lb / la > 0.75, lb / la < 1.33, sb / sa > 0.6, sb / sa < 1.6 else { return false }
+        var da = abs(angle(a.box) - angle(b.box)); da = min(da, 180 - da)
+        guard da <= 8 else { return false }
+        let ar = angle(a.box) * .pi / 180, dx = b.box.cx - a.box.cx, dy = b.box.cy - a.box.cy
+        let along = abs(dx * CGFloat(cos(ar)) + dy * CGFloat(sin(ar))), across = abs(-dx * CGFloat(sin(ar)) + dy * CGFloat(cos(ar)))
+        return along < 0.15 * la && across > 0.6 * sa && across < 1.6 * sa
+    }
+
+    static func reflectionTrace(_ a: Det, _ b: Det, _ src: CIImage, _ H: CGFloat) -> String {
+        let la = max(a.box.w, a.box.h), sa = min(a.box.w, a.box.h)
+        let ar = angle(a.box) * .pi / 180, dx = b.box.cx - a.box.cx, dy = b.box.cy - a.box.cy
+        let along = abs(dx * CGFloat(cos(ar)) + dy * CGFloat(sin(ar))) / la, across = abs(-dx * CGFloat(sin(ar)) + dy * CGFloat(cos(ar))) / sa
+        var da = abs(angle(a.box) - angle(b.box)); da = min(da, 180 - da)
+        var sc = ""
+        if let ga = grey(src, a.box, H), let gb = grey(src, b.box, H) { sc = "\(mirrorScores(ga, gb))" }
+        return String(format: "a=(%.0f,%.0f %.0fx%.0f) b=(%.0f,%.0f %.0fx%.0f) da=%.1f along=%.2f across=%.2f ", a.box.cx, a.box.cy, a.box.w, a.box.h, b.box.cx, b.box.cy, b.box.w, b.box.h, da, along, across) + sc
+    }
+
+    /// Small grey crop of a box, long side across (48 x 20), as floats.
+    static func grey(_ src: CIImage, _ b: (cx: CGFloat, cy: CGFloat, w: CGFloat, h: CGFloat, r: CGFloat), _ H: CGFloat) -> [Float]? {
+        var (w, h, r) = (b.w, b.h, b.r)
+        if w < h { swap(&w, &h); r += .pi / 2 }
+        let u = CGPoint(x: cos(r), y: sin(r)), v = CGPoint(x: -sin(r), y: cos(r))
+        func p(_ su: CGFloat, _ sv: CGFloat) -> CIVector { CIVector(x: b.cx + u.x * su * w / 2 + v.x * sv * h / 2, y: H - (b.cy + u.y * su * w / 2 + v.y * sv * h / 2)) }
+        guard let f = CIFilter(name: "CIPerspectiveCorrection") else { return nil }
+        f.setValue(src.clampedToExtent(), forKey: kCIInputImageKey)
+        f.setValue(p(-1, -1), forKey: "inputTopLeft"); f.setValue(p(1, -1), forKey: "inputTopRight")
+        f.setValue(p(1, 1), forKey: "inputBottomRight"); f.setValue(p(-1, 1), forKey: "inputBottomLeft")
+        guard var c = f.outputImage, c.extent.width > 1, c.extent.height > 1 else { return nil }
+        let gw = 48, gh = 20
+        c = c.transformed(by: CGAffineTransform(translationX: -c.extent.minX, y: -c.extent.minY))
+        c = c.transformed(by: CGAffineTransform(scaleX: CGFloat(gw) / c.extent.width, y: CGFloat(gh) / c.extent.height))
+        var px = [UInt8](repeating: 0, count: gw * gh * 4)
+        greyContext.render(c, toBitmap: &px, rowBytes: gw * 4, bounds: CGRect(x: 0, y: 0, width: gw, height: gh), format: .RGBA8,
+                           colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+        return (0 ..< gw * gh).map { Float(px[$0 * 4]) * 0.3 + Float(px[$0 * 4 + 1]) * 0.59 + Float(px[$0 * 4 + 2]) * 0.11 }
+    }
+    private static let greyContext = CIContext(options: [.useSoftwareRenderer: false])
+
+    /// Pure: a 48 x 20 grey crop `b` is a mirror of `a` (flipped across either axis matches better than any turn).
+    static func mirrorScore(_ a: [Float], _ b: [Float], w: Int = 48, h: Int = 20) -> Bool {
+        guard a.count == w * h, b.count == w * h else { return false }
+        func flipV(_ x: [Float]) -> [Float] { (0 ..< h).flatMap { r in x[(h - 1 - r) * w ..< (h - r) * w] } }
+        func flipH(_ x: [Float]) -> [Float] { (0 ..< h).flatMap { r in x[r * w ..< (r + 1) * w].reversed() } }
+        func corr(_ x: [Float], _ y: [Float]) -> Float {
+            let mx = x.reduce(0, +) / Float(x.count), my = y.reduce(0, +) / Float(y.count)
+            var sxy: Float = 0, sxx: Float = 0, syy: Float = 0
+            for i in x.indices { let dx = x[i] - mx, dy = y[i] - my; sxy += dx * dy; sxx += dx * dx; syy += dy * dy }
+            return sxx > 0 && syy > 0 ? sxy / (sxx * syy).squareRoot() : 0
+        }
+        let (mirror, turn) = mirrorScores(a, b, w: w, h: h)
+        guard mirror > 0.5 else { return false }
+        // A reflection is also fainter than the bill. A $1 looks much the same turned, so a faint copy needs only
+        // a small mirror margin (xh_18: mirror 0.61, turned 0.51).
+        func spread(_ x: [Float]) -> Float { let m = x.reduce(0, +) / Float(x.count); return (x.map { ($0 - m) * ($0 - m) }.reduce(0, +) / Float(x.count)).squareRoot() }
+        return mirror > turn + 0.15 || (mirror > turn + 0.05 && spread(b) < 0.85 * spread(a))
+    }
+    static func mirrorScores(_ a: [Float], _ b: [Float], w: Int = 48, h: Int = 20) -> (mirror: Float, turn: Float) {
+        guard a.count == w * h, b.count == w * h else { return (0, 0) }
+        func flipV(_ x: [Float]) -> [Float] { (0 ..< h).flatMap { r in x[(h - 1 - r) * w ..< (h - r) * w] } }
+        func flipH(_ x: [Float]) -> [Float] { (0 ..< h).flatMap { r in x[r * w ..< (r + 1) * w].reversed() } }
+        func corr(_ x: [Float], _ y: [Float]) -> Float {
+            let mx = x.reduce(0, +) / Float(x.count), my = y.reduce(0, +) / Float(y.count)
+            var sxy: Float = 0, sxx: Float = 0, syy: Float = 0
+            for i in x.indices { let dx = x[i] - mx, dy = y[i] - my; sxy += dx * dy; sxx += dx * dx; syy += dy * dy }
+            return sxx > 0 && syy > 0 ? sxy / (sxx * syy).squareRoot() : 0
+        }
+        return (max(corr(a, flipV(b)), corr(a, flipH(b))), max(corr(a, b), corr(a, flipH(flipV(b)))))
     }
 
     /// The classifier on one bill's box, straightened long side across, padded like training, 224 x 224.

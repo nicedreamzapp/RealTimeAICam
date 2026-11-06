@@ -1,6 +1,7 @@
 @testable import RealTime_Ai_Cam
 import CoreGraphics
 import Foundation
+import ImageIO
 import Testing
 
 /// The on-device money detector's decode (MoneyDetector.swift, a port of the trainer's decode2.py). These pin the
@@ -306,5 +307,83 @@ struct MoneyPackLiveTests {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         await #expect(throws: (any Error).self) { try await MoneyPack.install(from: URL(string: "https://ineedhemp.com/models/rtcam/money/nope/")!, into: root) }
         #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("money-v3").path))
+    }
+}
+
+/// Phone-test fixes (11/6): a bill's reflection, frames that may hold money, memory over many answers.
+/// MoneyCC0-xh18-one-dollar-reflection.jpg: "one dollar bill leaning wall", rawpixel.com/image/3301846, CC0.
+final class LinesBox: @unchecked Sendable { private let l = NSLock(); private var v: [String] = []
+    func add(_ s: String) { l.lock(); v.append(s); l.unlock() }; var all: [String] { l.lock(); defer { l.unlock() }; return v } }
+@Suite(.serialized) struct MoneyPhoneFixTests {
+    final class Marker {}
+    static func image(_ name: String) -> CGImage? {
+        guard let u = Bundle(for: Marker.self).url(forResource: name, withExtension: "jpg"),
+              let s = CGImageSourceCreateWithURL(u as CFURL, nil) else { return nil }
+        return CGImageSourceCreateImageAtIndex(s, 0, nil)
+    }
+    static func footprintMB() -> Double {
+        var info = task_vm_info_data_t(); var n = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+        let kr = withUnsafeMutablePointer(to: &info) { $0.withMemoryRebound(to: integer_t.self, capacity: Int(n)) { task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &n) } }
+        return kr == KERN_SUCCESS ? Double(info.phys_footprint) / 1_048_576 : -1
+    }
+
+    @Test func aMirrorIsNotATurn() {
+        let w = 48, h = 20
+        let a: [Float] = (0 ..< w * h).map { i in Float((i % w) * 3 + (i / w) * 11 + ((i * 7919) % 13) * 5) }
+        let flipV: [Float] = (0 ..< h).flatMap { r in a[(h - 1 - r) * w ..< (h - r) * w] }.map { $0 * 0.6 }
+        let turned: [Float] = a.reversed()
+        #expect(MoneyDetector.mirrorScore(a, flipV))     // a fainter mirror copy below it: a reflection
+        #expect(!MoneyDetector.mirrorScore(a, turned))   // a real bill the other way up: not a reflection
+        #expect(!MoneyDetector.mirrorScore(a, a))        // the same bill twice: not a reflection
+    }
+
+    @Test func framesThatMayHoldMoneyNeverSayThereIsNone() {
+        var c = LiveMoney.count([], boxed: true); c.doubts = [.unclear]
+        #expect(LiveMoney.sentence(c) == "I can't see any bills clearly. Hold them flat, about a foot from the camera.")
+        #expect(LiveMoney.sentence(c, lang: .es) == MoneyWordsES.unclear)
+        let none = LiveMoney.count([], boxed: true)
+        #expect(LiveMoney.sentence(none) == LiveMoney.noMoney && !LiveMoney.noMoney.contains("don't see any money"))
+        #expect(LiveMoney.sentence(none, lang: .es) == MoneyWordsES.noMoney)
+        // steady keeps "unclear" when every look found nothing.
+        #expect(LiveMoney.steady([c, none]).doubts.contains(.unclear))
+    }
+
+    /// The real published models on the real photo: one $1 standing on a glossy table is never two.
+    @Test func oneDollarAndItsReflectionIsOneBill() async throws {
+        try await MoneyPack.install()
+        MoneyDetector.reload()
+        #expect(MoneyDetector.models != nil)
+        guard let img = Self.image("MoneyCC0-xh18-one-dollar-reflection") else { Issue.record("missing image"); return }
+        let lines = LinesBox(); MoneyDetector.traceSink = { lines.add($0) }; defer { MoneyDetector.traceSink = nil }
+        let c = LiveMoney.countBurst(maxFrames: 2, frame: { img }, ask: nil)
+        let s = LiveMoney.sentence(c)
+        #expect(c.values.filter { $0 == 1 }.count <= 1, "\(s) \(lines.all.joined(separator: " || "))")
+        #expect(max(c.atLeast, c.values.count) <= 1 || (!c.doubts.contains(.countUnsure) && c.bills.count == 1), "\(s)")
+        #expect(!s.contains("two $1s"))
+    }
+
+    /// Memory stays flat over 50 money answers in one task (the phone run grew 79 -> 961 MB in its test loop).
+    @Test func memoryStaysFlatOverFiftyAnswers() async throws {
+        try await MoneyPack.install()
+        MoneyDetector.reload()
+        guard MoneyDetector.models != nil, let img = Self.image("MoneyCC0-xh18-one-dollar-reflection") else { Issue.record("no models"); return }
+        _ = LiveMoney.countBurst(maxFrames: 2, frame: { img }, ask: nil)   // warm up
+        let start = Self.footprintMB()
+        for _ in 0 ..< 50 { _ = LiveMoney.countBurst(maxFrames: 2, frame: { img }, ask: nil) }
+        let end = Self.footprintMB()
+        print("MONEY_MEMORY start \(Int(start)) MB end \(Int(end)) MB")
+        #expect(end - start < 60, "grew \(end - start) MB")
+    }
+}
+
+struct MoneyMirrorGeometryTests {
+    static func det(_ cx: CGFloat, _ cy: CGFloat, _ w: CGFloat = 440, _ h: CGFloat = 190, _ r: CGFloat = 0) -> MoneyDetector.Det {
+        MoneyDetectorDecodeTests.det(0, 0.9, cx, cy, w, h, r)
+    }
+    @Test func aBoxRightBelowAndTheSameSizeMayBeAMirror() {
+        #expect(MoneyDetector.mirrorGeometry(Self.det(500, 400), Self.det(505, 575)))           // xh_18's pair
+        #expect(!MoneyDetector.mirrorGeometry(Self.det(500, 400), Self.det(800, 575)))          // shifted along: a spread
+        #expect(!MoneyDetector.mirrorGeometry(Self.det(500, 400), Self.det(500, 430)))          // overlapping: a stack
+        #expect(!MoneyDetector.mirrorGeometry(Self.det(500, 400), Self.det(505, 575, 440, 190, 0.3)))   // turned: a fan
     }
 }

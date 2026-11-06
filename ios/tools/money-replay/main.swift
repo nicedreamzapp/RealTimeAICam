@@ -57,7 +57,7 @@ func honest(_ c: LiveMoney.Count) -> Bool {
     if c.doubts.contains(.overlapping) { return c.atLeast <= truth.count }
     // "At least N bills" (detector path, count not sure): honest when the floor holds.
     if c.doubts.contains(.countUnsure) { return max(c.atLeast, c.values.count) <= truth.count }
-    if c.doubts.contains(.none) { return true }
+    if c.doubts.contains(.none) || c.doubts.contains(.unclear) { return true }
     let hedged = !Set(c.doubts).isDisjoint(with: [.cutOff, .moreThanFound, .frames])
     return hedged ? c.bills.count <= truth.count : c.bills.count == truth.count
 }

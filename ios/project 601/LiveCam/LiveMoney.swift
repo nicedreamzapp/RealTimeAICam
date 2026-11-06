@@ -243,7 +243,7 @@ enum LiveMoney {
 
     /// Why there is no total: bills overlap, one is cut off at the edge, one couldn't be read, the frames
     /// disagreed, no bills at all, too many to trust, or a bill was seen that wasn't picked out.
-    enum Doubt: String, Equatable { case overlapping, cutOff, unreadable, frames, none, tooMany, moreThanFound, countUnsure, noCamera }
+    enum Doubt: String, Equatable { case overlapping, cutOff, unreadable, frames, none, tooMany, moreThanFound, countUnsure, noCamera, unclear }
 
     struct Count: Equatable {
         var bills: [Bill]
@@ -366,7 +366,8 @@ enum LiveMoney {
         if Set(looks.map(\.bills.count)).count > 1 || looks.contains(where: { $0.doubts.contains(.countUnsure) }) {
             if !c.doubts.contains(.countUnsure) { c.doubts.append(.countUnsure) }
         }
-        if agree.count < 2 && !c.doubts.contains(.none) { c.doubts.append(.frames) }
+        if bills.isEmpty, looks.contains(where: { $0.doubts.contains(.unclear) }), let i = c.doubts.firstIndex(of: .none) { c.doubts[i] = .unclear }
+        if agree.count < 2 && !c.doubts.contains(.none) && !c.doubts.contains(.unclear) { c.doubts.append(.frames) }
         c.size = base.size
         return c
     }
@@ -381,13 +382,13 @@ enum LiveMoney {
         let look = looker ?? { img in LiveMoney.look(img, ask: ask) }
         var looks: [Count] = []
         while looks.count < max(2, maxFrames), let img = frame() {
-            let (c, log) = look(img)
+            let (c, log) = autoreleasepool { look(img) }   // each look's buffers go before the next
             onLook?(c, log)
             looks.append(c)
             if c.boxed {
                 // The detector path: up to `maxFrames` looks (at least two), answered with what they agree on.
                 while looks.count < max(2, maxFrames), let more = frame() {
-                    let (c2, log2) = look(more)
+                    let (c2, log2) = autoreleasepool { look(more) }
                     onLook?(c2, log2)
                     looks.append(c2)
                 }
@@ -469,6 +470,8 @@ enum LiveMoney {
     /// a guess for a bill it couldn't read, and how to fix the shot.
     static func sentence(_ c: Count, lang: MoneyLang = .en) -> String {
         if c.doubts.contains(.noCamera) { return lang == .es ? MoneyWordsES.cameraPaused : cameraPaused }
+        if c.doubts.contains(.unclear) { return lang == .es ? MoneyWordsES.unclear : unclear }
+        if c.boxed && c.doubts.contains(.none) { return lang == .es ? MoneyWordsES.noMoney : noMoney }
         if lang == .es { return MoneyWordsES.sentence(c) }
         if c.boxed && !c.doubts.contains(.none) { return countedSentence(c) }
         if c.sure {
@@ -514,6 +517,12 @@ enum LiveMoney {
     /// LiveCamWords.cameraPaused, word for word (the app's existing line; spanish-ui has it in its catalog).
     static let cameraPaused = "My camera paused, I'm restarting it. Ask me again in a second."
     static let tooMany = "That's a lot of bills; I can count up to 12 at a time. Split them into smaller piles."
+    /// No bill found, but the frame may hold money.
+    static let unclear = "I can't see any bills clearly. Hold them flat, about a foot from the camera."
+    /// Nothing at all suggests money (detector path). Still no claim that there is none: a rolled bill in a hand
+    /// (CC0 xh_25) shows nothing the detector, the look or the text reader knows.
+    static let noMoney = "I can't find any bills here. If there's money, hold it flat, about a foot from the camera."
+    static let gettingReader = "Getting the money reader, one moment."
 
     // MARK: - Vision (the part that needs the frame)
 
@@ -606,6 +615,25 @@ enum LiveMoney {
         return out.reduce(into: [Serial]()) { acc, s in
             if !acc.contains(where: { $0.text == s.text && hypot($0.at.x - s.at.x, $0.at.y - s.at.y) < min(W, H) * 0.03 }) { acc.append(s) }
         }
+    }
+
+    /// Printed money words or a serial number anywhere in the frame ("THE UNITED STATES", "DOLLARS", "L89823401J"):
+    /// only asked when the detector found no bill, so a rolled or crumpled bill (CC0 xh_25) is never "no money".
+    static func moneyWords(in image: CGImage) -> Bool {
+        let words = [" UNITED STATES", " AMERICA", " DOLLAR", "FEDERAL RESERVE", " ONE HUNDRED", " TWENTY", " FIFTY", " LEGAL TENDER",
+                     " IN GOD WE TRUST"]
+        for o in [CGImagePropertyOrientation.up, .down] {
+            let rq = VNRecognizeTextRequest()
+            rq.recognitionLevel = .accurate
+            rq.usesLanguageCorrection = false
+            guard (try? VNImageRequestHandler(cgImage: image, orientation: o, options: [:]).perform([rq])) != nil else { continue }
+            for r in rq.results ?? [] {
+                guard let line = r.topCandidates(1).first?.string else { continue }
+                let t = " " + line.uppercased()
+                if words.contains(where: { t.contains($0) }) || !serials(in: line).isEmpty { return true }
+            }
+        }
+        return false
     }
 
     /// The printed text on one straightened bill, read the right way up and upside down (a bill on a table is
@@ -927,7 +955,8 @@ enum LiveMoney {
         // The on-device detector, when its models are in the app: it boxes every bill (fan strips and edge slivers
         // too), and its boxes are the count. The patch and rectangle search below is then skipped, and the reader
         // reads only inside the boxes. Without the models, the search runs as before.
-        let boxed = MoneyDetector.detect(image)
+        let detection = MoneyDetector.detect(image)
+        let boxed = detection?.found
         let blobs = boxed == nil ? paperBlobs(in: image) : []
         var single = blobs.filter(\.billLike)
         // Bills Vision finds by their straight edges that no pale patch already covers (a bill on a pale table,
@@ -1115,6 +1144,9 @@ enum LiveMoney {
         let unseen = smoothMoney.contains { q in !kept.contains { q.covered(by: $0.quad) > 0.2 || $0.quad.covered(by: q) > 0.2 } }
         let missed = !stray.isEmpty || unseen || (modelCount.map { $0 > kept.count } ?? false)
         var c = count(kept, moreSeen: missed, pile: anyPile ? pileValues : nil, boxed: boxed != nil)
+        // No bill found, but something still looks like money: never "no money" (CC0 xh_10, xh_25).
+        if let detection, kept.isEmpty, let i = c.doubts.firstIndex(of: .none),
+           detection.maybeMoney || moneyWords(in: image) { c.doubts[i] = .unclear }
         // When bills overlap, the fewest there can be: every one found whole, every distinct serial, every distinct
         // value. Each is a floor on its own, so the largest of them is too (adding them could count a bill twice).
         c.atLeast = max(kept.filter { $0.value != nil }.count, Set(frameSerials.map(\.text)).count, Set(c.values + c.pileValues).count)
@@ -1172,6 +1204,9 @@ enum MoneyLang: String {
 enum MoneyWordsES {
     static let cameraPaused = "Mi cámara se detuvo, la estoy reiniciando. Pregúntame otra vez en un segundo."
     static let tooMany = "Son muchos billetes; puedo contar hasta 12 a la vez. Sepáralos en montones más pequeños."
+    static let unclear = "No veo ningún billete con claridad. Sostenlos planos, a unos 30 centímetros de la cámara."
+    static let noMoney = "No encuentro billetes aquí. Si hay dinero, sostenlo plano, a unos 30 centímetros de la cámara."
+    static let gettingReader = "Preparando el lector de billetes, un momento."
     static func number(_ n: Int) -> String {
         let w = ["cero", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez", "once", "doce"]
         return n < w.count ? w[n] : "\(n)"

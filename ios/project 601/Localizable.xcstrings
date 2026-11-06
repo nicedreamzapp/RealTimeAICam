@@ -5610,6 +5610,83 @@
           }
         }
       }
+    },
+    "Live Cam money reader" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lector de billetes de Live Cam"
+          }
+        }
+      }
+    },
+    "Money reader" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lector de billetes"
+          }
+        }
+      }
+    },
+    "Downloaded, 8 MB. Live Cam uses it to count bills." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descargado, 8 MB. Live Cam lo usa para contar billetes."
+          }
+        }
+      }
+    },
+    "Downloading, 8 MB." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descargando, 8 MB."
+          }
+        }
+      }
+    },
+    "8 MB. It downloads with your first money question, or tap to get it now." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "8 MB. Se descarga con tu primera pregunta sobre dinero, o tócalo para obtenerlo ahora."
+          }
+        }
+      }
+    },
+    "Money reader ready." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El lector de billetes está listo."
+          }
+        }
+      }
+    },
+    "The money reader didn't download. Check the internet and try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El lector de billetes no se descargó. Revisa la conexión a internet e inténtalo de nuevo."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
