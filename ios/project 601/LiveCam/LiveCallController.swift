@@ -72,8 +72,6 @@ final class LiveCallController: ObservableObject {
     @Published private(set) var caption = ""
     /// The language the caption is in (VoiceOver reads it with a voice for it).
     @Published private(set) var captionLang = AppLang.code
-    /// The welcome is heard, never shown (Matt 11/6: "it does not need one on screen").
-    @Published private(set) var captionIsIntro = false
     @Published private(set) var progress: Double = 0
     @Published private(set) var micLevel: Float = -60
     /// The model is reading a photo or writing: the orb holds still so the GPU is all the model's.
@@ -107,23 +105,28 @@ final class LiveCallController: ObservableObject {
     /// Turning it on from the selfie camera flips to the back camera first (the selfie side has no light).
     func setFlashlight(_ on: Bool, spoken: Bool = false) {
         guard running, torchAvailable else { return }
-        if on, camera.isFront { flip() }
-        camera.setTorch(on)
-        torchOn = on
         log(["event": "flashlight", "on": on, "spoken": spoken])
-        if spoken {
-            // Never the same words twice in a row (the repeat guard), but always said: the light changed.
-            let lines = on ? ["Flashlight, on", "Light's on."] : ["Flashlight, off", "Light's off."]
+        // The camera flips to the back side itself if needed and reports the real state (torchChanged).
+        pendingTorch = (on, spoken)
+        camera.setTorch(on)
+    }
+    private var pendingTorch: (on: Bool, spoken: Bool)?
+    /// The camera's real torch state (review 11/6): the button and the spoken line follow it, never the request.
+    private func torchChanged(_ lit: Bool) {
+        torchOn = lit
+        guard let p = pendingTorch else { return }
+        pendingTorch = nil
+        log(["event": "flashlight_state", "on": lit, "asked": p.on])
+        if p.spoken {
+            // Never the same words twice in a row (the repeat guard), but always said: the light changed, or didn't.
+            let lines = p.on != lit ? [LiveCamWords.lightFailed] : lit ? ["Flashlight, on", "Light's on."] : ["Flashlight, off", "Light's off."]
             speakAll(own: lines.first { sayGuard.vet($0) != nil && LiveSayGuard.opening($0) != sayGuard.lastOpening } ?? lines[0])
         } else {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            UIImpactFeedbackGenerator(style: p.on == lit ? .light : .rigid).impactOccurred()
         }
     }
-    /// Flip camera: the light goes off when it flips to the selfie side.
-    func flip() {
-        if !camera.isFront { torchOn = false }
-        camera.flip()
-    }
+    /// Flip camera (the camera turns the light off itself when it flips to the selfie side, and says so).
+    func flip() { camera.flip() }
     private var backgroundWatch: NSObjectProtocol?
 
     /// The last question heard (in the person's words), shown above the answer.
@@ -179,11 +182,12 @@ final class LiveCallController: ObservableObject {
         running = true
         moneyMemory.forget()   // a new call never answers from an old count
         Task.detached(priority: .utility) { MoneyDetector.warmUp() }   // both money models loaded off the main thread
+        camera.onTorch = { [weak self] lit in DispatchQueue.main.async { MainActor.assumeIsolated { self?.torchChanged(lit) } } }
         UIApplication.shared.isIdleTimerDisabled = true
         // The app goes to the background: the light goes off (iOS stops the camera there anyway).
         backgroundWatch = NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil,
                                                                  queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { if self?.torchOn == true { self?.camera.setTorch(false); self?.torchOn = false } }
+            MainActor.assumeIsolated { if self?.torchOn == true { self?.camera.setTorch(false) } }
         }
         watch.enabled = proactiveOn
         LiveCamTest.beginSession()
@@ -198,7 +202,6 @@ final class LiveCallController: ObservableObject {
             guard let self else { return }
             self.caption = shown
             self.captionLang = lang
-            self.captionIsIntro = english == LiveWords.firstGreeting
             self.lastSaid = english
             self.log(["event": "say", "text": shown])
             if let o = self.openedAt { self.openedAt = nil; self.log(["event": "first_spoken_after_open", "seconds": Date().timeIntervalSince(o)]) }
@@ -241,16 +244,8 @@ final class LiveCallController: ObservableObject {
         camera.onEvent = { [weak self] o in DispatchQueue.main.async { MainActor.assumeIsolated { self?.log(o) } } }
         camera.start()
         if !typedOnly {
-            if steps.willAskPermission() {
-                // The first time: say why before iOS asks (blind users hear the reason, then the two prompts).
-                phase = .speaking
-                caption = L(LiveCamWords.permissionLine)
-                captionIsIntro = false
-                captionLang = AppLang.code
-                voice.sayOwn(LiveCamWords.permissionLine)
-                while running, voice.isBusy { try? await Task.sleep(nanoseconds: 150_000_000) }
-                guard stillOpen("permission_line") else { return }
-            }
+            // Matt 11/6: "I don't want it to... introduce itself or give instructions". Nothing is said before iOS asks
+            // for the mic and speech recognition; iOS's own prompts carry the reason (the purpose strings).
             let failure = await steps.startListener(listener)
             guard stillOpen("listener") else { return }
             if let f = failure {
@@ -303,7 +298,6 @@ final class LiveCallController: ObservableObject {
         guard running else { return }
         phase = .failed
         caption = L(why)
-        captionIsIntro = false
         captionLang = AppLang.code
         log(["event": "failed", "why": why])
         voice.sayOwn(why)
@@ -330,16 +324,16 @@ final class LiveCallController: ObservableObject {
         }
         log(["event": "loaded", "seconds": Date().timeIntervalSince(t0)])
         guard stillOpen("loaded") else { return }
-        // Greet like a friend, then wait for cues (11/2 Matt): it only looks when asked.
-        phase = .speaking
-        listener.watchForBargeIn(true)
+        // Matt 11/6: "I just want it to start working and doing what it's supposed to do. It doesn't need to introduce
+        // itself or anything." Open silent: no greeting, no opening look, no tips. Straight to listening (the orb shows
+        // it) and it answers when asked.
         describedOnce = true
         memory = LiveMemory()
         sayGuard = LiveSayGuard()
         checkInTurns = LiveRotation()
-        say(.own(LiveWords.firstGreeting))
-        if !typedOnly { look(prompt: LiveWords.openingLook, unprompted: false, first: true) }   // what's around, once (11/2 Matt)
-        else { answerDone = true }
+        answerDone = true
+        lastSpokeEnd = Date()
+        listen()
         if LiveCamTest.forceCantHear { hearingGaveUp() }
     }
 
@@ -435,11 +429,11 @@ final class LiveCallController: ObservableObject {
         let lang = listener.heardLang
         let stop = LiveBargeIn.shouldInterrupt(heard, confidence: confidence, saying: saying, continuing: continuing, lang: lang)
         log(["event": "heard_while_talking", "text": heard, "interrupt": stop])
-        if stop { bargeIn(heard: heard, dropWords: LiveBargeIn.afterEcho(heard, saying: saying, lang: lang)) }
+        if stop { bargeIn(heard: heard, echoOf: saying) }
     }
 
     /// Talked over with a real question: stop now and take it, the words heard so far kept.
-    func bargeIn(heard: String = "", dropWords: Int = 0) {
+    func bargeIn(heard: String = "", echoOf saying: [String] = []) {
         guard running, !micMuted, !hearingStopped, phase == .speaking || phase == .thinking else { return }
         // Still thinking and they kept talking right after: they weren't done, so keep what they said so far.
         if phase == .thinking, let e = questionEndedAt, Date().timeIntervalSince(e) < 2.5, !lastQuestion.isEmpty {
@@ -452,7 +446,7 @@ final class LiveCallController: ObservableObject {
         voice.stop()
         phase = .listening
         prefillArmed = false
-        listener.takeBargeAsQuestion(dropWords: dropWords)   // the same recognition carries on, its own echo left out
+        listener.takeBargeAsQuestion(echoOf: saying)   // the same recognition carries on, its own echo at the start left out
         if !typedOnly { startWatch() }
     }
 

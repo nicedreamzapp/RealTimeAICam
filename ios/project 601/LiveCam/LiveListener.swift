@@ -156,7 +156,7 @@ final class LiveListener {
         request = req
         transcript = ""
         listenStarted = Date(); lastChange = Date(); lastLoudAt = Date()
-        dropWords = 0
+        echoOf = []
         isListening = true
         tap.startFeeding(req, replay: replay)
         finishing = false
@@ -234,18 +234,18 @@ final class LiveListener {
 
     /// The words heard while it talked were a real question to it: the same recognition carries on as the question
     /// (end of speech and delivery as usual), so nothing said so far is lost.
-    func takeBargeAsQuestion(dropWords: Int = 0) {
+    func takeBargeAsQuestion(echoOf saying: [String] = []) {
         guard isListening, bargeOnly else { listen(); return }
         bargeOnly = false
-        self.dropWords = dropWords
+        echoOf = saying
         tap.speaking(false)
         lastChange = Date()
     }
 
     /// The language being heard (the recognizer's), for the barge-in word lists.
     var heardLang: String { recognizer?.locale.identifier ?? "en" }
-    /// Its own echo at the start of a barged-in question: that many words are left out of the question.
-    private var dropWords = 0
+    /// What it was saying when a question barged in: its echo at the start of the question is left out.
+    private var echoOf: [String] = []
 
     var hearingSomething: Bool { isListening && !bargeOnly && !transcript.isEmpty }
 
@@ -268,9 +268,9 @@ final class LiveListener {
     private func deliver(confidence: Double?, isFinal: Bool) {
         guard isListening else { return }
         var heard = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-        if dropWords > 0 {
-            heard = heard.split(separator: " ").dropFirst(dropWords).joined(separator: " ")
-            dropWords = 0
+        if !echoOf.isEmpty {
+            heard = LiveBargeIn.stripLeadingEcho(heard, saying: echoOf)
+            echoOf = []
         }
         let at = lastChange
         finishing = false

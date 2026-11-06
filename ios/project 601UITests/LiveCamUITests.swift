@@ -45,15 +45,16 @@ final class LiveCamUITests: XCTestCase {
         return (c.value as? String) ?? c.label
     }
 
-    /// Opens Live Cam from Home and waits for the greeting.
-    private func openLiveCam(_ app: XCUIApplication, greeting: String = TestLanguage.isSpanish ? "¡Hola!" : "Hey there",
-                             spanish: Bool = TestLanguage.isSpanish) {
+    /// Opens Live Cam from Home and waits until it is listening (Matt 11/6: it opens silent, no greeting), or for
+    /// `greeting` in the caption when a line is expected (the can't-hear note).
+    private func openLiveCam(_ app: XCUIApplication, greeting: String? = nil, spanish: Bool = TestLanguage.isSpanish) {
         let button = app.buttons[spanish ? TestLanguage.spanish("Live Cam, experimental") : "Live Cam, experimental"].firstMatch
         XCTAssertTrue(button.waitForExistence(timeout: 20), "no Live Cam button on Home")
         sleep(3) // buttons animate in
         if !button.isHittable { app.swipeUp() }
         button.tap()
-        let greeted = NSPredicate { _, _ in self.captionText(app).contains(greeting) }
+        let listening = app.descendants(matching: .any).matching(identifier: "liveCamOrb-yourTurn").firstMatch
+        let greeted = NSPredicate { _, _ in greeting.map { self.captionText(app).contains($0) } ?? listening.exists }
         expectation(for: greeted, evaluatedWith: NSObject())
         waitForExpectations(timeout: 180)
     }
@@ -184,7 +185,8 @@ final class LiveCamUITests: XCTestCase {
         let app = launch(env: ["RTCAM_FAKE_LIVE_ANSWER": "I see a blue double door with an exit sign above it.",
                                "RTCAM_FAKE_LIVE_DELAY": "3"])
         openLiveCam(app)
-        XCTAssertTrue(orb(app, "yourTurn").waitForExistence(timeout: 30), "never became your turn after the greeting")
+        XCTAssertTrue(orb(app, "yourTurn").waitForExistence(timeout: 30), "never became your turn after opening")
+        XCTAssertTrue(captionText(app).isEmpty, "it said something at open: \(captionText(app))")   // opens silent
         keep(app, "livecam-turn-yours")
         let words = app.descendants(matching: .any).matching(identifier: "liveCamWordsToggle").firstMatch
         if words.exists, (words.value as? String) == T("On") { words.tap() }   // Words on screen off: shape alone
@@ -232,7 +234,7 @@ final class LiveCamUITests: XCTestCase {
         let app = launch(["-userLanguage", "es", "-fakeTranslatorPacks", "(es)"],
                          env: ["RTCAM_FAKE_LIVE_ANSWER": "The cup is white."])
         // Your language Spanish makes the app Spanish: the greeting is the bundled Spanish line.
-        openLiveCam(app, greeting: "¡Hola!", spanish: true)
+        openLiveCam(app, spanish: true)
         ask(app, "De que color es la taza")
         let answered = NSPredicate { _, _ in self.captionText(app).contains("La taza es blanca") }
         expectation(for: answered, evaluatedWith: NSObject())

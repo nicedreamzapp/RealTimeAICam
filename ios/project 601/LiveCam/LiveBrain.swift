@@ -239,12 +239,8 @@ enum LiveLine: Equatable {
 }
 
 enum LiveWords {
-    /// Says out loud that it is always listening: there is nothing to tap (Matt's first try, 10/31).
-    /// 11/2 Matt: "it should just be like hey there how you doing and then wait for cues", not describe the room.
-    static let greeting = "Hey there, how's it going?"
-    /// The first greeting of each visit. Matt 11/6: "what is that warning welcome I don't want that": no welcome, no
-    /// experimental warning spoken at open, just the plain greeting (the Home button still says experimental).
-    static let firstGreeting = greeting
+    // Matt 11/6: Live Cam opens silent (no greeting, no welcome, no opening description); the old greeting and opening
+    // look are gone.
     /// Normal mode, after a long quiet: a friend in the room checking in, never a description of the scene or of
     /// them (11/2 Matt: "not something that's just critiquing everything"). Fixed lines, so the small model can't
     /// slip back into "Now I see...".
@@ -355,10 +351,6 @@ enum LiveWords {
 
     static let describeNow = "In one short sentence, tell me what you see right now, the main thing first."
 
-    /// The one look at the start of a call: what's around, never the person (11/2 Matt).
-    /// Matt 11/6: "I see a map and a monitor". The one help offer of the visit is added by the code after it
-    /// (LiveCamWords.helpOffer), never asked of the model, so it can't come back on every look.
-    static let openingLook = "In one short sentence that starts with \"I see\", name the main things around here. Never mention the person, their face or clothes."
     /// The quiet look while the view changes: a bare list the code compares with what was already named.
     static let inventory = "List the main things in view as short names separated by commas, at most 8. Things only, never the person or their clothes. No sentence."
     static let personWords: Set<String> = ["man", "woman", "person", "people", "guy", "you", "your", "face", "hair", "shirt",
@@ -779,24 +771,28 @@ enum LiveBargeIn {
     static let askStartsEnglish: Set<String> = ["what", "whats", "who", "where", "when", "why", "how", "which", "is", "are", "can",
                                          "could", "would", "should", "will", "do", "does", "did", "tell", "describe", "show",
                                          "explain", "help", "look", "read", "check", "find", "give", "say", "repeat"]
-    static let askStartsSpanish: Set<String> = ["qué", "que", "cómo", "como", "dónde", "donde", "cuál", "cual", "cuándo", "cuando",
-                                         "quién", "quien", "cuánto", "cuanto", "cuántos", "cuantos", "por", "puedes", "podrías",
-                                         "podrias", "dime", "mira", "lee", "describe", "ayúdame", "ayudame", "hay", "es", "está",
-                                         "esta", "explica", "busca", "repite", "muéstrame", "muestrame", "tengo"]
+    static let askStartsSpanish: Set<String> = ["qué", "cómo", "dónde", "cuál", "cuándo", "quién", "cuánto", "cuántos", "puedes",
+                                         "podrías", "podrias", "dime", "mira", "lee", "describe", "ayúdame", "ayudame", "explica",
+                                         "busca", "repite", "muéstrame", "muestrame"]
     static let askPhrasesEnglish = [" can you ", " could you ", " would you ", " tell me ", " look at ", " what is ", " what s ", " how do ",
                              " how many ", " where is ", " is this ", " is that ", " what about ", " do you ", " are you "]
-    static let askPhrasesSpanish = [" puedes ", " podrías ", " dime ", " mira ", " qué es ", " que es ", " cómo ", " dónde ", " cuál ",
-                                    " me dices ", " qué hay ", " qué ves "]
+    static let askPhrasesSpanish = [" puedes ", " podrías ", " dime ", " mira ", " qué es ", " cómo ", " dónde ", " cuál ",
+                                    " me dices ", " qué hay ", " qué ves ", " por qué "]
+
+    /// Spanish words that open a question but are also everyday words ("que", "es", "está"): two of them, or a strong
+    /// opener, are needed (review 11/6).
+    static let weakSpanish: Set<String> = ["que", "como", "donde", "cual", "cuando", "quien", "cuanto", "cuantos", "por", "hay",
+                                           "es", "está", "esta", "tengo"]
 
     static func isSpanish(_ lang: String) -> Bool { lang.lowercased().hasPrefix("es") }
 
-    /// The words heard minus its own voice: any run of 3+ words in a row that matches what it is saying is its own
-    /// sentence coming back through the speaker (review 11/6: a single shared word, "cup", is not an echo).
-    /// Question and stop words are never taken out. Returns the words kept and where the last echo ended.
-    static func withoutEcho(_ words: [String], saying: [String], lang: String = "en") -> (kept: [String], echoEnd: Int) {
+    /// Marks which of `words` are its own voice: a run of 3+ words in a row matching what it is saying (a whole
+    /// short line like "Flashlight, on" counts too). One shared word ("cup") is never an echo (review 11/6).
+    static func echoMask(_ words: [String], saying: [String]) -> [Bool] {
         let own = saying.map { LiveWords.normalize($0).split(separator: " ").map(String.init) }
         var echo = [Bool](repeating: false, count: words.count)
-        for line in own where line.count >= 3 {
+        for line in own where !line.isEmpty {
+            let need = min(3, line.count, max(2, words.count))   // a 2-word utterance that is 2 of its own words in a row
             var i = 0
             while i < words.count {
                 var best = 0
@@ -805,57 +801,73 @@ enum LiveBargeIn {
                     while i + k < words.count, j + k < line.count, words[i + k] == line[j + k] { k += 1 }
                     best = max(best, k)
                 }
-                if best >= 3 { for x in i ..< i + best { echo[x] = true }; i += best } else { i += 1 }
+                if best >= need { for x in i ..< i + best { echo[x] = true }; i += best } else { i += 1 }
             }
         }
-        let asks = isSpanish(lang) ? askStartsSpanish : askStartsEnglish
-        let stopWords = Set((isSpanish(lang) ? stopsSpanish : stopsEnglish).flatMap { $0 })
-        var kept: [String] = []
-        var end = 0
-        for (i, w) in words.enumerated() {
-            if echo[i], !asks.contains(w), !stopWords.contains(w) { end = i + 1; continue }
-            kept.append(w)
+        return echo
+    }
+
+    /// The words heard minus its own voice (review 11/6 round 2: everything echoed is taken out, so its own
+    /// "Flashlight, on" or "hold on" heard back never counts as a command).
+    static func withoutEcho(_ words: [String], saying: [String]) -> [String] {
+        let echo = echoMask(words, saying: saying)
+        return words.indices.filter { !echo[$0] }.map { words[$0] }
+    }
+
+    /// A barged-in question with its own voice left out: only an echo at the START is stripped, matched on the text
+    /// itself (raw words, so "cup's" stays one word), never words after the question ("what is that, the cup is red").
+    static func stripLeadingEcho(_ transcript: String, saying: [String]) -> String {
+        let raw = transcript.split(separator: " ").map(String.init)
+        guard !raw.isEmpty else { return transcript }
+        // Each raw word's normalized words, so the echo is found on normalized text and cut on raw word edges.
+        let parts = raw.map { LiveWords.normalize($0).split(separator: " ").map(String.init) }
+        let flat = parts.flatMap { $0 }
+        let echo = echoMask(flat, saying: saying)
+        var cut = 0, at = 0
+        for p in parts {
+            let n = p.count
+            if n == 0 { if cut == raw.count { break }; cut += 1; continue }   // punctuation on its own rides along
+            guard (at ..< at + n).allSatisfy({ echo[$0] }) else { break }
+            at += n; cut += 1
         }
-        return (kept, end)
+        guard cut > 0 else { return transcript }
+        return raw.dropFirst(cut).joined(separator: " ")
     }
 
-    /// The question to keep when it was talked over: only the words after its own echo (review 11/6).
-    static func afterEcho(_ heard: String, saying: [String], lang: String = "en") -> Int {
-        let words = LiveWords.normalize(heard).split(separator: " ").map(String.init)
-        return withoutEcho(words, saying: saying, lang: lang).echoEnd
-    }
-
-    /// True only for real words meant for it: a stop word anywhere in the newest words, or a question/ask of at least
-    /// three words that are not its own voice coming back, not filler, and not low confidence. `saying`: what it is
-    /// saying now. `continuing`: they started talking again right after their question ended, so two real words are
+    /// True only for real words meant for it, judged on the words left once its own voice is taken out: a light or
+    /// stop command anywhere in them, or a question/ask of at least three real words, not filler, not low
+    /// confidence. `continuing`: they started talking again right after their question ended, so two real words are
     /// enough. `lang`: the language being heard (the recognizer's).
     static func shouldInterrupt(_ heard: String, confidence: Double?, saying: [String], continuing: Bool = false,
                                 lang: String = "en") -> Bool {
         if let c = confidence, c > 0, c < 0.3 { return false }
-        if LiveWords.lightCommand(heard) != nil, LiveWords.normalize(heard).split(separator: " ").count >= 2 { return true }   // "lights on"
         let words = LiveWords.normalize(heard).split(separator: " ").map(String.init)
+        let fresh = withoutEcho(words, saying: saying)
+        let freshText = fresh.joined(separator: " ")
+        if LiveWords.lightCommand(freshText) != nil, fresh.count >= 2 { return true }   // "lights on", never its own line
         let es = isSpanish(lang)
-        // A stop word first, ahead of the echo rule: in the opening words or the newest ones ("... wait", "para").
-        let content = words.filter { !filler.contains($0) }
-        let stops = es ? stopsSpanish : stopsEnglish
-        let head = Array(content.prefix(3)), tail = Array(content.suffix(3))
+        // A stop word anywhere in what they said ("wait, what is the red one", "... hold on").
+        let content = fresh.filter { !filler.contains($0) }
         func has(_ ws: [String], _ p: [String]) -> Bool {
             ws.count >= p.count && (0 ... ws.count - p.count).contains { Array(ws[$0 ..< $0 + p.count]) == p }
         }
-        let ownLine = " " + saying.map { LiveWords.normalize($0) }.joined(separator: " ") + " "
         // "para" is also "for" in Spanish: it stops only when it opens what was heard ("para, para").
-        if stops.contains(where: { ($0 == ["para"] ? content.first == "para" : has(head, $0) || has(tail, $0))
-            && !ownLine.contains(" " + $0.joined(separator: " ") + " ") }) {
-            return true
-        }
-        let fresh = withoutEcho(words, saying: saying, lang: lang).kept
-        let real = fresh.filter { !filler.contains($0) }
+        if (es ? stopsSpanish : stopsEnglish).contains(where: { $0 == ["para"] ? content.first == "para" : has(content, $0) }) { return true }
+        let real = content
         if continuing { return real.count >= 2 }
         guard real.count >= 3 else { return false }
         let start = Array(fresh.drop(while: { filler.contains($0) }))
         let t = " " + start.joined(separator: " ") + " "
-        if let first = start.first, (es ? askStartsSpanish : askStartsEnglish).contains(first) { return true }
-        return (es ? askPhrasesSpanish : askPhrasesEnglish).contains { t.contains($0) }
+        if es {
+            if heard.contains("¿") { return true }
+            if let first = start.first, askStartsSpanish.contains(first) { return true }
+            // Two different weak cues, one of them a question word ("donde esta mi taza"), not "que bueno que...".
+            let cues = Set(start.prefix(3).filter { weakSpanish.contains($0) })
+            if cues.count >= 2, !cues.isDisjoint(with: ["que", "como", "donde", "cual", "cuando", "quien", "cuanto", "cuantos", "por"]) { return true }
+            return askPhrasesSpanish.contains { t.contains($0) }
+        }
+        if let first = start.first, askStartsEnglish.contains(first) { return true }
+        return askPhrasesEnglish.contains { t.contains($0) }
     }
 }
 

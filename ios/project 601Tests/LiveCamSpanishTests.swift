@@ -53,8 +53,8 @@ struct LiveCamSpanishTests {
     @Test func ownLineIsEnglishInEnglish() {
         forcing("en") {
             let v = RecordingVoice()
-            v.sayOwn(LiveWords.firstGreeting)
-            #expect(v.lines.first?.text == LiveWords.firstGreeting)
+            v.sayOwn(LiveCamWords.sayAgain)
+            #expect(v.lines.first?.text == LiveCamWords.sayAgain)
             #expect(v.lines.first?.lang == "en")
         }
     }

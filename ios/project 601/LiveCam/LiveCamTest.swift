@@ -12,7 +12,6 @@ import Foundation
 import UIKit
 
 enum LiveCamWords {
-    static let permissionLine = "Live Cam listens for your questions, so your phone will ask to use the microphone and speech recognition. Everything stays on this phone."
     static let notAllowed = "Live Cam needs the microphone and speech recognition to hear you. Allow them in Settings, then open Live Cam again."
     static let cantHear = "I can't hear you right now. Speech recognition on this phone keeps stopping. You can type your question in the box, or go back."
     static let cantHearNote = "Can't hear you: speech recognition keeps stopping. Type a question below, or tap Back."
@@ -40,6 +39,8 @@ enum LiveCamWords {
     static let helpOffer = "Anything I can help with?"
     /// An answer whose every sentence was already said this visit (Matt 11/6: never the same words twice).
     static let sameAsBefore = "Same as before."
+    /// The torch didn't do what was asked (review 11/6).
+    static let lightFailed = "The flashlight isn't working right now."
     static let notFullySure = "I'm not fully sure on that one."
     static let takeBack = "Actually, I'm not sure about the %@."
     static let lostAnswer = "Sorry, I lost that. Ask me again?"
@@ -48,9 +49,9 @@ enum LiveCamWords {
     /// es-strings.py only finds L("...") literals, so `missing` can't see these and `stale` lists them: keep them in the
     /// catalog. LiveCamSpanishTests checks each one has its Spanish.
     static var indirectKeys: [String] {
-        [permissionLine, notAllowed, cantHear, cantHearNote, noOfflineSpeech, LiveWords.firstGreeting,
+        [notAllowed, cantHear, cantHearNote, noOfflineSpeech,
          needsCamera, modelFailed, sayAgain, lostTrack, bye, gotIt, coachGoalSet, nothingSaidYet, coachGoalHeard,
-         flipToSeeYou, stillGettingReady, cantSeeInBackground, cameraPaused, newThing, newThingPlain, newThingThere, helpOffer, sameAsBefore, notFullySure, takeBack, lostAnswer]
+         flipToSeeYou, stillGettingReady, cantSeeInBackground, cameraPaused, newThing, newThingPlain, newThingThere, helpOffer, sameAsBefore, lightFailed, notFullySure, takeBack, lostAnswer]
             + LiveWords.checkIns + LiveWords.acks
             + LiveMode.allCases.flatMap { [$0.label, $0.confirm] } + ["Light's on.", "Light's off."]
     }

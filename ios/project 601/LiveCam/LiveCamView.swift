@@ -69,7 +69,7 @@ struct LiveCamView: View {
                     }
                     if call.typedOnly || call.hearingStopped { typedBox }
                     orb(size: wide ? 96 : 120)
-                    bottomBar
+                    bottomBar(width: geo.size.width)
                 }
                 // The menu floats over the view, so Mute and Back never move or leave the screen.
                 .overlay(alignment: .top) { if showModes { modeMenu.padding(.top, 76) } }
@@ -215,7 +215,7 @@ struct LiveCamView: View {
                     .font(.system(size: wide ? 22 : 26, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white).multilineTextAlignment(.center).lineLimit(wide ? 3 : 4).minimumScaleFactor(0.6)
                     .shadow(color: .black.opacity(0.9), radius: 6)
-                    .opacity(call.showCaption && !call.captionIsIntro ? 1 : 0.001)   // hidden words stay readable by VoiceOver
+                    .opacity(call.showCaption ? 1 : 0.001)   // hidden words stay readable by VoiceOver
                     .accessibilityLabel(call.caption)
                     .accessibilityValue(call.caption)
                     .accessibilityAddTraits(.updatesFrequently)
@@ -261,22 +261,32 @@ struct LiveCamView: View {
 
     // MARK: Bottom: mute and the one way out
 
-    private var bottomBar: some View {
-        HStack(spacing: call.torchAvailable ? 28 : 40) {
+    /// The round buttons' size and spacing for a row of `count` at this width: 76 pt where it fits, smaller (never
+    /// under 58) on a narrow screen, so the row always fits (review 11/6: it overflowed at 320 pt).
+    static func bottomRow(width: CGFloat, count: Int) -> (size: CGFloat, spacing: CGFloat) {
+        let n = CGFloat(count), avail = min(width, 640) - 32
+        let d = max(58, min(76, (avail - (n - 1) * 12) / n - 8))
+        let spacing = max(6, min(40, (avail - n * (d + 8)) / max(1, n - 1)))
+        return (d, spacing)
+    }
+
+    private func bottomBar(width: CGFloat) -> some View {
+        let (d, spacing) = Self.bottomRow(width: width, count: call.torchAvailable ? 3 : 2)
+        return HStack(spacing: spacing) {
             // Matt 11/6: "Live cam needs to have a flashlight... preferably at the bottom". One tap on, one tap off;
             // on the selfie camera it flips to the back camera first. Its word stays even with Words on screen off.
             if call.torchAvailable {
                 Button { call.setFlashlight(!call.torchOn) } label: {
                     VStack(spacing: 6) {
-                        Image(systemName: call.torchOn ? "flashlight.on.fill" : "flashlight.off.fill").font(.system(size: 28, weight: .semibold))
-                            .frame(width: 76, height: 76)
+                        Image(systemName: call.torchOn ? "flashlight.on.fill" : "flashlight.off.fill").font(.system(size: d * 0.37, weight: .semibold))
+                            .frame(width: d, height: d)
                             .background(call.torchOn ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.black.opacity(0.45)), in: Circle())
                             .overlay(Circle().stroke(.white.opacity(0.35), lineWidth: 1))
                             .foregroundStyle(call.torchOn ? .black : .white)
                         Text(L("Flashlight")).font(.footnote.weight(.semibold)).foregroundStyle(.white)
-                            .lineLimit(1).minimumScaleFactor(0.7)
+                            .lineLimit(1).minimumScaleFactor(0.6)
                     }
-                    .frame(width: 84)
+                    .frame(width: d + 8)
                 }
                 .accessibilityLabel(L("Flashlight"))
                 .accessibilityValue(call.torchOn ? L("On") : L("Off"))
@@ -286,23 +296,23 @@ struct LiveCamView: View {
             // Moonstone 11/1 Matt: "call it the mute button so it's obvious".
             Button { call.micMuted.toggle() } label: {
                 VStack(spacing: 6) {
-                    Image(systemName: call.micMuted ? "mic.slash.fill" : "mic.slash").font(.system(size: 28, weight: .semibold))
-                        .frame(width: 76, height: 76)
+                    Image(systemName: call.micMuted ? "mic.slash.fill" : "mic.slash").font(.system(size: d * 0.37, weight: .semibold))
+                        .frame(width: d, height: d)
                         .background(call.micMuted ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.black.opacity(0.45)), in: Circle())
                         .overlay(Circle().stroke(.white.opacity(0.35), lineWidth: 1))
                         .foregroundStyle(call.micMuted ? .black : .white)
                     Text(call.micMuted ? L("Unmute") : L("Mute")).font(.footnote.weight(.semibold)).foregroundStyle(.white)
-                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .lineLimit(1).minimumScaleFactor(0.6).frame(width: d + 8)
                 }
             }
             .accessibilityLabel(call.micMuted ? L("Unmute microphone") : L("Mute microphone"))
             .accessibilityHint(call.micMuted ? L("Live Cam starts listening again") : L("Live Cam stops listening until you unmute"))
             Button { call.end() } label: {
                 VStack(spacing: 6) {
-                    Image(systemName: "xmark").font(.system(size: 28, weight: .bold))
-                        .frame(width: 76, height: 76).background(Color.red, in: Circle()).foregroundStyle(.white)
+                    Image(systemName: "xmark").font(.system(size: d * 0.37, weight: .bold))
+                        .frame(width: d, height: d).background(Color.red, in: Circle()).foregroundStyle(.white)
                     Text(L("Back")).font(.footnote.weight(.semibold)).foregroundStyle(.white)
-                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .lineLimit(1).minimumScaleFactor(0.6).frame(width: d + 8)
                 }
             }
             .accessibilityLabel(L("Back"))
@@ -326,7 +336,7 @@ struct LiveCamView: View {
 
     private var orbLabel: String {
         switch call.phase {
-        case .listening: call.micMuted ? L("Microphone muted") : (call.hearingStopped ? L("Not listening. Type a question.") : L("Your turn. Just talk."))
+        case .listening: call.micMuted ? L("Microphone muted") : (call.hearingStopped ? L("Not listening. Type a question.") : L("Your turn"))
         case .thinking: L("Looking")
         case .speaking: L("Speaking")
         case .downloading, .loading, .starting: L("Getting ready")

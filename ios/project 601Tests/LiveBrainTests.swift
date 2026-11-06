@@ -64,10 +64,14 @@ struct LiveMemoryTests {
 }
 
 struct LiveWordsTests {
-    /// Matt 11/6: "what is that warning welcome I don't want that". The first greeting is the plain greeting.
-    @Test func firstGreetingHasNoWarningOrWelcome() {
-        #expect(LiveWords.firstGreeting == LiveWords.greeting)
-        for w in ["experimental", "welcome", "double-check"] { #expect(!LiveWords.firstGreeting.lowercased().contains(w)) }
+    /// Matt 11/6: "It doesn't need to introduce itself or anything." None of its own lines is a welcome, a warning
+    /// or an instruction about how to use it (Live Cam opens silent).
+    @Test func noLineIsAWelcomeOrAnInstruction() {
+        for l in LiveCamWords.indirectKeys {
+            for w in ["welcome", "experimental", "double-check", "just talk", "always listening", "live cam listens"] {
+                #expect(!l.lowercased().contains(w), "\(l)")
+            }
+        }
     }
 
     @Test func cameraQuestionsGetThePhotoOthersDoNot() {
@@ -239,7 +243,6 @@ struct LiveSayGuardTests {
         #expect(g.newThingFormat == LiveCamWords.newThingThere)   // never "I see" twice in a row
         #expect(!LiveWords.isHelpOffer(LiveCamWords.newThingPlain))
         #expect(LiveWords.isHelpOffer(LiveCamWords.newThing))
-        #expect(!LiveWords.openingLook.lowercased().contains("help"))
     }
 
     @Test func aSentenceAlreadySaidIsDropped() {
@@ -361,7 +364,77 @@ struct LiveReviewRound1Tests {
     }
 
     @Test func aBargedInQuestionLeavesOutItsOwnEcho() {
-        #expect(LiveBargeIn.afterEcho("the cup is red what is that", saying: ["The cup is red."]) == 4)
-        #expect(LiveBargeIn.afterEcho("what is that", saying: ["The cup is red."]) == 0)
+        #expect(LiveBargeIn.stripLeadingEcho("the cup is red what is that", saying: ["The cup is red."]) == "what is that")
+        #expect(LiveBargeIn.stripLeadingEcho("what is that", saying: ["The cup is red."]) == "what is that")
     }
+}
+
+/// The 11/6 review, round 2.
+struct LiveReviewRound2Tests {
+    @Test func itsOwnLightLineHeardBackNeverTogglesTheLight() {
+        #expect(!LiveBargeIn.shouldInterrupt("flashlight on", confidence: nil, saying: ["Flashlight, on"]))
+        #expect(!LiveBargeIn.shouldInterrupt("turn on the flashlight", confidence: nil,
+                                             saying: ["You can turn on the flashlight in the corner."]))
+        #expect(!LiveBargeIn.shouldInterrupt("hold on", confidence: nil, saying: ["Hold on, let me look."]))
+        #expect(LiveBargeIn.shouldInterrupt("lights off", confidence: nil, saying: ["The cup is white."]))
+    }
+
+    @Test func onlyAnEchoAtTheStartIsStrippedByItsText() {
+        let saying = ["The cup's red handle is on the left."]
+        #expect(LiveBargeIn.stripLeadingEcho("The cup's red handle what is that", saying: saying) == "what is that")
+        #expect(LiveBargeIn.stripLeadingEcho("what is that, the cup's red handle", saying: saying) == "what is that, the cup's red handle")
+        #expect(LiveBargeIn.stripLeadingEcho("what is that", saying: saying) == "what is that")
+    }
+
+    @Test func aStopWordAnywhereInTheUtteranceStopsIt() {
+        #expect(LiveBargeIn.shouldInterrupt("wait what is the red one over there by the door", confidence: nil, saying: ["I see a lamp."]))
+        #expect(LiveBargeIn.shouldInterrupt("okay so um wait", confidence: nil, saying: ["I see a lamp."]))
+    }
+
+    @Test func commonSpanishWordsAloneAreNotAQuestion() {
+        let s = ["La taza es blanca."]
+        #expect(!LiveBargeIn.shouldInterrupt("que bueno que viniste", confidence: nil, saying: s, lang: "es-MX"))
+        #expect(!LiveBargeIn.shouldInterrupt("esta casa está bonita", confidence: nil, saying: s, lang: "es-MX"))
+        #expect(LiveBargeIn.shouldInterrupt("¿que es eso de ahí?", confidence: nil, saying: s, lang: "es-MX"))
+        #expect(LiveBargeIn.shouldInterrupt("qué es eso", confidence: nil, saying: s, lang: "es-MX"))
+        #expect(LiveBargeIn.shouldInterrupt("donde esta mi taza", confidence: nil, saying: s, lang: "es-MX"))   // two cues
+    }
+
+    @Test func theBottomRowFitsFrom320ToTheUnfoldedDuo() {
+        for w in [320.0, 375, 390, 440, 669, 951] as [CGFloat] {
+            for n in [2, 3, 4] {
+                let r = LiveCamView.bottomRow(width: w, count: n)
+                let row = CGFloat(n) * (r.size + 8) + CGFloat(n - 1) * r.spacing
+                #expect(row <= min(w, 640) - 32 + 0.5, "row \(row) at \(w) with \(n)")
+                #expect(r.size >= 56)
+            }
+        }
+    }
+
+    @Test func theTorchFollowsTheCameraNotTheRequest() async {
+        let cam = LiveCamera()
+        cam.stillFrame = LiveCallController.noFrame
+        let seen = TorchLog()
+        cam.onTorch = { seen.add($0) }
+        cam.torchSetter = { _ in false }              // the torch fails to turn on
+        cam.setTorch(true)
+        await seen.wait(1)
+        #expect(seen.values == [false])
+        cam.torchSetter = { $0 }                      // works now
+        cam.setTorch(true)
+        await seen.wait(2)
+        cam.interruptionBegan()                       // iOS pauses the camera: the light is off
+        await seen.wait(3)
+        cam.reapplyTorch()                            // back after the restart
+        await seen.wait(4)
+        #expect(seen.values == [false, true, false, true])
+    }
+}
+
+final class TorchLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var v: [Bool] = []
+    var values: [Bool] { lock.lock(); defer { lock.unlock() }; return v }
+    func add(_ b: Bool) { lock.lock(); v.append(b); lock.unlock() }
+    func wait(_ n: Int) async { for _ in 0 ..< 200 where values.count < n { try? await Task.sleep(nanoseconds: 10_000_000) } }
 }

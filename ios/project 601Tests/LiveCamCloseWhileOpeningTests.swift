@@ -58,18 +58,20 @@ struct LiveCamCloseWhileOpeningTests {
         #expect(voice.said.isEmpty)
     }
 
-    @Test func closedDuringThePermissionLineNeverStartsTheMic() async {
+    /// Matt 11/6: Live Cam opens silent, even the first time (iOS's own prompts say why): nothing is said before the
+    /// mic starts.
+    @Test func theFirstTimeNothingIsSaidBeforeTheMicStarts() async {
         let (call, voice) = makeCall(realCamera: false)
         call.steps.willAskPermission = { true }
         var listenerStarted = false
-        call.steps.startListener = { _ in listenerStarted = true; return nil }
+        var saidBefore: [String] = ["(not reached)"]
+        call.steps.startListener = { _ in listenerStarted = true; saidBefore = voice.said; return nil }
         call.start()
-        // The why-line is being said: Back.
-        for _ in 0 ..< 40 where voice.said.isEmpty { try? await Task.sleep(nanoseconds: 25_000_000) }
-        #expect(voice.said == [LiveCamWords.permissionLine])
+        for _ in 0 ..< 40 where !listenerStarted { try? await Task.sleep(nanoseconds: 25_000_000) }
+        #expect(listenerStarted)
+        #expect(saidBefore.isEmpty)   // (no model in a unit test, so "couldn't start" comes after; that is a failure line)
         call.end()
         await settle(call)
-        #expect(!listenerStarted)
         #expect(call.phase == .ended)
         #expect(!call.anythingRunning)
     }
