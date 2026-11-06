@@ -359,7 +359,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pensándolo bien, no estoy seguro de eso: %@."
+            "value" : "Pensándolo mejor, no estoy seguro de que sea %@."
           }
         }
       }
@@ -816,6 +816,17 @@
       }
     },
     "Clear" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Borrar"
+          }
+        }
+      }
+    },
+    "Clear [model level]" : {
       "extractionState" : "manual",
       "localizations" : {
         "es" : {
@@ -1866,7 +1877,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ayúdame a apuntar toma una buena foto por ti. Elige Cara, Cuadro o Página, u Otra cosa, y di lo que quieres. Te dice hacia dónde moverte, hace una cuenta regresiva y guarda la foto con una descripción. Para las cosas que no reconoce a simple vista, como una billetera, mira con atención y te dice dónde está. Toca dos veces en cualquier parte para tomar la foto tú mismo."
+            "value" : "Ayúdame a apuntar toma una buena foto por ti. Elige Cara, Imagen o página, u Otra cosa, y di lo que quieres. Te dice hacia dónde moverte, hace una cuenta regresiva y guarda la foto con una descripción. Para las cosas que no reconoce a simple vista, como una billetera, mira con atención y te dice dónde está. Toca dos veces en cualquier parte para tomar la foto tú mismo."
           }
         }
       }
@@ -3263,7 +3274,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Abre el traductor, que lee en voz alta, en inglés, el texto en otro idioma."
+            "value" : "Abre el traductor, que lee en voz alta en inglés el texto que está en otro idioma."
           }
         }
       }
@@ -4286,7 +4297,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Toma una buena foto por ti. Elige Cara, Cuadro o Página, u Otra cosa, y di o escribe lo que quieres, como unas llaves, una taza o tu perro. La app te dice hacia dónde moverte, hace una cuenta regresiva y toma la foto, y luego la guarda en Fotos con una descripción incluida. Conoce miles de cosas cotidianas; para lo demás, como una billetera, mira con atención con la IA que describe y te dice dónde está. Toca dos veces en cualquier parte para tomar la foto tú mismo."
+            "value" : "Toma una buena foto por ti. Elige Cara, Imagen o página, u Otra cosa, y di o escribe lo que quieres, como unas llaves, una taza o tu perro. La app te dice hacia dónde moverte, hace una cuenta regresiva y toma la foto, y luego la guarda en Fotos con una descripción incluida. Conoce miles de cosas cotidianas; para lo demás, como una billetera, mira con atención con la IA que describe y te dice dónde está. Toca dos veces en cualquier parte para tomar la foto tú mismo."
           }
         }
       }
@@ -5243,7 +5254,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "¿Trabajas en algo en lo que pueda ayudarte?"
+            "value" : "¿Estás trabajando en algo en lo que te pueda ayudar?"
           }
         }
       }

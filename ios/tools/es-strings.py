@@ -22,7 +22,7 @@ CATALOG = IOS / "project 601" / "Localizable.xcstrings"
 SKIP_DIRS = ("Tests", "UITests", "unused-assets", "tools", ".build")
 
 # L("...") with the first argument a plain string literal (escaped quotes allowed).
-L_CALL = re.compile(r'(?<![A-Za-z0-9_.])L\(\s*"((?:[^"\\\n]|\\.)*)"')
+L_CALL = re.compile(r'(?<![A-Za-z0-9_.])L\(\s*"((?:[^"\\\n]|\\.)*)"(?:\s*,\s*context:\s*"([^"]*)")?')
 SPEC = re.compile(r"%(?:\d+\$)?(?:@|l?l?d|f|\.\d+f|%)")
 
 
@@ -63,7 +63,8 @@ def keys():
                 raw = m.group(1)
                 if "\\(" in raw:
                     print(f"WARNING interpolation inside L(): {rel}:{n}", file=sys.stderr)
-                found.setdefault(unescape(raw), f"{rel}:{n}")
+                key = unescape(raw) + (f" [{m.group(2)}]" if m.group(2) else "")
+                found.setdefault(key, f"{rel}:{n}")
     return found
 
 

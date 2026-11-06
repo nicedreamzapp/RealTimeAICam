@@ -16,7 +16,7 @@ enum ModelLevel: String, CaseIterable, Codable, Identifiable {
     var name: String {
         switch self {
         case .sharp: L("Sharp")
-        case .clear: L("Clear")
+        case .clear: L("Clear", context: "model level")
         case .balanced: L("Balanced")
         case .quick: L("Quick")
         }

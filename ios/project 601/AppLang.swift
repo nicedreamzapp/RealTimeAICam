@@ -83,6 +83,16 @@ func L(_ english: String) -> String {
     AppLang.text(english, in: AppLang.code)
 }
 
+/// The same English with two meanings ("Clear" the button, "Clear" the model level): the
+/// Spanish lives under "English [context]"; English shows the English as is.
+func L(_ english: String, context: String) -> String {
+    let c = AppLang.code
+    guard c != AppLang.english else { return english }
+    let key = "\(english) [\(context)]"
+    let out = AppLang.text(key, in: c)
+    return out == key ? english : out
+}
+
 func L(_ english: String, _ args: CVarArg...) -> String {
     let c = AppLang.code
     return String(format: AppLang.text(english, in: c), locale: Locale(identifier: c), arguments: args)
