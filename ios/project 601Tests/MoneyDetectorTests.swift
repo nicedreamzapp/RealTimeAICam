@@ -361,15 +361,36 @@ final class LinesBox: @unchecked Sendable { private let l = NSLock(); private va
     }
 
     /// Memory stays flat over 50 money answers in one task (the phone run grew 79 -> 961 MB in its test loop).
+    /// Judged on the slope, not one peak: footprint swings by +-20-30 MB between answers (Mac replay 11/6: five runs
+    /// of 110 answers, 177-220 MB, slope -0.77 to +0.01 MB per answer), so a single 50-answer difference is noise.
     @Test func memoryStaysFlatOverFiftyAnswers() async throws {
         MoneyDetector.reload()
         guard MoneyDetector.models != nil, let img = Self.image("MoneyCC0-xh18-one-dollar-reflection") else { Issue.record("no models"); return }
-        _ = LiveMoney.countBurst(maxFrames: 2, frame: { img }, ask: nil)   // warm up
-        let start = Self.footprintMB()
-        for _ in 0 ..< 50 { _ = LiveMoney.countBurst(maxFrames: 2, frame: { img }, ask: nil) }
-        let end = Self.footprintMB()
-        print("MONEY_MEMORY start \(Int(start)) MB end \(Int(end)) MB")
-        #expect(end - start < 60, "grew \(end - start) MB")
+        for _ in 0 ..< 10 { _ = LiveMoney.countBurst(maxFrames: 2, frame: { img }, ask: nil) }   // warm up
+        var xs: [Double] = [], ys: [Double] = []
+        for k in 0 ..< 50 {
+            _ = LiveMoney.countBurst(maxFrames: 2, frame: { img }, ask: nil)
+            xs.append(Double(k)); ys.append(Self.footprintMB())
+        }
+        let slope = Self.slope(xs, ys)
+        // A leak of even 0.5 MB an answer would be 25 MB over these 50 and climb without end.
+        #expect(slope < 0.5, "slope \(slope) MB per answer, \(Int(ys.first ?? 0)) -> \(Int(ys.last ?? 0)) MB")
+    }
+
+    /// Least-squares slope of y over x.
+    static func slope(_ x: [Double], _ y: [Double]) -> Double {
+        let n = Double(x.count), mx = x.reduce(0, +) / n, my = y.reduce(0, +) / n
+        var sxy = 0.0, sxx = 0.0
+        for i in x.indices { sxy += (x[i] - mx) * (y[i] - my); sxx += (x[i] - mx) * (x[i] - mx) }
+        return sxx > 0 ? sxy / sxx : 0
+    }
+
+    @Test func theSlopeIgnoresSwingsAndCatchesALeak() {
+        let x = (0 ..< 50).map(Double.init)
+        let swings = x.map { 200 + ($0.truncatingRemainder(dividingBy: 2) == 0 ? 25.0 : -25.0) }   // +-25 MB, no trend
+        let leak = x.map { 200 + 0.8 * $0 }
+        #expect(abs(Self.slope(x, swings)) < 0.5)
+        #expect(Self.slope(x, leak) > 0.5)
     }
 }
 
