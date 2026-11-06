@@ -438,3 +438,31 @@ final class TorchLog: @unchecked Sendable {
     func add(_ b: Bool) { lock.lock(); v.append(b); lock.unlock() }
     func wait(_ n: Int) async { for _ in 0 ..< 200 where values.count < n { try? await Task.sleep(nanoseconds: 10_000_000) } }
 }
+
+/// The 11/6 review, round 3: the light never stays on after Back, and its reports match what really happened.
+struct LiveReviewRound3Tests {
+    @Test func aTorchTapQueuedBeforeBackNeverLeavesTheLightOn() async {
+        let cam = LiveCamera()
+        cam.stillFrame = LiveCallController.noFrame
+        let seen = TorchLog()
+        cam.onTorch = { seen.add($0) }
+        cam.torchSetter = { $0 }
+        cam.setTorch(true)   // tapped
+        cam.stop()           // Back, right after
+        await seen.wait(2)
+        #expect(seen.values.last == false)
+    }
+
+    @Test func turningItOnReportsOnOnlyOnce() async {
+        let cam = LiveCamera()
+        cam.stillFrame = LiveCallController.noFrame
+        let seen = TorchLog()
+        cam.onTorch = { seen.add($0) }
+        cam.torchSetter = { $0 }
+        cam.setTorch(true)
+        await seen.wait(1)
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        #expect(!seen.values.contains(false))   // never an "off" on the way to on (it said "isn't working")
+        #expect(seen.values.last == true)
+    }
+}

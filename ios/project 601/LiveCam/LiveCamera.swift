@@ -47,7 +47,12 @@ final class LiveCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
     /// (so a flip still pending can't make it guess wrong).
     func setTorch(_ on: Bool) {
         queue.async { [self] in
-            if on, position == .front, stillFrame == nil { flipNow() }
+            if on, position == .front, stillFrame == nil {
+                // Review 11/6 round 3: wanted first, so the flip's own reconfigure lights it (and reports it lit)
+                // instead of reporting "off" and the app saying the flashlight isn't working.
+                lock.lock(); torchWanted = true; lock.unlock()
+                flipNow()
+            }
             lock.lock(); torchWanted = on && (position == .back || stillFrame != nil); lock.unlock()
             applyTorch()
         }
@@ -113,6 +118,8 @@ final class LiveCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
         lock.lock(); torchWanted = false; lock.unlock()
         queue.async { [self] in
             wanted = false
+            // Again here: a torch tap queued before Back must not leave the light on (review 11/6 round 3).
+            lock.lock(); torchWanted = false; lock.unlock()
             applyTorch()   // the light goes off with the camera
             if session.isRunning { session.stopRunning() }
             lock.lock(); latest = nil; latestAt = .distantPast; lock.unlock()

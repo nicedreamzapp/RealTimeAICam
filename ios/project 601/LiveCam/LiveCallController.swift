@@ -187,7 +187,8 @@ final class LiveCallController: ObservableObject {
         // The app goes to the background: the light goes off (iOS stops the camera there anyway).
         backgroundWatch = NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil,
                                                                  queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { if self?.torchOn == true { self?.camera.setTorch(false) } }
+            // Always, even if an interruption already showed it off: the wish is cleared so a restart can't relight it.
+            MainActor.assumeIsolated { self?.camera.setTorch(false) }
         }
         watch.enabled = proactiveOn
         LiveCamTest.beginSession()
@@ -444,6 +445,7 @@ final class LiveCallController: ObservableObject {
         current?.cancel(); current = nil
         answerDone = true
         voice.stop()
+        talkedSinceTurn = false   // still their turn: no tick or "Your turn" while they are asking (review 11/6 round 3)
         phase = .listening
         prefillArmed = false
         listener.takeBargeAsQuestion(echoOf: saying)   // the same recognition carries on, its own echo at the start left out
