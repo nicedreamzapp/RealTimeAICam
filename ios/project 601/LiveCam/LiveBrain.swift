@@ -230,6 +230,8 @@ enum LiveThings {
         "wooden", "metal", "plastic", "glass", "open", "closed", "left", "right", "ahead", "near", "far", "top", "bottom", "side",
         "middle", "center", "next", "behind", "above", "below", "under", "over", "front", "back", "double", "single", "old", "new",
         "yes", "not", "sure", "can", "tell", "looks", "look", "see", "seems", "maybe", "probably", "about", "around", "here"]
+    /// The view moved this much (mean thumbnail difference, 0...255) since the answered frame: no box (review 11/6).
+    static let movedTooFar: Double = 12
     /// Never boxed: the room itself. (A door or a window can be: the hallway test answered "a blue double door".)
     static let notBoxable: Set<String> = ["floor", "wall", "walls", "ceiling", "room", "space", "background", "air", "ground",
                                           "sky", "light", "lights", "lighting", "corner"]
@@ -272,8 +274,13 @@ enum LiveGoal {
         var task: String
         var step = 1
         var lastStep: String?
-        /// The last thing it said was a goal check-in ("Ready for the next step?"), so a bare "yes" means next.
-        var askedReady = false
+        /// When it last asked "Ready for the next step?": a bare "yes" / "ok" means next for 10 s after (review 11/6).
+        var askedReadyAt: Date?
+        var askedReady: Bool {
+            get { askedReadyAt != nil }
+            set { askedReadyAt = newValue ? Date() : nil }
+        }
+        func askedRecently(_ now: Date = Date()) -> Bool { askedReadyAt.map { now.timeIntervalSince($0) <= 10 } ?? false }
     }
 
     private static let leads: [[String]] = [
@@ -296,6 +303,10 @@ enum LiveGoal {
     /// The task in their words, "your" for "my": "I'm changing a tire" -> "changing a tire". Nil for anything else.
     static func detect(_ q: String) -> String? {
         if LiveWords.isLooksQuestion(q) || clears(q) { return nil }
+        // Review 11/6: "I'm holding a can, what is it?" is a question about the can, never a goal.
+        let t = " " + LiveWords.normalize(q) + " "
+        // ("Can you help me put this shelf together?" still is: a request, not a what/which/who/where question.)
+        if [" what ", " which ", " who ", " where ", " whats "].contains(where: { t.contains($0) }) { return nil }
         let w = LiveWords.normalize(q).split(separator: " ").map(String.init)
         guard let lead = leads.first(where: { w.count > $0.count && Array(w.prefix($0.count)) == $0 }) else { return nil }
         var rest = Array(w.dropFirst(lead.count))
@@ -308,6 +319,14 @@ enum LiveGoal {
         while let l = rest.last, ["please", "now", "today", "here", "real", "quick"].contains(l) { rest.removeLast() }
         guard rest.contains(where: { !vague.contains($0) && $0.count > 2 }), rest.count <= 10 else { return nil }
         return LiveWords.clip(rest.map { ["my": "your", "me": "you", "myself": "yourself", "i": "you"][$0] ?? $0 }.joined(separator: " "), 60)
+    }
+
+    /// While a goal is going, only an explicit new task switches it ("now I need to fix the faucet"); "I'm putting the
+    /// spare on" is a step of the tire, not a new goal (review 11/6).
+    static func isExplicitNewTask(_ q: String) -> Bool {
+        let t = " " + LiveWords.normalize(q) + " "
+        return [" new thing ", " new task ", " something else ", " different thing ", " now i need to ", " now i want to ",
+                " now help me ", " instead ", " switch to ", " next i want to "].contains { t.contains($0) }
     }
 
     /// "Done", "never mind", "new thing": the goal is over.
@@ -333,8 +352,8 @@ enum LiveGoal {
         let t = LiveWords.normalize(q)
         if isNext(t) { return true }
         if ["got it", "got that", "did that", "done that", "ok did it", "okay did it", "that s done", "thats done", "okay done",
-            "ok done", "done next", "finished that", "ok", "okay"].contains(t) { return true }
-        return askedReady && ["yes", "yeah", "yep", "sure", "ready", "yes please", "i m ready", "im ready", "go ahead", "let s go",
+            "ok done", "done next", "finished that"].contains(t) { return true }
+        return askedReady && ["yes", "yeah", "yep", "sure", "ready", "ok", "okay", "yes please", "i m ready", "im ready", "go ahead", "let s go",
                               "lets go", "uh huh", "yes i m ready"].contains(t)
     }
 

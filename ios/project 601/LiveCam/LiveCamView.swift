@@ -40,17 +40,13 @@ struct LiveCamView: View {
             ZStack {
                 Color.black.ignoresSafeArea()
                 if let still = call.camera.stillFrame {
-                    Image(decorative: still, scale: 1).resizable().scaledToFill()
-                        .frame(width: geo.size.width, height: geo.size.height).clipped().ignoresSafeArea()
-                        .accessibilityHidden(true)
+                    fullScreen(still)
                 } else {
                     LiveCamPreview(session: call.camera.session).ignoresSafeArea().accessibilityHidden(true)
                 }
                 // Matt 11/6, a live camera: the frame it just took holds still for a moment, with a shutter flash.
                 if let f = call.frozen {
-                    Image(decorative: f, scale: 1).resizable().scaledToFill()
-                        .frame(width: geo.size.width, height: geo.size.height).clipped().ignoresSafeArea()
-                        .accessibilityHidden(true)
+                    fullScreen(f)   // sized like the live preview and the box: the whole screen, no jump (review 11/6)
                 }
                 Color.white.opacity(flash).ignoresSafeArea().allowsHitTesting(false).accessibilityHidden(true)
                 thingBox
@@ -110,6 +106,16 @@ struct LiveCamView: View {
             flash = reduceMotion ? 0.2 : 0.45
             withAnimation(.easeOut(duration: 0.35)) { flash = 0 }
         }
+    }
+
+    /// A still filling the whole screen exactly like the live preview (aspect fill, past the safe areas).
+    private func fullScreen(_ image: CGImage) -> some View {
+        GeometryReader { g in
+            Image(decorative: image, scale: 1).resizable().scaledToFill()
+                .frame(width: g.size.width, height: g.size.height).clipped()
+        }
+        .ignoresSafeArea()
+        .accessibilityHidden(true)
     }
 
     // MARK: The box around the thing it named
@@ -174,7 +180,7 @@ struct LiveCamView: View {
             .accessibilityAddTraits(.isToggle)
             .accessibilityHint(L("Shows what Live Cam says in big words. VoiceOver can read them either way"))
             .accessibilityIdentifier("liveCamWordsToggle")
-            Button { call.flip() } label: {
+            Button { call.flip(); zoomLabel = 1 } label: {   // a flip starts at 1x again (review 11/6)
                 Image(systemName: "arrow.triangle.2.circlepath.camera").font(.title2.weight(.semibold))
                     .frame(width: 60, height: 60).background(.black.opacity(0.45), in: Circle())
                     .overlay(Circle().stroke(.white.opacity(0.35), lineWidth: 1))

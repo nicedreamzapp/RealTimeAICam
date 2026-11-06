@@ -15,6 +15,8 @@ final class LiveCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
     private var oneX: CGFloat = 1
     private var zoomShown: CGFloat = 1
 
+    /// The device zoom factor that reads as "1x".
+    static func oneX(hasUltraWide: Bool, firstSwitchOver: CGFloat?) -> CGFloat { hasUltraWide ? (firstSwitchOver ?? 1) : 1 }
     /// The widest zoom this camera has, as people read it (0.5 on a phone with an ultra wide, else 1).
     var minZoom: CGFloat { lock.lock(); defer { lock.unlock() }; return minShown }
     private var minShown: CGFloat = 1
@@ -192,10 +194,14 @@ final class LiveCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
         session.addInput(input)
         device = cam
         // Open at the main lens (1x), not the ultra wide, when the virtual camera starts below it.
-        let one = cam.virtualDeviceSwitchOverVideoZoomFactors.first.map { CGFloat(truncating: $0) } ?? 1
+        // Review 11/6: only a camera with an ultra wide starts below 1x; a wide + tele pair's first switch-over is the
+        // tele (2x), and taking it as "1x" showed a 0.5 pill that was really the main lens.
+        let hasUltraWide = cam.constituentDevices.contains { $0.deviceType == .builtInUltraWideCamera }
+        let one = Self.oneX(hasUltraWide: hasUltraWide,
+                            firstSwitchOver: cam.virtualDeviceSwitchOverVideoZoomFactors.first.map { CGFloat(truncating: $0) })
         oneX = one
         if (try? cam.lockForConfiguration()) != nil { cam.videoZoomFactor = one; cam.unlockForConfiguration() }
-        lock.lock(); zoomShown = 1; minShown = cam.minAvailableVideoZoomFactor / one; lock.unlock()
+        lock.lock(); zoomShown = 1; minShown = hasUltraWide ? cam.minAvailableVideoZoomFactor / one : 1; lock.unlock()
         if position == .back { applyTorch() }   // a reconfigure (restart, flip back) keeps the light as it was
         if session.outputs.isEmpty {
             output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
@@ -252,6 +258,8 @@ final class LiveCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
 /// Finds the thing an answer named in the frame it was answered from, with the YOLOE detector the app already has
 /// (Help Me Aim's, bundled: nothing downloaded). Loaded the first time it is needed, let go when Live Cam closes.
 final class LiveThingFinder: @unchecked Sendable {
+    /// The camera's frame now (to skip a box once the view has moved).
+    var current: (() -> CGImage?)?
     private let lock = NSLock()
     private var finder: AimObjectFinder?
     private var index: [String: [Int32]] = [:]

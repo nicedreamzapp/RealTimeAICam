@@ -611,3 +611,39 @@ struct LiveGoalTests {
         #expect(LiveGoal.checkIns.contains("Ready for the next step?"))
     }
 }
+
+/// Steps 2-5, review round 1 (11/6).
+struct LiveStepsReview1Tests {
+    @Test func itsOwnNextLineAndAStrayOkNeverAdvanceAStep() {
+        let heard = LiveWords.normalize("say next when you're ready").split(separator: " ").map(String.init)
+        #expect(LiveBargeIn.withoutEcho(heard, saying: ["Say next when you're ready."]).isEmpty)
+        #expect(!LiveGoal.wantsNext("ok", askedReady: false))
+        #expect(!LiveGoal.wantsNext("okay", askedReady: false))
+        #expect(LiveGoal.wantsNext("ok", askedReady: true))
+        var g = LiveGoal.State(task: "changing a tire")
+        g.askedReadyAt = Date().addingTimeInterval(-11)
+        #expect(!g.askedRecently())
+        g.askedReady = true
+        #expect(g.askedRecently())
+    }
+
+    @Test func aQuestionNeverStartsAGoalAndAStepNeverReplacesIt() {
+        #expect(LiveGoal.detect("I'm holding a can, what is it?") == nil)
+        #expect(LiveGoal.detect("help me find where the leak is") == nil)
+        #expect(LiveGoal.detect("I'm changing a tire") == "changing a tire")
+        #expect(!LiveGoal.isExplicitNewTask("I'm putting the spare on"))
+        #expect(LiveGoal.isExplicitNewTask("now I need to fix the faucet"))
+    }
+
+    @Test func zoomNeverShowsHalfOnATwoLensPhone() {
+        #expect(LiveCamera.oneX(hasUltraWide: false, firstSwitchOver: 2) == 1)   // wide + tele: 1x is the wide lens
+        #expect(LiveCamera.oneX(hasUltraWide: true, firstSwitchOver: 2) == 2)    // ultra wide + wide: 1x is the wide
+        #expect(LiveCamera.oneX(hasUltraWide: true, firstSwitchOver: nil) == 1)
+    }
+
+    @Test func aMovedViewGetsNoBox() {
+        let a = [UInt8](repeating: 40, count: 256), b = [UInt8](repeating: 120, count: 256)
+        #expect(LiveProactive.difference(a, a) < LiveThings.movedTooFar)
+        #expect(LiveProactive.difference(a, b) >= LiveThings.movedTooFar)
+    }
+}

@@ -25,6 +25,8 @@ final class LiveListener {
     /// Matt 11/6, no dead air: the voice went quiet after real words (true), or they started again (false). The orb
     /// shows "looking" right away, before the full end-of-question wait is over.
     var onSoundsDone: ((Bool, _ afterVoice: TimeInterval, _ afterWord: TimeInterval) -> Void)?
+    /// It listened and ended with nothing to answer (empty, or only its own echo): the owner shows "Your turn" again.
+    var onNothingHeard: (() -> Void)?
     private var soundsDoneSent = false
     var onPartial: ((String) -> Void)?
     var onLevel: ((Float) -> Void)?
@@ -287,7 +289,7 @@ final class LiveListener {
         let at = lastChange
         finishing = false
         stopListening()
-        if heard.isEmpty { listen(); return }
+        if heard.isEmpty { listen(); onNothingHeard?(); return }
         quickFailures = 0
         onQuestion?(heard, at, confidence, isFinal)
     }
