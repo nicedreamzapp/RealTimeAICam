@@ -1,5 +1,8 @@
 package com.mattmacosko.realtimeaicam.ui
 
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import com.mattmacosko.realtimeaicam.R
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -170,9 +173,9 @@ fun DetectionChrome(
         val controlButtons: @Composable () -> Unit = {
             // 1. Camera flip — iOS handleFlipCamera (front ↔ rear)
             CircleControlButton(
-                label = "Switch camera",
-                stateLabel = if (isFront) "Front camera" else "Rear camera",
-                clickLabel = "Switch between the front and rear camera",
+                label = stringResource(R.string.e_od_switch_camera),
+                stateLabel = if (isFront) stringResource(R.string.e_od_front_camera) else stringResource(R.string.e_od_rear_camera),
+                clickLabel = stringResource(R.string.e_od_switch_camera_action),
                 onClick = { if (buttonDebouncer.tryFire()) pipeline.flipCamera() },
             ) {
                 Icon(Icons.Default.Cameraswitch, null, tint = Color.White, modifier = Modifier.size(22.dp))
@@ -189,8 +192,8 @@ fun DetectionChrome(
                     .then(if (lensVisible) Modifier else Modifier.clearAndSetSemantics { })
             ) {
                 CircleControlButton(
-                    label = if (isUltraWide) "Switch to normal camera" else "Switch to wide angle camera",
-                    clickLabel = "Change how much the camera can see at once",
+                    label = if (isUltraWide) stringResource(R.string.e_od_lens_normal) else stringResource(R.string.e_od_lens_wide),
+                    clickLabel = stringResource(R.string.e_od_lens_action),
                     onClick = {
                         if (hasUltraWide && !isFront && buttonDebouncer.tryFire()) {
                             pipeline.toggleUltraWide()
@@ -216,9 +219,9 @@ fun DetectionChrome(
                 // appears costs screen-reader flicks at the moment you cannot see.
                 CircleControlButton(
                     ringColor = if (torchOn) IosColors.Yellow.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.2f),
-                    label = "Flashlight",
-                    stateLabel = if (torchOn) "On" else "Off",
-                    clickLabel = if (torchOn) "Turn the flashlight off" else "Turn the flashlight on",
+                    label = stringResource(R.string.e_od_flashlight),
+                    stateLabel = if (torchOn) stringResource(R.string.e_on) else stringResource(R.string.e_off),
+                    clickLabel = if (torchOn) stringResource(R.string.e_od_flashlight_off_action) else stringResource(R.string.e_od_flashlight_on_action),
                     onClick = {
                         if (isFront) return@CircleControlButton
                         pipeline.setTorch(!torchOn)
@@ -243,9 +246,9 @@ fun DetectionChrome(
             CircleControlButton(
                 ringColor = if (speechEnabled) IosColors.Green.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.25f),
                 ringWidth = if (speechEnabled) 2.dp else 1.dp,
-                label = if (speechEnabled) "Turn off spoken announcements" else "Turn on spoken announcements",
-                stateLabel = if (speechEnabled) "Announcements on" else "Announcements off",
-                clickLabel = "Control whether detected objects are spoken aloud",
+                label = if (speechEnabled) stringResource(R.string.e_od_speech_turn_off) else stringResource(R.string.e_od_speech_turn_on),
+                stateLabel = if (speechEnabled) stringResource(R.string.e_od_speech_on) else stringResource(R.string.e_od_speech_off),
+                clickLabel = stringResource(R.string.e_od_speech_action),
                 onClick = {
                     if (!buttonDebouncer.tryFire()) return@CircleControlButton
                     pipeline.announcer.setEnabled(!speechEnabled)
@@ -255,9 +258,9 @@ fun DetectionChrome(
             }
             // 6. Confidence
             CircleControlButton(
-                label = "Detection sensitivity",
-                stateLabel = "${(confidence * 100).roundToInt()} percent",
-                clickLabel = "Open a slider for how sure the app must be before naming something",
+                label = stringResource(R.string.e_od_sensitivity),
+                stateLabel = stringResource(R.string.e_percent, (confidence * 100).roundToInt()),
+                clickLabel = stringResource(R.string.e_od_sensitivity_action),
                 onClick = { showConfidencePopup = !showConfidencePopup },
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(1.dp)) {
@@ -274,6 +277,9 @@ fun DetectionChrome(
             }
         }
 
+        val filterOptions = listOf(
+            stringResource(R.string.e_od_filter_all), stringResource(R.string.e_od_filter_indoor), stringResource(R.string.e_od_filter_outdoor),
+        )
         val segmentedOnSelect: (Int) -> Unit = {
             pipeline.filterMode.value = when (it) {
                 1 -> "indoor"; 2 -> "outdoor"; else -> "all"
@@ -300,7 +306,7 @@ fun DetectionChrome(
             ) {
                 controlButtons()
                 IosSegmentedControl(
-                    options = listOf("All", "Indoor", "Outdoor"),
+                    options = filterOptions,
                     selectedIndex = filterIndex,
                     onSelect = segmentedOnSelect,
                     modifier = Modifier.width(200.dp).filterModeAdjustable(filterIndex, segmentedOnSelect),
@@ -319,7 +325,7 @@ fun DetectionChrome(
                     .padding(bottom = 32.dp),
             ) {
                 IosSegmentedControl(
-                    options = listOf("All", "Indoor", "Outdoor"),
+                    options = filterOptions,
                     selectedIndex = filterIndex,
                     onSelect = segmentedOnSelect,
                     modifier = Modifier.width(minOf(fullWidth - 32.dp, 560.dp)).filterModeAdjustable(filterIndex, segmentedOnSelect),
@@ -337,6 +343,7 @@ fun DetectionChrome(
         }
 
             // Tap anywhere outside the torch popup to dismiss it
+            val closeBrightness = stringResource(R.string.e_od_close_brightness)
             if (showTorchPopup && !torchOn) {
                 Box(
                     Modifier
@@ -344,9 +351,9 @@ fun DetectionChrome(
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
-                            onClickLabel = "Close the flashlight brightness choices",
+                            onClickLabel = stringResource(R.string.e_od_close_brightness_action),
                         ) { showTorchPopup = false }
-                        .semantics { contentDescription = "Close flashlight brightness" }
+                        .semantics { contentDescription = closeBrightness }
                 )
             }
 
@@ -381,6 +388,9 @@ fun DetectionChrome(
                     for (preset in listOf(100, 75, 50, 25)) {
                         val selected = preset == torchPreset
                         val isPresetSelected = selected
+                        val presetLabel = stringResource(R.string.e_od_flashlight_percent, preset)
+                        val selectedWord = stringResource(R.string.e_selected)
+                        val notSelectedWord = stringResource(R.string.e_not_selected)
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier
@@ -402,8 +412,8 @@ fun DetectionChrome(
                                     showTorchPopup = false
                                 }
                                 .semantics(mergeDescendants = true) {
-                                    contentDescription = "Flashlight $preset percent"
-                                    stateDescription = if (isPresetSelected) "Selected" else "Not selected"
+                                    contentDescription = presetLabel
+                                    stateDescription = if (isPresetSelected) selectedWord else notSelectedWord
                                 },
                         ) {
                             Text("$preset%", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Color.White)
@@ -432,6 +442,8 @@ fun DetectionChrome(
                 },
             ) {
                 var dragging by remember { mutableStateOf(false) }
+                val sensitivityLabel = stringResource(R.string.e_od_sensitivity)
+                val sensitivityState = stringResource(R.string.e_percent, (confidence * 100).roundToInt())
                 LaunchedEffect(dragging, showConfidencePopup) {
                     if (!dragging && showConfidencePopup) {
                         delay(2500)
@@ -463,8 +475,8 @@ fun DetectionChrome(
                                 .requiredWidth(160.dp)
                                 .rotate(-90f)
                                 .semantics {
-                                    contentDescription = "Detection sensitivity"
-                                    stateDescription = "${(confidence * 100).roundToInt()} percent"
+                                    contentDescription = sensitivityLabel
+                                    stateDescription = sensitivityState
                                 },
                         )
                     }
@@ -516,6 +528,7 @@ private fun CountChip(count: Int) {
         count <= 10 -> IosColors.Red
         else -> IosColors.Purple
     }
+    val inView = pluralStringResource(R.plurals.e_od_objects_in_view, count, count)
     Row(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -525,7 +538,7 @@ private fun CountChip(count: Int) {
             .border(1.5.dp, countColor, RoundedCornerShape(12.dp))
             .padding(vertical = 8.dp, horizontal = 12.dp)
             .semantics(mergeDescendants = true) {
-                contentDescription = if (count == 1) "1 object in view" else "$count objects in view"
+                contentDescription = inView
             },
     ) {
         Icon(Icons.Default.Visibility, null, tint = countColor, modifier = Modifier.size(12.dp))
@@ -607,6 +620,8 @@ fun IosSegmentedControl(
         Row(Modifier.fillMaxSize()) {
             options.forEachIndexed { i, label ->
                 val isChosen = i == selectedIndex
+                val showLabel = stringResource(R.string.e_od_filter_show_action, label)
+                val objectsLabel = stringResource(R.string.e_od_filter_objects, label)
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
@@ -616,10 +631,10 @@ fun IosSegmentedControl(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
                             role = Role.Tab,
-                            onClickLabel = "Show $label objects",
+                            onClickLabel = showLabel,
                         ) { onSelect(i) }
                         .semantics(mergeDescendants = true) {
-                            contentDescription = "$label objects"
+                            contentDescription = objectsLabel
                             selected = isChosen
                         },
                 ) {
@@ -636,13 +651,18 @@ fun IosSegmentedControl(
  * separate stops for a screen reader. Same as iOS build 36: one control, "What to look for",
  * that TalkBack adjusts like a slider (volume keys or its adjust gesture). Double tap steps on.
  */
+@Composable
 private fun Modifier.filterModeAdjustable(selectedIndex: Int, onSelect: (Int) -> Unit): Modifier {
-    val names = listOf("All objects", "Indoor", "Outdoor")
+    val names = listOf(
+        stringResource(R.string.e_od_filter_all_objects), stringResource(R.string.e_od_filter_indoor), stringResource(R.string.e_od_filter_outdoor),
+    )
+    val lookFor = stringResource(R.string.e_od_filter_what)
+    val next = stringResource(R.string.e_od_filter_next)
     return clearAndSetSemantics {
-        contentDescription = "What to look for"
+        contentDescription = lookFor
         stateDescription = names[selectedIndex.coerceIn(0, 2)]
         progressBarRangeInfo = ProgressBarRangeInfo(selectedIndex.toFloat(), 0f..2f, steps = 1)
         setProgress { v -> onSelect(Math.round(v).coerceIn(0, 2)); true }
-        onClick(label = "Next setting") { onSelect((selectedIndex + 1) % 3); true }
+        onClick(label = next) { onSelect((selectedIndex + 1) % 3); true }
     }
 }

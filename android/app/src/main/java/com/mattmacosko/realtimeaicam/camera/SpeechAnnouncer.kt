@@ -10,6 +10,8 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityManager
+import com.mattmacosko.realtimeaicam.AppLang
+import com.mattmacosko.realtimeaicam.R
 import com.mattmacosko.realtimeaicam.detection.Detection
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -84,7 +86,9 @@ class SpeechAnnouncer(context: Context) {
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
     @Volatile private var ready = false
-    private var appliedVoice: String? = null
+    /** The Home voice pick, looked up once by name. */
+    @Volatile private var pickedVoice: android.speech.tts.Voice? = null
+    @Volatile private var lastLineLang: String = YL_EN
 
     @Volatile private var isSpeaking = false
     /** Last utterance the engine finished (done, error or stopped); lets speakAndWait wait for its own line. */
@@ -173,7 +177,7 @@ class SpeechAnnouncer(context: Context) {
                 return
             }
             engineFailed = true
-            pendingLine?.let { announceToScreenReader(it.first) }
+            pendingLine?.let { announceToScreenReader(it.first, utteranceLanguage.remove(it.second) ?: YL_EN) }
             pendingLine = null
             updateProblem()
             return
@@ -263,7 +267,7 @@ class SpeechAnnouncer(context: Context) {
                 updateProblem()
             }
             val line = lastLine
-            if (line != null && line.second == utteranceId) announceToScreenReader(line.first)
+            if (line != null && line.second == utteranceId) announceToScreenReader(line.first, lastLineLang)
         }
     }
 
@@ -275,7 +279,7 @@ class SpeechAnnouncer(context: Context) {
         mainHandler.postDelayed({
             if (!ready && !engineFailed) {
                 engineSlow = true
-                pendingLine?.let { announceToScreenReader(it.first) }
+                pendingLine?.let { announceToScreenReader(it.first, utteranceLanguage.remove(it.second) ?: YL_EN) }
                 pendingLine = null
                 updateProblem()
             }
@@ -290,7 +294,7 @@ class SpeechAnnouncer(context: Context) {
      */
     fun checkVolume() {
         val off = SpeechChecks.volumeOff(speaksAloud, currentSpeechVolume())
-        if (off && !volumeWasOff) announceToScreenReader(SpeechChecks.VOLUME_OFF_LINE)
+        if (off && !volumeWasOff) announceToScreenReader(SpeechChecks.volumeOffLine(), AppLang.code())
         volumeWasOff = off
         updateProblem()
     }
@@ -362,7 +366,7 @@ class SpeechAnnouncer(context: Context) {
             // iOS announceSpeechEnabled(): clears queue, speaks confirmation
             announcementQueue.clear()
             isProcessingQueue = false
-            sayOrHold("Speech enabled", "toggle-${utteranceSeq++}")
+            sayAppLine(AppLang.str(R.string.e_speech_enabled), "toggle")
         } else {
             stop() // also sets enabled=false, like iOS stopSpeech()
         }
@@ -477,7 +481,9 @@ class SpeechAnnouncer(context: Context) {
         // volume first, wait for it to finish, then a short silence to wake the speaker.
         val warm = "warm-${utteranceSeq++}"
         val mute = android.os.Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 0f) }
-        tts.speak("three", TextToSpeech.QUEUE_FLUSH, mute, warm)
+        // The countdown is said in the app's language: warm that voice, with its own word.
+        applyVoice(AppLang.code())
+        tts.speak(AppLang.str(R.string.e_countdown_three), TextToSpeech.QUEUE_FLUSH, mute, warm)
         while (lastFinishedId != warm && SystemClock.elapsedRealtime() - start < timeoutMs) {
             kotlinx.coroutines.delay(20)
         }
@@ -493,7 +499,7 @@ class SpeechAnnouncer(context: Context) {
         while (!ready && !voiceUnavailable && SystemClock.elapsedRealtime() - start < timeoutMs) kotlinx.coroutines.delay(50)
         if (!ready || voiceUnavailable) {
             // The countdown used to give up here in silence. TalkBack says it instead.
-            announceToScreenReader(text)
+            announceToScreenReader(text, AppLang.code())
             return
         }
         val id = "wait-${utteranceSeq++}"
@@ -629,9 +635,17 @@ class SpeechAnnouncer(context: Context) {
     private fun sayOrHold(text: String, id: String) {
         when {
             ready -> speakInternal(text, id)
-            voiceUnavailable || !speaksAloud -> announceToScreenReader(text)
+            voiceUnavailable || !speaksAloud -> announceToScreenReader(text, utteranceLanguage.remove(id) ?: YL_EN)
             else -> pendingLine = text to id
         }
+    }
+
+    /** One of the app's own lines (already in the app's language), said in a voice for that language. */
+    private fun sayAppLine(text: String, prefix: String) {
+        val id = "$prefix-${utteranceSeq++}"
+        val app = AppLang.code()
+        if (app != YL_EN) utteranceLanguage[id] = app
+        sayOrHold(text, id)
     }
 
     /**
@@ -652,7 +666,7 @@ class SpeechAnnouncer(context: Context) {
             if (debuggable) android.util.Log.i("RTCamSpeech", "via TalkBack: $text")
             // TalkBack reads this in the user's OWN voice and rate, which is the
             // whole point of the setting. Also the fallback when no speech engine works.
-            announceToScreenReader(text)
+            announceToScreenReader(text, lang)
             if (id.startsWith("result-")) {
                 // No "done" from TalkBack: count it once it has had time to be heard.
                 mainHandler.postDelayed({ com.mattmacosko.realtimeaicam.RatePrompt.noteResultSpoken(appContext) },
@@ -660,34 +674,47 @@ class SpeechAnnouncer(context: Context) {
             }
             return
         }
-        if (lang != YL_EN) {
-            // Your language: a voice for it (the Home voice picker lists English voices only).
-            val v = voiceFor(lang)
-            if (v != null && tts.voice?.name != v.name) {
-                if (englishVoice == null) englishVoice = tts.voice
-                try { tts.voice = v } catch (_: Throwable) {}
-                appliedVoice = null
-            }
-            if (v == null) outputLanguage() // says once that no voice is installed
-            android.util.Log.i("RTCamSpeech", "[$lang] voice=${v?.name}")
-        } else {
-            // Honor the Home-screen voice selection (persisted)
-            val wanted = com.mattmacosko.realtimeaicam.ui.VoicePrefs.get(appContext)
-            if (wanted != null && wanted != appliedVoice) {
-                com.mattmacosko.realtimeaicam.ui.VoicePrefs.apply(appContext, tts)
-                appliedVoice = wanted
-            } else if (wanted == null && englishVoice != null && tts.voice?.locale?.language != YL_EN) {
-                try { tts.voice = englishVoice } catch (_: Throwable) {}
-            }
-        }
+        val v = applyVoice(lang)
+        if (v == null && lang != YL_EN) outputLanguage() // says once that no voice is installed
+        if (lang != YL_EN) android.util.Log.i("RTCamSpeech", "[$lang] voice=${v?.name}")
         lastLine = text to id
+        lastLineLang = lang
         // Debug builds log every line handed to the app's voice, so a cable test can read it
         // (lines sent to TalkBack are logged as "via TalkBack" instead, at info level).
         if (debuggable) android.util.Log.d("RTCamSpeech", text)
         if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, id) == TextToSpeech.ERROR) {
             // Refused outright (engine died, bad state): don't let the line vanish.
-            announceToScreenReader(text)
+            announceToScreenReader(text, lang)
         }
+    }
+
+    /**
+     * The voice for a line in [lang] (2026-11-05): the voice picked on Home when it speaks [lang],
+     * otherwise the best installed voice for [lang]. English with no English pick keeps the
+     * engine's own voice when that one is English. Never a voice of another language: a Spanish
+     * line in an English voice, or the reverse, is what a blind user can't follow.
+     * Applies it to the engine and returns it (null: no voice for [lang] on the phone).
+     */
+    private fun applyVoice(lang: String): android.speech.tts.Voice? {
+        val pickedName = com.mattmacosko.realtimeaicam.ui.VoicePrefs.get(appContext)
+        val picked = pickedName?.let { n ->
+            pickedVoice?.takeIf { it.name == n }
+                ?: try { tts.voices?.firstOrNull { it.name == n } } catch (_: Throwable) { null }
+        }
+        pickedVoice = picked
+        val current = try { tts.voice } catch (_: Throwable) { null }
+        if (lang == YL_EN && current != null && current.locale.language == YL_EN && englishVoice == null) englishVoice = current
+        val target = when {
+            picked != null && SpeechVoices.speaks(picked.locale.language, lang) -> picked
+            lang == YL_EN && current != null && current.locale.language == YL_EN && picked == null -> current
+            lang == YL_EN -> englishVoice ?: voiceFor(YL_EN)
+            else -> voiceFor(lang)
+        } ?: return if (lang == YL_EN) current else null
+        if (current?.name != target.name) {
+            if (current != null && current.locale.language == YL_EN && englishVoice == null) englishVoice = current
+            try { tts.voice = target } catch (_: Throwable) {}
+        }
+        return target
     }
 
     /**
@@ -737,7 +764,8 @@ class SpeechAnnouncer(context: Context) {
 
 /** The pure parts of the "can the voice be heard" checks, kept apart so they can be unit tested. */
 object SpeechChecks {
-    const val VOLUME_OFF_LINE = "Volume is off. Turn it up to hear the app."
+    /** Shown on the banner and said by TalkBack, in the app's language. */
+    fun volumeOffLine(): String = AppLang.str(R.string.e_volume_off_line)
 
     /** setLanguage's answer means a voice will actually speak. */
     fun languageUsable(result: Int): Boolean = result >= TextToSpeech.LANG_AVAILABLE
@@ -755,6 +783,16 @@ object SpeechChecks {
         voiceFailed -> SpeechProblem.NO_VOICE
         volumeOff -> SpeechProblem.VOLUME_OFF
         else -> null
+    }
+}
+
+/** Which voice speaks which line (2026-11-05), kept pure for unit tests. */
+object SpeechVoices {
+    /** A voice whose locale language is [voiceLanguage] can say a line in [lineLang]. */
+    fun speaks(voiceLanguage: String?, lineLang: String): Boolean {
+        if (voiceLanguage.isNullOrBlank()) return false
+        return voiceLanguage == lineLang ||
+            com.mattmacosko.realtimeaicam.translation.YourLanguageRules.normalize(voiceLanguage) == lineLang
     }
 }
 

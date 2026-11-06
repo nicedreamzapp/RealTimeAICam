@@ -1,5 +1,7 @@
 package com.mattmacosko.realtimeaicam.narrator
 
+import com.mattmacosko.realtimeaicam.AppLang
+import com.mattmacosko.realtimeaicam.R
 import android.app.ActivityManager
 import android.content.Context
 import java.io.File
@@ -13,9 +15,10 @@ import java.io.File
  * download once from our own server and are then just as offline.
  */
 enum class ModelLevel(
-    val title: String,
+    /** The level's name, in the app's language (resource). */
+    private val titleRes: Int,
     val score: Int,
-    val blurb: String,
+    private val blurbRes: Int,
     val modelFile: String,
     val mmprojFile: String,
     val bytes: Long,
@@ -30,20 +33,23 @@ enum class ModelLevel(
     /** Total RAM (ActivityManager.totalMem) before the level is offered. */
     val minimumMemory: Long,
 ) {
-    SHARP("Sharp", 78, "The most accurate answers. Best on newer phones.",
+    SHARP(R.string.e_level_sharp, 78, R.string.e_level_sharp_blurb,
         "lfm3-omni-2b-Q8_0.gguf", "lfm3-omni-2b-mmproj-vision-Q8_0.gguf",
         2_049_283_586L, 1.3, 7_000_000_000L),
-    CLEAR("Clear", 75, "Almost as accurate as Sharp, half the download.",
+    CLEAR(R.string.e_level_clear, 75, R.string.e_level_clear_blurb,
         "lfm3-omni-2b-Q3_K_M.gguf", "lfm3-omni-2b-mmproj-vision-Q8_0.gguf",
         1_117_944_898L, 1.05, 3_500_000_000L),
-    BALANCED("Balanced", 57, "Built into the app, always ready, even with no internet.",
+    BALANCED(R.string.e_level_balanced, 57, R.string.e_level_balanced_blurb,
         NarratorEngine.MODEL_FILE, NarratorEngine.MMPROJ_FILE,
         735_090_426L, 1.0, 0L),
-    QUICK("Quick", 47, "The fastest answers, for older phones. Less detail.",
+    QUICK(R.string.e_level_quick, 47, R.string.e_level_quick_blurb,
         "vision-narrator-0.8b-Q4_K_M.gguf", "vision-narrator-0.8b-mmproj-F16.gguf",
         736_644_128L, 0.72, 0L);
 
     val key: String get() = name.lowercase()
+    /** Shown and spoken: "Sharp" / "Nítido". */
+    val title: String get() = AppLang.str(titleRes)
+    val blurb: String get() = AppLang.str(blurbRes)
     /** The real model behind the level, shown small after the plain sentence. */
     val modelName: String get() = when (this) {
         SHARP -> "LFM3-Omni 2B, 8-bit"
@@ -51,15 +57,15 @@ enum class ModelLevel(
         BALANCED -> "LFM3-Omni 2B, 2-bit"
         QUICK -> "Vision Narrator 0.8B, 4-bit"
     }
-    fun technicalLine(): String = "Model: $modelName, ${sizeText()}."
+    fun technicalLine(): String = AppLang.str(R.string.e_level_technical, modelName, sizeText())
     val isBundled: Boolean get() = this == BALANCED
     val usesLfm3Prompt: Boolean get() = this != QUICK
     /** Folder on our server. */
     val remoteBase: String get() = "https://ineedhemp.com/models/rtcam/$key/"
 
     fun sizeText(): String =
-        if (bytes >= 1_000_000_000L) String.format("%.2f GB", bytes / 1e9)
-        else String.format("%.0f MB", bytes / 1e6)
+        if (bytes >= 1_000_000_000L) String.format(AppLang.locale(), "%.2f GB", bytes / 1e9)
+        else String.format(AppLang.locale(), "%.0f MB", bytes / 1e6)
 
     fun fitsThisPhone(context: Context): Boolean {
         val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
@@ -88,13 +94,15 @@ enum class ModelLevel(
 enum class PhotoKind { PAGE, SCENE }
 
 /** Settings > Models: "Accuracy first" (default) or "Speed first". */
-enum class ModelPriority(val title: String) {
-    ACCURACY("Most accurate"), SPEED("Fastest");
+enum class ModelPriority(private val titleRes: Int) {
+    ACCURACY(R.string.e_priority_accuracy), SPEED(R.string.e_priority_speed);
+
+    val title: String get() = AppLang.str(titleRes)
 
     /** One plain line under the choice. */
     val explanation: String get() = if (this == ACCURACY)
-        "Best answers. Mail, money and medicine may take up to a minute, everything else up to 20 seconds."
-    else "Quicker answers, about 10 seconds where this phone can, a little less accurate."
+        AppLang.str(R.string.e_priority_accuracy_line)
+    else AppLang.str(R.string.e_priority_speed_line)
 
     /**
      * The longest a level may take and still be picked automatically. Matt's rule
@@ -177,9 +185,9 @@ object ModelPicker {
     }
 
     fun spoken(seconds: Double?): String = when {
-        seconds == null -> "speed not measured yet"
-        seconds < 1.5 -> "about 1 second"
-        seconds < 60 -> "about ${Math.round(seconds)} seconds"
-        else -> Math.round(seconds / 60).let { if (it == 1L) "about a minute" else "about $it minutes" }
+        seconds == null -> AppLang.str(R.string.e_speed_unmeasured)
+        seconds < 1.5 -> AppLang.str(R.string.e_speed_one_second)
+        seconds < 60 -> AppLang.str(R.string.e_speed_seconds, Math.round(seconds).toInt())
+        else -> Math.round(seconds / 60).let { if (it == 1L) AppLang.str(R.string.e_speed_one_minute) else AppLang.str(R.string.e_speed_minutes, it.toInt()) }
     }
 }

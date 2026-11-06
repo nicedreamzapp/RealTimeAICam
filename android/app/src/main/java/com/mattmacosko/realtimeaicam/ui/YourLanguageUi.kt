@@ -41,6 +41,9 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.mattmacosko.realtimeaicam.AppLang
+import com.mattmacosko.realtimeaicam.R
 import com.mattmacosko.realtimeaicam.translation.YourLanguage
 import com.mattmacosko.realtimeaicam.translation.YourLanguageRules
 
@@ -59,6 +62,7 @@ fun YourLanguageDownloadRow(say: (String) -> Unit, modifier: Modifier = Modifier
     if (code == YourLanguageRules.ENGLISH || code in ready) return
     val busy = downloading == code
     val label = if (busy) YourLanguageRules.downloadingLine(code) else YourLanguageRules.downloadRow(code)
+    val downloadWord = stringResource(R.string.e_download)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -66,7 +70,7 @@ fun YourLanguageDownloadRow(say: (String) -> Unit, modifier: Modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(IosColors.Blue.copy(alpha = 0.85f), RoundedCornerShape(14.dp))
-            .clickable(enabled = !busy, role = Role.Button, onClickLabel = "Download") {
+            .clickable(enabled = !busy, role = Role.Button, onClickLabel = downloadWord) {
                 YourLanguage.download(context, code, say = { line -> android.os.Handler(android.os.Looper.getMainLooper()).post { say(line) } })
             }
             .padding(horizontal = 14.dp, vertical = 12.dp)
@@ -74,7 +78,7 @@ fun YourLanguageDownloadRow(say: (String) -> Unit, modifier: Modifier = Modifier
             .clearAndSetSemantics {
                 contentDescription = label
                 role = Role.Button
-                if (!busy) onClick(label = "Download") {
+                if (!busy) onClick(label = downloadWord) {
                     YourLanguage.download(context, code, say = { line -> android.os.Handler(android.os.Looper.getMainLooper()).post { say(line) } })
                     true
                 }
@@ -94,6 +98,12 @@ fun YourLanguageSettingsCard(say: (String) -> Unit) {
     val ready by YourLanguage.readyPacks.collectAsState()
     val code = remember(choice) { YourLanguage.code(context) }
     var open by remember { mutableStateOf(false) }
+    val closeList = stringResource(R.string.e_yl_close_list)
+    val chooseLanguage = stringResource(R.string.e_yl_choose)
+    val yourLanguage = stringResource(R.string.e_yl_title)
+    val selectedWord = stringResource(R.string.e_selected)
+    val readyWord = stringResource(R.string.e_yl_ready_state)
+    val needsDownload = stringResource(R.string.e_yl_needs_download)
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier
@@ -107,17 +117,17 @@ fun YourLanguageSettingsCard(say: (String) -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(role = Role.Button, onClickLabel = if (open) "Close the language list" else "Choose your language") { open = !open }
+                .clickable(role = Role.Button, onClickLabel = if (open) closeList else chooseLanguage) { open = !open }
                 .semantics(mergeDescendants = true) {
-                    contentDescription = "Your language"
+                    contentDescription = yourLanguage
                     stateDescription = YourLanguageRules.name(code)
                 },
         ) {
             Icon(Icons.Default.Translate, null, tint = IosColors.Green, modifier = Modifier.size(20.dp))
             Column(Modifier.weight(1f).padding(start = 8.dp)) {
-                Text("Your language", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                Text(yourLanguage, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                 Text(
-                    "Read, Object Detection, Help Me Aim and What's this? speak in this language. Buttons stay in English for now.",
+                    stringResource(R.string.e_yl_card_note),
                     fontSize = 12.sp, color = IosColors.Gray,
                 )
             }
@@ -139,9 +149,11 @@ fun YourLanguageSettingsCard(say: (String) -> Unit) {
                         .clickable(role = Role.Button) {
                             YourLanguage.set(context, c)
                             open = false
+                            // Said in the app's language as it is NOW: picking Spanish switches the app to Spanish.
+                            val n = YourLanguageRules.nameInSentence(c)
                             say(
-                                if (c == YourLanguageRules.ENGLISH || c in YourLanguage.readyPacks.value) "Your language is ${YourLanguageRules.name(c)}."
-                                else "Your language is ${YourLanguageRules.name(c)}. ${YourLanguageRules.downloadRow(c)}: tap the download button."
+                                if (c == YourLanguageRules.ENGLISH || c in YourLanguage.readyPacks.value) AppLang.str(R.string.e_yl_is, n)
+                                else AppLang.str(R.string.e_yl_is_download, n, YourLanguageRules.downloadRow(c))
                             )
                         }
                         .padding(horizontal = 12.dp, vertical = 10.dp)
@@ -150,9 +162,9 @@ fun YourLanguageSettingsCard(say: (String) -> Unit) {
                             contentDescription = YourLanguageRules.name(c)
                             selected = isSel
                             stateDescription = when {
-                                isSel -> "Selected"
-                                c == YourLanguageRules.ENGLISH || c in ready -> "Ready"
-                                else -> "Needs a one-time download"
+                                isSel -> selectedWord
+                                c == YourLanguageRules.ENGLISH || c in ready -> readyWord
+                                else -> needsDownload
                             }
                         },
                 ) {

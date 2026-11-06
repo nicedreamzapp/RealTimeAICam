@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher shortcut labels in Spanish (the launcher follows the phone's language). The phrases
+     the assistant may hear (string-array) stay in values/shortcuts.xml: speech command words. -->
+<resources>
+    <string name="shortcut_whats_this">¿Qué es esto?</string>
+    <string name="shortcut_help_me_aim">Ayúdame a apuntar</string>
+    <string name="shortcut_read_text">Leer texto</string>
+    <string name="shortcut_translate">Traducir</string>
+    <string name="shortcut_object_detection">Detección de objetos</string>
+</resources>

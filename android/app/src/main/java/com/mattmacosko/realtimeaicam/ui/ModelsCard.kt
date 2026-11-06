@@ -1,5 +1,8 @@
 package com.mattmacosko.realtimeaicam.ui
 
+import androidx.compose.ui.res.stringResource
+import com.mattmacosko.realtimeaicam.AppLang
+import com.mattmacosko.realtimeaicam.R
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -83,6 +86,10 @@ fun ModelsCard() {
     var refresh by remember { mutableIntStateOf(0) }
     @Suppress("UNUSED_EXPRESSION") states; refresh
     val summary = modelsSummary(context)
+    val changeLabel = stringResource(R.string.e_models_change)
+    val changeHint = stringResource(R.string.e_models_change_hint)
+    val modelsWord = stringResource(R.string.e_models)
+    val cardLabel = stringResource(R.string.e_models_card_label, summary)
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -92,17 +99,17 @@ fun ModelsCard() {
             .clip(RoundedCornerShape(12.dp))
             .background(IosColors.MaterialLight.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
             .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
-            .clickable(role = Role.Button, onClickLabel = "change which model What's this? uses") { open = true }
+            .clickable(role = Role.Button, onClickLabel = changeLabel) { open = true }
             .clearAndSetSemantics {
-                contentDescription = "Models. $summary"
+                contentDescription = cardLabel
                 role = Role.Button
-                onClick("change which model What's this? uses. You don't need to") { open = true; true }
+                onClick(changeHint) { open = true; true }
             }
             .padding(16.dp),
     ) {
         Icon(Icons.Default.Memory, null, tint = Teal, modifier = Modifier.size(22.dp))
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-            Text("Models", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+            Text(modelsWord, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
             Text(summary, fontSize = 14.sp, color = IosColors.Gray)
         }
         Icon(Icons.Default.ChevronRight, null, tint = IosColors.Gray)
@@ -116,20 +123,20 @@ private fun modelsSummary(context: Context): String {
     val current = ModelDownloader.states.value.entries.firstOrNull { it.value is ModelDownloader.State.Downloading }
     if (current != null) {
         val pct = ((current.value as ModelDownloader.State.Downloading).progress * 100).toInt()
-        return "Getting ${current.key.title}, $pct percent. What's this? works meanwhile."
+        return AppLang.str(R.string.e_models_getting, current.key.title, pct)
     }
     if (ModelPicker.balancedSeconds(context) == null) {
-        return "Using the built-in model. Your first What's this? photo picks the best one for this phone."
+        return AppLang.str(R.string.e_models_using_builtin)
     }
     val using = ModelPicker.level(context, PhotoKind.SCENE)
-    if (ModelPicker.manualLevel(context) != null) return "Using ${using.title}, the one you picked."
+    if (ModelPicker.manualLevel(context) != null) return AppLang.str(R.string.e_models_using_picked, using.title)
     val page = ModelPicker.ideal(context, PhotoKind.PAGE)
     val scene = ModelPicker.ideal(context, PhotoKind.SCENE)
     if (!page.isInstalled(context) || !scene.isInstalled(context)) {
-        return "Using ${using.title} for now. ${page.title}, the best fit, downloads on Wi-Fi."
+        return AppLang.str(R.string.e_models_using_for_now, using.title, page.title)
     }
-    if (page == scene) return "Using ${page.title}, the best fit for this phone."
-    return "Using ${page.title} for mail, money and medicine, ${scene.title} for everything else."
+    if (page == scene) return AppLang.str(R.string.e_models_using_best, page.title)
+    return AppLang.str(R.string.e_models_using_split, page.title, scene.title)
 }
 
 /** Everything about one model in one sentence, after its name. */
@@ -137,19 +144,19 @@ private fun rowSentence(context: Context, level: ModelLevel): String {
     val parts = mutableListOf(level.blurb)
     val state = ModelDownloader.state(context, level)
     when {
-        !level.fitsThisPhone(context) -> parts += "Too big for this phone's memory."
-        state is ModelDownloader.State.Downloading -> parts += "Downloading, ${(state.progress * 100).toInt()} percent."
-        state is ModelDownloader.State.Queued -> parts += "Waiting to download."
-        state is ModelDownloader.State.Verifying -> parts += "Checking the download."
+        !level.fitsThisPhone(context) -> parts += AppLang.str(R.string.e_models_too_big)
+        state is ModelDownloader.State.Downloading -> parts += AppLang.str(R.string.e_models_downloading, (state.progress * 100).toInt())
+        state is ModelDownloader.State.Queued -> parts += AppLang.str(R.string.e_models_waiting)
+        state is ModelDownloader.State.Verifying -> parts += AppLang.str(R.string.e_models_checking)
         level.isBundled -> {}
-        level.isInstalled(context) -> parts += "On this phone."
-        else -> parts += "Not downloaded. ${level.sizeText()}, downloads when you pick it."
+        level.isInstalled(context) -> parts += AppLang.str(R.string.e_models_on_phone)
+        else -> parts += AppLang.str(R.string.e_models_not_downloaded, level.sizeText())
     }
-    if (state is ModelDownloader.State.Failed) parts += "The last download stopped. Pick it to try again."
+    if (state is ModelDownloader.State.Failed) parts += AppLang.str(R.string.e_models_last_failed)
     if (level.fitsThisPhone(context)) {
-        ModelPicker.estimate(context, level, PhotoKind.SCENE)?.let { parts += "Answers in ${ModelPicker.spoken(it)}." }
+        ModelPicker.estimate(context, level, PhotoKind.SCENE)?.let { parts += AppLang.str(R.string.e_models_answers_in, ModelPicker.spoken(it)) }
     }
-    parts += "Accuracy ${level.score} out of 100."
+    parts += AppLang.str(R.string.e_models_accuracy, level.score)
     return parts.joinToString(" ")
 }
 
@@ -162,7 +169,7 @@ private fun ModelsChooser(onDone: () -> Unit) {
     var refresh by remember { mutableIntStateOf(0) }
     @Suppress("UNUSED_EXPRESSION") states; refresh
 
-    fun say(text: String) { view.announceForAccessibility(text) }
+    fun say(text: String) { A11yAnnounce.say(view, text) }
     val choice = ModelPicker.manualLevel(context)
     val priority = ModelPicker.priority(context)
 
@@ -172,10 +179,10 @@ private fun ModelsChooser(onDone: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             ) {
-                Text("Models", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
+                Text(stringResource(R.string.e_models), fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
                     modifier = Modifier.weight(1f).semantics { heading() })
                 Text(
-                    "Done", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = IosColors.Blue,
+                    stringResource(R.string.e_done), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = IosColors.Blue,
                     modifier = Modifier
                         .heightIn(min = 48.dp)
                         .clickable(role = Role.Button, onClick = onDone)
@@ -188,48 +195,50 @@ private fun ModelsChooser(onDone: () -> Unit) {
             ) {
                 item {
                     Text(
-                        "You don't need to change anything. Automatic picks the best model this phone can run, " +
-                            "and What's this? keeps working while it downloads.",
+                        stringResource(R.string.e_models_intro),
                         fontSize = 16.sp, color = Color.White, modifier = Modifier.padding(vertical = 8.dp),
                     )
                 }
-                item { SectionTitle("What matters more to you?") }
+                item { SectionTitle(stringResource(R.string.e_models_what_matters)) }
                 for (p in ModelPriority.entries) item {
                     BigRow(p.title, p.explanation, selected = p == priority) {
                         ModelPicker.setPriority(context, p)
                         ModelDownloader.fetchWanted(context, automatic = true)
-                        say("${p.title} selected.")
+                        say(AppLang.str(R.string.e_models_selected, p.title))
                         refresh++
                     }
                 }
-                item { SectionTitle("Which model") }
+                item { SectionTitle(stringResource(R.string.e_models_which)) }
                 item {
-                    BigRow("Automatic (recommended)", modelsSummary(context), selected = choice == null) {
+                    BigRow(stringResource(R.string.e_models_automatic), modelsSummary(context), selected = choice == null) {
                         ModelPicker.setManualLevel(context, null)
                         ModelDownloader.fetchWanted(context, automatic = true)
-                        say("Automatic selected. ${modelsSummary(context)}")
+                        say(AppLang.str(R.string.e_models_automatic_selected, modelsSummary(context)))
                         refresh++
                     }
                 }
                 for (level in ModelLevel.entries) item {
                     val state = ModelDownloader.state(context, level)
+                    val deleteWord = stringResource(R.string.e_models_delete_word)
+                    val stopWord = stringResource(R.string.e_models_stop_word)
+                    var visibleWord: String? = null
                     val actions = buildList {
                         if (!level.isBundled && level.isInstalled(context)) add(
-                            CustomAccessibilityAction("Delete ${level.title} to free ${level.sizeText()}") {
+                            CustomAccessibilityAction(AppLang.str(R.string.e_models_delete_action, level.title, level.sizeText())) {
                                 ModelDownloader.delete(context, level)
                                 NarratorEngine.get(context).select(ModelLevel.BALANCED)
                                 if (choice == level) ModelPicker.setManualLevel(context, null)
-                                say("${level.title} deleted. ${level.sizeText()} freed.")
+                                say(AppLang.str(R.string.e_models_deleted, level.title, level.sizeText()))
                                 refresh++; true
                             },
-                        )
+                        ).also { if (visibleWord == null) visibleWord = deleteWord }
                         if (state is ModelDownloader.State.Downloading || state is ModelDownloader.State.Queued) add(
-                            CustomAccessibilityAction("Stop downloading ${level.title}") {
+                            CustomAccessibilityAction(AppLang.str(R.string.e_models_stop_action, level.title)) {
                                 ModelDownloader.delete(context, level)
-                                say("Stopped downloading ${level.title}.")
+                                say(AppLang.str(R.string.e_models_stopped, level.title))
                                 refresh++; true
                             },
-                        )
+                        ).also { if (visibleWord == null) visibleWord = stopWord }
                     }
                     BigRow(
                         level.title, rowSentence(context, level), selected = choice == level,
@@ -238,17 +247,17 @@ private fun ModelsChooser(onDone: () -> Unit) {
                         progress = (state as? ModelDownloader.State.Downloading)?.progress,
                         actions = actions,
                         // Sighted people get the same delete as a visible word on the row.
-                        visibleAction = actions.firstOrNull()?.let { a -> a.label.substringBefore(" to free").substringBefore(" ${level.title}") to a.action },
+                        visibleAction = actions.firstOrNull()?.let { a -> (visibleWord ?: a.label) to a.action },
                     ) {
                         if (!level.fitsThisPhone(context)) {
-                            say("${level.title} is too big for this phone's memory.")
+                            say(AppLang.str(R.string.e_models_level_too_big, level.title))
                         } else {
                             ModelPicker.setManualLevel(context, level)
                             if (level.isInstalled(context)) {
-                                say("${level.title} selected. What's this? uses it from now on.")
+                                say(AppLang.str(R.string.e_models_level_selected_ready, level.title))
                             } else {
                                 // The downloader says the rest ("Getting Sharp, 2 GB…"), once.
-                                say("${level.title} selected.")
+                                say(AppLang.str(R.string.e_models_selected, level.title))
                                 ModelDownloader.start(context, level)
                             }
                         }
@@ -280,6 +289,8 @@ private fun BigRow(
     visibleAction: Pair<String, () -> Boolean>? = null,
     onPick: () -> Unit,
 ) {
+    val selectedWord = stringResource(R.string.e_selected)
+    val notSelectedWord = stringResource(R.string.e_not_selected)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -290,7 +301,7 @@ private fun BigRow(
             .clickable(role = Role.RadioButton, onClick = onPick)
             .clearAndSetSemantics {
                 contentDescription = if (note != null) "$title. $detail $note" else "$title. $detail"
-                stateDescription = if (selected) "Selected" else "Not selected"
+                stateDescription = if (selected) selectedWord else notSelectedWord
                 this.selected = selected
                 role = Role.RadioButton
                 onClick { onPick(); true }

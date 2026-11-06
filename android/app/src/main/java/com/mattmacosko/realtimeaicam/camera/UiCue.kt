@@ -2,6 +2,8 @@ package com.mattmacosko.realtimeaicam.camera
 
 import android.content.Context
 import android.view.accessibility.AccessibilityManager
+import com.mattmacosko.realtimeaicam.AppLang
+import com.mattmacosko.realtimeaicam.R
 
 /**
  * Short screen cues ("Home", "Point the camera at some text", "Live Cam is coming soon."), from
@@ -10,9 +12,10 @@ import android.view.accessibility.AccessibilityManager
  * over each other.
  */
 object UiCue {
-    const val HOME = "Home"
-    const val READ_HINT = "Point the camera at some text"
-    const val LIVE_CAM_COMING_SOON = "Live Cam is coming soon."
+    // In the app's language (2026-11-05): cue() expects the app's own line, already localized.
+    val HOME: String get() = AppLang.str(R.string.e_cue_home)
+    val READ_HINT: String get() = AppLang.str(R.string.e_cue_read_hint)
+    val LIVE_CAM_COMING_SOON: String get() = AppLang.str(R.string.e_cue_live_cam_soon)
 
     /** How long Read waits after opening before its hint, so text found right away wins. */
     const val READ_HINT_DELAY_MS = 1_200L
