@@ -82,7 +82,12 @@ fun MainScreen(
     // orientation handling, so Home + both OCR screens lock portrait here.
     // Detection is the one screen that rearranges for sideways holding on
     // iOS, so it alone rotates freely.
-    val activity = context as? android.app.Activity
+    // LocalContext may be AppLang's language wrapper around the activity: unwrap it.
+    val activity = remember(context) {
+        var c: android.content.Context? = context
+        while (c is android.content.ContextWrapper && c !is android.app.Activity) c = c.baseContext
+        c as? android.app.Activity
+    }
     DisposableEffect(mode) {
         activity?.requestedOrientation =
             if (mode == AppMode.ObjectDetection) {
