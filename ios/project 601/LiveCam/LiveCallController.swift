@@ -88,6 +88,36 @@ final class LiveCallController: ObservableObject {
     @Published var proactiveOn = UserDefaults.standard.object(forKey: "liveCamProactive") as? Bool ?? true {
         didSet { UserDefaults.standard.set(proactiveOn, forKey: "liveCamProactive"); watch.enabled = proactiveOn }
     }
+    /// The flashlight (Matt 11/6), back camera only: one tap on, one tap off.
+    @Published private(set) var torchOn = false
+    var torchAvailable: Bool {
+        #if DEBUG
+        if LiveCamTest.active { return true }   // the harness has no camera: the button and its state still work
+        #endif
+        return LiveCamera.torchAvailable
+    }
+    /// Turning it on from the selfie camera flips to the back camera first (the selfie side has no light).
+    func setFlashlight(_ on: Bool, spoken: Bool = false) {
+        guard running, torchAvailable else { return }
+        if on, camera.isFront { flip() }
+        camera.setTorch(on)
+        torchOn = on
+        log(["event": "flashlight", "on": on, "spoken": spoken])
+        if spoken {
+            // Never the same words twice in a row (the repeat guard), but always said: the light changed.
+            let lines = on ? ["Flashlight, on", "Light's on."] : ["Flashlight, off", "Light's off."]
+            speakAll(own: lines.first { sayGuard.vet($0) != nil && LiveSayGuard.opening($0) != sayGuard.lastOpening } ?? lines[0])
+        } else {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+    }
+    /// Flip camera: the light goes off when it flips to the selfie side.
+    func flip() {
+        if !camera.isFront { torchOn = false }
+        camera.flip()
+    }
+    private var backgroundWatch: NSObjectProtocol?
+
     /// The last question heard (in the person's words), shown above the answer.
     @Published private(set) var heardText = ""
     /// Speech recognition kept failing the moment it started: the mic is off for this visit and a typing box shows.
@@ -142,6 +172,11 @@ final class LiveCallController: ObservableObject {
         moneyMemory.forget()   // a new call never answers from an old count
         Task.detached(priority: .utility) { MoneyDetector.warmUp() }   // both money models loaded off the main thread
         UIApplication.shared.isIdleTimerDisabled = true
+        // The app goes to the background: the light goes off (iOS stops the camera there anyway).
+        backgroundWatch = NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil,
+                                                                 queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { if self?.torchOn == true { self?.camera.setTorch(false); self?.torchOn = false } }
+        }
         watch.enabled = proactiveOn
         LiveCamTest.beginSession()
         openedAt = Date()
@@ -233,7 +268,9 @@ final class LiveCallController: ObservableObject {
         voice.onQuiet = nil
         voice.stop()
         listener.shutdown()
-        camera.stop()
+        camera.stop()   // the light goes off with it
+        torchOn = false
+        if let b = backgroundWatch { NotificationCenter.default.removeObserver(b); backgroundWatch = nil }
         // The model is let go (What's this? loads its own copy when it is next used).
         preload?.cancel(); preload = nil
         engine = nil
@@ -508,6 +545,9 @@ final class LiveCallController: ObservableObject {
         case .hush:
             stopTalking()
             listen()
+        case let .light(on):
+            questionEndedAt = endedAt
+            setFlashlight(on ?? !torchOn, spoken: true)
         case let .mode(m):
             questionEndedAt = endedAt
             let rest = LiveWords.modeRest(q)

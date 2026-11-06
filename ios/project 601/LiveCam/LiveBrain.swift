@@ -544,7 +544,30 @@ enum LiveWords {
         return Double(a.intersection(b).count) / Double(min(a.count, b.count)) >= 0.6
     }
 
-    enum Turn: Equatable { case end, repeatLast, stopSaying, hush, mode(LiveMode), ask }
+    enum Turn: Equatable { case end, repeatLast, stopSaying, hush, mode(LiveMode), light(Bool?), ask }
+
+    /// "Turn on the flashlight", "lights off", "flashlight": the light, handled on the phone with no model call
+    /// (Matt 11/6). true on, false off, nil switch it. A question about a light ("is the light on") is not one.
+    static func lightCommand(_ q: String) -> Bool?? {
+        let t = normalize(q)
+        let s = " " + t + " "
+        let things = [" light ", " lights ", " flashlight ", " torch ", " flash light "]
+        guard things.contains(where: { s.contains($0) }) else { return nil }
+        let words = t.split(separator: " ").map(String.init)
+        guard words.count <= 8, let first = words.first else { return nil }
+        if ["is", "are", "what", "where", "does", "do", "why", "how", "which", "was", "did"].contains(first) { return nil }
+        if s.contains(" see ") || s.contains(" look") || s.contains(" color ") || s.contains(" read ") { return nil }
+        let on = [" turn on ", " switch on ", " light on ", " lights on ", " flashlight on ", " torch on ", " on the light",
+                  " on the flashlight", " on the torch", " on my flashlight", " on the lights", " light up ", " need light ",
+                  " need a light ", " need some light ", " more light "].contains { s.contains($0) }
+            || (s.contains(" turn ") && t.hasSuffix(" on"))
+        let off = [" turn off ", " switch off ", " light off ", " lights off ", " flashlight off ", " torch off ", " off the light",
+                   " off the flashlight", " off the torch", " kill the light", " no light "].contains { s.contains($0) }
+            || (s.contains(" turn ") && t.hasSuffix(" off"))
+        if on != off { return .some(on) }
+        if ["flashlight", "the flashlight", "light", "toggle the light", "toggle the flashlight", "flashlight please", "torch"].contains(t) { return .some(nil) }
+        return nil
+    }
 
     /// "Funny mode", "be funny", "analyze this", "coach me", "back to normal" (Matt 11/1: four modes, switched by voice).
     static func modeSwitch(_ t: String) -> LiveMode? {
@@ -672,6 +695,7 @@ enum LiveWords {
 
     static func turn(_ q: String) -> Turn {
         let t = normalize(q)
+        if let l = lightCommand(q) { return .light(l) }
         if ["stop", "end call", "end the call", "hang up", "goodbye", "good bye", "bye", "bye bye"].contains(t)
             || t.hasPrefix("goodbye ") || t.hasSuffix(" goodbye") || t.contains("end the call") || t.contains("hang up") { return .end }
         if ["repeat", "repeat that", "say that again", "what did you say", "come again", "say it again"].contains(t) { return .repeatLast }
@@ -747,6 +771,7 @@ enum LiveBargeIn {
     /// their question ended, so two real words are enough (they weren't done).
     static func shouldInterrupt(_ heard: String, confidence: Double?, saying: [String], continuing: Bool = false) -> Bool {
         if let c = confidence, c > 0, c < 0.3 { return false }
+        if LiveWords.lightCommand(heard) != nil, LiveWords.normalize(heard).split(separator: " ").count >= 2 { return true }   // "lights on"
         let own = Set(saying.flatMap { LiveWords.normalize($0).split(separator: " ").map(String.init) })
         let words = LiveWords.normalize(heard).split(separator: " ").map(String.init)
         // Its own voice: the words that are not in what it is saying right now.

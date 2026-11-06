@@ -148,6 +148,30 @@ final class LiveCamUITests: XCTestCase {
         app.terminate()
     }
 
+    /// Matt 11/6: a flashlight at the bottom with Mute and Back; one tap on, one tap off.
+    @MainActor
+    func testFlashlightToggles() throws {
+        continueAfterFailure = false
+        let app = launch(env: ["RTCAM_FAKE_LIVE_ANSWER": "I see a blue double door."])
+        openLiveCam(app)
+        let light = app.descendants(matching: .any).matching(identifier: "liveCamFlashlight").firstMatch   // a toggle: a switch to XCUITest
+        XCTAssertTrue(light.waitForExistence(timeout: 10), "no flashlight button")
+        XCTAssertGreaterThanOrEqual(min(light.frame.width, light.frame.height), 56)
+        XCTAssertTrue(app.windows.firstMatch.frame.contains(light.frame), "flashlight off screen: \(light.frame)")
+        for n in ["Back", "Mute microphone"].map({ T($0) }) {
+            XCTAssertFalse(light.frame.intersects(app.buttons[n].firstMatch.frame), "flashlight overlaps \(n)")
+        }
+        XCTAssertEqual(light.value as? String, T("Off"))
+        light.tap()
+        XCTAssertTrue(NSPredicate(format: "value == %@", T("On")).evaluate(with: light) || { sleep(1); return (light.value as? String) == T("On") }())
+        keep(app, "livecam-flashlight-on")
+        light.tap()
+        sleep(1)
+        XCTAssertEqual(light.value as? String, T("Off"))
+        goBack(app)
+        app.terminate()
+    }
+
     /// 11/04 review: speech recognition that keeps failing stops retrying, says so, and shows a note and a typing
     /// box. Both must be on screen and clear of the controls on every size.
     @MainActor

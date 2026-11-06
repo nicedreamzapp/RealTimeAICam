@@ -282,3 +282,24 @@ struct LiveSayGuardTests {
         for i in 0 ..< 12 { let p = r2.next(from: noHelp, random: i)!; #expect(p != last); #expect(!LiveWords.isHelpOffer(p)); last = p }
     }
 }
+
+/// Matt 11/6: "Live cam needs to have a flashlight", by voice too, handled on the phone.
+struct LiveFlashlightTests {
+    @Test func spokenLightCommands() {
+        for q in ["turn on the light", "turn on the flashlight", "lights on", "flashlight on", "can you turn the flashlight on",
+                  "it's dark I need some light", "turn the light on please"] {
+            #expect(LiveWords.lightCommand(q) == .some(true), "on: \(q)")
+        }
+        for q in ["lights off", "turn off the flashlight", "flashlight off", "turn the light off", "kill the light"] {
+            #expect(LiveWords.lightCommand(q) == .some(false), "off: \(q)")
+        }
+        #expect(LiveWords.lightCommand("flashlight") == .some(nil))   // switch it
+        for q in ["is the light on", "what color is the light", "the light is too bright", "do you see a flashlight",
+                  "where is my flashlight", "how do I fix this", "turn left"] {
+            #expect(LiveWords.lightCommand(q) == nil, "not a command: \(q)")
+        }
+        #expect(LiveWords.turn("lights off") == .light(false))
+        #expect(LiveWords.judge("lights on", confidence: nil, isFinal: true, lastSaid: nil, sinceItSpoke: 100) == .answer)
+        #expect(LiveBargeIn.shouldInterrupt("lights off", confidence: nil, saying: ["The cup is white."]))
+    }
+}

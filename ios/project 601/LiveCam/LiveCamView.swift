@@ -136,7 +136,7 @@ struct LiveCamView: View {
             .accessibilityAddTraits(.isToggle)
             .accessibilityHint(L("Shows what Live Cam says in big words. VoiceOver can read them either way"))
             .accessibilityIdentifier("liveCamWordsToggle")
-            Button { call.camera.flip() } label: {
+            Button { call.flip() } label: {
                 Image(systemName: "arrow.triangle.2.circlepath.camera").font(.title2.weight(.semibold))
                     .frame(width: 60, height: 60).background(.black.opacity(0.45), in: Circle())
                     .overlay(Circle().stroke(.white.opacity(0.35), lineWidth: 1))
@@ -261,7 +261,27 @@ struct LiveCamView: View {
     // MARK: Bottom: mute and the one way out
 
     private var bottomBar: some View {
-        HStack(spacing: 40) {
+        HStack(spacing: call.torchAvailable ? 28 : 40) {
+            // Matt 11/6: "Live cam needs to have a flashlight... preferably at the bottom". One tap on, one tap off;
+            // on the selfie camera it flips to the back camera first. Its word stays even with Words on screen off.
+            if call.torchAvailable {
+                Button { call.setFlashlight(!call.torchOn) } label: {
+                    VStack(spacing: 6) {
+                        Image(systemName: call.torchOn ? "flashlight.on.fill" : "flashlight.off.fill").font(.system(size: 28, weight: .semibold))
+                            .frame(width: 76, height: 76)
+                            .background(call.torchOn ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.black.opacity(0.45)), in: Circle())
+                            .overlay(Circle().stroke(.white.opacity(0.35), lineWidth: 1))
+                            .foregroundStyle(call.torchOn ? .black : .white)
+                        Text(L("Flashlight")).font(.footnote.weight(.semibold)).foregroundStyle(.white)
+                            .lineLimit(1).minimumScaleFactor(0.7)
+                    }
+                    .frame(width: 84)
+                }
+                .accessibilityLabel(L("Flashlight"))
+                .accessibilityValue(call.torchOn ? L("On") : L("Off"))
+                .accessibilityAddTraits(.isToggle)
+                .accessibilityIdentifier("liveCamFlashlight")
+            }
             // Moonstone 11/1 Matt: "call it the mute button so it's obvious".
             Button { call.micMuted.toggle() } label: {
                 VStack(spacing: 6) {

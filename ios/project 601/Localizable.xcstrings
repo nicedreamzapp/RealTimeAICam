@@ -1640,6 +1640,28 @@
         }
       }
     },
+    "Light's on." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Luz encendida."
+          }
+        }
+      }
+    },
+    "Light's off." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Luz apagada."
+          }
+        }
+      }
+    },
     "Flashlight" : {
       "extractionState" : "manual",
       "localizations" : {

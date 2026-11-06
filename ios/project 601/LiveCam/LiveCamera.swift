@@ -30,6 +30,31 @@ final class LiveCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
         }
     }
     private var latestAt = Date.distantPast
+
+    // MARK: Flashlight (Matt 11/6: "Live cam needs to have a flashlight")
+
+    /// The back camera has a torch on this phone.
+    static let torchAvailable: Bool = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)?.hasTorch ?? false
+    /// The person wants the light on (kept across the camera's own reconfigure; back camera only).
+    private var torchWanted = false
+    var torchOn: Bool { lock.lock(); defer { lock.unlock() }; return torchWanted }
+
+    /// Light on or off (back camera only; the caller flips to the back camera first).
+    func setTorch(_ on: Bool) {
+        // On the camera queue, after any flip already asked for (so "on" from the selfie side lands on the back camera).
+        queue.async { [self] in
+            lock.lock(); torchWanted = on && position == .back; lock.unlock()
+            applyTorch()
+        }
+    }
+
+    /// Call on `queue`.
+    private func applyTorch() {
+        lock.lock(); let on = torchWanted; lock.unlock()
+        guard let d = device, d.hasTorch, (try? d.lockForConfiguration()) != nil else { return }
+        if on, d.isTorchModeSupported(.on) { try? d.setTorchModeOn(level: 1.0) } else if d.torchMode != .off { d.torchMode = .off }
+        d.unlockForConfiguration()
+    }
     /// A call wants the camera running (stop() clears it, so an interruption ending never restarts a closed call).
     private var wanted = false
     private var watching = false
@@ -67,8 +92,10 @@ final class LiveCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
     var isWanted: Bool { queue.sync { wanted } }
 
     func stop() {
+        lock.lock(); torchWanted = false; lock.unlock()
         queue.async { [self] in
             wanted = false
+            applyTorch()   // the light goes off with the camera
             if session.isRunning { session.stopRunning() }
             lock.lock(); latest = nil; latestAt = .distantPast; lock.unlock()
         }
@@ -109,6 +136,7 @@ final class LiveCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
     func flip() {
         guard stillFrame == nil else { return }
         queue.async { [self] in
+            if position == .back { lock.lock(); torchWanted = false; lock.unlock(); applyTorch() }   // no light on the selfie side
             position = position == .back ? .front : .back
             lock.lock(); front = position == .front; lock.unlock()
             UserDefaults.standard.set(position == .front, forKey: "liveCamFrontCamera")
@@ -135,6 +163,7 @@ final class LiveCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
         oneX = one
         if (try? cam.lockForConfiguration()) != nil { cam.videoZoomFactor = one; cam.unlockForConfiguration() }
         lock.lock(); zoomShown = 1; lock.unlock()
+        if position == .back { applyTorch() }   // a reconfigure (restart, flip back) keeps the light as it was
         if session.outputs.isEmpty {
             output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
             output.alwaysDiscardsLateVideoFrames = true

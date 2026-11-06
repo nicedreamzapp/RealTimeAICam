@@ -51,7 +51,7 @@ enum LiveCamWords {
          needsCamera, modelFailed, sayAgain, lostTrack, bye, gotIt, coachGoalSet, nothingSaidYet, coachGoalHeard,
          flipToSeeYou, stillGettingReady, cantSeeInBackground, cameraPaused, newThing, newThingPlain, newThingThere, helpOffer, sameAsBefore, notFullySure, takeBack, lostAnswer]
             + LiveWords.checkIns + LiveWords.acks
-            + LiveMode.allCases.flatMap { [$0.label, $0.confirm] }
+            + LiveMode.allCases.flatMap { [$0.label, $0.confirm] } + ["Light's on.", "Light's off."]
     }
 }
 
