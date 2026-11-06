@@ -1,6 +1,50 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%@ and %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ y %@"
+          }
+        }
+      }
+    },
+    "%@ came down the wrong size." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ llegó con un tamaño incorrecto."
+          }
+        }
+      }
+    },
+    "%@ deleted. %@ freed." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ eliminado. Se liberaron %@."
+          }
+        }
+      }
+    },
+    "%@ did not arrive." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ no llegó."
+          }
+        }
+      }
+    },
     "%@ didn't download. Connect to the internet, then tap the download button again." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8,6 +52,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ no se descargó. Conéctate a internet y vuelve a tocar el botón de descarga."
+          }
+        }
+      }
+    },
+    "%@ failed its integrity check." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ no pasó la revisión de integridad."
           }
         }
       }
@@ -23,6 +78,83 @@
         }
       }
     },
+    "%@ is too big for this phone's memory." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ es demasiado grande para la memoria de este teléfono."
+          }
+        }
+      }
+    },
+    "%@ model download %ld percent." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descarga del modelo %@: %ld por ciento."
+          }
+        }
+      }
+    },
+    "%@ needs a one-time download from Apple. Connect to the internet once, then it works offline." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El %@ necesita una descarga única de Apple. Conéctate a internet una vez y luego funciona sin conexión."
+          }
+        }
+      }
+    },
+    "%@ needs iOS 18 or later." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El %@ necesita iOS 18 o posterior."
+          }
+        }
+      }
+    },
+    "%@ selected." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ elegido."
+          }
+        }
+      }
+    },
+    "%@ selected. What's this? uses it from now on." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ elegido. ¿Qué es esto? lo usará desde ahora."
+          }
+        }
+      }
+    },
+    "%@ Text" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Texto en %@"
+          }
+        }
+      }
+    },
     "%@ → Eng" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -30,6 +162,39 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ → Ing"
+          }
+        }
+      }
+    },
+    "%@, Enhanced quality" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, calidad mejorada"
+          }
+        }
+      }
+    },
+    "%@, one time, Wi-Fi recommended. What's this? gets more accurate. It already works without it." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, una sola vez, mejor con Wi-Fi. ¿Qué es esto? será más preciso. Ya funciona sin él."
+          }
+        }
+      }
+    },
+    "%@, Premium quality" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, calidad Premium"
           }
         }
       }
@@ -45,6 +210,160 @@
         }
       }
     },
+    "%ld objects in view" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%ld objetos a la vista"
+          }
+        }
+      }
+    },
+    "%ld percent" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%ld por ciento"
+          }
+        }
+      }
+    },
+    "(Enhanced)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "(Mejorada)"
+          }
+        }
+      }
+    },
+    "(Premium)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "(Premium)"
+          }
+        }
+      }
+    },
+    "1 object in view" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 objeto a la vista"
+          }
+        }
+      }
+    },
+    "a face" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "una cara"
+          }
+        }
+      }
+    },
+    "A friendly helper that answers what you ask" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un ayudante amable que responde lo que preguntas"
+          }
+        }
+      }
+    },
+    "a picture or page" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "una imagen o página"
+          }
+        }
+      }
+    },
+    "about %ld minutes" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alrededor de %ld minutos"
+          }
+        }
+      }
+    },
+    "about %ld seconds" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alrededor de %ld segundos"
+          }
+        }
+      }
+    },
+    "about 1 second" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alrededor de 1 segundo"
+          }
+        }
+      }
+    },
+    "about a minute" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alrededor de un minuto"
+          }
+        }
+      }
+    },
+    "Accuracy %ld out of 100." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Precisión de %ld sobre 100."
+          }
+        }
+      }
+    },
+    "Actually, I'm not sure about the %@." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pensándolo bien, no estoy seguro de eso: %@."
+          }
+        }
+      }
+    },
     "Adjust torch brightness between twenty five, fifty, seventy five, and one hundred percent." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -52,6 +371,677 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ajusta la linterna al veinticinco, cincuenta, setenta y cinco o cien por ciento."
+          }
+        }
+      }
+    },
+    "After the beep, say what you're looking for." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Después del pitido, di qué buscas."
+          }
+        }
+      }
+    },
+    "Aim at %@ again" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apunta otra vez a %@"
+          }
+        }
+      }
+    },
+    "All" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todo"
+          }
+        }
+      }
+    },
+    "All objects" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todos los objetos"
+          }
+        }
+      }
+    },
+    "Almost as accurate as Sharp, half the download." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Casi tan preciso como Nítido, con la mitad de descarga."
+          }
+        }
+      }
+    },
+    "Always listening. Just talk." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Siempre escuchando. Solo habla."
+          }
+        }
+      }
+    },
+    "Analyze" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Análisis"
+          }
+        }
+      }
+    },
+    "Analyze mode" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modo análisis"
+          }
+        }
+      }
+    },
+    "Analyze mode on. Ask me anything and I'll dig into the how and why." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modo análisis activado. Pregúntame lo que quieras y profundizo en el cómo y el porqué."
+          }
+        }
+      }
+    },
+    "Announces how far away each object is, in feet" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dice a qué distancia está cada objeto, en pies"
+          }
+        }
+      }
+    },
+    "Answers in %@." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Responde en %@."
+          }
+        }
+      }
+    },
+    "Answers, then adds a joke" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Responde y luego agrega un chiste"
+          }
+        }
+      }
+    },
+    "Anything you want to talk through?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Hay algo de lo que quieras hablar?"
+          }
+        }
+      }
+    },
+    "Apple's translator can't do %@ on this device." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El traductor de Apple no funciona con el %@ en este dispositivo."
+          }
+        }
+      }
+    },
+    "Ask" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preguntar"
+          }
+        }
+      }
+    },
+    "Ask about this photo" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pregunta sobre esta foto"
+          }
+        }
+      }
+    },
+    "Auto read" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lectura automática"
+          }
+        }
+      }
+    },
+    "Automatic (recommended)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automático (recomendado)"
+          }
+        }
+      }
+    },
+    "Automatic selected." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automático elegido."
+          }
+        }
+      }
+    },
+    "Back" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Atrás"
+          }
+        }
+      }
+    },
+    "back camera" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cámara trasera"
+          }
+        }
+      }
+    },
+    "Back to choices" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volver a las opciones"
+          }
+        }
+      }
+    },
+    "Back to home" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volver al inicio"
+          }
+        }
+      }
+    },
+    "Back to normal." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De vuelta al modo normal."
+          }
+        }
+      }
+    },
+    "Back to the three choices" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volver a las tres opciones"
+          }
+        }
+      }
+    },
+    "back up" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "aléjate"
+          }
+        }
+      }
+    },
+    "back up, the page is cut off" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "aléjate, la página está cortada"
+          }
+        }
+      }
+    },
+    "Balanced" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Equilibrado"
+          }
+        }
+      }
+    },
+    "Best answers. Mail, money and medicine may take up to a minute, everything else up to 20 seconds." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las mejores respuestas. El correo, el dinero y las medicinas pueden tardar hasta un minuto; lo demás, hasta 20 segundos."
+          }
+        }
+      }
+    },
+    "Built into the app, always ready, even with no internet." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viene con la app, siempre listo, incluso sin internet."
+          }
+        }
+      }
+    },
+    "Camera Access Needed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se necesita acceso a la cámara"
+          }
+        }
+      }
+    },
+    "Camera frames are processed on-device only" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las imágenes de la cámara se procesan solo en el teléfono"
+          }
+        }
+      }
+    },
+    "Camera Zoom" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zoom de la cámara"
+          }
+        }
+      }
+    },
+    "Camera, looking for %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cámara, buscando %@"
+          }
+        }
+      }
+    },
+    "Can't hear you: speech recognition keeps stopping. Type a question below, or tap Back." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No te oigo: el reconocimiento de voz se sigue deteniendo. Escribe una pregunta abajo o toca Atrás."
+          }
+        }
+      }
+    },
+    "Cancel" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelar"
+          }
+        }
+      }
+    },
+    "Changes camera field of view for wider or normal view" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambia el campo de visión de la cámara a más amplio o normal"
+          }
+        }
+      }
+    },
+    "Checking the %@ model…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revisando el modelo %@…"
+          }
+        }
+      }
+    },
+    "Checking the download." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revisando la descarga."
+          }
+        }
+      }
+    },
+    "Choose your preferred voice for speech feedback" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige la voz que prefieres para que te hable"
+          }
+        }
+      }
+    },
+    "Clear" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claro"
+          }
+        }
+      }
+    },
+    "Clear copy history" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Borrar el historial de copias"
+          }
+        }
+      }
+    },
+    "Clear list" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Borrar lista"
+          }
+        }
+      }
+    },
+    "Clear recent items" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Borrar lo buscado antes"
+          }
+        }
+      }
+    },
+    "Clears this photo and returns to the camera for a new picture" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quita esta foto y vuelve a la cámara para tomar otra"
+          }
+        }
+      }
+    },
+    "Close settings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerrar ajustes"
+          }
+        }
+      }
+    },
+    "Closes the list of voices" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cierra la lista de voces"
+          }
+        }
+      }
+    },
+    "Coach" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entrenador"
+          }
+        }
+      }
+    },
+    "Coach mode" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modo entrenador"
+          }
+        }
+      }
+    },
+    "Coach mode on. Let's work on %@. Show me, or ask me anything about it." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modo entrenador activado. Trabajemos en %@. Muéstrame o pregúntame lo que quieras sobre eso."
+          }
+        }
+      }
+    },
+    "Coach mode on. What do you want coaching on?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modo entrenador activado. ¿En qué quieres que te entrene?"
+          }
+        }
+      }
+    },
+    "Continue Reading" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seguir leyendo"
+          }
+        }
+      }
+    },
+    "Controls automatic object detection announcements" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Controla los anuncios automáticos de objetos detectados"
+          }
+        }
+      }
+    },
+    "Copied" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copiado"
+          }
+        }
+      }
+    },
+    "Copies it to the clipboard" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lo copia al portapapeles"
+          }
+        }
+      }
+    },
+    "Copies the summary and the full page to the clipboard" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copia el resumen y la página completa al portapapeles"
+          }
+        }
+      }
+    },
+    "Copies the text on screen to the clipboard" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copia el texto de la pantalla al portapapeles"
+          }
+        }
+      }
+    },
+    "Copy History" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Historial de copias"
+          }
+        }
+      }
+    },
+    "Copy history stays on this device (you can clear it anytime)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El historial de copias se queda en este dispositivo (puedes borrarlo cuando quieras)"
+          }
+        }
+      }
+    },
+    "Copy summary" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copiar resumen"
+          }
+        }
+      }
+    },
+    "Copy text" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copiar texto"
           }
         }
       }
@@ -67,6 +1057,347 @@
         }
       }
     },
+    "Copy this saved text" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copiar este texto guardado"
+          }
+        }
+      }
+    },
+    "Copy Translation" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copiar traducción"
+          }
+        }
+      }
+    },
+    "Couldn't translate this %@ text. Try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No pude traducir este texto en %@. Intenta de nuevo."
+          }
+        }
+      }
+    },
+    "Countdown before photo" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cuenta regresiva antes de la foto"
+          }
+        }
+      }
+    },
+    "Counts three, two, one out loud, then takes the picture — your hand is off the phone when it fires." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cuenta tres, dos, uno en voz alta y luego toma la foto: tu mano no toca el teléfono cuando dispara."
+          }
+        }
+      }
+    },
+    "Credits" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Créditos"
+          }
+        }
+      }
+    },
+    "Cut off at the bottom." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cortado abajo."
+          }
+        }
+      }
+    },
+    "Cut off at the top." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cortado arriba."
+          }
+        }
+      }
+    },
+    "Cut off on the left." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cortado a la izquierda."
+          }
+        }
+      }
+    },
+    "Cut off on the right." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cortado a la derecha."
+          }
+        }
+      }
+    },
+    "Delete" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar"
+          }
+        }
+      }
+    },
+    "Delete %@ to free %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar %@ para liberar %@"
+          }
+        }
+      }
+    },
+    "Deletes every saved copy from this device" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Borra todas las copias guardadas en este dispositivo"
+          }
+        }
+      }
+    },
+    "Describe a photo from my library" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Describir una foto de mi galería"
+          }
+        }
+      }
+    },
+    "Detected" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detectado"
+          }
+        }
+      }
+    },
+    "Detected objects" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Objetos detectados"
+          }
+        }
+      }
+    },
+    "Detection engine failed to load — please restart the app" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El motor de detección no se cargó. Vuelve a abrir la app"
+          }
+        }
+      }
+    },
+    "Detection sensitivity" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sensibilidad de detección"
+          }
+        }
+      }
+    },
+    "Digs into the how and why, and reads everything when you say analyze this" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profundiza en el cómo y el porqué, y lo lee todo cuando dices analiza esto"
+          }
+        }
+      }
+    },
+    "Done" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Listo"
+          }
+        }
+      }
+    },
+    "Double tap anywhere to take it now" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toca dos veces en cualquier parte para tomarla ya"
+          }
+        }
+      }
+    },
+    "Double tap for copy, continue reading or new scan" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toca dos veces para copiar, seguir leyendo o escanear de nuevo"
+          }
+        }
+      }
+    },
+    "Double tap to choose the language results are spoken in" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toca dos veces para elegir el idioma en que se dicen los resultados"
+          }
+        }
+      }
+    },
+    "Double tap to hear all of it" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toca dos veces para oírlo todo"
+          }
+        }
+      }
+    },
+    "Double tap to hide this note" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toca dos veces para ocultar este aviso"
+          }
+        }
+      }
+    },
+    "Double tap to stop it talking and ask something else" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toca dos veces para que deje de hablar y preguntar otra cosa"
+          }
+        }
+      }
+    },
+    "Double tap to stop the countdown without taking the picture" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toca dos veces para detener la cuenta sin tomar la foto"
+          }
+        }
+      }
+    },
+    "Double tap to switch between Tap to read, Auto read and Mute" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toca dos veces para cambiar entre Toca para leer, Lectura automática y Silencio"
+          }
+        }
+      }
+    },
+    "Double tap to take the picture now" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toca dos veces para tomar la foto ya"
+          }
+        }
+      }
+    },
+    "Double-tap to change which model What's this? uses. You don't need to." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toca dos veces para cambiar el modelo que usa ¿Qué es esto?. No hace falta."
+          }
+        }
+      }
+    },
+    "Double-tap to use %@." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toca dos veces para usar %@."
+          }
+        }
+      }
+    },
     "Download %@ once, then it works offline" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -74,6 +1405,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Descarga %@ una vez y luego funciona sin internet"
+          }
+        }
+      }
+    },
+    "Download failed: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La descarga falló: %@"
           }
         }
       }
@@ -89,6 +1431,61 @@
         }
       }
     },
+    "Downloading %@, one time only. After that it works offline." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descargando %@, solo esta vez. Después funciona sin conexión."
+          }
+        }
+      }
+    },
+    "Downloading the %@ model, %ld percent" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descargando el modelo %@, %ld por ciento"
+          }
+        }
+      }
+    },
+    "Downloading the %@ model… %ld%%" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descargando el modelo %@… %ld%%"
+          }
+        }
+      }
+    },
+    "Downloading, %ld percent." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descargando, %ld por ciento."
+          }
+        }
+      }
+    },
+    "Ended" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminado"
+          }
+        }
+      }
+    },
     "English OCR mode reads printed English text aloud." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -96,6 +1493,842 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Leer lee en voz alta el texto impreso."
+          }
+        }
+      }
+    },
+    "English text reader" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lector de texto"
+          }
+        }
+      }
+    },
+    "Everything runs on your phone and works offline, even in Airplane Mode. The bigger AI models and translation languages download once, then stay on your phone." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todo funciona en tu teléfono y sin internet, incluso en modo avión. Los modelos de IA más grandes y los idiomas de traducción se descargan una vez y se quedan en tu teléfono."
+          }
+        }
+      }
+    },
+    "Everything runs on your phone and works offline. No accounts and no tracking." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todo funciona en tu teléfono y sin internet. Sin cuentas y sin rastreo."
+          }
+        }
+      }
+    },
+    "EXPERIMENTAL" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "EXPERIMENTAL"
+          }
+        }
+      }
+    },
+    "Experimental. A conversation with the camera. It says hello, then listens the whole time: just talk, there is nothing to press. Ask what's in front of you, what a sign says, what color something is, or anything else, and it answers out loud a sentence at a time. Talk over it to cut in; say stop, or use the red Back button, to leave. Mode at the top picks Normal, Funny, Analyze or Coach, or just say funny mode, analyze this or coach me. Flip camera switches to the selfie side. Mute stops it listening. While you're quiet it checks in now and then and mentions new things it is sure it sees; turn Speak up off in Mode to stop that. With VoiceOver, a two-finger double tap stops it talking and the escape gesture leaves. It uses the same describing AI as What's this?, so it works offline, and it speaks in Your language. The first time, it asks for the microphone and speech recognition; your voice is turned into text on the phone and nothing is recorded." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Experimental. Una conversación con la cámara. Te saluda y luego escucha todo el tiempo: solo habla, no hay nada que tocar. Pregunta qué tienes enfrente, qué dice un letrero, de qué color es algo o lo que quieras, y te responde en voz alta, una frase a la vez. Habla encima para interrumpirla; di adiós, o usa el botón rojo Atrás, para salir. Modo, arriba, elige Normal, Divertido, Analizar o Entrenador, o simplemente di modo divertido, analiza esto o entréname. Girar cámara cambia a la cámara frontal. Silenciar deja de escuchar. Mientras estás en silencio, de vez en cuando te habla y menciona cosas nuevas que está segura de ver; desactiva Hablar en silencio en Modo para evitarlo. Con VoiceOver, un doble toque con dos dedos la hace callar y el gesto de escape sale. Usa la misma IA que describe en ¿Qué es esto?, así que funciona sin internet, y habla en Tu idioma. La primera vez pide el micrófono y el reconocimiento de voz; tu voz se convierte en texto en el teléfono y no se graba nada."
+          }
+        }
+      }
+    },
+    "Face" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cara"
+          }
+        }
+      }
+    },
+    "Fastest" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Más rápido"
+          }
+        }
+      }
+    },
+    "Find" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buscar"
+          }
+        }
+      }
+    },
+    "Finds a page, a sign or a picture on the wall and gets all of it in the shot" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Encuentra una página, un letrero o un cuadro en la pared y lo deja entero en la foto"
+          }
+        }
+      }
+    },
+    "Finds faces and talks you into the shot, then takes the picture" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Encuentra caras, te guía con la voz hasta encuadrar y toma la foto"
+          }
+        }
+      }
+    },
+    "Flashlight" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Linterna"
+          }
+        }
+      }
+    },
+    "Flashlight, off" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Linterna, desactivada"
+          }
+        }
+      }
+    },
+    "Flashlight, on" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Linterna, activada"
+          }
+        }
+      }
+    },
+    "Flip camera" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Girar cámara"
+          }
+        }
+      }
+    },
+    "Flip the camera to face you and I'll take a look." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gira la cámara hacia ti y te echo un vistazo."
+          }
+        }
+      }
+    },
+    "Found it. Hold still." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahí está. No te muevas."
+          }
+        }
+      }
+    },
+    "front camera" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cámara frontal"
+          }
+        }
+      }
+    },
+    "Funny" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Divertido"
+          }
+        }
+      }
+    },
+    "Funny mode" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modo divertido"
+          }
+        }
+      }
+    },
+    "Funny mode on." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modo divertido activado."
+          }
+        }
+      }
+    },
+    "Get the %@ model for this phone" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descarga el modelo %@ para este teléfono"
+          }
+        }
+      }
+    },
+    "Get the %@ model for this phone (%@, one time, Wi-Fi recommended)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descarga el modelo %@ para este teléfono (%@, una sola vez, mejor con Wi-Fi)"
+          }
+        }
+      }
+    },
+    "Getting %@, %ld percent. What's this? works meanwhile." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descargando %@, %ld por ciento. ¿Qué es esto? sigue funcionando mientras tanto."
+          }
+        }
+      }
+    },
+    "Getting Live Cam ready" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparando Live Cam"
+          }
+        }
+      }
+    },
+    "Getting ready" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparando"
+          }
+        }
+      }
+    },
+    "Getting the %@ model for this phone, %@. What's this? keeps working while it downloads." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descargando el modelo %@ para este teléfono, %@. ¿Qué es esto? sigue funcionando mientras se descarga."
+          }
+        }
+      }
+    },
+    "got it, %@ faces, hold still" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "listo, %@ caras, no te muevas"
+          }
+        }
+      }
+    },
+    "Got it, %@. Show me what you're doing, or ask me anything about it." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entendido: %@. Muéstrame lo que haces o pregúntame lo que quieras sobre eso."
+          }
+        }
+      }
+    },
+    "got it, hold still" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "listo, no te muevas"
+          }
+        }
+      }
+    },
+    "Got it." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entendido."
+          }
+        }
+      }
+    },
+    "GUIDE" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GUÍA"
+          }
+        }
+      }
+    },
+    "Heard: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oí: %@"
+          }
+        }
+      }
+    },
+    "Help Me Aim" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ayúdame a apuntar"
+          }
+        }
+      }
+    },
+    "Help Me Aim takes a good photo for you. Choose Face, Picture or Page, or Something Else and say what you want. It tells you which way to move, counts down, and saves the photo with a description. For things it doesn't know by sight, like a wallet, it looks closely and tells you where it is. Double tap anywhere to take the picture yourself." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ayúdame a apuntar toma una buena foto por ti. Elige Cara, Cuadro o Página, u Otra cosa, y di lo que quieres. Te dice hacia dónde moverte, hace una cuenta regresiva y guarda la foto con una descripción. Para las cosas que no reconoce a simple vista, como una billetera, mira con atención y te dice dónde está. Toca dos veces en cualquier parte para tomar la foto tú mismo."
+          }
+        }
+      }
+    },
+    "Hide the LFM Open License" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ocultar la LFM Open License"
+          }
+        }
+      }
+    },
+    "Hmm, one sec." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mmm, un segundo."
+          }
+        }
+      }
+    },
+    "Hold to ask about this" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantén para preguntar"
+          }
+        }
+      }
+    },
+    "Hold, speak your question, then let go to hear the answer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantén, di tu pregunta y suelta para oír la respuesta"
+          }
+        }
+      }
+    },
+    "Home screen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pantalla de inicio"
+          }
+        }
+      }
+    },
+    "How's it going over there?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Cómo va todo por ahí?"
+          }
+        }
+      }
+    },
+    "I can't hear you right now. Speech recognition on this phone keeps stopping. You can type your question in the box, or go back." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahora no te oigo. El reconocimiento de voz de este teléfono se sigue deteniendo. Puedes escribir tu pregunta en el cuadro o volver atrás."
+          }
+        }
+      }
+    },
+    "I can't look for %@ yet" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todavía no puedo buscar %@"
+          }
+        }
+      }
+    },
+    "I can't see while the phone is locked or another app is open. Open RealTime AI Cam again and ask me." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No puedo ver con el teléfono bloqueado o con otra app abierta. Vuelve a abrir RealTime AI Cam y pregúntame."
+          }
+        }
+      }
+    },
+    "I can't use the microphone. Allow it in Settings, or type the word." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No puedo usar el micrófono. Permítelo en Ajustes o escribe la palabra."
+          }
+        }
+      }
+    },
+    "I couldn't find %@. Point somewhere else and double tap to take a picture, or go back to try another word." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No encontré %@. Apunta a otro lugar y toca dos veces para tomar una foto, o vuelve atrás para probar otra palabra."
+          }
+        }
+      }
+    },
+    "I couldn't find any words in that picture." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No encontré palabras en esa foto."
+          }
+        }
+      }
+    },
+    "I couldn't save it. Allow adding photos in Settings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No pude guardarla. Permite añadir fotos en Ajustes"
+          }
+        }
+      }
+    },
+    "I couldn't save it. Allow adding photos in the phone's settings." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No pude guardarla. Permite agregar fotos en los ajustes del teléfono."
+          }
+        }
+      }
+    },
+    "I couldn't start the vision model. Go back and try Live Cam again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No pude iniciar el modelo de visión. Vuelve atrás y prueba Live Cam otra vez."
+          }
+        }
+      }
+    },
+    "I couldn't take the picture, try again" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No pude tomar la foto, intenta de nuevo"
+          }
+        }
+      }
+    },
+    "I didn't catch that. Hold the button and ask again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No te entendí. Mantén el botón y pregunta de nuevo."
+          }
+        }
+      }
+    },
+    "I didn't catch that. Tap to Speak to try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No te entendí. Toca para hablar de nuevo."
+          }
+        }
+      }
+    },
+    "I didn't hear anything. Tap to Speak to try again, or type it." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No oí nada. Toca para hablar de nuevo, o escríbelo."
+          }
+        }
+      }
+    },
+    "I don't know %@ by sight, so I'll look closely every few seconds. Point the phone where it might be and move slowly. Double tap anywhere to take the picture yourself." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No reconozco %@ a simple vista, así que miraré con calma cada pocos segundos. Apunta el teléfono hacia donde podría estar y muévelo despacio. Toca dos veces en cualquier parte para tomar la foto tú."
+          }
+        }
+      }
+    },
+    "I don't see %@ yet, move the phone slowly" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aún no veo %@, mueve el teléfono despacio"
+          }
+        }
+      }
+    },
+    "I don't see %@, and nothing else stands out. Try another direction." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No veo %@ y no destaca nada más. Prueba otra dirección."
+          }
+        }
+      }
+    },
+    "I don't see %@. I can see %@." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No veo %@. Sí veo %@."
+          }
+        }
+      }
+    },
+    "I haven't said anything yet." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todavía no he dicho nada."
+          }
+        }
+      }
+    },
+    "I lost track of that part. Ask me the whole question again?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Perdí el hilo de esa parte. ¿Me haces la pregunta completa otra vez?"
+          }
+        }
+      }
+    },
+    "I think that's it, but I'm not sure. Hold still, I'll take the picture and tell you what it is." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Creo que es eso, pero no estoy seguro. No te muevas, tomaré la foto y te diré qué es."
+          }
+        }
+      }
+    },
+    "I'm not fully sure on that one." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De eso no estoy del todo seguro."
+          }
+        }
+      }
+    },
+    "I'm still getting ready. Ask me again in a second." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todavía me estoy preparando. Pregúntame otra vez en un segundo."
+          }
+        }
+      }
+    },
+    "Identify objects around you and hear them announced" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reconoce los objetos a tu alrededor y te los dice"
+          }
+        }
+      }
+    },
+    "In Settings, Models, the app already picked the best A I for your phone. You can choose Most accurate or Fastest there." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En Ajustes, Modelos, la app ya eligió la mejor IA para tu teléfono. Ahí puedes elegir Más preciso o Más rápido."
+          }
+        }
+      }
+    },
+    "Indoor" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interior"
+          }
+        }
+      }
+    },
+    "INFO" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "INFO"
+          }
+        }
+      }
+    },
+    "Info and guide" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Información y guía"
+          }
+        }
+      }
+    },
+    "Instructions" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Instrucciones"
+          }
+        }
+      }
+    },
+    "It's near the bottom. Tilt the phone down a little." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Está cerca de abajo. Inclina el teléfono un poco hacia abajo."
+          }
+        }
+      }
+    },
+    "It's near the top. Tilt the phone up a little." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Está cerca de arriba. Inclina el teléfono un poco hacia arriba."
+          }
+        }
+      }
+    },
+    "It's on the left. Turn the phone a little left." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Está a la izquierda. Gira el teléfono un poco a la izquierda."
+          }
+        }
+      }
+    },
+    "It's on the right. Turn the phone a little right." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Está a la derecha. Gira el teléfono un poco a la derecha."
+          }
+        }
+      }
+    },
+    "It's right in front of you. Hold still." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Está justo enfrente. No te muevas."
+          }
+        }
+      }
+    },
+    "Language" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Idioma"
+          }
+        }
+      }
+    },
+    "Let me look." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déjame ver."
+          }
+        }
+      }
+    },
+    "Let me see." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A ver."
           }
         }
       }
@@ -111,6 +2344,501 @@
         }
       }
     },
+    "LiDAR distance disabled" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Distancia LiDAR desactivada"
+          }
+        }
+      }
+    },
+    "LiDAR distance enabled" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Distancia LiDAR activada"
+          }
+        }
+      }
+    },
+    "LiDAR not available in this mode" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LiDAR no está disponible en este modo"
+          }
+        }
+      }
+    },
+    "LiDAR not available in ultra-wide mode" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LiDAR no está disponible con el ultra gran angular"
+          }
+        }
+      }
+    },
+    "LiDAR only works with 1x camera" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LiDAR solo funciona con la cámara 1x"
+          }
+        }
+      }
+    },
+    "LiDAR works best at 1x zoom" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LiDAR funciona mejor con zoom 1x"
+          }
+        }
+      }
+    },
+    "Listening · just talk" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escuchando · solo habla"
+          }
+        }
+      }
+    },
+    "Listening… let go to ask" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escuchando… suelta para preguntar"
+          }
+        }
+      }
+    },
+    "Listening… tap to stop" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escuchando… toca para detener"
+          }
+        }
+      }
+    },
+    "Live Cam listens for your questions, so your phone will ask to use the microphone and speech recognition. Everything stays on this phone." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Live Cam escucha tus preguntas, así que tu teléfono te pedirá usar el micrófono y el reconocimiento de voz. Todo se queda en este teléfono."
+          }
+        }
+      }
+    },
+    "Live Cam needs the camera. Allow it in Settings, then open Live Cam again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Live Cam necesita la cámara. Permítela en los ajustes del teléfono y vuelve a abrir Live Cam."
+          }
+        }
+      }
+    },
+    "Live Cam needs the microphone and speech recognition to hear you. Allow them in Settings, then open Live Cam again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Live Cam necesita el micrófono y el reconocimiento de voz para oírte. Permítelos en los ajustes del teléfono y vuelve a abrir Live Cam."
+          }
+        }
+      }
+    },
+    "Live Cam starts listening again" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Live Cam vuelve a escuchar"
+          }
+        }
+      }
+    },
+    "Live Cam stops listening until you unmute" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Live Cam deja de escuchar hasta que actives el micrófono"
+          }
+        }
+      }
+    },
+    "Live Cam, experimental" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Live Cam, experimental"
+          }
+        }
+      }
+    },
+    "Live Cam, which is experimental, is a conversation with the camera. It says hello, then listens the whole time, so just talk. Ask what's in front of you, what a sign says, or anything else, and it answers out loud. Talk over it to cut in. Say stop, or press the red Back button, to leave. The Mode button picks Normal, Funny, Analyze or Coach, or just say funny mode, analyze this, or coach me. With VoiceOver, a two finger double tap stops it talking. It works offline and nothing is recorded." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Live Cam, que es experimental, es una conversación con la cámara. Te saluda y luego escucha todo el tiempo, así que solo habla. Pregunta qué tienes enfrente, qué dice un letrero o lo que quieras, y te responde en voz alta. Habla encima para interrumpirla. Di adiós, o toca el botón rojo Atrás, para salir. El botón Modo elige Normal, Divertido, Analizar o Entrenador, o simplemente di modo divertido, analiza esto o entréname. Con VoiceOver, un doble toque con dos dedos la hace callar. Funciona sin internet y no se graba nada."
+          }
+        }
+      }
+    },
+    "Look for %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buscar %@"
+          }
+        }
+      }
+    },
+    "Looking" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mirando"
+          }
+        }
+      }
+    },
+    "Looking for %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buscando %@"
+          }
+        }
+      }
+    },
+    "Looking for %@. Move the phone slowly. Double tap anywhere to take the picture yourself." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buscando %@. Mueve el teléfono despacio. Toca dos veces en cualquier parte para tomar la foto tú."
+          }
+        }
+      }
+    },
+    "Looking…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mirando…"
+          }
+        }
+      }
+    },
+    "lost it" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lo perdí"
+          }
+        }
+      }
+    },
+    "Mail reader" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lector de correo"
+          }
+        }
+      }
+    },
+    "Measures distance to detected objects" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mide la distancia a los objetos detectados"
+          }
+        }
+      }
+    },
+    "Measuring this phone's speed. This takes a few seconds." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Midiendo la velocidad de este teléfono. Tarda unos segundos."
+          }
+        }
+      }
+    },
+    "Microphone muted" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Micrófono silenciado"
+          }
+        }
+      }
+    },
+    "Mode" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modo"
+          }
+        }
+      }
+    },
+    "Mode: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modo: %@"
+          }
+        }
+      }
+    },
+    "Model: %@, %@." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modelo: %@, %@."
+          }
+        }
+      }
+    },
+    "Models" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modelos"
+          }
+        }
+      }
+    },
+    "Models, voice and other settings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modelos, voz y otros ajustes"
+          }
+        }
+      }
+    },
+    "Most accurate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Más preciso"
+          }
+        }
+      }
+    },
+    "move closer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "acércate"
+          }
+        }
+      }
+    },
+    "move the phone down" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "muévelo hacia abajo"
+          }
+        }
+      }
+    },
+    "move the phone left" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "muévelo a la izquierda"
+          }
+        }
+      }
+    },
+    "move the phone right" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "muévelo a la derecha"
+          }
+        }
+      }
+    },
+    "move the phone up" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "muévelo hacia arriba"
+          }
+        }
+      }
+    },
+    "Mute" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Silencio"
+          }
+        }
+      }
+    },
+    "Mute microphone" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Silenciar micrófono"
+          }
+        }
+      }
+    },
+    "My camera paused, I'm restarting it. Ask me again in a second." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mi cámara se pausó y la estoy reiniciando. Pregúntame otra vez en un segundo."
+          }
+        }
+      }
+    },
+    "Names the things around you as you move the phone, nonstop, fast and offline." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nombra las cosas a tu alrededor mientras mueves el teléfono, sin parar, rápido y sin internet."
+          }
+        }
+      }
+    },
+    "Need a hand with anything?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Necesitas una mano con algo?"
+          }
+        }
+      }
+    },
+    "New Scan" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escanear de nuevo"
+          }
+        }
+      }
+    },
+    "Next shot" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Otra foto"
+          }
+        }
+      }
+    },
+    "No %@ here yet. Turn slowly." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aún no veo %@. Gira despacio."
+          }
+        }
+      }
+    },
     "No %@ voice is installed on this phone. You can add one in the phone's settings, under Accessibility, Spoken Content, Voices." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -118,6 +2846,149 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Este teléfono no tiene una voz en %@. Puedes agregar una en Ajustes del teléfono, en Accesibilidad, Contenido leído, Voces."
+          }
+        }
+      }
+    },
+    "No accounts, no tracking, no location access. Nothing you point the camera at is uploaded." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin cuentas, sin rastreo, sin acceso a tu ubicación. Nada de lo que apuntas con la cámara se sube a internet."
+          }
+        }
+      }
+    },
+    "No copied text yet" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todavía no hay texto copiado"
+          }
+        }
+      }
+    },
+    "No tracking, no analytics, no accounts" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin rastreo, sin analíticas, sin cuentas"
+          }
+        }
+      }
+    },
+    "No voice selected" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ninguna voz elegida"
+          }
+        }
+      }
+    },
+    "Normal" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Normal"
+          }
+        }
+      }
+    },
+    "Normal mode" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modo normal"
+          }
+        }
+      }
+    },
+    "Not downloaded. %@, downloads when you pick it." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin descargar. %@, se descarga cuando lo elijas."
+          }
+        }
+      }
+    },
+    "Not listening. Type a question." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No estoy escuchando. Escribe una pregunta."
+          }
+        }
+      }
+    },
+    "Not speaking" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En silencio"
+          }
+        }
+      }
+    },
+    "Not working" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No funciona"
+          }
+        }
+      }
+    },
+    "Nothing detected yet" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todavía no se detecta nada"
+          }
+        }
+      }
+    },
+    "Object Detection" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detección de objetos"
+          }
+        }
+      }
+    },
+    "Object detection camera" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cámara de detección de objetos"
           }
         }
       }
@@ -133,6 +3004,446 @@
         }
       }
     },
+    "Object Detection names the things around you as you move the phone." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detección de objetos nombra las cosas a tu alrededor mientras mueves el teléfono."
+          }
+        }
+      }
+    },
+    "Object Detection: YOLOv8 by Ultralytics (AGPL-3.0), trained on Open Images V7 by Google (CC BY 4.0)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detección de objetos: YOLOv8 de Ultralytics (AGPL-3.0), entrenado con Open Images V7 de Google (CC BY 4.0)"
+          }
+        }
+      }
+    },
+    "Off" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desactivado"
+          }
+        }
+      }
+    },
+    "Offline listening isn't available on this phone. Type the word instead." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este teléfono no puede escuchar sin conexión. Escribe la palabra."
+          }
+        }
+      }
+    },
+    "Oh, I see %@ now." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ah, ahora veo %@."
+          }
+        }
+      }
+    },
+    "Okay, bye for now." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bueno, hasta luego."
+          }
+        }
+      }
+    },
+    "Okay." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bueno."
+          }
+        }
+      }
+    },
+    "On" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activado"
+          }
+        }
+      }
+    },
+    "On phones with LiDAR, tap the white ruler (it turns green) to hear distances, like Dog, 3 feet." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En los teléfonos con LiDAR, toca la regla blanca (se pone verde) para escuchar distancias, como perro, 3 pies."
+          }
+        }
+      }
+    },
+    "On this phone." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En este teléfono."
+          }
+        }
+      }
+    },
+    "On-device engine: llama.cpp by ggml-org (MIT)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Motor en el teléfono: llama.cpp de ggml-org (MIT)"
+          }
+        }
+      }
+    },
+    "one" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "uno"
+          }
+        }
+      }
+    },
+    "One careful look. Point at a page, a bill, a package or a room and press the button. Mail and pages get the point of them: who sent it, what it is, what's due. A room or a thing gets a description. Afterwards, hold to ask a follow-up question about the same photo." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una mirada con calma. Apunta a una página, una factura, un paquete o una habitación y toca el botón. Del correo y las páginas te dice lo importante: quién lo envió, qué es y qué hay que pagar. Una habitación o una cosa recibe una descripción. Después, mantén presionado para hacer otra pregunta sobre la misma foto."
+          }
+        }
+      }
+    },
+    "One moment." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un momento."
+          }
+        }
+      }
+    },
+    "Open phone settings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir los ajustes del teléfono"
+          }
+        }
+      }
+    },
+    "Open Settings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir Ajustes"
+          }
+        }
+      }
+    },
+    "Opens a list of voices to choose from" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre una lista de voces para elegir"
+          }
+        }
+      }
+    },
+    "Opens a slider to control how sure the app must be before naming something" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre un control deslizante para decidir qué tan segura debe estar la app antes de nombrar algo"
+          }
+        }
+      }
+    },
+    "Opens Help Me Aim, which talks you into the shot and then takes it." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre Ayúdame a apuntar, que te guía con la voz hasta encuadrar la foto y luego la toma."
+          }
+        }
+      }
+    },
+    "Opens Object Detection, which names the things around you out loud." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre Detección de objetos, que nombra en voz alta las cosas a tu alrededor."
+          }
+        }
+      }
+    },
+    "Opens settings, copy history and tips" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre los ajustes, el historial de copias y los consejos"
+          }
+        }
+      }
+    },
+    "Opens the instructions, including a spoken audio tutorial" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre las instrucciones, con un tutorial hablado"
+          }
+        }
+      }
+    },
+    "Opens the text reader, which reads what the camera sees out loud." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre el lector de texto, que lee en voz alta lo que ve la cámara."
+          }
+        }
+      }
+    },
+    "Opens the translator, which reads text in another language out loud in English." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre el traductor, que lee en voz alta, en inglés, el texto en otro idioma."
+          }
+        }
+      }
+    },
+    "Opens What's this?, ready to point at a page, a bill, a package or a room." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre ¿Qué es esto?, listo para apuntar a una página, una factura, un paquete o una habitación."
+          }
+        }
+      }
+    },
+    "or" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "o"
+          }
+        }
+      }
+    },
+    "Or type a question" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O escribe una pregunta"
+          }
+        }
+      }
+    },
+    "Or type a question about this photo" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O escribe una pregunta sobre esta foto"
+          }
+        }
+      }
+    },
+    "Or type it" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O escríbelo"
+          }
+        }
+      }
+    },
+    "Or type what you're looking for" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O escribe lo que buscas"
+          }
+        }
+      }
+    },
+    "Other languages need iOS 18 or later. On this phone everything is spoken in English." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los demás idiomas necesitan iOS 18 o posterior. En este teléfono todo se dice en inglés."
+          }
+        }
+      }
+    },
+    "Outdoor" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exterior"
+          }
+        }
+      }
+    },
+    "Pick a picture already on this phone and the app reads its words out loud" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige una foto que ya está en el teléfono y la app lee sus palabras en voz alta"
+          }
+        }
+      }
+    },
+    "Pick a picture already on this phone and the app says what is in it" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige una foto que ya está en el teléfono y la app dice qué hay en ella"
+          }
+        }
+      }
+    },
+    "Picking the best one" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eligiendo la mejor"
+          }
+        }
+      }
+    },
+    "Picture or Page" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Imagen o página"
+          }
+        }
+      }
+    },
+    "Picture taken" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto tomada"
+          }
+        }
+      }
+    },
+    "picture taken, but I couldn't save it. Allow adding photos in Settings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "foto tomada, pero no pude guardarla. Permite añadir fotos en Ajustes"
+          }
+        }
+      }
+    },
+    "picture taken, saved to your photos" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "foto tomada y guardada en tus fotos"
+          }
+        }
+      }
+    },
+    "Picture taken. Describing it" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto tomada. Describiéndola"
+          }
+        }
+      }
+    },
     "Pinch the screen to zoom in or out." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -140,6 +3451,424 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pellizca la pantalla para acercar o alejar."
+          }
+        }
+      }
+    },
+    "Play full audio tutorial" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reproducir el tutorial completo"
+          }
+        }
+      }
+    },
+    "Point at anything, then press What's this?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apunta a lo que sea y toca ¿Qué es esto?"
+          }
+        }
+      }
+    },
+    "Point at printed text and hear it read out loud. The Language pill at the top picks English or one of 17 languages, like Spanish, French, Chinese or Arabic, and translates it into English. Spanish works right away; other languages download once from Apple, then work offline (iOS 18 or later). Auto read is on to start: new text is spoken by itself, once. The small button next to Speak switches between Auto read, Mute and Tap to read. Copy keeps the text in your history." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apunta a un texto impreso y escúchalo en voz alta. El botón Idioma, arriba, elige inglés o uno de 17 idiomas, como español, francés, chino o árabe, y lo traduce al inglés. El español funciona de inmediato; los demás idiomas se descargan una vez de Apple y luego funcionan sin internet (iOS 18 o posterior). La lectura automática empieza activada: el texto nuevo se lee solo, una vez. El botón pequeño junto a Leer en voz alta cambia entre Lectura automática, Silencio y Tocar para leer. Copiar guarda el texto en tu historial."
+          }
+        }
+      }
+    },
+    "Point the camera at a page, a bill, a package, or a room to hear what it is" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apunta la cámara a una página, una factura, un paquete o una habitación para saber qué es"
+          }
+        }
+      }
+    },
+    "Practical tips on whatever you want to get better at" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Consejos prácticos para mejorar en lo que quieras"
+          }
+        }
+      }
+    },
+    "Private by Design" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Privada por diseño"
+          }
+        }
+      }
+    },
+    "Quick" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rápido"
+          }
+        }
+      }
+    },
+    "Quick: Vision Narrator 0.8B by Nice Dreamz, fine-tuned from Qwen3.5-0.8B by Alibaba Cloud (Apache-2.0)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rápido: Vision Narrator 0.8B de Nice Dreamz, ajustado a partir de Qwen3.5-0.8B de Alibaba Cloud (Apache-2.0)"
+          }
+        }
+      }
+    },
+    "Quicker answers, about 10 seconds where this phone can, a little less accurate." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Respuestas más rápidas, unos 10 segundos si este teléfono puede, un poco menos precisas."
+          }
+        }
+      }
+    },
+    "Read" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leer"
+          }
+        }
+      }
+    },
+    "Read a photo from my library" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leer una foto de mi galería"
+          }
+        }
+      }
+    },
+    "Read mode" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modo de lectura"
+          }
+        }
+      }
+    },
+    "Read text" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leer texto"
+          }
+        }
+      }
+    },
+    "Read text aloud" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leer el texto en voz alta"
+          }
+        }
+      }
+    },
+    "Read the LFM Open License v1.0" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leer la LFM Open License v1.0"
+          }
+        }
+      }
+    },
+    "Read, Object Detection, Help Me Aim and What's this? speak in this language." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leer, Detección de objetos, Ayúdame a apuntar y ¿Qué es esto? hablan en este idioma."
+          }
+        }
+      }
+    },
+    "Read. Point at printed text and hear it out loud. The Language button at the top picks English, or one of 17 languages to translate into English. Swipe up or down on it to change. The small button next to Speak switches between Auto read, which is on to start and reads new text by itself, Mute, and Tap to read." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leer. Apunta a un texto impreso y escúchalo en voz alta. El botón Idioma, arriba, elige inglés o uno de 17 idiomas para traducir al inglés. Desliza hacia arriba o hacia abajo sobre él para cambiarlo. El botón pequeño junto a Leer en voz alta cambia entre Lectura automática, que empieza activada y lee solo el texto nuevo, Silencio y Tocar para leer."
+          }
+        }
+      }
+    },
+    "Reading English text" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leyendo texto en inglés"
+          }
+        }
+      }
+    },
+    "Reads text out loud. Pick another language at the top to translate it into English" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lee el texto en voz alta. Elige otro idioma arriba para traducirlo al inglés"
+          }
+        }
+      }
+    },
+    "Repeats the summary out loud" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Repite el resumen en voz alta"
+          }
+        }
+      }
+    },
+    "Reset/Stop — Clears text, translation, and stops speaking" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reiniciar/Detener: borra el texto y la traducción y deja de hablar"
+          }
+        }
+      }
+    },
+    "Returns to the home screen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vuelve a la pantalla de inicio"
+          }
+        }
+      }
+    },
+    "Save Photo" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardar foto"
+          }
+        }
+      }
+    },
+    "Save photo with this description" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardar la foto con esta descripción"
+          }
+        }
+      }
+    },
+    "saved to your photos with that description" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "guardada en tus fotos con esa descripción"
+          }
+        }
+      }
+    },
+    "Saved to your photos with that description." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardada en tus fotos con esa descripción."
+          }
+        }
+      }
+    },
+    "Say the summary again" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Repetir el resumen"
+          }
+        }
+      }
+    },
+    "Say what you're looking for, like keys or a cup" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Di qué buscas, como llaves o una taza"
+          }
+        }
+      }
+    },
+    "Select Voice" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige una voz"
+          }
+        }
+      }
+    },
+    "Sets this as the voice that reads text aloud" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usa esta voz para leer en voz alta"
+          }
+        }
+      }
+    },
+    "Settings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajustes"
+          }
+        }
+      }
+    },
+    "Sharp" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nítido"
+          }
+        }
+      }
+    },
+    "Shows the modes and settings. You can also say funny mode, analyze mode, coach mode or normal mode." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Muestra los modos y ajustes. También puedes decir modo divertido, modo análisis, modo entrenador o modo normal."
+          }
+        }
+      }
+    },
+    "Shows what Live Cam says in big words. VoiceOver can read them either way" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Muestra en letra grande lo que dice Live Cam. VoiceOver puede leerlo de todos modos"
+          }
+        }
+      }
+    },
+    "Something Else" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Otra cosa"
+          }
+        }
+      }
+    },
+    "Sorry, I couldn't work that out. Try asking again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Perdón, no pude averiguarlo. Intenta preguntar de nuevo."
+          }
+        }
+      }
+    },
+    "Sorry, I lost that. Ask me again?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Perdón, se me fue. ¿Me lo preguntas otra vez?"
+          }
+        }
+      }
+    },
+    "Sorry, say that again?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Perdón, ¿me lo repites?"
           }
         }
       }
@@ -155,6 +3884,72 @@
         }
       }
     },
+    "Speak in the app's own voice" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hablar con la voz de la app"
+          }
+        }
+      }
+    },
+    "Speak up when quiet" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hablar en el silencio"
+          }
+        }
+      }
+    },
+    "Speaking" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hablando"
+          }
+        }
+      }
+    },
+    "Speaks a detailed guide for screen-reader users" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lee una guía detallada para quienes usan lector de pantalla"
+          }
+        }
+      }
+    },
+    "Speaks the text the camera has found" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lee en voz alta el texto que encontró la cámara"
+          }
+        }
+      }
+    },
+    "Speech disabled" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voz desactivada"
+          }
+        }
+      }
+    },
     "Speech enabled" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -166,6 +3961,28 @@
         }
       }
     },
+    "Speech recognition on this phone can't work offline yet, so Live Cam can't hear you here." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El reconocimiento de voz de este teléfono aún no funciona sin conexión, así que Live Cam no puede oírte aquí."
+          }
+        }
+      }
+    },
+    "speed not checked yet" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "velocidad aún sin medir"
+          }
+        }
+      }
+    },
     "Still downloading %@." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -173,6 +3990,336 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Todavía descargando %@."
+          }
+        }
+      }
+    },
+    "Still looking for %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sigo buscando %@"
+          }
+        }
+      }
+    },
+    "still looking for %@. take your time, i'll say the moment i see it" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sigo buscando %@. Tómate tu tiempo, te aviso en cuanto aparezca"
+          }
+        }
+      }
+    },
+    "still looking. if the light is low, there's a flashlight button at the top of the screen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sigo buscando. Si hay poca luz, hay un botón de linterna arriba en la pantalla"
+          }
+        }
+      }
+    },
+    "still looking. try holding the phone a little further back" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sigo buscando. Prueba a alejar un poco el teléfono"
+          }
+        }
+      }
+    },
+    "still looking. turn slowly, a bit at a time, and give me a moment to catch up" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sigo buscando. Gira despacio, poco a poco, y dame un momento"
+          }
+        }
+      }
+    },
+    "Still no %@. Try another spot." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sigo sin ver %@. Prueba en otro lugar."
+          }
+        }
+      }
+    },
+    "Stop audio tutorial" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detener el tutorial"
+          }
+        }
+      }
+    },
+    "Stop downloading %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detener la descarga de %@"
+          }
+        }
+      }
+    },
+    "Stop reading" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dejar de leer"
+          }
+        }
+      }
+    },
+    "Stops listening now" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deja de escuchar ahora"
+          }
+        }
+      }
+    },
+    "Stops Live Cam and goes back to the home screen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detiene Live Cam y vuelve a la pantalla de inicio"
+          }
+        }
+      }
+    },
+    "Stops speaking the text" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deja de leer el texto"
+          }
+        }
+      }
+    },
+    "Stops the spoken instructions" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detiene las instrucciones habladas"
+          }
+        }
+      }
+    },
+    "Summarizing what you point at" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resume lo que apuntas"
+          }
+        }
+      }
+    },
+    "Summary" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resumen"
+          }
+        }
+      }
+    },
+    "Sure, looking." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claro, mirando."
+          }
+        }
+      }
+    },
+    "Swipe up or down to change" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desliza hacia arriba o hacia abajo para cambiar"
+          }
+        }
+      }
+    },
+    "Swipe up or down to change, or double tap for the list" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desliza hacia arriba o abajo para cambiar, o toca dos veces para ver la lista"
+          }
+        }
+      }
+    },
+    "Switch Camera" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambiar de cámara"
+          }
+        }
+      }
+    },
+    "Switch to back camera" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambiar a la cámara trasera"
+          }
+        }
+      }
+    },
+    "Switch to front camera" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambiar a la cámara frontal"
+          }
+        }
+      }
+    },
+    "Switch to normal camera" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambiar a la cámara normal"
+          }
+        }
+      }
+    },
+    "Switch to wide angle camera" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambiar a la cámara gran angular"
+          }
+        }
+      }
+    },
+    "Switches between front and rear camera" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambia entre la cámara frontal y la trasera"
+          }
+        }
+      }
+    },
+    "Switches between the back camera and the selfie camera" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambia entre la cámara trasera y la cámara frontal"
+          }
+        }
+      }
+    },
+    "Take Another" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tomar otra"
+          }
+        }
+      }
+    },
+    "Takes a good photo for you. Choose Face, Picture or Page, or Something Else and say or type what you want, like keys, a mug or your dog. The app tells you which way to move, counts down and takes the picture, then saves it to Photos with a description written into it. It knows thousands of everyday things; for anything else, like a wallet, it looks closely with the describing AI and tells you where it is. Double tap anywhere to take the picture yourself." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toma una buena foto por ti. Elige Cara, Cuadro o Página, u Otra cosa, y di o escribe lo que quieres, como unas llaves, una taza o tu perro. La app te dice hacia dónde moverte, hace una cuenta regresiva y toma la foto, y luego la guarda en Fotos con una descripción incluida. Conoce miles de cosas cotidianas; para lo demás, como una billetera, mira con atención con la IA que describe y te dice dónde está. Toca dos veces en cualquier parte para tomar la foto tú mismo."
+          }
+        }
+      }
+    },
+    "Takes a picture and says what it is: a letter, a bill, a label, or whatever is in front of you" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toma una foto y dice qué es: una carta, una factura, una etiqueta o lo que tengas enfrente"
+          }
+        }
+      }
+    },
+    "Taking the picture" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tomando la foto"
+          }
+        }
+      }
+    },
+    "Talk with the camera. Ask out loud about what's in front of you and hear the answer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Habla con la cámara. Pregunta en voz alta qué tienes enfrente y escucha la respuesta"
           }
         }
       }
@@ -199,6 +4346,204 @@
         }
       }
     },
+    "Tap the white ruler to add distances, for example, Dog, three feet." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toca la regla blanca para agregar distancias, por ejemplo, perro, tres pies."
+          }
+        }
+      }
+    },
+    "Tap to read" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toca para leer"
+          }
+        }
+      }
+    },
+    "Tap to Speak" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toca para hablar"
+          }
+        }
+      }
+    },
+    "Tell the camera what you want a picture of. It talks you into the shot, then takes the photo" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dile a la cámara de qué quieres una foto. Te guía con la voz hasta encuadrarla y luego toma la foto"
+          }
+        }
+      }
+    },
+    "That picture couldn't be opened." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo abrir esa foto."
+          }
+        }
+      }
+    },
+    "The %@ model download stopped. You can try again in Settings, under Models. What's this? still works." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La descarga del modelo %@ se detuvo. Puedes intentarlo de nuevo en Ajustes, en Modelos. ¿Qué es esto? sigue funcionando."
+          }
+        }
+      }
+    },
+    "The %@ model is ready. What's this? will use it from now on." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El modelo %@ está listo. ¿Qué es esto? lo usará desde ahora."
+          }
+        }
+      }
+    },
+    "The camera couldn't take the picture. Try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La cámara no pudo tomar la foto. Intenta de nuevo."
+          }
+        }
+      }
+    },
+    "The fastest answers, for older phones. Less detail." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las respuestas más rápidas, para teléfonos más antiguos. Menos detalle."
+          }
+        }
+      }
+    },
+    "The home screen has two buttons at the top, Settings and Info and guide, then five tools, then the voice button. Swipe through them, or touch the screen to explore." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La pantalla de inicio tiene dos botones arriba, Ajustes e Información y guía, luego cinco herramientas y luego el botón de voz. Desliza para recorrerlos o toca la pantalla para explorar."
+          }
+        }
+      }
+    },
+    "The last download stopped. Pick it to try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La última descarga se detuvo. Elígelo para intentarlo de nuevo."
+          }
+        }
+      }
+    },
+    "The model list on the server is empty." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La lista de modelos del servidor está vacía."
+          }
+        }
+      }
+    },
+    "The most accurate answers. Best on newer phones." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las respuestas más precisas. Mejor en teléfonos nuevos."
+          }
+        }
+      }
+    },
+    "The object finder didn't load. Try Face or Picture or Page." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El buscador de objetos no cargó. Prueba Cara o Imagen o página."
+          }
+        }
+      }
+    },
+    "The picture you just took" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La foto que acabas de tomar"
+          }
+        }
+      }
+    },
+    "the same thing" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lo mismo"
+          }
+        }
+      }
+    },
+    "The server answered %ld for %@." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El servidor respondió %ld para %@."
+          }
+        }
+      }
+    },
+    "The Settings button at the top of the home screen. Models: the app picks the best describing AI for your phone by itself and downloads it once, on Wi-Fi. Mail, money and medicine always get the most accurate one your phone can run. In Settings, then Models, you can choose Most accurate or Fastest, or pick one yourself. The voice button at the bottom of the home screen changes the voice." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El botón Ajustes, arriba en la pantalla de inicio. Modelos: la app elige sola la mejor IA que describe para tu teléfono y la descarga una vez, con Wi-Fi. El correo, el dinero y las medicinas siempre usan la más precisa que tu teléfono puede usar. En Ajustes, luego Modelos, puedes elegir Más preciso o Más rápido, o elegir uno tú mismo. El botón de voz, abajo en la pantalla de inicio, cambia la voz."
+          }
+        }
+      }
+    },
     "The translator turns printed Spanish into English and reads it aloud. On iOS 18 and later it can translate other languages too, after a one-time download from Apple." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -206,6 +4551,72 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "El traductor convierte texto impreso de otro idioma y lo lee en voz alta. En iOS 18 o posterior traduce más idiomas, después de una descarga única de Apple."
+          }
+        }
+      }
+    },
+    "Then say what you're looking for after the beep" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Luego di qué buscas después del pitido"
+          }
+        }
+      }
+    },
+    "Thinking…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pensando…"
+          }
+        }
+      }
+    },
+    "This app requires access to your camera to function. Please allow camera access in Settings." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta app necesita acceso a la cámara para funcionar. Permite el acceso a la cámara en los ajustes del teléfono."
+          }
+        }
+      }
+    },
+    "three" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tres"
+          }
+        }
+      }
+    },
+    "Tips" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Consejos"
+          }
+        }
+      }
+    },
+    "to" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "a"
           }
         }
       }
@@ -232,6 +4643,402 @@
         }
       }
     },
+    "Too big for this phone's memory." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demasiado grande para la memoria de este teléfono."
+          }
+        }
+      }
+    },
+    "Translate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traducir"
+          }
+        }
+      }
+    },
+    "Translate a photo from my library" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traducir una foto de mi galería"
+          }
+        }
+      }
+    },
+    "Translates the %@ text on screen into %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traduce el texto en %@ de la pantalla al %@"
+          }
+        }
+      }
+    },
+    "Translating" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traduciendo"
+          }
+        }
+      }
+    },
+    "Translating %@ to English" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traduciendo del %@ al inglés"
+          }
+        }
+      }
+    },
+    "Translation" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traducción"
+          }
+        }
+      }
+    },
+    "Translation data couldn't load. Please close and reopen the app." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los datos de traducción no cargaron. Cierra la app y vuelve a abrirla."
+          }
+        }
+      }
+    },
+    "Translation Ready" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traducción lista"
+          }
+        }
+      }
+    },
+    "Translator" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traductor"
+          }
+        }
+      }
+    },
+    "Turn off distance measurement" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desactivar la medición de distancia"
+          }
+        }
+      }
+    },
+    "Turn off LiDAR distance measurement" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desactivar la medición de distancia LiDAR"
+          }
+        }
+      }
+    },
+    "Turn off speech announcements" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desactivar los anuncios de voz"
+          }
+        }
+      }
+    },
+    "Turn on distance measurement" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activar la medición de distancia"
+          }
+        }
+      }
+    },
+    "Turn on LiDAR distance measurement" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activar la medición de distancia LiDAR"
+          }
+        }
+      }
+    },
+    "Turn on speech announcements" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activar los anuncios de voz"
+          }
+        }
+      }
+    },
+    "Turn this off and VoiceOver reads everything instead, in your voice and at your speed, so the app is not talking over it." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desactívalo y VoiceOver lo lee todo, con tu voz y a tu velocidad, así la app no habla encima."
+          }
+        }
+      }
+    },
+    "Turn this off and VoiceOver reads the descriptions instead, so two voices are not talking at once" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desactívalo y VoiceOver lee las descripciones, así no hablan dos voces a la vez"
+          }
+        }
+      }
+    },
+    "two" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dos"
+          }
+        }
+      }
+    },
+    "Type a question" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escribe una pregunta"
+          }
+        }
+      }
+    },
+    "Unmute" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activar"
+          }
+        }
+      }
+    },
+    "Unmute microphone" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activar micrófono"
+          }
+        }
+      }
+    },
+    "Using %@ for mail, money and medicine, %@ for everything else." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usando %@ para correo, dinero y medicinas, y %@ para todo lo demás."
+          }
+        }
+      }
+    },
+    "Using %@ for now. %@, the best fit, downloads on Wi-Fi." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usando %@ por ahora. %@, el más adecuado, se descarga con Wi-Fi."
+          }
+        }
+      }
+    },
+    "Using %@, the best fit for this phone." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usando %@, el más adecuado para este teléfono."
+          }
+        }
+      }
+    },
+    "Using %@, the one you picked." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usando %@, el que elegiste."
+          }
+        }
+      }
+    },
+    "Using front camera" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usando la cámara frontal"
+          }
+        }
+      }
+    },
+    "Using rear camera" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usando la cámara trasera"
+          }
+        }
+      }
+    },
+    "Using the built-in model. The best one for this phone is picked in a moment." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usando el modelo incluido. En un momento se elige el mejor para este teléfono."
+          }
+        }
+      }
+    },
+    "Voice Selection" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elegir voz"
+          }
+        }
+      }
+    },
+    "Voice, %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voz, %@"
+          }
+        }
+      }
+    },
+    "Volume is off. Turn it up to hear the app." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El volumen está apagado. Súbelo para escuchar la app."
+          }
+        }
+      }
+    },
+    "Waiting to download." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esperando para descargar."
+          }
+        }
+      }
+    },
+    "Welcome to Live Cam. It's experimental, so double-check anything important. Hey there, how's it going?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Te doy la bienvenida a Live Cam. Es experimental, así que verifica todo lo importante. ¡Hola! ¿Cómo va todo?"
+          }
+        }
+      }
+    },
+    "Welcome to RealTime AI Cam." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bienvenido a RealTime AI Cam."
+          }
+        }
+      }
+    },
+    "Welcome to RealTime AI Cam. %@ voice chosen." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bienvenido a RealTime AI Cam. Elegiste la voz %@."
+          }
+        }
+      }
+    },
     "Welcome to the real-time AI iOS Detection app. Thank you for choosing this voice!" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -239,6 +5046,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bienvenido a RealTime AI Cam. ¡Gracias por elegir esta voz!"
+          }
+        }
+      }
+    },
+    "Welcome to the RealTime A I Camera." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bienvenido a RealTime A I Cam."
           }
         }
       }
@@ -254,6 +5072,83 @@
         }
       }
     },
+    "What are you looking for?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Qué buscas?"
+          }
+        }
+      }
+    },
+    "What are you up to?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Qué estás haciendo?"
+          }
+        }
+      }
+    },
+    "What are you working on?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿En qué estás trabajando?"
+          }
+        }
+      }
+    },
+    "What do you want a picture of?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿De qué quieres una foto?"
+          }
+        }
+      }
+    },
+    "What matters more to you?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Qué te importa más?"
+          }
+        }
+      }
+    },
+    "What to look for" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qué buscar"
+          }
+        }
+      }
+    },
+    "What's this?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Qué es esto?"
+          }
+        }
+      }
+    },
     "What's this? picks the most accurate model your phone can run by itself, and downloads it once on Wi-Fi. You can change it in Settings, under Models." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -261,6 +5156,105 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "¿Qué es esto? elige el modelo más preciso que tu teléfono puede usar por sí solo y lo descarga una vez por Wi-Fi. Puedes cambiarlo en Ajustes, en Modelos."
+          }
+        }
+      }
+    },
+    "What's this? runs LFM3-Omni-2B by Liquid AI, on this phone, under the LFM Open License v1.0. Nice Dreamz converted it to GGUF in three sizes (Sharp Q8_0, Clear Q3_K_M, Balanced IQ2_XS); the weights are otherwise unchanged." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Qué es esto? usa LFM3-Omni-2B de Liquid AI, en este teléfono, bajo la LFM Open License v1.0. Nice Dreamz lo convirtió a GGUF en tres tamaños (Nítido Q8_0, Claro Q3_K_M, Equilibrado IQ2_XS); los pesos no tienen otros cambios."
+          }
+        }
+      }
+    },
+    "What's this? takes one careful look. Mail and pages get the point of them, like who sent it and what's due. A room gets a description. Afterwards, hold to ask a follow up question." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Qué es esto? mira con calma una vez. Del correo y las páginas te dice lo importante, como quién lo envió y qué hay que pagar. Una habitación recibe una descripción. Después, mantén presionado para hacer otra pregunta."
+          }
+        }
+      }
+    },
+    "When on, Live Cam checks in after a long quiet and mentions new things it is sure it sees" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Si está activado, Live Cam te habla tras un largo silencio y menciona cosas nuevas que está seguro de ver"
+          }
+        }
+      }
+    },
+    "When on, the app counts three, two, one out loud and then takes the picture, so you are not touching the phone when it fires" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Si está activado, la app cuenta tres, dos, uno en voz alta y luego toma la foto, así no estás tocando el teléfono cuando dispara"
+          }
+        }
+      }
+    },
+    "Which model" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qué modelo"
+          }
+        }
+      }
+    },
+    "Words on screen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Texto en pantalla"
+          }
+        }
+      }
+    },
+    "Working it out…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un momento…"
+          }
+        }
+      }
+    },
+    "Working on anything I can help with?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Trabajas en algo en lo que pueda ayudarte?"
+          }
+        }
+      }
+    },
+    "Works 100% offline — even in Airplane Mode (the optional bigger models download once, then stay offline)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Funciona 100% sin internet, incluso en modo avión (los modelos más grandes opcionales se descargan una vez y luego funcionan sin internet)"
           }
         }
       }
@@ -276,6 +5270,72 @@
         }
       }
     },
+    "You don't need to change anything. Automatic picks the best model this phone can run, and What's this? keeps working while it downloads." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No necesitas cambiar nada. Automático elige el mejor modelo que puede usar este teléfono, y ¿Qué es esto? sigue funcionando mientras se descarga."
+          }
+        }
+      }
+    },
+    "You said: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dijiste: %@"
+          }
+        }
+      }
+    },
+    "You: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tú: %@"
+          }
+        }
+      }
+    },
+    "Your camera, out loud. Everything runs on your phone." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu cámara, en voz alta. Todo funciona en tu teléfono."
+          }
+        }
+      }
+    },
+    "Your language" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu idioma"
+          }
+        }
+      }
+    },
+    "Your language is %@." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu idioma es %@."
+          }
+        }
+      }
+    },
     "Your language is %@. Spoken results can be translated into %@ after a one-time download. You can change this in Settings." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -287,6 +5347,28 @@
         }
       }
     },
+    "Your language is %@. Tap %@." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu idioma es %@. Toca %@."
+          }
+        }
+      }
+    },
+    "Your language is English." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu idioma es inglés."
+          }
+        }
+      }
+    },
     "Your language: in Settings, pick the language you want to hear. The first time, tap Download once; after that it works offline. Read, Object Detection, Help Me Aim and What's this? then speak in your language. Buttons, menus and this guide are in Spanish when your phone or Your language is Spanish, and in English otherwise." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -294,6 +5376,160 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tu idioma: en Ajustes, elige el idioma que quieres escuchar. La primera vez, toca Descargar una sola vez; después funciona sin internet. Leer, Detección de objetos, Ayúdame a apuntar y ¿Qué es esto? hablarán en tu idioma. Los botones, los menús y esta guía están en español cuando tu teléfono o Tu idioma están en español, y en inglés en los demás casos."
+          }
+        }
+      }
+    },
+    "your subject" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lo que buscas"
+          }
+        }
+      }
+    },
+    "• ⚙️ Open settings/history" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "• ⚙️ Abre ajustes e historial"
+          }
+        }
+      }
+    },
+    "• 📋 Copy detected/translated text" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "• 📋 Copia el texto detectado o traducido"
+          }
+        }
+      }
+    },
+    "• 🗣️ Speak detected/translated text" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "• 🗣️ Lee en voz alta el texto detectado o traducido"
+          }
+        }
+      }
+    },
+    "• 🤏 Pinch to zoom the camera" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "• 🤏 Pellizca para hacer zoom"
+          }
+        }
+      }
+    },
+    "⏹ Stop Audio" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⏹ Detener audio"
+          }
+        }
+      }
+    },
+    "🌐 Lens toggle, wide or ultra-wide (Object Detection)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🌐 Cambio de lente, gran angular o ultra gran angular (Detección de objetos)"
+          }
+        }
+      }
+    },
+    "🎛️ **Camera controls**" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🎛️ **Controles de la cámara**"
+          }
+        }
+      }
+    },
+    "🎧 Play Full Audio Tutorial" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🎧 Reproducir el tutorial completo"
+          }
+        }
+      }
+    },
+    "👋 Welcome to RealTime AI Camera!" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👋 ¡Bienvenido a RealTime AI Cam!"
+          }
+        }
+      }
+    },
+    "🔄 Switch camera, front or back" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔄 Cambiar de cámara, frontal o trasera"
+          }
+        }
+      }
+    },
+    "🔒 **Private by design**" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 **Privada por diseño**"
+          }
+        }
+      }
+    },
+    "🔦 Flashlight, one tap on, one tap off" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔦 Linterna, un toque la enciende, otro la apaga"
+          }
+        }
+      }
+    },
+    "🤏 Pinch to zoom" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🤏 Pellizca para hacer zoom"
           }
         }
       }
