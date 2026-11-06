@@ -314,8 +314,12 @@ enum MoneyDetector {
             if traceOn { for k in kept { trace("MONEY_TRACE refl? \(reflectionTrace(k, d, src, H))") } }
             kept.append(d)
             let q = LiveMoney.Quad(corners: d.poly.map { CGPoint(x: $0.x, y: H - $0.y) })
+            // Sure of it as a bill only when the classifier also sees money in it (phone run 11/6, CC0 xh_18: a
+            // patch of brick wall boxed at 0.5+ made "at least 2" of one $1).
+            let looksLikeMoney = probs["none", default: 1] < 0.5 && (lk.1 >= 0.5)
+            if traceOn { trace(String(format: "MONEY_TRACE bill conf=%.2f none=%.2f top=%@ %.2f", d.conf, probs["none", default: -1], "\(lk.0 ?? 0)", lk.1)) }
             found.append(Found(quad: q, conf: d.conf, value: maybeMirror ? nil : val, look: lk, numerals: votes,
-                               sure: d.conf >= sureConf && !merged && !maybeMirror))
+                               sure: d.conf >= sureConf && !merged && !maybeMirror && looksLikeMoney))
         }
         var maybe = !found.isEmpty
         if !maybe {
