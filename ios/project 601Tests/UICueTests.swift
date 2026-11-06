@@ -38,5 +38,19 @@ final class UICueTests: XCTestCase {
         XCTAssertTrue(AppLang.hasSpanish(UICue.home))
         XCTAssertTrue(AppLang.hasSpanish(UICue.readHint))
         XCTAssertEqual(AppLang.text(UICue.readHint, in: "es"), "Apunta la cámara a un texto")
+        // The L() list the strings tool reads must stay the same words as the cues.
+        XCTAssertEqual(UICue.keysSaidByKey, [UICue.home, UICue.readHint])
+    }
+
+    /// The path that said it in English: a Spanish app's cue line, words and language.
+    func testSpanishAppSaysTheCueInSpanish() async {
+        UserDefaults.standard.set("es", forKey: AppLang.forcedKey)
+        defer { UserDefaults.standard.removeObject(forKey: AppLang.forcedKey) }
+        let read = await UICue.line(UICue.readHint)
+        XCTAssertEqual(read.text, "Apunta la cámara a un texto")
+        XCTAssertEqual(read.lang, "es")
+        let home = await UICue.line(UICue.home)
+        XCTAssertEqual(home.text, "Inicio")
+        XCTAssertEqual(home.lang, "es")
     }
 }
