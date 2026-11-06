@@ -7,6 +7,10 @@ enum UICue {
     /// English keys: `say` puts them in the app's language.
     static let home = "Home"
     static let readHint = "Point the camera at some text"
+    /// Looked up by key when said (`line`), not through L() at the call. Listed through L()
+    /// here only so ios/tools/es-strings.py counts them; never read at run time. A Spanish app
+    /// said both in English with the Spanish voice until they were in the catalog (2026-11-05).
+    static let keysSaidByKey = [L("Home"), L("Point the camera at some text")]
     /// How long Read waits after opening before its hint, so text found right away wins.
     static let readHintDelay: TimeInterval = 1.2
     /// After "Home", the pause before VoiceOver's focus moves to Settings (which cuts speech off).

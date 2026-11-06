@@ -31,4 +31,12 @@ final class UICueTests: XCTestCase {
         XCTAssertEqual(UICue.home, "Home")
         XCTAssertEqual(UICue.readHint, "Point the camera at some text")
     }
+
+    /// A Spanish app says its cues from the catalog: a missing entry came out in English
+    /// with the Spanish voice on a real iPhone (2026-11-05).
+    func testCuesHaveSpanish() {
+        XCTAssertTrue(AppLang.hasSpanish(UICue.home))
+        XCTAssertTrue(AppLang.hasSpanish(UICue.readHint))
+        XCTAssertEqual(AppLang.text(UICue.readHint, in: "es"), "Apunta la cámara a un texto")
+    }
 }

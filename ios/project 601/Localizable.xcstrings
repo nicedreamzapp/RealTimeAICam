@@ -1926,6 +1926,17 @@
         }
       }
     },
+    "Home" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inicio"
+          }
+        }
+      }
+    },
     "Home screen" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3506,6 +3517,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Apunta la cámara a una página, una factura, un paquete o una habitación para saber qué es"
+          }
+        }
+      }
+    },
+    "Point the camera at some text" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apunta la cámara a un texto"
           }
         }
       }
