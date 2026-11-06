@@ -97,8 +97,9 @@ struct LiveCamView: View {
             call.onEnd = { onBack() }
             call.start()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                // Matt 11/6: no experimental warning at open; VoiceOver hears just the screen's name.
                 UIAccessibility.post(notification: .screenChanged,
-                                     argument: SpeechManager.voiceOverLine(L("Live Cam, experimental"), lang: AppLang.code))
+                                     argument: SpeechManager.voiceOverLine(L("Live Cam"), lang: AppLang.code))
             }
         }
         .onDisappear { call.end() }

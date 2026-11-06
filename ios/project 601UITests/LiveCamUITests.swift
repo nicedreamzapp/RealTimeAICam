@@ -181,7 +181,7 @@ final class LiveCamUITests: XCTestCase {
         let app = launch(["-userLanguage", "es", "-fakeTranslatorPacks", "(es)"],
                          env: ["RTCAM_FAKE_LIVE_ANSWER": "The cup is white."])
         // Your language Spanish makes the app Spanish: the greeting is the bundled Spanish line.
-        openLiveCam(app, greeting: "bienvenida a Live Cam", spanish: true)
+        openLiveCam(app, greeting: "¡Hola!", spanish: true)
         ask(app, "De que color es la taza")
         let answered = NSPredicate { _, _ in self.captionText(app).contains("La taza es blanca") }
         expectation(for: answered, evaluatedWith: NSObject())

@@ -64,6 +64,12 @@ struct LiveMemoryTests {
 }
 
 struct LiveWordsTests {
+    /// Matt 11/6: "what is that warning welcome I don't want that". The first greeting is the plain greeting.
+    @Test func firstGreetingHasNoWarningOrWelcome() {
+        #expect(LiveWords.firstGreeting == LiveWords.greeting)
+        for w in ["experimental", "welcome", "double-check"] { #expect(!LiveWords.firstGreeting.lowercased().contains(w)) }
+    }
+
     @Test func cameraQuestionsGetThePhotoOthersDoNot() {
         #expect(LiveWords.needsPhoto("What is in front of me?", lastUsedPhoto: false))
         #expect(LiveWords.needsPhoto("what color is this cup", lastUsedPhoto: false))

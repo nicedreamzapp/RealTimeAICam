@@ -1882,6 +1882,17 @@
         }
       }
     },
+    "Hey there, how's it going?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¡Hola! ¿Cómo va todo?"
+          }
+        }
+      }
+    },
     "Help Me Aim" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2494,6 +2505,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Escuchando… toca para detener"
+          }
+        }
+      }
+    },
+    "Live Cam" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Live Cam"
           }
         }
       }
@@ -5079,17 +5101,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Esperando para descargar."
-          }
-        }
-      }
-    },
-    "Welcome to Live Cam. It's experimental, so double-check anything important. Hey there, how's it going?" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Te doy la bienvenida a Live Cam. Es experimental, así que verifica todo lo importante. ¡Hola! ¿Cómo va todo?"
           }
         }
       }

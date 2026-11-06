@@ -139,8 +139,9 @@ enum LiveWords {
     /// Says out loud that it is always listening: there is nothing to tap (Matt's first try, 10/31).
     /// 11/2 Matt: "it should just be like hey there how you doing and then wait for cues", not describe the room.
     static let greeting = "Hey there, how's it going?"
-    /// RT Cam: the first greeting of each visit says once that Live Cam is experimental (Matt 11/4).
-    static let firstGreeting = "Welcome to Live Cam. It's experimental, so double-check anything important. Hey there, how's it going?"
+    /// The first greeting of each visit. Matt 11/6: "what is that warning welcome I don't want that": no welcome, no
+    /// experimental warning spoken at open, just the plain greeting (the Home button still says experimental).
+    static let firstGreeting = greeting
     /// Normal mode, after a long quiet: a friend in the room checking in, never a description of the scene or of
     /// them (11/2 Matt: "not something that's just critiquing everything"). Fixed lines, so the small model can't
     /// slip back into "Now I see...".
