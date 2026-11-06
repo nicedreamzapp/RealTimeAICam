@@ -9,6 +9,12 @@
             "state" : "translated",
             "value" : "La app usa la cámara para detectar objetos en tiempo real, leer texto y traducirlo. No se guardan ni se envían imágenes."
           }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This app uses the camera to detect objects in real-time, perform OCR text recognition, and translate text. No images are stored or transmitted"
+          }
         }
       }
     },
@@ -19,6 +25,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "El micrófono escucha las preguntas que haces en voz alta: mientras mantienes presionado el botón de preguntar y todo el tiempo que Live Cam está abierto. No se graba ni se envía nada."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The mic hears the questions you ask out loud: while you hold the ask button, and the whole time Live Cam is open. Nothing is recorded or sent."
           }
         }
       }
@@ -31,6 +43,12 @@
             "state" : "translated",
             "value" : "Ayúdame a apuntar guarda en tu fototeca las fotos que tomas. No se sube nada."
           }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Help Me Aim saves the pictures you take to your photo library. Nothing is uploaded."
+          }
         }
       }
     },
@@ -41,6 +59,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tus preguntas habladas se convierten en texto en este teléfono, sin internet. No se envía nada."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your spoken questions are turned into text on this phone, offline. Nothing is sent anywhere."
           }
         }
       }
