@@ -44,6 +44,9 @@ enum LiveCamWords {
     static let lightFailed = "The flashlight isn't working right now."
     /// Said while it counts money, taking turns (Matt 11/6: never the same words twice in a row).
     static let countingLines = ["Let me count.", "Counting now.", "One sec, counting."]
+    /// A goal finished ("done") or swapped ("new thing"), Matt 11/6.
+    static let goalDone = "Nice work."
+    static let goalNew = "Okay. What's the new thing?"
     static let notFullySure = "I'm not fully sure on that one."
     static let takeBack = "Actually, I'm not sure about the %@."
     static let lostAnswer = "Sorry, I lost that. Ask me again?"
@@ -54,8 +57,8 @@ enum LiveCamWords {
     static var indirectKeys: [String] {
         [notAllowed, cantHear, cantHearNote, noOfflineSpeech,
          needsCamera, modelFailed, sayAgain, lostTrack, bye, gotIt, coachGoalSet, nothingSaidYet, coachGoalHeard,
-         flipToSeeYou, stillGettingReady, cantSeeInBackground, cameraPaused, newThing, newThingPlain, newThingThere, helpOffer, sameAsBefore, lightFailed, notFullySure, takeBack, lostAnswer]
-            + LiveWords.checkIns + LiveWords.acks
+         flipToSeeYou, stillGettingReady, cantSeeInBackground, cameraPaused, newThing, newThingPlain, newThingThere, helpOffer, sameAsBefore, lightFailed, goalDone, goalNew, notFullySure, takeBack, lostAnswer]
+            + LiveWords.checkIns + LiveWords.acks + LiveGoal.checkIns
             + LiveMode.allCases.flatMap { [$0.label, $0.confirm] } + ["Light's on.", "Light's off."] + countingLines
     }
 }

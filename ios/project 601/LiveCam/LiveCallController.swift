@@ -165,6 +165,10 @@ final class LiveCallController: ObservableObject {
     /// Matt 11/6: never the same sentence twice, one help offer per visit, no two lines opening the same way.
     private var sayGuard = LiveSayGuard()
     private var checkInTurns = LiveRotation()
+    /// What they're doing this visit ("changing a tire"), its step, and the goal check-ins' turns (Matt 11/6).
+    private(set) var goal: LiveGoal.State?
+    private var goalCheckIns = LiveRotation()
+    private var goalAnswering = false
     /// This turn's model sentences: how many were said and how many were dropped as repeats.
     private var tally = (turn: -1, said: 0, dropped: 0)
     private var watch = LiveProactive()
@@ -345,6 +349,8 @@ final class LiveCallController: ObservableObject {
         memory = LiveMemory()
         sayGuard = LiveSayGuard()
         checkInTurns = LiveRotation()
+        goal = nil
+        goalCheckIns = LiveRotation()
         answerDone = true
         lastSpokeEnd = Date()
         listen()
@@ -573,6 +579,14 @@ final class LiveCallController: ObservableObject {
             cutOff = nil
             if Date().timeIntervalSince(c.at) < 8 { q = c.text + " " + q; log(["event": "joined", "text": q]) }
         }
+        // A goal is going: "next", "okay done with that", or "yes" after "Ready for the next step?" is the next step,
+        // even as one word (the fragment rule would drop it).
+        if let g = goal, LiveGoal.wantsNext(q, askedReady: g.askedReady) {
+            log(["event": "transcript", "text": q, "final": isFinal, "decision": "goal: next step"])
+            watch.personSpoke()
+            goalTurn(q, endedAt: endedAt, next: true)
+            return
+        }
         let verdict = LiveWords.judge(q, confidence: confidence, isFinal: isFinal, lastSaid: lastSaid,
                                        sinceItSpoke: endedAt.timeIntervalSince(lastSpokeEnd))
         var entry: [String: Any] = ["event": "transcript", "text": q, "final": isFinal, "ended": endedAt.timeIntervalSince1970,
@@ -595,6 +609,17 @@ final class LiveCallController: ObservableObject {
         watch.personSpoke()
         lastQuestion = q
         notice = nil
+        // "Done", "never mind", "new thing": the goal is over (Matt 11/6).
+        if let g = goal, LiveGoal.clears(q) {
+            goal = nil
+            log(["event": "goal_cleared", "goal": g.task, "said": q])
+            questionEndedAt = endedAt
+            let t = " " + LiveWords.normalize(q) + " "
+            if [" new thing ", " something else ", " different thing "].contains(where: { t.contains($0) }) { speakAll(own: LiveCamWords.goalNew) }
+            else if [" never mind ", " nevermind ", " forget it ", " forget that ", " stop that "].contains(where: { t.contains($0) }) { stopTalking(); listen() }
+            else { speakAll(own: LiveCamWords.goalDone) }
+            return
+        }
         // It only keeps the last couple of exchanges (90 s): "what did I ask first" is past its memory, say so.
         if LiveWords.reachesBack(q) {   // it keeps only the last two exchanges, so reaching back is past it (run 2)
             showNotice("Lost track — ask the whole question again")
@@ -676,11 +701,23 @@ final class LiveCallController: ObservableObject {
         case .notMoney:
             moneyMemory.forget()
         }
+        // Matt 11/6: "I'm changing a tire", "help me fix my sink": the goal is kept for the visit and the first step given.
+        if let task = LiveGoal.detect(q), goal?.task != task {
+            goal = LiveGoal.State(task: task)
+            log(["event": "goal_set", "goal": task])
+            goalTurn(q, endedAt: endedAt, next: true)
+            return
+        }
+        // With a goal, a statement ("okay, the jack is under it") is them moving on: the next step.
+        if goal != nil, !LiveWords.isQuestionOrAsk(" " + LiveWords.normalize(q) + " ") {
+            goalTurn(q, endedAt: endedAt, next: true)
+            return
+        }
         // 11/1 Matt: "it should always be taking in the photo". Every question goes with the live frame; a
         // general one keeps the chat voice and only uses the photo if it helps.
         if !LiveWords.needsPhoto(q, lastUsedPhoto: lastUsedPhoto) {
             lastUsedPhoto = false
-            look(prompt: LiveWords.chatQuestion(q, history: []) + " " + LiveWords.photoIfHelps,
+            look(prompt: LiveWords.chatQuestion(q, history: []) + " " + LiveWords.photoIfHelps + (goal.map { LiveGoal.rider($0, next: false) } ?? ""),
                  unprompted: false, question: q, general: true)
             return
         }
@@ -697,6 +734,22 @@ final class LiveCallController: ObservableObject {
         // Front camera: the person in view is the one talking ("a bald man with glasses" was Matt, 11/1).
         if camera.isFront { prompt += " The person in front of the camera is the one talking to you: call them \"you\"." }
         else if LiveWords.isAboutThem(q) { prompt += LiveWords.backCameraSelf }
+        if let g = goal { prompt += LiveGoal.rider(g, next: false) }
+        look(prompt: prompt, unprompted: false, question: q)
+    }
+
+    /// The next step of the goal, from the live frame (step 1 when it was just set).
+    private func goalTurn(_ q: String, endedAt: Date, next: Bool) {
+        guard var g = goal else { return }
+        questionEndedAt = endedAt
+        if next, g.lastStep != nil { g.step += 1 }
+        g.askedReady = false
+        goal = g
+        log(["event": "goal_step", "goal": g.task, "step": g.step])
+        lastUsedPhoto = true
+        goalAnswering = true
+        var prompt = "They say now: \(q)" + LiveGoal.rider(g, next: true)
+        if camera.isFront { prompt += " The person in front of the camera is the one talking to you: call them \"you\"." }
         look(prompt: prompt, unprompted: false, question: q)
     }
 
@@ -870,6 +923,8 @@ final class LiveCallController: ObservableObject {
             return
         }
         let asked = Date()
+        let isGoalTurn = goalAnswering
+        goalAnswering = false
         let lastSeen = memory.lastSeen
         let lastAnswer = memory.lastAnswer
         let guardRepeat = LiveRepeatGuard()
@@ -1078,6 +1133,7 @@ final class LiveCallController: ObservableObject {
                         self.sayPart(.withContent(LiveCamWords.takeBack, b), turn: my)
                     }
                 }
+                if isGoalTurn, !said.isEmpty { self.goal?.lastStep = said }
                 if said.isEmpty { self.sayPart(.own(LiveCamWords.lostAnswer), turn: my) }
                 else if let question { self.memory.note(question: question, answer: said) } else { self.memory.noteSeen(said) }
                 self.watch.described(thumb)
@@ -1194,7 +1250,16 @@ final class LiveCallController: ObservableObject {
                 // Every mode is a companion, not a commentator (11/2 Normal; 11/3 Matt in Funny: "Now I see a bald man with glasses"
                 // came out unasked and sounded like it was hearing itself). No "Now I see", just a check-in after a long quiet.
                 do {
-                    if quiet, self.watch.shouldCheckIn(at: Date(), quietSince: max(self.lastHeardAt, self.lastSpokeEnd)),
+                    if quiet, self.goal != nil,
+                       self.watch.shouldCheckIn(at: Date(), quietSince: max(self.lastHeardAt, self.lastSpokeEnd), after: LiveProactive.goalCheckInAfter),
+                       let line = self.goalCheckIns.next(from: LiveGoal.checkIns), self.sayGuard.vet(line) != nil {
+                        // Matt 11/6: with a goal the check-in is about it ("Ready for the next step?"), never the same twice.
+                        self.log(["event": "watch_fired", "why": "goal check in"])
+                        self.watch.commented(at: Date())
+                        self.goal?.askedReady = true
+                        self.listener.stopListening()
+                        self.speakAll(own: line)
+                    } else if quiet, self.goal == nil, self.watch.shouldCheckIn(at: Date(), quietSince: max(self.lastHeardAt, self.lastSpokeEnd)),
                        // Matt 11/6: the lines take turns (none twice until all are used), and once help was offered
                        // only the ones that don't offer it again.
                        let line = self.checkInTurns.next(from: self.sayGuard.helpOffered

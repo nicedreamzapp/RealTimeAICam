@@ -3191,6 +3191,83 @@
         }
       }
     },
+    "Ready for the next step?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Listo para el siguiente paso?"
+          }
+        }
+      }
+    },
+    "How's that step going?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Cómo va ese paso?"
+          }
+        }
+      }
+    },
+    "Say next when you're ready." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Di siguiente cuando estés listo."
+          }
+        }
+      }
+    },
+    "Want the next step?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Quieres el siguiente paso?"
+          }
+        }
+      }
+    },
+    "Still with me on that step?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Sigues con ese paso?"
+          }
+        }
+      }
+    },
+    "Nice work." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buen trabajo."
+          }
+        }
+      }
+    },
+    "Okay. What's the new thing?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bien. ¿Qué es lo nuevo?"
+          }
+        }
+      }
+    },
     "I see %@. Anything I can help with?" : {
       "extractionState" : "manual",
       "localizations" : {

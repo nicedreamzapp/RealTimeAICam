@@ -553,3 +553,61 @@ struct LiveNoDeadAirTests {
         #expect(LiveTiming.showLookingAfter < LiveTiming.audioQuietComplete)
     }
 }
+
+/// Matt 11/6: a goal for the visit ("I'm changing a tire"), its steps, and how it ends.
+struct LiveGoalTests {
+    @Test func aGoalIsHeardInEverydayWords() {
+        #expect(LiveGoal.detect("I'm changing a tire") == "changing a tire")
+        #expect(LiveGoal.detect("help me fix my sink") == "fix your sink")
+        #expect(LiveGoal.detect("Can you help me put this shelf together?") == "put this shelf together")
+        #expect(LiveGoal.detect("I'm working on my bike") == "your bike")
+        #expect(LiveGoal.detect("I'm trying to bake bread") == "bake bread")
+        #expect(LiveGoal.detect("walk me through replacing a light switch") == "replacing a light switch")
+        #expect(LiveGoal.detect("I'm doing my taxes") == "doing your taxes")
+    }
+
+    @Test func smallTalkAndQuestionsAreNotGoals() {
+        for q in ["I'm tired", "I'm doing good", "I'm gonna keep working", "I'm feeling sick", "how do I look", "what is that",
+                  "help me see", "I'm just sitting here", "help me with this", "I'm fine thanks", "done", "never mind"] {
+            #expect(LiveGoal.detect(q) == nil, "not a goal: \(q)")
+        }
+    }
+
+    @Test func doneNeverMindAndNewThingClearIt() {
+        for q in ["done", "I'm done", "all done", "never mind", "new thing", "let's do something else", "forget it", "I fixed it"] {
+            #expect(LiveGoal.clears(q), "should clear: \(q)")
+        }
+        for q in ["done, what's next", "next", "what is that", "okay done with that next"] { #expect(!LiveGoal.clears(q), "should not clear: \(q)") }
+    }
+
+    @Test func nextStepWords() {
+        #expect(LiveGoal.wantsNext("what's next", askedReady: false))
+        #expect(LiveGoal.wantsNext("okay got it", askedReady: false) == false)
+        #expect(LiveGoal.wantsNext("got it", askedReady: false))
+        #expect(LiveGoal.wantsNext("then what", askedReady: false))
+        #expect(!LiveGoal.wantsNext("yes", askedReady: false))
+        #expect(LiveGoal.wantsNext("yes", askedReady: true))   // after "Ready for the next step?"
+        #expect(!LiveGoal.wantsNext("what color is the jack", askedReady: true))
+    }
+
+    @Test func theRiderAsksForTheNextStepOnly() {
+        var g = LiveGoal.State(task: "changing a tire")
+        let first = LiveGoal.rider(g, next: true)
+        #expect(first.contains("changing a tire") && first.contains("step 1"))
+        g.lastStep = "Loosen the lug nuts a half turn before you jack it up."; g.step = 2
+        let second = LiveGoal.rider(g, next: true)
+        #expect(second.contains("step 2") && second.contains("Loosen the lug nuts"))
+        #expect(second.count < 400)   // the 2B model: keep it short
+        #expect(!LiveGoal.rider(g, next: false).contains("step 2"))
+    }
+
+    @Test func goalCheckInsVaryAndNeverOfferHelp() {
+        var r = LiveRotation()
+        var last = ""
+        for i in 0 ..< 15 {
+            let l = r.next(from: LiveGoal.checkIns, random: i * 3)!
+            #expect(l != last); #expect(!LiveWords.isHelpOffer(l)); last = l
+        }
+        #expect(LiveGoal.checkIns.contains("Ready for the next step?"))
+    }
+}

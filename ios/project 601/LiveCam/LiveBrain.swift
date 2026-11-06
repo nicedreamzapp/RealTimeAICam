@@ -262,6 +262,97 @@ enum LiveThings {
     }
 }
 
+// MARK: - A goal for the visit (Matt 11/6: "I need to make it the most useful it can be")
+
+/// "I'm changing a tire", "help me fix my sink": Live Cam remembers what they're doing for the visit, gives the next
+/// step, and the step after on the next turn. Plain words in, plain words out (the 2B model only gets a short rider on
+/// the question, where it follows rules). "Done", "never mind", "new thing" clear it.
+enum LiveGoal {
+    struct State: Equatable {
+        var task: String
+        var step = 1
+        var lastStep: String?
+        /// The last thing it said was a goal check-in ("Ready for the next step?"), so a bare "yes" means next.
+        var askedReady = false
+    }
+
+    private static let leads: [[String]] = [
+        ["can", "you", "help", "me", "with"], ["can", "you", "help", "me"], ["help", "me", "with"], ["help", "me"],
+        ["walk", "me", "through"], ["show", "me", "how", "to"], ["teach", "me", "how", "to"], ["how", "do", "i"], ["how", "can", "i"],
+        ["i", "m", "trying", "to"], ["i", "am", "trying", "to"], ["i", "need", "to"], ["i", "want", "to"], ["i", "have", "to"],
+        ["i", "m", "going", "to"], ["i", "m", "gonna"], ["i", "m", "about", "to"], ["we", "re"], ["i", "m"], ["i", "am"], ["im"]]
+    /// Words that aren't a task on their own ("I'm gonna keep working", "help me with this").
+    private static let vague: Set<String> = ["keep", "working", "work", "go", "going", "stuff", "it", "this", "that", "something",
+        "thing", "things", "now", "here", "there", "out", "with", "on", "please", "a", "the", "bit", "little", "see", "look", "done",
+        "fine", "good", "okay", "ok", "back", "home", "busy", "tired", "just", "really", "so", "you", "me", "up", "set", "great",
+        "well", "alright", "nothing", "much", "not", "fun", "around", "doing", "my", "your", "for", "to", "of", "in", "an", "and"]
+    /// "I'm feeling sick", "I'm just sitting here": a state, not a job.
+    private static let notDoing: Set<String> = ["feeling", "being", "sitting", "chilling", "hanging", "waiting", "thinking",
+        "wondering", "talking", "listening", "kidding", "joking", "leaving", "going", "getting", "looking", "watching", "standing",
+        "walking", "driving", "eating", "sleeping", "working", "trying", "coming", "playing", "having", "saying", "asking"]
+    /// Verbs that mean a job with steps, after "help me" / "I need to" (not "help me see").
+    private static let notTasks: Set<String> = ["see", "look", "find", "read", "know", "understand", "hear", "remember", "think", "decide"]
+
+    /// The task in their words, "your" for "my": "I'm changing a tire" -> "changing a tire". Nil for anything else.
+    static func detect(_ q: String) -> String? {
+        if LiveWords.isLooksQuestion(q) || clears(q) { return nil }
+        let w = LiveWords.normalize(q).split(separator: " ").map(String.init)
+        guard let lead = leads.first(where: { w.count > $0.count && Array(w.prefix($0.count)) == $0 }) else { return nil }
+        var rest = Array(w.dropFirst(lead.count))
+        if ["i", "m", "im", "am", "re"].contains(lead.last!) || lead == ["im"] {
+            // "I'm changing a tire": a doing word right after; "I'm tired" isn't a task.
+            if rest.first == "working", rest.count > 2, rest[1] == "on" { rest.removeFirst(2) }
+            else { guard let v = rest.first, v.hasSuffix("ing"), v.count > 4, !notDoing.contains(v) else { return nil } }
+        }
+        if let v = rest.first, notTasks.contains(v) { return nil }
+        while let l = rest.last, ["please", "now", "today", "here", "real", "quick"].contains(l) { rest.removeLast() }
+        guard rest.contains(where: { !vague.contains($0) && $0.count > 2 }), rest.count <= 10 else { return nil }
+        return LiveWords.clip(rest.map { ["my": "your", "me": "you", "myself": "yourself", "i": "you"][$0] ?? $0 }.joined(separator: " "), 60)
+    }
+
+    /// "Done", "never mind", "new thing": the goal is over.
+    static func clears(_ q: String) -> Bool {
+        let t = LiveWords.normalize(q)
+        if isNext(t) { return false }   // "done, what's next" is the next step, not the end
+        if ["done", "i m done", "im done", "all done", "we re done", "finished", "i m finished", "all finished", "that s it", "thats it",
+            "never mind", "nevermind", "new thing", "something else", "forget it", "forget that", "stop that", "we re good", "i got it now",
+            "it s done", "its done", "i did it", "i fixed it", "it works now", "done with that"].contains(t) { return true }
+        let s = " " + t + " "
+        return [" new thing ", " something else ", " never mind ", " nevermind ", " different thing ", " i m done ", " all done ",
+                " forget it ", " i m finished ", " it works now ", " i fixed it "].contains { s.contains($0) }
+    }
+
+    private static func isNext(_ t: String) -> Bool {
+        let s = " " + t + " "
+        return [" next ", " what now ", " then what ", " and then ", " after that ", " what do i do now ", " keep going ", " go on ",
+                " continue ", " what s after ", " ok what s ", " okay what s "].contains { s.contains($0) }
+    }
+
+    /// The next step, please: "next", "what's next", "okay done with that", or a bare "yes" right after "Ready for the next step?".
+    static func wantsNext(_ q: String, askedReady: Bool) -> Bool {
+        let t = LiveWords.normalize(q)
+        if isNext(t) { return true }
+        if ["got it", "got that", "did that", "done that", "ok did it", "okay did it", "that s done", "thats done", "okay done",
+            "ok done", "done next", "finished that", "ok", "okay"].contains(t) { return true }
+        return askedReady && ["yes", "yeah", "yep", "sure", "ready", "yes please", "i m ready", "im ready", "go ahead", "let s go",
+                              "lets go", "uh huh", "yes i m ready"].contains(t)
+    }
+
+    /// Rides on the question (the 2B model follows rules there): the task, the step wanted, the last step given.
+    static func rider(_ g: State, next: Bool) -> String {
+        var r = " They are working on: \(g.task)."
+        if let last = g.lastStep { r += " The step you gave last: \(LiveWords.clip(last, 100))" }
+        r += next || g.lastStep == nil
+            ? " Give only step \(g.step), the very next thing to do, in one or two short sentences, using what you see if it helps. Don't repeat an earlier step."
+            : " Answer what they asked with that task in mind, in one or two short sentences."
+        return r
+    }
+
+    /// Quiet check-ins while there is a goal (never an offer of help, never the same twice in a row: LiveRotation).
+    static let checkIns = ["Ready for the next step?", "How's that step going?", "Say next when you're ready.", "Want the next step?",
+                           "Still with me on that step?"]
+}
+
 // MARK: - Words
 
 /// One line for Live Cam's voice (2026-11-05, Spanish UI). `own`: the app's own words, an English key said in the
@@ -675,7 +766,8 @@ enum LiveWords {
     static let commands = ["stop", "bye", "goodbye", "repeat", "say that again", "what's this", "whats this", "what is this",
                            "what's that", "whats that", "what is that", "hello", "hey", "hi", "thanks", "thank you",
                            "describe", "what do you see", "end call", "hang up", "go on", "continue", "and",
-                           "critique me", "rate me", "roast me", "judge me", "how i look", "my posture", "wait", "shh", "shush", "quiet", "hang on", "never mind", "nevermind"]
+                           "critique me", "rate me", "roast me", "judge me", "how i look", "my posture", "wait", "shh", "shush", "quiet", "hang on", "never mind", "nevermind",
+                           "next", "next step", "what's next", "whats next", "then what", "done", "all done", "new thing"]   // goals (11/6)
 
     /// Decide whether a finished transcript is a real utterance worth answering. `confidence` is the
     /// recognizer's average word confidence (nil when it gave none); `lastSaid` is Live Cam's own
@@ -949,9 +1041,11 @@ struct LiveProactive {
     /// Normal mode: quiet this long (no one talking, nothing said) before a friendly check-in.
     static let checkInAfter: TimeInterval = 90
     /// Check in only when the person has been quiet a good while, and at most twice in a row with no reply.
-    func shouldCheckIn(at t: Date, quietSince: Date) -> Bool {
-        enabled && unanswered < Self.maxUnanswered && t.timeIntervalSince(max(quietSince, lastComment)) >= Self.checkInAfter
+    func shouldCheckIn(at t: Date, quietSince: Date, after: TimeInterval = checkInAfter) -> Bool {
+        enabled && unanswered < Self.maxUnanswered && t.timeIntervalSince(max(quietSince, lastComment)) >= after
     }
+    /// With a goal (Matt 11/6) the check-in comes sooner: they're in the middle of a job.
+    static let goalCheckInAfter: TimeInterval = 45
 
     static func difference(_ a: [UInt8], _ b: [UInt8]) -> Double {
         guard a.count == b.count, !a.isEmpty else { return 255 }
