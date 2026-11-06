@@ -702,3 +702,22 @@ struct LiveGoalFollowUp2Tests {
         #expect(g.askedRecently() && LiveGoal.wantsNext("ok", askedReady: g.askedRecently()))
     }
 }
+
+/// Goal follow-ups 3 (review 11/6).
+struct LiveGoalFollowUp3Tests {
+    @Test func onlyNowOrNextSwitchesAndNeverAQuestion() {
+        var g = LiveGoal.State(task: "changing a tire")
+        g.lastStep = "Loosen the lug nuts a half turn before you jack it up."
+        #expect(!LiveGoal.switchesGoal(g, "Okay, how do I get the hubcap off?"))
+        #expect(!LiveGoal.switchesGoal(g, "so I need to fix the faucet"))
+        #expect(LiveGoal.switchesGoal(g, "Now I need to fix the faucet"))
+        #expect(!LiveGoal.switchesGoal(g, "now how do I fix the faucet"))
+    }
+
+    @Test func aQuickOkCountsOnlyOnceItStoppedTalking() {
+        #expect(!LiveGoal.quickOkCounts(["ok"], askedRecently: true, speaking: true, sinceItSpoke: 3, lastSaid: "Ready for the next step?"))
+        #expect(LiveGoal.quickOkCounts(["ok"], askedRecently: true, speaking: false, sinceItSpoke: 0.3, lastSaid: "Ready for the next step?"))
+        #expect(!LiveGoal.quickOkCounts(["okay"], askedRecently: true, speaking: false, sinceItSpoke: 0.3, lastSaid: "Okay. What's the new thing?"))
+        #expect(!LiveGoal.quickOkCounts(["ok"], askedRecently: false, speaking: false, sinceItSpoke: 3, lastSaid: nil))
+    }
+}

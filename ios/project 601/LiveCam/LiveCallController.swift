@@ -612,7 +612,8 @@ final class LiveCallController: ObservableObject {
         // "next"/"ok" in the second after it spoke is its own voice; a new task asked for is a new goal, not a step.
         if let g = goal, !fresh.isEmpty, g.askedRecently() || !LiveWords.isEcho(q),
            !(LiveGoal.isEchoTail(fresh, speaking: phase == .speaking || voice.isBusy, sinceItSpoke: endedAt.timeIntervalSince(lastSpokeEnd))
-             && !(g.askedRecently() && ["ok", "okay"].contains(fresh[0]))),   // a quick "ok" to "Ready for the next step?" counts
+             && !LiveGoal.quickOkCounts(fresh, askedRecently: g.askedRecently(), speaking: phase == .speaking || voice.isBusy,
+                                        sinceItSpoke: endedAt.timeIntervalSince(lastSpokeEnd), lastSaid: lastSaid)),
            !LiveGoal.switchesGoal(g, q),
            LiveGoal.wantsNext(fresh.joined(separator: " "), askedReady: g.askedRecently()) {
             log(["event": "transcript", "text": q, "final": isFinal, "decision": "goal: next step"])

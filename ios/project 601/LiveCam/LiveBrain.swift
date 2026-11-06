@@ -355,11 +355,21 @@ enum LiveGoal {
         if [" new thing ", " new task ", " something else ", " different thing ", " instead ", " switch to "].contains(where: { t.contains($0) }) {
             return true
         }
+        // Never a question ("Okay, how do I get the hubcap off?"), and only after "now" / "next" (review 11/6).
+        if [" how do i ", " how can i ", " how to ", " what ", " where ", " whats "].contains(where: { t.contains($0) }) { return false }
         guard let task = detect(q), task != g.task else { return false }
         let raw = LiveWords.normalize(q).split(separator: " ").map(String.init)
-        guard let first = raw.first, ["now", "next", "so", "okay", "ok", "alright", "then"].contains(first) else { return false }
+        guard let first = raw.first, ["now", "next"].contains(first) else { return false }
         let mine = LiveWords.contentWords(g.task).union(LiveWords.contentWords(g.lastStep ?? ""))
         return LiveWords.contentWords(task).isDisjoint(with: mine)
+    }
+
+    /// A quick "ok" to "Ready for the next step?" counts: only once it has stopped talking, and not in the second after
+    /// a line of its own that had "okay" in it (review 11/6).
+    static func quickOkCounts(_ fresh: [String], askedRecently: Bool, speaking: Bool, sinceItSpoke: TimeInterval, lastSaid: String?) -> Bool {
+        guard askedRecently, fresh.count == 1, ["ok", "okay"].contains(fresh[0]), !speaking else { return false }
+        let saidOkay = (" " + LiveWords.normalize(lastSaid ?? "") + " ").contains(" okay ") || (" " + LiveWords.normalize(lastSaid ?? "") + " ").contains(" ok ")
+        return !(saidOkay && sinceItSpoke < 1.0)
     }
 
     /// A lone "next" or "ok" heard while it is talking or within a second after it stops is the tail of its own voice
