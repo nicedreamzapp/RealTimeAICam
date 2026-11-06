@@ -304,6 +304,17 @@ final class LinesBox: @unchecked Sendable { private let l = NSLock(); private va
     func add(_ s: String) { l.lock(); v.append(s); l.unlock() }; var all: [String] { l.lock(); defer { l.unlock() }; return v } }
 @Suite(.serialized) struct MoneyPhoneFixTests {
     final class Marker {}
+    /// A busy 48 x 20 grey pattern, and its upside-down mirror at 60% contrast (kept simple for older compilers).
+    static func pattern(w: Int, h: Int) -> [Float] {
+        var out: [Float] = []
+        for i in 0 ..< w * h { let v: Int = (i % w) * 3 + (i / w) * 11 + ((i * 7919) % 13) * 5; out.append(Float(v)) }
+        return out
+    }
+    static func flippedFaint(_ a: [Float], w: Int, h: Int) -> [Float] {
+        var out: [Float] = []
+        for r in 0 ..< h { for c in 0 ..< w { out.append(a[(h - 1 - r) * w + c] * 0.6) } }
+        return out
+    }
     static func image(_ name: String) -> CGImage? {
         guard let u = Bundle(for: Marker.self).url(forResource: name, withExtension: "jpg"),
               let s = CGImageSourceCreateWithURL(u as CFURL, nil) else { return nil }
@@ -317,8 +328,8 @@ final class LinesBox: @unchecked Sendable { private let l = NSLock(); private va
 
     @Test func aMirrorIsNotATurn() {
         let w = 48, h = 20
-        let a: [Float] = (0 ..< w * h).map { i in Float((i % w) * 3 + (i / w) * 11 + ((i * 7919) % 13) * 5) }
-        let flipV: [Float] = (0 ..< h).flatMap { r in a[(h - 1 - r) * w ..< (h - r) * w] }.map { $0 * 0.6 }
+        let a: [Float] = MoneyPhoneFixTests.pattern(w: w, h: h)
+        let flipV: [Float] = MoneyPhoneFixTests.flippedFaint(a, w: w, h: h)
         let turned: [Float] = a.reversed()
         #expect(MoneyDetector.mirrorScore(a, flipV))     // a fainter mirror copy below it: a reflection
         #expect(!MoneyDetector.mirrorScore(a, turned))   // a real bill the other way up: not a reflection
@@ -378,9 +389,9 @@ struct MoneyMirrorGeometryTests {
 @Suite(.serialized) struct MoneyReReviewTests {
     @Test func thePixelsCanKeepARealBillEdgeToEdge() {
         let w = 48, h = 20
-        let a: [Float] = (0 ..< w * h).map { i in Float((i % w) * 3 + (i / w) * 11 + ((i * 7919) % 13) * 5) }
+        let a: [Float] = MoneyPhoneFixTests.pattern(w: w, h: h)
         let same = a.map { $0 * 0.95 + 4 }                                        // a second $20 the same way round
-        let mirror: [Float] = (0 ..< h).flatMap { r in a[(h - 1 - r) * w ..< (h - r) * w] }.map { $0 * 0.6 }
+        let mirror: [Float] = MoneyPhoneFixTests.flippedFaint(a, w: w, h: h)
         #expect(MoneyDetector.mirrorVerdict(a, same) == .real)
         #expect(MoneyDetector.mirrorVerdict(a, mirror) == .mirror)
         // Kept as real and read: two $20s edge to edge are $40.
