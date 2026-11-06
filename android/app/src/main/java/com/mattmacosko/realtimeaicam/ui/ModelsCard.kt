@@ -174,6 +174,12 @@ private fun ModelsChooser(onDone: () -> Unit) {
     val priority = ModelPicker.priority(context)
 
     Dialog(onDismissRequest = onDone, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        // A dialog is its own window and resets LocalContext to the phone's language: put the
+        // app's language back, or a Spanish app shows this sheet in English (Cricket, 11/05).
+        val dialogContext = androidx.compose.ui.platform.LocalContext.current
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.ui.platform.LocalContext provides com.mattmacosko.realtimeaicam.AppLang.localized(dialogContext),
+        ) {
         Column(Modifier.fillMaxSize().background(Color.Black)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -266,6 +272,7 @@ private fun ModelsChooser(onDone: () -> Unit) {
                 }
                 item { Spacer(Modifier.heightIn(min = 72.dp)) }
             }
+        }
         }
     }
 }
