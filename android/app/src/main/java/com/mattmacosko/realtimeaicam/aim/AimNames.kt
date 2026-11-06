@@ -23,6 +23,8 @@ object AimNames {
     @Volatile var translate: ((String, String) -> String?)? = null
 
     private val cache = ConcurrentHashMap<String, String>()
+    private val missed = ConcurrentHashMap<String, Long>()
+    private const val MISS_RETRY_MS = 30_000L
 
     /** "a key" in English; "una llave" in a Spanish app once translated. */
     fun withArticle(word: String): String = withArticle(word, article = true)
@@ -59,8 +61,13 @@ object AimNames {
     private fun translated(phrase: String, lang: String, bare: Boolean): String? {
         val key = "$lang|$bare|$phrase"
         cache[key]?.let { return it }
+        // A miss (no Spanish pack, or asked on the main thread) is not asked again for a while:
+        // the camera path builds these lines every frame.
+        val now = System.nanoTime() / 1_000_000
+        missed[key]?.let { if (now - it < MISS_RETRY_MS) return null }
         val t = translate ?: return null
-        val raw = t(phrase, lang) ?: return null
+        val raw = t(phrase, lang)
+        if (raw == null) { missed[key] = now; return null }
         val clean = if (bare) ObjectLabelTranslations.cleanOutput(raw, lang) else ObjectLabelTranslations.cleanOutput(raw)
         val out = clean.trim().trimEnd('.', '!', '?')
         if (out.isEmpty()) return null
@@ -79,5 +86,5 @@ object AimNames {
     }
 
     /** Tests. */
-    fun clear() = cache.clear()
+    fun clear() { cache.clear(); missed.clear() }
 }
