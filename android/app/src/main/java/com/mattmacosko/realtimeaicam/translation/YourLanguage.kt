@@ -2,6 +2,8 @@ package com.mattmacosko.realtimeaicam.translation
 
 import android.content.Context
 import android.util.Log
+import com.mattmacosko.realtimeaicam.AppLang
+import com.mattmacosko.realtimeaicam.R
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.common.model.RemoteModelManager
@@ -18,7 +20,7 @@ import java.util.concurrent.TimeUnit
  * "Your language" (2026-11-04, Play reviews from a French and a Spanish speaker: everything
  * was spoken in English). The language the person wants to HEAR. Read, Object Detection,
  * Help Me Aim and What's this? translate what they say into it with Google's on-device
- * translator. Screens and buttons stay English for now.
+ * translator. The app's own words follow AppLang (Spanish when this is Spanish).
  *
  * Matt's rule: no added MB and nothing downloads until the person clearly wants it. The
  * language's translation pack downloads only on a tap of "Download <Name> once, then it works
@@ -31,8 +33,22 @@ object YourLanguageRules {
     /** English plus the 17 languages Read can read. */
     val codes: List<String> = listOf(ENGLISH) + ReaderLanguages.all.map { it.code }
 
-    fun name(code: String): String =
-        if (code == ENGLISH) "English" else ReaderLanguages.all.firstOrNull { it.code == code }?.name ?: "English"
+    /**
+     * The language's name in the app's language: "Spanish" in English, "Español" in Spanish
+     * (2026-11-05, same as iOS name(_:in:)). Capitalized: for labels standing alone.
+     */
+    fun name(code: String, ui: String = AppLang.code()): String {
+        val english = if (code == ENGLISH) "English" else ReaderLanguages.all.firstOrNull { it.code == code }?.name ?: "English"
+        if (ui == ENGLISH) return english
+        val loc = java.util.Locale.forLanguageTag(ui)
+        val local = java.util.Locale.forLanguageTag(code).getDisplayLanguage(loc)
+        if (local.isBlank() || local.equals(code, ignoreCase = true)) return english
+        return local.replaceFirstChar { it.titlecase(loc) }
+    }
+
+    /** The name inside a sentence: Spanish writes language names in lowercase ("en español"). */
+    fun nameInSentence(code: String): String =
+        if (AppLang.isSpanish) name(code).lowercase(AppLang.locale()) else name(code)
 
     /** Java's old codes ("in" Indonesian, "iw" Hebrew) and regional tags to our codes. */
     fun normalize(language: String): String {
@@ -53,19 +69,28 @@ object YourLanguageRules {
         !alreadyAnnounced && defaultFor(phoneLanguage) != ENGLISH
 
     fun firstLaunchLine(code: String): String {
-        val n = name(code)
-        return "Your language is $n. Spoken results can be translated into $n after a one-time download. You can change this in Settings."
+        val n = nameInSentence(code)
+        return AppLang.str(R.string.e_yl_first_launch, n, n)
     }
 
-    fun downloadRow(code: String): String = "Download ${name(code)} once, then it works offline"
-    fun downloadingLine(code: String): String = "Downloading ${name(code)}, one time only."
-    fun stillDownloadingLine(code: String): String = "Still downloading ${name(code)}."
-    fun readyLine(code: String): String = "${name(code)} is ready, it works offline now."
+    fun downloadRow(code: String): String = AppLang.str(R.string.e_yl_download_row, nameInSentence(code))
+    fun downloadingLine(code: String): String = AppLang.str(R.string.e_yl_downloading, nameInSentence(code))
+    fun stillDownloadingLine(code: String): String = AppLang.str(R.string.e_yl_still_downloading, nameInSentence(code))
+    fun readyLine(code: String): String = AppLang.str(R.string.e_yl_ready, name(code))
     fun failedLine(code: String, online: Boolean): String =
-        if (online) "${name(code)} couldn't download just now. Tap the download row to try again."
-        else "${name(code)} needs a one-time download. Connect to the internet once, then tap the download row."
+        if (online) AppLang.str(R.string.e_yl_failed_online, name(code))
+        else AppLang.str(R.string.e_yl_failed_offline, name(code))
+
+    /**
+     * Said by the English voice when no voice for [code] is installed, so it stays English out
+     * loud; [noVoiceShown] is the same line for the screen, in the app's language.
+     */
     fun noVoiceLine(code: String): String =
-        "No ${name(code)} voice is installed on this phone. You can add one in the phone's speech settings."
+        "No ${name(code, ENGLISH)} voice is installed on this phone. You can add one in the phone's speech settings."
+    fun noVoiceShown(code: String): String = AppLang.str(R.string.e_yl_no_voice_shown, nameInSentence(code))
+
+    /** One short paragraph, same words in the guide, the spoken tutorial and on iOS. */
+    fun guide(): String = AppLang.str(R.string.e_yl_guide)
 
     /**
      * The Read pill. [page] is the language the page is in (null = English page). With Your
@@ -73,18 +98,21 @@ object YourLanguageRules {
      * ends: "French → Spanish", "English → Spanish", or just "Spanish" when they match.
      */
     fun pillLabel(page: ReaderLanguage?, target: String): String {
-        if (target == ENGLISH) return if (page == null) "English" else "${page.tag} → Eng"
-        val from = page?.name ?: "English"
+        if (target == ENGLISH) {
+            if (page == null) return name(ENGLISH)
+            return if (AppLang.isSpanish) AppLang.str(R.string.e_yl_pill_to_english, name(page.code)) else "${page.tag} → Eng"
+        }
+        val from = name(page?.code ?: ENGLISH)
         val to = name(target)
         return if (from == to) to else "$from → $to"
     }
 
     /** What a screen reader hears for the pill. */
     fun pillSpoken(page: ReaderLanguage?, target: String): String {
-        if (target == ENGLISH) return if (page == null) "English" else "${page.name}, translated to English"
-        val from = page?.name ?: "English"
+        val from = name(page?.code ?: ENGLISH)
+        if (target == ENGLISH) return if (page == null) name(ENGLISH) else AppLang.str(R.string.e_yl_translated_to, from, nameInSentence(ENGLISH))
         val to = name(target)
-        return if (from == to) to else "$from, translated to $to"
+        return if (from == to) to else AppLang.str(R.string.e_yl_translated_to, from, nameInSentence(target))
     }
 }
 

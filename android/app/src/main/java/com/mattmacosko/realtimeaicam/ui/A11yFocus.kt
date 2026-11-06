@@ -70,3 +70,25 @@ object A11yFocus {
         return null
     }
 }
+
+/**
+ * TalkBack announcements of the app's own lines, tagged with the app's language (2026-11-05):
+ * on an English phone with Your language set to Spanish, the line is Spanish and TalkBack must
+ * read it in a Spanish voice, not its English one.
+ */
+object A11yAnnounce {
+    /** [text] with a LocaleSpan for the app's language (plain text in English). */
+    fun inAppLanguage(text: CharSequence): CharSequence {
+        val lang = com.mattmacosko.realtimeaicam.AppLang.code()
+        if (lang == com.mattmacosko.realtimeaicam.AppLang.ENGLISH) return text
+        return android.text.SpannableString(text).apply {
+            setSpan(android.text.style.LocaleSpan(java.util.Locale.forLanguageTag(lang)), 0, length, 0)
+        }
+    }
+
+    /** [View.announceForAccessibility] with the app's language attached. */
+    fun say(view: View, text: String) {
+        @Suppress("DEPRECATION")
+        view.announceForAccessibility(inAppLanguage(text))
+    }
+}

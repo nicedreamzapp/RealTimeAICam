@@ -38,6 +38,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.mattmacosko.realtimeaicam.R
 import java.util.Locale
 
 /** Persisted voice selection shared by every TTS instance in the app. */
@@ -74,6 +76,35 @@ object VoicePrefs {
             .apply()
     }
 
+    /**
+     * The voice for speaking [lang] on [tts] (2026-11-05): the picked voice when it speaks
+     * [lang]; else the engine's current voice when that one does; else the best installed voice
+     * for [lang]; else the engine's own voice for that language. Never a voice of another
+     * language (a Spanish line in an English voice, or the reverse).
+     */
+    fun applyFor(context: Context, tts: TextToSpeech, lang: String) {
+        try {
+            val all = tts.voices.orEmpty()
+            val picked = get(context)?.let { n -> all.firstOrNull { it.name == n } }
+            if (picked != null && com.mattmacosko.realtimeaicam.camera.SpeechVoices.speaks(picked.locale.language, lang)) {
+                if (tts.voice?.name != picked.name) tts.voice = picked
+                return
+            }
+            if (com.mattmacosko.realtimeaicam.camera.SpeechVoices.speaks(tts.voice?.locale?.language, lang)) return
+            val best = all
+                .filter {
+                    com.mattmacosko.realtimeaicam.camera.SpeechVoices.speaks(it.locale.language, lang) &&
+                        !it.isNetworkConnectionRequired &&
+                        it.features?.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) != true
+                }
+                .sortedWith(compareByDescending<Voice> { it.quality }.thenBy { it.name })
+                .firstOrNull()
+            if (best != null) tts.voice = best else tts.setLanguage(Locale.forLanguageTag(lang))
+        } catch (_: Throwable) {
+            // Some engines throw on .voices: keep the engine's voice.
+        }
+    }
+
     /** Applies the persisted voice to a TTS instance (no-op if unavailable). */
     fun apply(context: Context, tts: TextToSpeech) {
         val name = get(context) ?: return
@@ -93,9 +124,10 @@ data class VoiceOption(
 )
 
 /**
- * Owns a TTS instance for the Home voice picker: lists up to 10 English
- * voices (iOS §1.7/§1.8), tracks + persists the selection, speaks the
- * iOS welcome line on selection.
+ * Owns a TTS instance for the Home voice picker: lists the voices for the app's
+ * language (English voices in English, Spanish voices in Spanish, 2026-11-05;
+ * iOS §1.7/§1.8), tracks + persists the selection, speaks the iOS welcome line
+ * on selection. The announcer uses the pick for lines in the pick's language.
  */
 class VoicePickerModel(private val context: Context) {
     var voices by mutableStateOf<List<VoiceOption>>(emptyList())
@@ -104,12 +136,22 @@ class VoicePickerModel(private val context: Context) {
         private set
 
     private var tts: TextToSpeech? = null
+    private var ttsReady = false
+    /** The app language the list was made for. */
+    private var lang: String = com.mattmacosko.realtimeaicam.AppLang.code()
+
+    /** The app's language changed (Your language set to Spanish, or back): list its voices. */
+    fun setLanguage(code: String) {
+        if (code == lang) return
+        lang = code
+        if (ttsReady) loadVoices()
+    }
 
     init {
         // Show the persisted voice immediately (TTS init can take seconds)
         selected = VoicePrefs.getOption(context)
         tts = TextToSpeech(context) { status ->
-            if (status == TextToSpeech.SUCCESS) loadVoices()
+            if (status == TextToSpeech.SUCCESS) { ttsReady = true; loadVoices() }
         }
     }
 
@@ -123,16 +165,18 @@ class VoicePickerModel(private val context: Context) {
     }
 
     private fun displayName(v: Voice, index: Int): String {
-        val base = v.locale.getDisplayName(Locale.ENGLISH)
+        val ui = Locale.forLanguageTag(lang)
+        val base = v.locale.getDisplayName(ui).replaceFirstChar { it.titlecase(ui) }
             .replace("English (United States)", "English (US)")
             .replace("English (United Kingdom)", "English (UK)")
-        val tag = if (v.quality >= Voice.QUALITY_HIGH) " (Enhanced)" else ""
+            .replace("Español (Estados Unidos)", "Español (EE. UU.)")
+        val tag = if (v.quality >= Voice.QUALITY_HIGH) " " + com.mattmacosko.realtimeaicam.AppLang.str(com.mattmacosko.realtimeaicam.R.string.e_voice_enhanced_tag) else ""
         return "$base ${index + 1}$tag"
     }
 
     private fun loadVoices() {
         val t = tts ?: return
-        val english = try {
+        val forLang = try {
             // Every English voice the phone has, best first. The .take(10) that
             // used to sit here meant any voice the user enabled AFTER install
             // sorted below the built-ins and fell off the end, so they could
@@ -140,13 +184,16 @@ class VoicePickerModel(private val context: Context) {
             // against the iPhone build, which had the same cap. The popup below
             // scrolls now, so a long list is a scroll, not unreachable buttons.
             t.voices.orEmpty()
-                .filter { it.locale.language == "en" && !it.isNetworkConnectionRequired }
+                .filter {
+                    com.mattmacosko.realtimeaicam.camera.SpeechVoices.speaks(it.locale.language, lang) &&
+                        !it.isNetworkConnectionRequired
+                }
                 .sortedWith(compareByDescending<Voice> { it.quality }.thenBy { it.name })
         } catch (e: Exception) {
             emptyList()
         }
         var perLocale = HashMap<String, Int>()
-        voices = english.map { v ->
+        voices = forLang.map { v ->
             val idx = perLocale.getOrDefault(v.locale.toString(), 0)
             perLocale[v.locale.toString()] = idx + 1
             VoiceOption(
@@ -170,7 +217,7 @@ class VoicePickerModel(private val context: Context) {
         VoicePrefs.apply(context, t)
         // iOS playWelcomeMessage()
         t.speak(
-            "Welcome to the RealTime AI Detection app. Thank you for choosing this voice!",
+            com.mattmacosko.realtimeaicam.AppLang.str(com.mattmacosko.realtimeaicam.R.string.e_voice_welcome),
             TextToSpeech.QUEUE_FLUSH, null, "welcome",
         )
     }
@@ -186,6 +233,9 @@ class VoicePickerModel(private val context: Context) {
 fun rememberVoicePickerModel(context: Context): VoicePickerModel {
     val model = remember { VoicePickerModel(context) }
     DisposableEffect(Unit) { onDispose { model.shutdown() } }
+    // The context is re-made in the new language when the app's language changes.
+    val lang = com.mattmacosko.realtimeaicam.AppLang.code()
+    androidx.compose.runtime.LaunchedEffect(lang) { model.setLanguage(lang) }
     return model
 }
 
@@ -195,6 +245,11 @@ fun VoiceGridPopup(
     model: VoicePickerModel,
     onDismiss: () -> Unit,
 ) {
+    val closeListLabel = stringResource(R.string.e_voice_close_list_action)
+    val closeList = stringResource(R.string.e_voice_close_list)
+    val useVoice = stringResource(R.string.e_voice_use)
+    val selectedWord = stringResource(R.string.e_selected)
+    val notSelectedWord = stringResource(R.string.e_not_selected)
     // Full-screen scrim to dismiss on outside tap
     Box(
         Modifier
@@ -202,10 +257,10 @@ fun VoiceGridPopup(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClickLabel = "Close the voice list",
+                onClickLabel = closeListLabel,
                 onClick = onDismiss,
             )
-            .semantics { contentDescription = "Close voice list" },
+            .semantics { contentDescription = closeList },
         contentAlignment = Alignment.BottomCenter,
     ) {
         Column(
@@ -226,7 +281,7 @@ fun VoiceGridPopup(
         ) {
             if (model.voices.isEmpty()) {
                 Text(
-                    "No voices available",
+                    stringResource(R.string.e_voice_none),
                     fontSize = 13.sp,
                     color = Color.White.copy(alpha = 0.7f),
                     textAlign = TextAlign.Center,
@@ -250,7 +305,7 @@ fun VoiceGridPopup(
                                 )
                                 .clickable(
                                     role = Role.Button,
-                                    onClickLabel = "Use this voice for reading aloud",
+                                    onClickLabel = useVoice,
                                 ) {
                                     model.select(option)
                                     onDismiss()
@@ -258,7 +313,7 @@ fun VoiceGridPopup(
                                 .padding(vertical = 6.dp, horizontal = 4.dp)
                                 .clearAndSetSemantics {
                                     contentDescription = option.display
-                                    stateDescription = if (isSelected) "Selected" else "Not selected"
+                                    stateDescription = if (isSelected) selectedWord else notSelectedWord
                                 },
                         ) {
                             Text(option.emoji, fontSize = 20.sp)
