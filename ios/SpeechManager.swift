@@ -463,7 +463,8 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
             UIAccessibility.post(notification: .announcement, argument: Self.voiceOverLine(text, lang: lang))
             return
         }
-        let voice = YourLanguageVoice.prepare("", lang: lang, selected: selectedVoiceIdentifier).voice
+        let voice = YourLanguageVoice.voice(for: lang, selected: selectedVoiceIdentifier)
+            ?? YourLanguageVoice.voice(for: YourLanguageRules.english, selected: selectedVoiceIdentifier)
         // Stop current speech if any
         if speechSynthesizer.isSpeaking {
             speechSynthesizer.stopSpeaking(at: .immediate)

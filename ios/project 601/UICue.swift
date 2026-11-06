@@ -33,14 +33,12 @@ enum UICue {
     static let homeCueDelay: TimeInterval = 0.6
 
     /// The cue's words and their language. The app's own Spanish ships in the app, so a Spanish
-    /// app says the bundled line with no download (2026-11-05); Your language in another language
-    /// still goes through the translator; English otherwise.
+    /// app always says the bundled line, with no download (2026-11-05); an English app with Your
+    /// language in another language still goes through the translator. Same as Android cue().
     static func line(_ english: String) async -> (text: String, lang: String) {
         let app = AppLang.code
-        let yours = YourLanguage.activeCode
-        if yours == YourLanguageRules.english || yours == app {
-            return (AppLang.text(english, in: app), app)
-        }
+        if app != AppLang.english { return (AppLang.text(english, in: app), app) }
+        if YourLanguage.activeCode == YourLanguageRules.english { return (english, YourLanguageRules.english) }
         return await YourLanguage.intoActive(english)
     }
 

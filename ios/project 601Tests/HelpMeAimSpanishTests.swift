@@ -41,7 +41,9 @@ struct HelpMeAimSpanishTests {
         #expect(AimNames.spanishPhrase("cartera") == "cartera")
         AimNames.setSpanish("zzkey", "mis llaves")
         #expect(AimNames.withArticle("zzkey", lang: "es") == "mis llaves")
-        #expect(AimNames.bare("zzkey", lang: "es") == "mis llaves")
+        #expect(AimNames.bare("zzkey", lang: "es") == "llaves")
+        #expect(AimNames.withoutArticle("una laptop") == "laptop")
+        #expect(AimNames.withoutArticle("taza") == "taza")
         // English stays exactly as before.
         #expect(AimNames.withArticle("zzkey", lang: "en") == "a zzkey")
         #expect(AimNames.bare("zzkey", lang: "en") == "zzkey")

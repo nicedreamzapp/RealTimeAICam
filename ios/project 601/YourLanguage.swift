@@ -553,16 +553,23 @@ enum YourLanguageVoice {
         // The picked voice reads its own language only (the picker lists the app language's
         // voices, so a Spanish speaker may have picked a Spanish one): English text in a
         // Spanish voice, or the reverse, falls to the best voice for that language.
-        if let picked, speaks(picked, lang) { return (text, picked) }
-        let fallbackEnglish = best(for: YourLanguageRules.english) ?? AVSpeechSynthesisVoice(language: "en-US")
-        let chosen = picked ?? fallbackEnglish
-        guard lang != YourLanguageRules.english else { return (text, fallbackEnglish) }
-        if let v = best(for: lang) { return (text, v) }
+        if let v = voice(for: lang, selected: selected) { return (text, v) }
+        // No voice for `lang`: an English voice says the English warning and the text (the
+        // picked voice only if it is an English one).
+        let chosen = voice(for: YourLanguageRules.english, selected: selected)
         lock.lock()
         let first = warned.insert(lang).inserted
         lock.unlock()
         NSLog("YourLanguage: no voice installed for %@", lang)
         return (first ? YourLanguageRules.noVoiceLine(lang) + " " + text : text, chosen)
+    }
+
+    /// The voice for text in `lang`, with no warning side effects: the picked voice when it
+    /// speaks `lang`, else the best installed one (always one for English), else nil.
+    static func voice(for lang: String, selected: String) -> AVSpeechSynthesisVoice? {
+        if let picked = AVSpeechSynthesisVoice(identifier: selected), speaks(picked, lang) { return picked }
+        if let v = best(for: lang) { return v }
+        return lang == YourLanguageRules.english ? AVSpeechSynthesisVoice(language: "en-US") : nil
     }
 
     /// Speech recognition in Your language when the phone can do it offline, else English.

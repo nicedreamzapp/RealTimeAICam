@@ -34,7 +34,8 @@ enum AppLang {
     }
 
     /// The language iOS picked for this app: the phone's, or the per-app choice in Settings.
-    static var appLanguage: String? { Bundle.main.preferredLocalizations.first }
+    /// Fixed for the life of the process (iOS relaunches the app when its language changes).
+    static let appLanguage: String? = Bundle.main.preferredLocalizations.first
 
     #if DEBUG
     /// Tests only: `-rtcamUILanguage es|en` (a launch argument, or set in a unit test) fixes the
