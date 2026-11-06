@@ -66,16 +66,21 @@ object AimNames {
         val now = System.nanoTime() / 1_000_000
         missed[key]?.let { if (now - it < MISS_RETRY_MS) return null else missed.remove(key) }
         val t = translate ?: return null
-        // On the main thread the hook declines without trying (no blocking there): that is not a
-        // miss, or warm() right after on a worker would be skipped.
-        val onMain = Thread.currentThread().name == "main"
+        // Never block the main thread on the translator, and never count that as a miss (warm()
+        // on a worker right after must still ask).
+        if (onMainThread()) return null
         val raw = t(phrase, lang)
-        if (raw == null) { if (!onMain) missed[key] = now; return null }
+        if (raw == null) { missed[key] = now; return null }
         val clean = if (bare) ObjectLabelTranslations.cleanOutput(raw, lang) else ObjectLabelTranslations.cleanOutput(raw)
         val out = clean.trim().trimEnd('.', '!', '?')
         if (out.isEmpty()) { missed[key] = now; return null }
         cache[key] = out
         return out
+    }
+
+    /** The main looper's thread (false in JVM unit tests, which have no looper). */
+    @Volatile var onMainThread: () -> Boolean = {
+        try { android.os.Looper.myLooper() == android.os.Looper.getMainLooper() } catch (_: Throwable) { false }
     }
 
     /** Off the main thread: translate [subject]'s name now, so the first line is not English. */

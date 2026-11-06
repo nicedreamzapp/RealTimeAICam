@@ -44,6 +44,10 @@ struct HelpMeAimSpanishTests {
         #expect(AimNames.bare("zzkey", lang: "es") == "llaves")
         #expect(AimNames.withoutArticle("una laptop") == "laptop")
         #expect(AimNames.withoutArticle("taza") == "taza")
+        // A list line keeps the person's own wording; only bare-noun lines drop the article.
+        AimNames.setSpanish("zzglasses", "mis gafas")
+        #expect(AimNames.inLine("zzglasses", article: "zzglasses", lang: "es") == "mis gafas")
+        #expect(AimNames.bare("zzglasses", lang: "es") == "gafas")
         // English stays exactly as before.
         #expect(AimNames.withArticle("zzkey", lang: "en") == "a zzkey")
         #expect(AimNames.bare("zzkey", lang: "en") == "zzkey")

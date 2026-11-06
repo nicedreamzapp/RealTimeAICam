@@ -618,9 +618,11 @@ class AimPipeline(
     private suspend fun sayWhenQuiet(line: String, shot: Int) {
         val start = SystemClock.elapsedRealtime()
         // The description may still be in the translator: wait for the voice to start...
-        // (A first translation can take several seconds; saying the line sooner would cut the
-        // description off. Capped at 8 s so a description that never comes is not long silence.)
-        while (!speaker.speakingNow.value && SystemClock.elapsedRealtime() - start < 8_000) delay(50)
+        // While the description is still in the translator, keep waiting (a cold first translation
+        // takes seconds; speaking now would drop it). Once nothing is translating, give the voice
+        // a moment to start, so a description that never comes is not long silence.
+        while (!speaker.speakingNow.value && SystemClock.elapsedRealtime() - start < 30_000 &&
+            (speaker.translating.value != null || SystemClock.elapsedRealtime() - start < 4_000)) delay(50)
         // ...and to finish.
         while (speaker.speakingNow.value && SystemClock.elapsedRealtime() - start < 180_000) delay(100)
         if (shot != shotNumber) return

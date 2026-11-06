@@ -82,6 +82,8 @@ class SpeechAnnouncer(context: Context) {
      * request time — iOS fixed a "stuck green with no audio" bug this way.
      */
     val speakingNow = MutableStateFlow(false)
+    /** A line still in the translator (its speakSeq), or null: Help Me Aim waits on it before its next line. */
+    val translating = MutableStateFlow<Long?>(null)
 
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -608,7 +610,9 @@ class SpeechAnnouncer(context: Context) {
             // Translate first (a few ms once the pack is loaded), then say it, unless a newer line
             // was asked for meanwhile: the same "the latest line wins" as QUEUE_FLUSH.
             val mine = ++speakSeq
+            translating.value = mine
             com.mattmacosko.realtimeaicam.translation.YourLanguage.translateAsync(text, YL_EN, lang) { said ->
+                if (translating.value == mine) translating.value = null
                 if (mine != speakSeq) return@translateAsync
                 if (said == null) { speakEnglish(text, prefix); return@translateAsync }
                 val clean = try { SpeakableText.stripFormatting(said) } catch (t: Throwable) { said }

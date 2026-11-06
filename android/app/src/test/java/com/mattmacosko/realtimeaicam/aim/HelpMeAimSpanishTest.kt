@@ -33,7 +33,23 @@ class HelpMeAimSpanishTest {
     @After fun english() {
         AppLang.testCode = null
         AimNames.translate = null
+        AimNames.onMainThread = { false }
         AimNames.clear()
+    }
+
+    @Test fun aMainThreadCallIsNotAMissAndAMissIsNotAskedAgain() {
+        // On the main thread nothing is asked and nothing is remembered...
+        AimNames.onMainThread = { true }
+        assertEquals("key", AimNames.bare("key"))
+        assertTrue(asked.isEmpty())
+        // ...so a worker right after still gets the Spanish.
+        AimNames.onMainThread = { false }
+        assertEquals("llave", AimNames.bare("key"))
+        // A real miss (no translation) is asked once, not on every frame.
+        asked.clear()
+        assertEquals("umbrella", AimNames.bare("umbrella"))
+        assertEquals("umbrella", AimNames.bare("umbrella"))
+        assertEquals(1, asked.count { it == "umbrella" })
     }
 
     @Test fun steeringLinesAreSpanish() {

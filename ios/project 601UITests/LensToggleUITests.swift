@@ -22,7 +22,9 @@ final class LensToggleUITests: XCTestCase {
 
     private func lensText(_ app: XCUIApplication) -> XCUIElement {
         app.staticTexts.containing(
-            NSPredicate(format: "label CONTAINS[c] 'ultra'")
+            // VoiceOver's label drops the emoji, so match the guide line without it.
+            NSPredicate(format: "label CONTAINS %@", T("🌐 Lens toggle, wide or ultra-wide (Object Detection)")
+                .replacingOccurrences(of: "🌐", with: "").trimmingCharacters(in: .whitespaces))
         ).firstMatch
     }
 
