@@ -346,6 +346,22 @@ enum LiveGoal {
         return !["i", "m", "im", "am", "re"].contains(l.last!) && l != ["im"]
     }
 
+    /// Inside a goal, a new task replaces it only when it is clearly another job (review 11/6): "new thing" / "something
+    /// else" / "instead", or a task asked for after "now"/"next"/"so"/"okay" that shares no words with the goal or its
+    /// last step ("Now I need to fix the faucet" during the tire). "How do I loosen the lug nuts?" or "I need to get the
+    /// hubcap off" stay the tire: answered as questions about it.
+    static func switchesGoal(_ g: State, _ q: String) -> Bool {
+        let t = " " + LiveWords.normalize(q) + " "
+        if [" new thing ", " new task ", " something else ", " different thing ", " instead ", " switch to "].contains(where: { t.contains($0) }) {
+            return true
+        }
+        guard let task = detect(q), task != g.task else { return false }
+        let raw = LiveWords.normalize(q).split(separator: " ").map(String.init)
+        guard let first = raw.first, ["now", "next", "so", "okay", "ok", "alright", "then"].contains(first) else { return false }
+        let mine = LiveWords.contentWords(g.task).union(LiveWords.contentWords(g.lastStep ?? ""))
+        return LiveWords.contentWords(task).isDisjoint(with: mine)
+    }
+
     /// A lone "next" or "ok" heard while it is talking or within a second after it stops is the tail of its own voice
     /// ("Say next when you're ready"), never a step (Matt 11/6).
     static func isEchoTail(_ fresh: [String], speaking: Bool, sinceItSpoke: TimeInterval) -> Bool {

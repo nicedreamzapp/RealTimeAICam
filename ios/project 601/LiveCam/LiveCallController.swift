@@ -611,8 +611,9 @@ final class LiveCallController: ObservableObject {
         // Matt 11/6: "ok" right after "Ready for the next step?" counts (it is not a screen-reader echo then); a lone
         // "next"/"ok" in the second after it spoke is its own voice; a new task asked for is a new goal, not a step.
         if let g = goal, !fresh.isEmpty, g.askedRecently() || !LiveWords.isEcho(q),
-           !LiveGoal.isEchoTail(fresh, speaking: phase == .speaking || voice.isBusy, sinceItSpoke: endedAt.timeIntervalSince(lastSpokeEnd)),
-           !(LiveGoal.asksForTask(q) && LiveGoal.detect(q) != g.task),
+           !(LiveGoal.isEchoTail(fresh, speaking: phase == .speaking || voice.isBusy, sinceItSpoke: endedAt.timeIntervalSince(lastSpokeEnd))
+             && !(g.askedRecently() && ["ok", "okay"].contains(fresh[0]))),   // a quick "ok" to "Ready for the next step?" counts
+           !LiveGoal.switchesGoal(g, q),
            LiveGoal.wantsNext(fresh.joined(separator: " "), askedReady: g.askedRecently()) {
             log(["event": "transcript", "text": q, "final": isFinal, "decision": "goal: next step"])
             watch.personSpoke()
@@ -734,14 +735,15 @@ final class LiveCallController: ObservableObject {
             moneyMemory.forget()
         }
         // Matt 11/6: "I'm changing a tire", "help me fix my sink": the goal is kept for the visit and the first step given.
-        if let task = LiveGoal.detect(q), goal?.task != task, goal == nil || LiveGoal.isExplicitNewTask(q) || LiveGoal.asksForTask(q) {
+        if let task = LiveGoal.detect(q), goal?.task != task, goal.map({ LiveGoal.switchesGoal($0, q) }) ?? true {
             goal = LiveGoal.State(task: task)
             log(["event": "goal_set", "goal": task])
             goalTurn(q, endedAt: endedAt, next: true)
             return
         }
         // With a goal, a statement ("okay, the jack is under it") is them moving on: the next step.
-        if goal != nil, !LiveWords.isQuestionOrAsk(" " + LiveWords.normalize(q) + " ") {
+        // ("I need to get the hubcap off" mid-tire is a question about this task: answered, the step not advanced.)
+        if goal != nil, !LiveGoal.asksForTask(q), !LiveWords.isQuestionOrAsk(" " + LiveWords.normalize(q) + " ") {
             goalTurn(q, endedAt: endedAt, next: true)
             return
         }

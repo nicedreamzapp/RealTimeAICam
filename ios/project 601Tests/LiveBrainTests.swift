@@ -673,3 +673,32 @@ struct LiveGoalFollowUpTests {
         #expect(!LiveGoal.isEchoTail(["what", "next"], speaking: false, sinceItSpoke: 0.4))
     }
 }
+
+/// Goal follow-ups 2 (review 11/6): a question about the job never replaces the job.
+struct LiveGoalFollowUp2Tests {
+    private var tire: LiveGoal.State {
+        var g = LiveGoal.State(task: "changing a tire")
+        g.lastStep = "Loosen the lug nuts a half turn before you jack it up."
+        return g
+    }
+
+    @Test func questionsAboutTheJobKeepTheJob() {
+        #expect(!LiveGoal.switchesGoal(tire, "how do I loosen the lug nuts?"))
+        #expect(!LiveGoal.switchesGoal(tire, "I need to get the hubcap off"))
+        #expect(!LiveGoal.switchesGoal(tire, "now I need to tighten the lug nuts"))   // shares the last step's words
+        #expect(LiveGoal.asksForTask("I need to get the hubcap off"))                  // so it is answered, not a step
+    }
+
+    @Test func anotherJobSwitches() {
+        #expect(LiveGoal.switchesGoal(tire, "Now I need to fix the faucet"))
+        #expect(LiveGoal.switchesGoal(tire, "let's do something else"))
+    }
+
+    @Test func aQuickOkAfterReadyIsNotAnEchoTail() {
+        var g = tire
+        g.askedReady = true
+        // The controller skips the echo-tail rule for "ok" inside the window; the tail rule alone would drop it.
+        #expect(LiveGoal.isEchoTail(["ok"], speaking: false, sinceItSpoke: 0.3))
+        #expect(g.askedRecently() && LiveGoal.wantsNext("ok", askedReady: g.askedRecently()))
+    }
+}
