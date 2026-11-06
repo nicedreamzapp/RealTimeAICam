@@ -577,6 +577,7 @@ final class LiveCallController: ObservableObject {
     /// Counts the bills in view: the full camera frame (1280 x 720, not the 512 px look), each bill found and read
     /// on its own, the total added in code. One frame, a second only if a bill couldn't be read.
     private func countMoney(_ q: String) {
+        moneyMemory.countStarted()   // no follow-up is answered from the old count while this one runs
         guard let engine else { speakAll(own: LiveCamWords.stillGettingReady); return }
         if UIApplication.shared.applicationState != .active {
             speakAll(own: LiveCamWords.cantSeeInBackground)

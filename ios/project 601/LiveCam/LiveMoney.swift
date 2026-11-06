@@ -99,15 +99,16 @@ enum LiveMoney {
     /// "How many twenties" -> 20. nil when the question names no denomination.
     static func askedDenomination(_ q: String) -> Int? {
         let t = folded(q)
-        // "How many $20 bills": the recognizer's "$20" is "20" once normalized, so "20 bill" counts too.
+        // "How many $20 bills": the recognizer's "$20" is "20" once normalized, so "20 bill" counts too. Spanish
+        // "de veinte" only right after "cuántos" or "billetes" ("a menos de 2 metros" is no denomination).
         let names: [(Int, [String])] = [
-            (100, [" hundreds ", " 100s ", " hundred dollar ", " 100 dollar ", " hundred bill", " 100 bill", " de cien ", " de 100 "]),
-            (50, [" fifties ", " 50s ", " fifty dollar ", " 50 dollar ", " fifty bill", " 50 bill", " de cincuenta ", " de 50 "]),
-            (20, [" twenties ", " 20s ", " twenty dollar ", " 20 dollar ", " twenty bill", " 20 bill", " de veinte ", " de 20 "]),
-            (10, [" tens ", " 10s ", " ten dollar ", " 10 dollar ", " ten bill", " 10 bill", " de diez ", " de 10 "]),
-            (5, [" fives ", " 5s ", " five dollar ", " 5 dollar ", " five bill", " 5 bill", " de cinco ", " de 5 "]),
-            (2, [" twos ", " 2s ", " two dollar ", " 2 dollar ", " two bill", " 2 bill", " de dos ", " de 2 "]),
-            (1, [" ones ", " 1s ", " one dollar ", " 1 dollar ", " singles ", " one bill", " 1 bill", " de uno ", " de un dolar ", " de 1 "]),
+            (100, [" hundreds ", " 100s ", " hundred dollar ", " 100 dollar ", " hundred bill", " 100 bill", " cuantos de cien ", " cuantas de cien ", " billetes de cien ", " billete de cien ", " cuantos de 100 ", " cuantas de 100 ", " billetes de 100 ", " billete de 100 "]),
+            (50, [" fifties ", " 50s ", " fifty dollar ", " 50 dollar ", " fifty bill", " 50 bill", " cuantos de cincuenta ", " cuantas de cincuenta ", " billetes de cincuenta ", " billete de cincuenta ", " cuantos de 50 ", " cuantas de 50 ", " billetes de 50 ", " billete de 50 "]),
+            (20, [" twenties ", " 20s ", " twenty dollar ", " 20 dollar ", " twenty bill", " 20 bill", " cuantos de veinte ", " cuantas de veinte ", " billetes de veinte ", " billete de veinte ", " cuantos de 20 ", " cuantas de 20 ", " billetes de 20 ", " billete de 20 "]),
+            (10, [" tens ", " 10s ", " ten dollar ", " 10 dollar ", " ten bill", " 10 bill", " cuantos de diez ", " cuantas de diez ", " billetes de diez ", " billete de diez ", " cuantos de 10 ", " cuantas de 10 ", " billetes de 10 ", " billete de 10 "]),
+            (5, [" fives ", " 5s ", " five dollar ", " 5 dollar ", " five bill", " 5 bill", " cuantos de cinco ", " cuantas de cinco ", " billetes de cinco ", " billete de cinco ", " cuantos de 5 ", " cuantas de 5 ", " billetes de 5 ", " billete de 5 "]),
+            (2, [" twos ", " 2s ", " two dollar ", " 2 dollar ", " two bill", " 2 bill", " cuantos de dos ", " cuantas de dos ", " billetes de dos ", " billete de dos ", " cuantos de 2 ", " cuantas de 2 ", " billetes de 2 ", " billete de 2 "]),
+            (1, [" ones ", " 1s ", " one dollar ", " 1 dollar ", " singles ", " one bill", " 1 bill", " cuantos de uno ", " cuantas de uno ", " billetes de uno ", " billete de uno ", " cuantos de un dolar ", " cuantas de un dolar ", " billetes de un dolar ", " billete de un dolar ", " cuantos de 1 ", " cuantas de 1 ", " billetes de 1 ", " billete de 1 "]),
         ]
         return names.first { $0.1.contains { t.contains($0) } }?.0
     }
@@ -375,16 +376,18 @@ enum LiveMoney {
     /// next frame found it). A bill unread in one frame can be read in the other (fused bill by bill). Overlap, a
     /// cut-off or a missed bill stops at once: a third of a second won't fix it.
     static func countBurst(maxFrames: Int = 3, frame: () -> CGImage?, ask: Ask?,
-                           onLook: ((Count, [[String: Any]]) -> Void)? = nil) -> Count {
+                           onLook: ((Count, [[String: Any]]) -> Void)? = nil,
+                           look looker: ((CGImage) -> (Count, [[String: Any]]))? = nil) -> Count {
+        let look = looker ?? { img in LiveMoney.look(img, ask: ask) }
         var looks: [Count] = []
         while looks.count < max(2, maxFrames), let img = frame() {
-            let (c, log) = look(img, ask: ask)
+            let (c, log) = look(img)
             onLook?(c, log)
             looks.append(c)
             if c.boxed {
                 // The detector path: up to `maxFrames` looks (at least two), answered with what they agree on.
                 while looks.count < max(2, maxFrames), let more = frame() {
-                    let (c2, log2) = look(more, ask: ask)
+                    let (c2, log2) = look(more)
                     onLook?(c2, log2)
                     looks.append(c2)
                 }
@@ -559,6 +562,16 @@ enum LiveMoney {
     struct Serial: Equatable { var text: String; var at: CGPoint }
 
     /// Every serial number in the frame, read both ways up, with where it is (pixels, y up), each serial once.
+    /// Where to read serials on the detector path: the detected bills' bounding area, or nil (the whole frame) when
+    /// that area is under 60% of the frame, so a serial on a bill the detector missed still turns up as a stray.
+    static func serialArea(_ quads: [Quad], width W: CGFloat, height H: CGFloat) -> CGRect? {
+        guard !quads.isEmpty, W > 0, H > 0 else { return nil }
+        let xs = quads.flatMap { $0.corners.map(\.x) }, ys = quads.flatMap { $0.corners.map(\.y) }
+        let r = CGRect(x: max(0, xs.min()!), y: max(0, ys.min()!), width: min(W, xs.max()!) - max(0, xs.min()!),
+                       height: min(H, ys.max()!) - max(0, ys.min()!))
+        return r.width * r.height >= 0.6 * W * H ? r : nil
+    }
+
     /// Serials inside the area the given bills cover (their bounding rectangle, a little wider), in frame pixels.
     static func serialsInFrame(_ image: CGImage, within quads: [Quad]) -> [Serial] {
         guard !quads.isEmpty else { return [] }
@@ -940,7 +953,8 @@ enum LiveMoney {
         // counted twice and two $1s side by side still count as two.
         // Detector path: serials are read only inside the detected bills' area (11/6 review: the whole frame both
         // ways up cost seconds a look).
-        let frameSerials = boxed.map { serialsInFrame(image, within: $0.map(\.quad)) } ?? serialsInFrame(image)
+        let frameSerials = boxed.flatMap { b in serialArea(b.map(\.quad), width: CGFloat(image.width), height: CGFloat(image.height)).map { _ in serialsInFrame(image, within: b.map(\.quad)) } }
+            ?? serialsInFrame(image)
         func read(_ crop: CGImage) -> (Int?, [String: Any]) {
             let (lines, upright) = printedTextAndWayUp(crop)
             let (word, numeral) = ocrVotes(lines)
@@ -1140,6 +1154,9 @@ struct MoneyMemory {
     mutating func note(_ c: LiveMoney.Count, at t: Date = Date()) { last = c; at = t }
     func recent(at t: Date = Date()) -> LiveMoney.Count? { t.timeIntervalSince(at) <= Self.maxAge ? last : nil }
     mutating func forget() { last = nil }
+    /// A count has started: until it answers, nothing is answered from the old one ("count again", then "how many
+    /// twenties?" before the recount finishes).
+    mutating func countStarted() { forget() }
 }
 
 

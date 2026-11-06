@@ -238,9 +238,45 @@ struct MoneyReviewRound2Tests {
     }
 
     @Test func theDetectorPathHonorsMaxFrames() {
-        // No camera frames to give: still never more looks than asked for, and never "no bills".
-        var asked = 0
-        let c = LiveMoney.countBurst(maxFrames: 2, frame: { asked += 1; return nil }, ask: nil)
-        #expect(asked == 1 && c.doubts.contains(.noCamera))
+        // No camera frame: "camera paused", never "no bills".
+        let none = LiveMoney.countBurst(maxFrames: 2, frame: { nil }, ask: nil)
+        #expect(none.doubts.contains(.noCamera))
+        // Detector looks (boxed): exactly maxFrames looks, then the steady answer.
+        let img = CGContext(data: nil, width: 8, height: 8, bitsPerComponent: 8, bytesPerRow: 32, space: CGColorSpaceCreateDeviceRGB(),
+                            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!.makeImage()!
+        for n in [2, 3] {
+            var frames = 0, looks = 0
+            let c = LiveMoney.countBurst(maxFrames: n, frame: { frames += 1; return img }, ask: nil, look: { _ in
+                looks += 1
+                return (MoneyReviewFixTests.sure, [])
+            })
+            #expect(looks == n && frames == n, "maxFrames \(n)")
+            #expect(c.boxed && c.sure && c.total == 129)
+        }
+    }
+
+    @Test func aRecountForgetsTheOldCountAtOnce() {
+        var m = MoneyMemory()
+        m.note(Self.sure)
+        #expect(LiveMoney.route("how many twenties", last: m.recent()) == .fromLastCount)
+        m.countStarted()   // "count again" starts a recount
+        #expect(m.recent() == nil)
+        #expect(LiveMoney.route("how many twenties", last: m.recent()) == .countAgain)
+    }
+
+    @Test func serialsAreReadOnTheWholeFrameWhenTheBillsCoverLittleOfIt() {
+        let W: CGFloat = 1000, H: CGFloat = 800
+        let small = [MoneyDetectorDecodeTests.bills([1])[0].quad]   // one bill, a small part of the frame
+        #expect(LiveMoney.serialArea(small, width: W, height: H) == nil)
+        let big = LiveMoney.Quad(corners: [CGPoint(x: 20, y: 780), CGPoint(x: 980, y: 780), CGPoint(x: 980, y: 20), CGPoint(x: 20, y: 20)])
+        #expect(LiveMoney.serialArea([big], width: W, height: H) != nil)
+        #expect(LiveMoney.serialArea([], width: W, height: H) == nil)
+    }
+
+    @Test func spanishDistancesAreNotADenomination() {
+        #expect(LiveMoney.route("¿cuántos árboles hay a menos de 2 metros?", last: Self.sure) == .notMoney)
+        #expect(LiveMoney.route("¿cuántos árboles hay a menos de 2 metros?", last: nil) == .notMoney)
+        #expect(LiveMoney.askedDenomination("¿Cuántos billetes de 20 hay?") == 20)
+        #expect(LiveMoney.askedDenomination("¿cuántos de veinte?") == 20)
     }
 }
