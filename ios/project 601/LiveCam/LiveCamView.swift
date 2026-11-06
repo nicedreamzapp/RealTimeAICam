@@ -54,15 +54,6 @@ struct LiveCamView: View {
                 }
                 Color.white.opacity(flash).ignoresSafeArea().allowsHitTesting(false).accessibilityHidden(true)
                 thingBox
-                if call.showCaption, abs(zoomLabel - 1) > 0.05 {
-                    VStack {
-                        Text(String(format: zoomLabel < 10 ? "%.1f×" : "%.0f×", zoomLabel))
-                            .font(.footnote.weight(.bold)).foregroundStyle(.white)
-                            .padding(.horizontal, 10).padding(.vertical, 5).background(.black.opacity(0.45), in: Capsule())
-                            .padding(.top, 80)
-                        Spacer()
-                    }.allowsHitTesting(false).accessibilityHidden(true)
-                }
                 LinearGradient(colors: [.black.opacity(0.45), .clear, .clear, .black.opacity(0.8)], startPoint: .top, endPoint: .bottom)
                     .ignoresSafeArea().accessibilityHidden(true)
                 VStack(spacing: wide ? 10 : 16) {
@@ -78,7 +69,9 @@ struct LiveCamView: View {
                             .accessibilityIdentifier("liveCamCantHear")
                     }
                     if call.typedOnly || call.hearingStopped { typedBox }
-                    orb(size: wide ? 96 : 120)
+                    // Matt 11/6, a live camera: zoom pills like the Camera app's, just above the controls.
+                    zoomPills
+                    orb(size: wide ? 84 : (geo.size.height < 700 ? 96 : 120))
                     bottomBar(width: geo.size.width)
                 }
                 // The menu floats over the view, so Mute and Back never move or leave the screen.
@@ -244,22 +237,23 @@ struct LiveCamView: View {
 
     // MARK: Middle: what it heard and what it says
 
-    @ViewBuilder
     private func words(wide: Bool) -> some View {
-        VStack(spacing: 8) {
+        // Matt 11/6: captions like FaceTime's Live Captions, a rounded see-through bubble with the words left-aligned.
+        let bubble = call.showCaption && (!call.caption.isEmpty || !call.heardText.isEmpty)
+        return VStack(alignment: .leading, spacing: 6) {
             if call.showCaption, !call.heardText.isEmpty {
                 Text(L("You: %@", call.heardText))
-                    .font(.system(size: wide ? 17 : 19, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.85)).multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.7)
-                    .shadow(color: .black.opacity(0.9), radius: 4)
+                    .font(.system(size: wide ? 15 : 17, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.7)).multilineTextAlignment(.leading).lineLimit(2).minimumScaleFactor(0.7)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityLabel(L("You said: %@", call.heardText))
                     .accessibilityIdentifier("liveCamHeard")
             }
             if !call.caption.isEmpty {
                 Text(call.caption)
-                    .font(.system(size: wide ? 22 : 26, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white).multilineTextAlignment(.center).lineLimit(wide ? 3 : 4).minimumScaleFactor(0.6)
-                    .shadow(color: .black.opacity(0.9), radius: 6)
+                    .font(.system(size: wide ? 20 : 22, weight: .semibold))
+                    .foregroundStyle(.white).multilineTextAlignment(.leading).lineLimit(wide ? 3 : 4).minimumScaleFactor(0.6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .opacity(call.showCaption ? 1 : 0.001)   // hidden words stay readable by VoiceOver
                     .accessibilityLabel(call.caption)
                     .accessibilityValue(call.caption)
@@ -270,9 +264,56 @@ struct LiveCamView: View {
             }
             if call.phase == .loading || call.phase == .starting {
                 ProgressView().tint(.white).accessibilityLabel(L("Getting Live Cam ready"))
+                    .frame(maxWidth: .infinity)
             }
         }
+        .padding(.horizontal, bubble ? 16 : 0).padding(.vertical, bubble ? 12 : 0)
+        .background {
+            if bubble {
+                RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.ultraThinMaterial)
+                    .environment(\.colorScheme, .dark)
+                    .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.black.opacity(0.25)))
+            }
+        }
+        .frame(maxWidth: 560)
         .frame(maxWidth: .infinity)
+    }
+
+    // MARK: Zoom pills (the Camera app's 0.5, 1, 2)
+
+    private var zoomStops: [CGFloat] { (call.camera.minZoom < 0.9 ? [0.5] : []) + [1, 2] }
+
+    private var zoomPills: some View {
+        let stops = zoomStops
+        // The pill showing the zoom now: the nearest stop at or below it, like the Camera app ("1.4×" on the 1).
+        let active = stops.last { $0 <= zoomLabel + 0.01 } ?? stops[0]
+        return HStack(spacing: 6) {
+            ForEach(stops, id: \.self) { z in
+                let on = z == active
+                Button {
+                    call.camera.setZoom(z); zoomLabel = z
+                } label: {
+                    Text(on ? Self.zoomText(zoomLabel) : Self.zoomText(z, short: true))
+                        .font(.system(size: on ? 14 : 12, weight: .bold))
+                        .foregroundStyle(on ? LiveOrb.lookColor : .white)
+                        .frame(width: on ? 44 : 36, height: on ? 44 : 36)
+                        .background(.black.opacity(0.5), in: Circle())
+                        .frame(width: 48, height: 48).contentShape(Circle())
+                }
+                .accessibilityLabel(L("Zoom %@", Self.zoomText(z)))
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+        .padding(.horizontal, 6)
+        .background(.black.opacity(0.25), in: Capsule())
+        .animation(.easeOut(duration: 0.15), value: active)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("liveCamZoom")
+    }
+
+    static func zoomText(_ z: CGFloat, short: Bool = false) -> String {
+        if short { return z < 1 ? ".5" : String(format: "%.0f", z) }
+        return String(format: z < 10 && abs(z - z.rounded()) > 0.05 ? "%.1f×" : "%.0f×", z)
     }
 
     private var typedBox: some View {
@@ -316,7 +357,7 @@ struct LiveCamView: View {
     }
 
     private func bottomBar(width: CGFloat) -> some View {
-        let (d, spacing) = Self.bottomRow(width: width, count: call.torchAvailable ? 3 : 2)
+        let (d, spacing) = Self.bottomRow(width: width, count: call.torchAvailable ? 4 : 3)
         return HStack(spacing: spacing) {
             // Matt 11/6: "Live cam needs to have a flashlight... preferably at the bottom". One tap on, one tap off;
             // on the selfie camera it flips to the back camera first. Its word stays even with Words on screen off.
@@ -352,6 +393,20 @@ struct LiveCamView: View {
             }
             .accessibilityLabel(call.micMuted ? L("Unmute microphone") : L("Mute microphone"))
             .accessibilityHint(call.micMuted ? L("Live Cam starts listening again") : L("Live Cam stops listening until you unmute"))
+            // Matt 11/6: a shutter for loud places. Press it to ask about what's in view right now.
+            Button { call.askAboutView() } label: {
+                VStack(spacing: 6) {
+                    ZStack {
+                        Circle().stroke(.white, lineWidth: 4).frame(width: d, height: d)
+                        Circle().fill(.white).frame(width: d - 14, height: d - 14)
+                    }
+                    Text(L("Ask")).font(.footnote.weight(.semibold)).foregroundStyle(.white)
+                        .lineLimit(1).minimumScaleFactor(0.6).frame(width: d + 8)
+                }
+            }
+            .accessibilityLabel(L("Ask about the view"))
+            .accessibilityHint(L("Tells you what's in front of the camera right now, for loud places"))
+            .accessibilityIdentifier("liveCamShutter")
             Button { call.end() } label: {
                 VStack(spacing: 6) {
                     Image(systemName: "xmark").font(.system(size: d * 0.37, weight: .bold))

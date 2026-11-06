@@ -15,6 +15,9 @@ final class LiveCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
     private var oneX: CGFloat = 1
     private var zoomShown: CGFloat = 1
 
+    /// The widest zoom this camera has, as people read it (0.5 on a phone with an ultra wide, else 1).
+    var minZoom: CGFloat { lock.lock(); defer { lock.unlock() }; return minShown }
+    private var minShown: CGFloat = 1
     /// Zoom as people read it (0.5x ... 1x ... 25x).
     var zoom: CGFloat { lock.lock(); defer { lock.unlock() }; return zoomShown }
 
@@ -192,7 +195,7 @@ final class LiveCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
         let one = cam.virtualDeviceSwitchOverVideoZoomFactors.first.map { CGFloat(truncating: $0) } ?? 1
         oneX = one
         if (try? cam.lockForConfiguration()) != nil { cam.videoZoomFactor = one; cam.unlockForConfiguration() }
-        lock.lock(); zoomShown = 1; lock.unlock()
+        lock.lock(); zoomShown = 1; minShown = cam.minAvailableVideoZoomFactor / one; lock.unlock()
         if position == .back { applyTorch() }   // a reconfigure (restart, flip back) keeps the light as it was
         if session.outputs.isEmpty {
             output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]

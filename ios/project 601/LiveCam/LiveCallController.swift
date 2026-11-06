@@ -562,6 +562,16 @@ final class LiveCallController: ObservableObject {
         }
     }
 
+    /// The shutter button (Matt 11/6, for loud places): the same as asking "what do you see" right now.
+    func askAboutView() {
+        guard running, phase != .loading, phase != .starting else { return }
+        log(["event": "shutter_button"])
+        stopTalking()
+        listener.stopListening()
+        heardText = L("What do you see?")
+        heard("What do you see?", endedAt: Date(), confidence: nil, isFinal: true)
+    }
+
     /// Test builds and the typed box: a question as if it had been heard (no mic).
     func ask(typed q: String) {
         let t = q.trimmingCharacters(in: .whitespacesAndNewlines)

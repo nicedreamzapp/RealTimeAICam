@@ -78,7 +78,7 @@ final class LiveCamUITests: XCTestCase {
     /// Every control big enough, on screen, and not on top of another.
     private func checkLayout(_ app: XCUIApplication) {
         let screen = app.windows.firstMatch.frame
-        let names = ["Back", "Mute microphone", "Flip camera"].map { T($0) }
+        let names = ["Back", "Mute microphone", "Flip camera", "Ask about the view"].map { T($0) }
         var frames: [(String, CGRect)] = []
         for n in names {
             let b = app.buttons[n].firstMatch
@@ -92,6 +92,15 @@ final class LiveCamUITests: XCTestCase {
         XCTAssertGreaterThanOrEqual(mode.frame.height, 56)
         XCTAssertTrue(screen.contains(mode.frame), "Mode off screen")
         frames.append(("Mode", mode.frame))
+        // The zoom pills (Matt 11/6): each a 44 pt+ target, on screen, clear of every other control.
+        let pills = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", T("Zoom %@").replacingOccurrences(of: "%@", with: "")))
+        XCTAssertGreaterThanOrEqual(pills.count, 2, "zoom pills missing")
+        for i in 0 ..< pills.count {
+            let p = pills.element(boundBy: i)
+            XCTAssertGreaterThanOrEqual(min(p.frame.width, p.frame.height), 44, "zoom pill under 44 pt: \(p.frame)")
+            XCTAssertTrue(screen.contains(p.frame), "zoom pill off screen: \(p.frame)")
+            frames.append(("zoom \(i)", p.frame))
+        }
         for i in 0 ..< frames.count {
             for j in (i + 1) ..< frames.count {
                 XCTAssertFalse(frames[i].1.intersects(frames[j].1), "\(frames[i].0) overlaps \(frames[j].0)")
@@ -216,6 +225,27 @@ final class LiveCamUITests: XCTestCase {
         waitForExpectations(timeout: 60)
         sleep(3)   // the detector runs after the answer (about 1.5 s in the Simulator)
         keep(app, "livecam-box")
+        goBack(app)
+        app.terminate()
+    }
+
+    /// Matt 11/6, a live camera: the shutter asks about the view right now (loud places), zoom pills, caption bubble.
+    @MainActor
+    func testShutterAsksAboutTheView() throws {
+        continueAfterFailure = false
+        let app = launch(env: ["RTCAM_FAKE_LIVE_ANSWER": "I see a blue double door with an exit sign above it."])
+        openLiveCam(app)
+        checkLayout(app)
+        let shutter = app.buttons[T("Ask about the view")].firstMatch
+        XCTAssertTrue(shutter.exists, "no shutter")
+        shutter.tap()
+        let answered = NSPredicate { _, _ in self.captionText(app).contains("blue double door") }
+        expectation(for: answered, evaluatedWith: NSObject())
+        waitForExpectations(timeout: 60)
+        app.buttons[T("Zoom %@").replacingOccurrences(of: "%@", with: "2×")].firstMatch.tap()
+        sleep(1)
+        keep(app, "livecam-shutter-answer")
+        checkLayout(app)
         goBack(app)
         app.terminate()
     }

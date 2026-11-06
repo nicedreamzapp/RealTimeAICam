@@ -540,6 +540,50 @@
         }
       }
     },
+    "Ask about the view" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preguntar por la vista"
+          }
+        }
+      }
+    },
+    "Tells you what's in front of the camera right now, for loud places" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Te dice qué hay frente a la cámara ahora mismo, para lugares con ruido"
+          }
+        }
+      }
+    },
+    "What do you see?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Qué ves?"
+          }
+        }
+      }
+    },
+    "Zoom %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zoom %@"
+          }
+        }
+      }
+    },
     "Ask" : {
       "extractionState" : "manual",
       "localizations" : {
