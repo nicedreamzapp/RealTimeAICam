@@ -58,10 +58,13 @@ final class AimVoice: NSObject, AVSpeechSynthesizerDelegate {
     }
 
     func say(_ text: String, then done: (() -> Void)? = nil) {
-        // Your language: every guidance line and the description are translated
-        // first (cached, so repeated lines are instant). English: no change.
-        guard YourLanguage.activeCode != YourLanguageRules.english else {
-            speakLine(text, language: YourLanguageRules.english, then: done)
+        // The app's lines are already in the app's language (L()). A Spanish
+        // app says them from the bundled Spanish in a Spanish voice: no
+        // translator, nothing to download (2026-11-05).
+        // Your language (French...): every guidance line and the description are
+        // translated first (cached, so repeated lines are instant). English: no change.
+        if case let .asIs(lang) = AimLineRoute.pick(appLang: AppLang.code, yourLanguage: YourLanguage.activeCode) {
+            speakLine(text, language: lang, then: done)
             return
         }
         token += 1
@@ -77,8 +80,21 @@ final class AimVoice: NSObject, AVSpeechSynthesizerDelegate {
         }
     }
 
+    /// Lines already in their language, said one after the other: in a Spanish
+    /// app the photo's description (content, in Your language) and then the
+    /// app's own "saved to your photos" in Spanish, each in its own voice.
+    func say(parts: [(text: String, lang: String)], then done: (() -> Void)? = nil) {
+        guard let first = parts.first else { done?(); return }
+        let rest = Array(parts.dropFirst())
+        speakLine(first.text, language: first.lang) { [weak self] in
+            guard let self else { return }
+            if rest.isEmpty { done?() } else { say(parts: rest, then: done) }
+        }
+    }
+
     private func speakLine(_ text: String, language: String, then done: (() -> Void)?) {
-        let line = SpeakableText.spoken(AimPhrases.capitalized(text))
+        translatingLine = false
+        let line = SpeakableText.spoken(AimPhrases.capitalized(text), lang: language)
         AimDevLog.note((usesVoiceOver ? "SAY(voiceover) " : "SAY ") + line)
         #if DEBUG
         if language != YourLanguageRules.english { SpeakLog.note("aim[\(language)]", line) }
@@ -89,7 +105,9 @@ final class AimVoice: NSObject, AVSpeechSynthesizerDelegate {
         if usesVoiceOver {
             if synth.isSpeaking { synth.stopSpeaking(at: .immediate) }
             announcementPending = true
-            UIAccessibility.post(notification: .announcement, argument: line)
+            // Tagged with its language so VoiceOver reads Spanish in Spanish.
+            UIAccessibility.post(notification: .announcement,
+                                 argument: SpeechManager.voiceOverLine(line, lang: language))
             // If VoiceOver drops the announcement it never reports back;
             // allow roughly the time it takes to say the line.
             let limit = max(2.5, Double(line.count) * 0.08)
@@ -102,7 +120,8 @@ final class AimVoice: NSObject, AVSpeechSynthesizerDelegate {
         announcementPending = false
         let prepared = YourLanguageVoice.prepare(line, lang: language, selected: voiceIdentifier)
         let utterance = AVSpeechUtterance(string: prepared.text)
-        utterance.voice = prepared.voice ?? AVSpeechSynthesisVoice(language: "en-US")
+        utterance.voice = prepared.voice
+            ?? AVSpeechSynthesisVoice(language: language == YourLanguageRules.english ? "en-US" : language)
         utterance.rate = 0.52
         utterance.volume = 1.0
         #if DEBUG
@@ -449,7 +468,7 @@ final class HelpMeAimController: ObservableObject {
     func chooseSomethingElse() {
         isTyping = false
         phase = .asking
-        statusText = "What are you looking for?"
+        statusText = L("What are you looking for?")
         voice.warmRoute()
         // Ask, wait for the sentence to finish completely, then beep and
         // listen on our own. Nothing to press or hold (Matt, 2026-09-16).
@@ -512,9 +531,9 @@ final class HelpMeAimController: ObservableObject {
                     voice.say(line)
                 }
             case .notAllowed:
-                voice.say("I can't use the microphone. Allow it in Settings, or type the word.")
+                voice.say(L("I can't use the microphone. Allow it in Settings, or type the word."))
             case .unavailable:
-                voice.say("Offline listening isn't available on this phone. Type the word instead.")
+                voice.say(L("Offline listening isn't available on this phone. Type the word instead."))
             }
         }
         Task { await listener.start(handle) }
@@ -524,29 +543,38 @@ final class HelpMeAimController: ObservableObject {
         // Typed while the mic was open: close it now, or it hears the app's
         // own "Looking for…" line (seen in the 2026-09-16 live runs).
         if listener.isRunning { listener.stop(deliver: false) }
+        AimNames.forgetAll()
         // Said or typed in Your language ("taza"): into English first, the word
         // matching below stays English (2026-11-04).
         if YourLanguage.activeCode != YourLanguageRules.english {
+            // The person's own words: what the recent buttons keep, and in a
+            // Spanish app the name said inside the lines ("mis llaves").
+            let own = YourLanguage.activeCode == AppLang.spanish ? AimNames.spanishPhrase(text)
+                : text.trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
             Task { @MainActor [weak self] in
                 let english = await AimLanguage.wordForMatching(text)
                 AimDevLog.note("YOUR LANGUAGE \(text) -> \(english)")
                 #if DEBUG
                 SpeakLog.note("aimWord[\(YourLanguage.activeCode)>en]", "\(text) -> \(english)")
                 #endif
-                self?.submitEnglish(english)
+                self?.submitEnglish(english, own: own.isEmpty ? nil : own)
             }
             return
         }
-        submitEnglish(text)
+        submitEnglish(text, own: nil)
     }
 
-    private func submitEnglish(_ text: String) {
+    /// `own`: the words as the person said them in Your language, when it isn't English.
+    private func submitEnglish(_ text: String, own: String?) {
         let names = vocabulary()
+        let said = AimVocabulary.normalize(text)
+        if let own, AppLang.isSpanish, YourLanguage.activeCode == AppLang.spanish, !said.isEmpty {
+            AimNames.setSpanish(said, own)
+        }
         guard let match = AimVocabulary.match(text, index: classIndex), !names.isEmpty else {
-            let said = AimVocabulary.normalize(text)
             // No name for it in the finder: the describing model looks instead.
             if !said.isEmpty, OnDeviceVisionNarrator.isBundled {
-                askedWord = said
+                askedWord = own ?? said
                 begin(.described(said))
                 return
             }
@@ -554,7 +582,10 @@ final class HelpMeAimController: ObservableObject {
             voice.say(AimPhrases.cantLookFor(said))
             return
         }
-        askedWord = AimVocabulary.normalize(text)
+        if let own, AppLang.isSpanish, YourLanguage.activeCode == AppLang.spanish {
+            AimNames.setSpanish(match.spokenName, own)
+        }
+        askedWord = own ?? said
         begin(.object(match))
     }
 
@@ -601,7 +632,12 @@ final class HelpMeAimController: ObservableObject {
         coach = AimCoach(subject: newSubject)
         coach?.reset(now: Date())
         recentOthers = []
-        statusText = "Looking for \(newSubject.spokenName)"
+        switch newSubject {
+        case let .object(m): AimNames.learn([m.spokenName])
+        case let .described(w): AimNames.learn([w])
+        default: break
+        }
+        statusText = L("Looking for %@", newSubject.lineName)
         if newSubject != .face { cameraPosition = .back }
         voice.warmRoute()
         if case let .described(word) = newSubject {
@@ -629,7 +665,7 @@ final class HelpMeAimController: ObservableObject {
             loadFinder { [weak self] finder in
                 guard let self else { return }
                 guard let finder else {
-                    voice.say("The object finder didn't load. Try Face or Picture or Page.")
+                    voice.say(L("The object finder didn't load. Try Face or Picture or Page."))
                     return
                 }
                 analyzer.configure(kind: .object, classIDs: Set(match.classIDs), finder: finder)
@@ -755,6 +791,7 @@ final class HelpMeAimController: ObservableObject {
             recentOthers.append(others)
             if recentOthers.count > AimElsewhere.window { recentOthers.removeFirst() }
             let things = AimElsewhere.pick(recentOthers, excluding: AimElsewhere.targetNames(for: subject))
+            AimNames.learn(things)
             elsewhere = AimElsewhere.sentence(subject: subject, things: things)
         }
         let actions = coach.observe(box: observation.box, faceCount: observation.count,
@@ -810,7 +847,7 @@ final class HelpMeAimController: ObservableObject {
         countdownWord = nil
         analyzer.setPaused(true)
         phase = .capturing
-        statusText = "Taking the picture"
+        statusText = L("Taking the picture")
         // Nothing for the object finder to score when the describing model
         // found it: keep the sharpest frame of the burst.
         let snapshot: (kind: AimFrameAnalyzer.Kind, ids: Set<Int32>, finder: AimObjectFinder?)?
@@ -830,7 +867,7 @@ final class HelpMeAimController: ObservableObject {
             }
             setTorch(false)
             notify.notificationOccurred(.success)
-            statusText = "Picking the best one"
+            statusText = L("Picking the best one")
             Task { [weak self] in
                 let result = await Task.detached(priority: .userInitiated) {
                     AimShotProcessor.process(frames, snapshot: snapshot, framing: framing, subjectName: subjectName)
@@ -838,7 +875,7 @@ final class HelpMeAimController: ObservableObject {
                 guard let self, phase == .capturing else { return }
                 lastPhoto = result.image
                 phase = .taken
-                statusText = "Picture taken"
+                statusText = L("Picture taken")
                 #if HELP_ME_AIM_SHOT_LOG
                 if let keep = result.keep { TestShotLog.write(keep) }
                 #endif
@@ -854,7 +891,7 @@ final class HelpMeAimController: ObservableObject {
                 // or nothing to say: the plain photo, as before.
                 var description: String?
                 if OnDeviceVisionNarrator.isBundled, let shot = result.image {
-                    statusText = "Picture taken. Describing it"
+                    statusText = AimPhrases.describing
                     voice.say(AimPhrases.describing)
                     description = await AimCaption.describe(shot, isPage: isPage)
                 }
@@ -867,19 +904,31 @@ final class HelpMeAimController: ObservableObject {
                         AimRecentTargets.remember(word)
                         recentTargets = AimRecentTargets.all()
                     }
-                    let line: String
-                    if let description {
-                        line = description + " " + AimPhrases.capitalized(
-                            saved ? AimPhrases.savedWithDescription : AimPhrases.notSavedWithDescription) + "."
-                    } else {
-                        line = AimPhrases.capitalized(
-                            AimPhrases.pictureTaken + (saved ? AimPhrases.savedSuffix : AimPhrases.notSavedSuffix))
-                    }
-                    statusText = line
                     // A description heard to the end is a success (rating prompt).
                     let described = description != nil
-                    voice.say(line) {
-                        if described { RatePrompt.resultSpoken(viaVoiceOver: false) }
+                    let spoken = { if described { RatePrompt.resultSpoken(viaVoiceOver: false) } }
+                    guard let description else {
+                        let line = AimPhrases.capitalized(AimPhrases.taken(saved: saved))
+                        statusText = line
+                        voice.say(line, then: spoken)
+                        return
+                    }
+                    let after = AimPhrases.capitalized(
+                        saved ? AimPhrases.savedWithDescription : AimPhrases.notSavedWithDescription) + "."
+                    guard AppLang.isSpanish else {
+                        let line = description + " " + after
+                        statusText = line
+                        voice.say(line, then: spoken)
+                        return
+                    }
+                    // Spanish app: the description is content (Your language's
+                    // translator, as on every other screen), the line after it
+                    // is the app's own Spanish; each said in its own voice.
+                    Task { @MainActor [weak self] in
+                        let out = await YourLanguage.intoActive(description)
+                        guard let self, phase == .taken else { return }
+                        statusText = out.text + " " + after
+                        voice.say(parts: [(out.text, out.lang), (after, AppLang.spanish)], then: spoken)
                     }
                 }
             }
@@ -920,12 +969,12 @@ final class HelpMeAimController: ObservableObject {
         cameraPosition = cameraPosition == .back ? .front : .back
         setTorch(false)
         coach?.reset(now: Date())
-        voice.say(cameraPosition == .front ? "front camera" : "back camera")
+        voice.say(cameraPosition == .front ? L("front camera") : L("back camera"))
     }
 
     func toggleTorch() {
         setTorch(!torchOn)
-        voice.say(torchOn ? "flashlight on" : "flashlight off")
+        voice.say(torchOn ? L("Flashlight, on") : L("Flashlight, off"))
     }
 
     private func setTorch(_ on: Bool) {
@@ -965,7 +1014,7 @@ final class HelpMeAimController: ObservableObject {
         camera?.start(position: cameraPosition)
         coach?.reset(now: Date())
         voice.warmRoute()
-        sayAfterVoiceOver("Still looking for \(subject.spokenName)")
+        sayAfterVoiceOver(L("Still looking for %@", subject.lineName))
         switch subject {
         case .object: if finder != nil { analyzer.setPaused(false) }
         case let .described(word): startLooking(for: word, firstWait: 2)
@@ -1026,6 +1075,7 @@ struct HelpMeAimView: View {
     @AccessibilityFocusState private var cameraFocused: Bool
     @State private var typed = ""
     @FocusState private var typing: Bool
+    @ObservedObject private var appLang = AppLangObserver.shared
 
     var body: some View {
         ZStack {
@@ -1056,26 +1106,26 @@ struct HelpMeAimView: View {
 
     private var choices: some View {
         VStack(spacing: 18) {
-            topBar(title: "Help Me Aim", back: {
+            topBar(title: L("Help Me Aim"), back: {
                 controller.shutdown()
                 onBack()
-            }, backLabel: "Back to home")
-            Text("What do you want a picture of?")
+            }, backLabel: L("Back to home"))
+            Text(L("What do you want a picture of?"))
                 .font(.title2.weight(.semibold))
                 .foregroundColor(.white)
                 .multilineTextAlignment(.center)
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 8)
-            AimBigButton(emoji: "🙂", title: "Face", color: .pink,
-                         hint: "Finds faces and talks you into the shot, then takes the picture") {
+            AimBigButton(emoji: "🙂", title: L("Face"), color: .pink,
+                         hint: L("Finds faces and talks you into the shot, then takes the picture")) {
                 controller.chooseFace()
             }
-            AimBigButton(emoji: "🖼️", title: "Picture or Page", color: .blue,
-                         hint: "Finds a page, a sign or a picture on the wall and gets all of it in the shot") {
+            AimBigButton(emoji: "🖼️", title: L("Picture or Page"), color: .blue,
+                         hint: L("Finds a page, a sign or a picture on the wall and gets all of it in the shot")) {
                 controller.choosePage()
             }
-            AimBigButton(emoji: "🔎", title: "Something Else", color: .orange,
-                         hint: "Say what you're looking for, like keys or a cup") {
+            AimBigButton(emoji: "🔎", title: L("Something Else"), color: .orange,
+                         hint: L("Say what you're looking for, like keys or a cup")) {
                 controller.chooseSomethingElse()
             }
             Spacer()
@@ -1087,8 +1137,8 @@ struct HelpMeAimView: View {
 
     private var asking: some View {
         VStack(spacing: 18) {
-            topBar(title: "Something Else", back: { controller.backToChoices() }, backLabel: "Back to choices")
-            Text("What are you looking for?")
+            topBar(title: L("Something Else"), back: { controller.backToChoices() }, backLabel: L("Back to choices"))
+            Text(L("What are you looking for?"))
                 .font(.title2.weight(.semibold))
                 .foregroundColor(.white)
                 .accessibilityAddTraits(.isHeader)
@@ -1096,7 +1146,7 @@ struct HelpMeAimView: View {
             if !controller.recentTargets.isEmpty {
                 recentTargetButtons
             }
-            if !controller.statusText.isEmpty, controller.statusText != "What are you looking for?" {
+            if !controller.statusText.isEmpty, controller.statusText != L("What are you looking for?") {
                 Text(controller.statusText)
                     .font(.headline)
                     .foregroundColor(.yellow)
@@ -1104,7 +1154,7 @@ struct HelpMeAimView: View {
                     .accessibilityHidden(true)
             }
             HStack {
-                TextField("Or type it", text: $typed)
+                TextField(L("Or type it"), text: $typed)
                     .textFieldStyle(.roundedBorder)
                     .submitLabel(.search)
                     .autocorrectionDisabled()
@@ -1112,8 +1162,8 @@ struct HelpMeAimView: View {
                     .focused($typing)
                     .onChange(of: typing) { _, now in if now { controller.typingStarted() } }
                     .onSubmit { controller.submit(typed) }
-                    .accessibilityLabel("Or type what you're looking for")
-                Button("Find") { controller.submit(typed) }
+                    .accessibilityLabel(L("Or type what you're looking for"))
+                Button(L("Find")) { controller.submit(typed) }
                     .buttonStyle(.borderedProminent)
                     .disabled(typed.trimmingCharacters(in: .whitespaces).isEmpty)
             }
@@ -1138,13 +1188,13 @@ struct HelpMeAimView: View {
                             .background(Capsule().fill(Color.black.opacity(0.6)))
                             .overlay(Capsule().stroke(Color.white.opacity(0.7), lineWidth: 1.5))
                     }
-                    .accessibilityLabel("Look for \(word)")
+                    .accessibilityLabel(L("Look for %@", word))
                 }
             }
-            Button("Clear list") { controller.clearRecentTargets() }
+            Button(L("Clear list")) { controller.clearRecentTargets() }
                 .font(.subheadline)
                 .foregroundColor(.white.opacity(0.8))
-                .accessibilityLabel("Clear recent items")
+                .accessibilityLabel(L("Clear recent items"))
         }
     }
 
@@ -1160,27 +1210,27 @@ struct HelpMeAimView: View {
                     controller.shootNow()
                 }
                 .accessibilityElement()
-                .accessibilityLabel("Camera, looking for \(controller.subject?.spokenName ?? "your subject")")
-                .accessibilityHint("Double tap to take the picture now")
+                .accessibilityLabel(L("Camera, looking for %@", controller.subject?.lineName ?? L("your subject")))
+                .accessibilityHint(L("Double tap to take the picture now"))
                 .accessibilityAddTraits(.isButton)
                 .accessibilityAction { controller.shootNow() }
                 .accessibilityFocused($cameraFocused)
 
             VStack {
                 HStack(spacing: 12) {
-                    smallButton("Back", system: "chevron.left", label: "Back to choices") {
+                    smallButton(L("Back"), system: "chevron.left", label: L("Back to choices")) {
                         controller.backToChoices()
                     }
                     Spacer()
                     if controller.subject == .face {
                         smallButton(nil, system: "arrow.triangle.2.circlepath.camera",
-                                    label: controller.cameraPosition == .back ? "Switch to front camera" : "Switch to back camera") {
+                                    label: controller.cameraPosition == .back ? L("Switch to front camera") : L("Switch to back camera")) {
                             controller.toggleCamera()
                         }
                     }
                     if controller.cameraPosition == .back {
                         smallButton(nil, system: controller.torchOn ? "flashlight.on.fill" : "flashlight.off.fill",
-                                    label: controller.torchOn ? "Flashlight, on" : "Flashlight, off") {
+                                    label: controller.torchOn ? L("Flashlight, on") : L("Flashlight, off")) {
                             controller.toggleTorch()
                         }
                     }
@@ -1206,7 +1256,7 @@ struct HelpMeAimView: View {
                         .font(.title3.weight(.semibold))
                         .foregroundColor(.white)
                         .multilineTextAlignment(.center)
-                    Text("Double tap anywhere to take it now")
+                    Text(L("Double tap anywhere to take it now"))
                         .font(.footnote)
                         .foregroundColor(.white.opacity(0.8))
                 }
@@ -1235,24 +1285,24 @@ struct HelpMeAimView: View {
         // with the photo above it (Matt, 2026-11-03).
         ScrollView {
         VStack(spacing: 18) {
-            topBar(title: "Picture Taken", back: { controller.backToChoices() }, backLabel: "Back to choices")
+            topBar(title: L("Picture taken"), back: { controller.backToChoices() }, backLabel: L("Back to choices"))
             if let photo = controller.lastPhoto {
                 Image(uiImage: photo)
                     .resizable()
                     .scaledToFit()
                     .cornerRadius(12)
                     .frame(maxHeight: 360)
-                    .accessibilityLabel("The picture you just took")
+                    .accessibilityLabel(L("The picture you just took"))
             }
             Text(controller.statusText)
                 .foregroundColor(.white)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-            AimBigButton(emoji: "📸", title: "Take Another", color: .green,
-                         hint: "Aim at \(controller.subject?.spokenName ?? "the same thing") again") {
+            AimBigButton(emoji: "📸", title: L("Take Another"), color: .green,
+                         hint: L("Aim at %@ again", controller.subject?.lineName ?? L("the same thing"))) {
                 controller.takeAnother()
             }
-            AimBigButton(emoji: "↩️", title: "Back", color: .gray, hint: "Back to the three choices") {
+            AimBigButton(emoji: "↩️", title: L("Back"), color: .gray, hint: L("Back to the three choices")) {
                 controller.backToChoices()
             }
         }
@@ -1265,7 +1315,7 @@ struct HelpMeAimView: View {
 
     private func topBar(title: String, back: @escaping () -> Void, backLabel: String) -> some View {
         HStack {
-            smallButton("Back", system: "chevron.left", label: backLabel, action: back)
+            smallButton(L("Back"), system: "chevron.left", label: backLabel, action: back)
             Spacer()
             Text(title)
                 .font(.headline)
@@ -1310,8 +1360,13 @@ struct AimBigButton: View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Text(emoji).font(.system(size: 34))
+                // Spanish runs longer ("Escuchando… toca para detener"): wraps, centered.
                 OutlinedText(text: title, fontSize: 24)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
             .frame(maxWidth: .infinity, minHeight: 88)
             .background(
                 ZStack {
@@ -1337,14 +1392,14 @@ private struct AimListenButton: View {
     var body: some View {
         VStack(spacing: 10) {
             AimBigButton(emoji: listener.isRunning ? "👂" : "🎙️",
-                         title: listener.isRunning ? "Listening… tap to stop" : AimPhrases.speakTitle,
+                         title: listener.isRunning ? L("Listening… tap to stop") : AimPhrases.speakTitle,
                          color: listener.isRunning ? .red : .purple,
-                         hint: listener.isRunning ? "Stops listening now" : AimPhrases.speakHint,
-                         label: listener.isRunning ? "Listening, tap to stop" : AimPhrases.speakLabel,
+                         hint: listener.isRunning ? L("Stops listening now") : AimPhrases.speakHint,
+                         label: listener.isRunning ? L("Listening… tap to stop") : AimPhrases.speakLabel,
                          action: action)
             if !listener.transcript.isEmpty {
                 // Shown for sighted helpers; the spoken reply covers VoiceOver.
-                Text("Heard: \(listener.transcript)")
+                Text(L("Heard: %@", listener.transcript))
                     .foregroundColor(.white)
                     .accessibilityHidden(true)
             }

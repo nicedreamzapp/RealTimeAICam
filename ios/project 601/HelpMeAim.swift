@@ -37,6 +37,18 @@ enum AimSubject: Equatable {
         }
     }
 
+    /// The name inside the app's lines, in the app's language: "a key" in English;
+    /// in Spanish the person's own words ("mis llaves") or the translator's
+    /// "una llave" (AimNames), the English word when neither is there yet.
+    var lineName: String {
+        switch self {
+        case .face: L("a face")
+        case .page: L("a picture or page")
+        case let .object(match): AimNames.withArticle(match.spokenName)
+        case let .described(word): AimNames.withArticle(word)
+        }
+    }
+
     /// Found by a word the person said, so it goes in the recent buttons.
     var remembersWord: Bool {
         switch self {
@@ -253,27 +265,30 @@ enum AimSteering {
 // MARK: - Phrases
 
 enum AimPhrases {
+    // Every line here is the app's own and goes through L(): Spanish from the
+    // bundled catalog when the app is Spanish (no translator), English
+    // otherwise. Names inside come from `lineName` / AimNames (2026-11-05).
     static func phrase(for instruction: AimInstruction, subject: AimSubject, faceCount: Int = 1) -> String {
         switch instruction {
-        case .notFound: "I don't see \(subject.spokenName) yet, move the phone slowly"
-        case .moveLeft: "move the phone left"
-        case .moveRight: "move the phone right"
-        case .moveUp: "move the phone up"
-        case .moveDown: "move the phone down"
-        case .moveCloser: "move closer"
-        case .backUp: "back up"
-        case .backUpCutOff: subject == .page ? "back up, the page is cut off" : "back up"
+        case .notFound: L("I don't see %@ yet, move the phone slowly", subject.lineName)
+        case .moveLeft: L("move the phone left")
+        case .moveRight: L("move the phone right")
+        case .moveUp: L("move the phone up")
+        case .moveDown: L("move the phone down")
+        case .moveCloser: L("move closer")
+        case .backUp: L("back up")
+        case .backUpCutOff: subject == .page ? L("back up, the page is cut off") : L("back up")
         case .framed:
             if subject == .face, faceCount > 1 {
-                "got it, \(countWord(faceCount)) faces, hold still"
+                L("got it, %@ faces, hold still", countWord(faceCount))
             } else {
-                "got it, hold still"
+                L("got it, hold still")
             }
         }
     }
 
     static func intro(for subject: AimSubject) -> String {
-        "Looking for \(subject.spokenName). Move the phone slowly. Double tap anywhere to take the picture yourself."
+        L("Looking for %@. Move the phone slowly. Double tap anywhere to take the picture yourself.", subject.lineName)
     }
 
     /// What to say while it still hasn't found the thing, in the order it is
@@ -288,42 +303,47 @@ enum AimPhrases {
     /// than nagging. Kept identical to Android's AimPhrases.searching.
     static func searching(step: Int, for subject: AimSubject) -> String {
         switch step {
-        case 0: "I don't see \(subject.spokenName) yet, move the phone slowly"
-        case 1: "still looking. try holding the phone a little further back"
-        case 2: "still looking. turn slowly, a bit at a time, and give me a moment to catch up"
-        case 3: "still looking. if the light is low, there's a flashlight button at the top of the screen"
-        default: "still looking for \(subject.spokenName). take your time, i'll say the moment i see it"
+        case 0: L("I don't see %@ yet, move the phone slowly", subject.lineName)
+        case 1: L("still looking. try holding the phone a little further back")
+        case 2: L("still looking. turn slowly, a bit at a time, and give me a moment to catch up")
+        case 3: L("still looking. if the light is low, there's a flashlight button at the top of the screen")
+        default: L("still looking for %@. take your time, i'll say the moment i see it", subject.lineName)
         }
     }
 
-    static let lostIt = "lost it"
-    static let pictureTaken = "picture taken"
-    static let savedSuffix = ", saved to your photos"
-    static let notSavedSuffix = ", but I couldn't save it. Allow adding photos in Settings"
+    static var lostIt: String { L("lost it") }
+    /// After the shot with no description: taken, and whether it reached Photos.
+    static func taken(saved: Bool) -> String {
+        saved ? L("picture taken, saved to your photos")
+            : L("picture taken, but I couldn't save it. Allow adding photos in Settings")
+    }
     /// Said the moment the shot is kept, while the vision model looks at it.
-    static let describing = "picture taken. describing it"
+    static var describing: String { L("Picture taken. Describing it") }
     /// After the description is read out: where the photo went, with its words.
-    static let savedWithDescription = "saved to your photos with that description"
-    static let notSavedWithDescription = "I couldn't save it. Allow adding photos in Settings"
-    static let captureFailed = "I couldn't take the picture, try again"
+    static var savedWithDescription: String { L("saved to your photos with that description") }
+    static var notSavedWithDescription: String { L("I couldn't save it. Allow adding photos in Settings") }
+    static var captureFailed: String { L("I couldn't take the picture, try again") }
     // Something Else, round 2 (Matt: "you don't know when to speak, if you
     // need to press the button, or hold it"). The app asks, beeps, and
     // listens by itself; Speak is a single tap for a retry.
-    static let askWhat = "After the beep, say what you're looking for."
-    static let heardNothing = "I didn't hear anything. Tap to Speak to try again, or type it."
-    static let didntCatch = "I didn't catch that. Tap to Speak to try again."
+    static var askWhat: String { L("After the beep, say what you're looking for.") }
+    static var heardNothing: String { L("I didn't hear anything. Tap to Speak to try again, or type it.") }
+    static var didntCatch: String { L("I didn't catch that. Tap to Speak to try again.") }
     /// The retry button: one tap, nothing to hold.
-    static let speakTitle = "Tap to Speak"
-    static let speakLabel = "Tap to speak"
-    static let speakHint = "Then say what you're looking for after the beep"
+    static var speakTitle: String { L("Tap to Speak") }
+    static var speakLabel: String { L("Tap to Speak") }
+    static var speakHint: String { L("Then say what you're looking for after the beep") }
+    /// Digits on screen; the voice says them in its own language.
     static let countdown = ["3", "2", "1"]
 
     static func cantLookFor(_ word: String) -> String {
         let w = word.trimmingCharacters(in: .whitespacesAndNewlines)
-        return w.isEmpty ? didntCatch : "I can't look for \(w) yet"
+        return w.isEmpty ? didntCatch : L("I can't look for %@ yet", AimNames.bare(w))
     }
 
-    static func countWord(_ n: Int) -> String {
+    /// "two" in English; in Spanish the digit, which a Spanish voice says as "dos".
+    static func countWord(_ n: Int, lang: String = AppLang.code) -> String {
+        if lang != AppLang.english { return String(n) }
         let words = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"]
         return n >= 0 && n < words.count ? words[n] : "many"
     }
@@ -1101,17 +1121,16 @@ enum AimElsewhere {
     }
 
     static func sentence(subject: AimSubject, things: [String]) -> String {
-        let missing = subject.spokenName
+        let missing = subject.lineName
         guard !things.isEmpty else {
-            return "I don't see \(missing), and nothing else stands out. Try another direction."
+            return L("I don't see %@, and nothing else stands out. Try another direction.", missing)
         }
-        let said = things.map(article)
-        let list: String = switch said.count {
-        case 1: said[0]
-        case 2: "\(said[0]) and \(said[1])"
-        default: said.dropLast().joined(separator: ", ") + " and " + said[said.count - 1]
-        }
-        return "I don't see \(missing). I can see \(list)."
+        let said = things.map { AimNames.inLine($0, article: article($0)) }
+        // "a dog, a laptop and a mirror": the list before the last joined with
+        // commas, then one "and" key, so Spanish says "y".
+        let list = said.count == 1 ? said[0]
+            : L("%@ and %@", said.dropLast().joined(separator: ", "), said[said.count - 1])
+        return L("I don't see %@. I can see %@.", missing, list)
     }
 
     /// Names that count as the target itself (so a dog is not offered when
@@ -1177,11 +1196,11 @@ enum AimAsk {
     /// Which way to move the phone to bring it to the middle.
     static func steer(_ place: Place) -> String {
         switch place {
-        case .left: "It's on the left. Turn the phone a little left."
-        case .right: "It's on the right. Turn the phone a little right."
-        case .top: "It's near the top. Tilt the phone up a little."
-        case .bottom: "It's near the bottom. Tilt the phone down a little."
-        case .middle: "It's right in front of you. Hold still."
+        case .left: L("It's on the left. Turn the phone a little left.")
+        case .right: L("It's on the right. Turn the phone a little right.")
+        case .top: L("It's near the top. Tilt the phone up a little.")
+        case .bottom: L("It's near the bottom. Tilt the phone down a little.")
+        case .middle: L("It's right in front of you. Hold still.")
         }
     }
 
@@ -1200,24 +1219,26 @@ enum AimAsk {
     }
 
     static func intro(for word: String) -> String {
-        "I don't know \(AimVocabulary.withArticle(word)) by sight, so I'll look closely every few seconds. "
-            + "Point the phone where it might be and move slowly. Double tap anywhere to take the picture yourself."
+        L("I don't know %@ by sight, so I'll look closely every few seconds. Point the phone where it might be and move slowly. Double tap anywhere to take the picture yourself.",
+          AimNames.withArticle(word))
     }
 
     static func notYet(_ word: String, misses: Int) -> String? {
         // Every other miss, so it is not a stuck record.
         guard misses % 2 == 1 else { return nil }
-        return misses == 1 ? "No \(word) here yet. Turn slowly." : "Still no \(word). Try another spot."
+        let name = AimNames.bare(word)
+        return misses == 1 ? L("No %@ here yet. Turn slowly.", name) : L("Still no %@. Try another spot.", name)
     }
 
     static func gaveUp(_ word: String) -> String {
-        "I couldn't find \(AimVocabulary.withArticle(word)). Point somewhere else and double tap to take a picture, or go back to try another word."
+        L("I couldn't find %@. Point somewhere else and double tap to take a picture, or go back to try another word.",
+          AimNames.withArticle(word))
     }
 
-    static let found = "Found it. Hold still."
+    static var found: String { L("Found it. Hold still.") }
     /// The model said yes but didn't name it on its own: say so, take the
     /// picture anyway, and the description tells them what it really is.
-    static let foundUnsure = "I think that's it, but I'm not sure. Hold still, I'll take the picture and tell you what it is."
+    static var foundUnsure: String { L("I think that's it, but I'm not sure. Hold still, I'll take the picture and tell you what it is.") }
 }
 
 // MARK: - Spoken word -> YOLOE class
@@ -1477,5 +1498,114 @@ enum AimRecentTargets {
     static func title(_ word: String) -> String {
         guard let first = word.first else { return word }
         return first.uppercased() + word.dropFirst()
+    }
+}
+
+// MARK: - Which way a line is said
+
+/// How Help Me Aim says one of its own lines (2026-11-05).
+enum AimLineRoute: Equatable {
+    /// Already in this language (from L()): spoken as is, in its voice.
+    case asIs(String)
+    /// An English line put into Your language by Apple's translator first.
+    case translate
+
+    static func pick(appLang: String, yourLanguage: String) -> AimLineRoute {
+        // Spanish app: the bundled Spanish, no translator and no download.
+        if appLang == AppLang.spanish { return .asIs(AppLang.spanish) }
+        return yourLanguage == YourLanguageRules.english ? .asIs(YourLanguageRules.english) : .translate
+    }
+}
+
+// MARK: - Names inside the lines, in the app's language
+
+/// The thing's name inside Help Me Aim's own lines (2026-11-05, Spanish UI).
+/// The lines come from the bundled catalog; the NAME is content: the matching
+/// stays English ("key"), so in a Spanish app the name is said as the person
+/// said it ("mis llaves", which carries its own article and gender) or, when
+/// they used English or a recent button, as Apple's translator gives it
+/// ("una llave", only once Spanish is downloaded). Until then the English word,
+/// never a gap. English apps: exactly the old wording.
+enum AimNames {
+    private static let lock = NSLock()
+    private nonisolated(unsafe) static var spanish: [String: String] = [:]
+
+    /// "a key" (English) / the Spanish name with its article, else the bare English word.
+    static func withArticle(_ word: String, lang: String = AppLang.code) -> String {
+        inLine(word, article: AimVocabulary.withArticle(word), lang: lang)
+    }
+
+    /// "key" (English) / the Spanish name, else the bare English word.
+    static func bare(_ word: String, lang: String = AppLang.code) -> String {
+        inLine(word, article: word, lang: lang)
+    }
+
+    /// `english` is how the English line says it (with or without an article).
+    static func inLine(_ word: String, article english: String, lang: String = AppLang.code) -> String {
+        guard lang == AppLang.spanish else { return english }
+        return spanishName(word) ?? word
+    }
+
+    static func spanishName(_ word: String) -> String? {
+        lock.lock(); defer { lock.unlock() }
+        return spanish[word.lowercased()]
+    }
+
+    /// How to say the English `word` in Spanish from now on.
+    static func setSpanish(_ word: String, _ name: String) {
+        let clean = name.trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+        guard !word.isEmpty, !clean.isEmpty else { return }
+        lock.lock(); spanish[word.lowercased()] = clean.lowercased(); lock.unlock()
+    }
+
+    static func forgetAll() {
+        lock.lock(); spanish = [:]; asked = []; lock.unlock()
+    }
+
+    private static let spanishFillers = [
+        "estoy buscando ", "busco ", "buscar ", "búscame ", "buscame ", "encuentra ", "encontrar ",
+        "dónde están ", "donde estan ", "dónde está ", "donde esta ", "quiero ", "una foto de ",
+        "foto de ",
+    ]
+
+    /// What the person said or typed in Spanish, as a name for the lines:
+    /// "busco mis llaves." -> "mis llaves". Articles stay (they carry the gender).
+    static func spanishPhrase(_ said: String) -> String {
+        var s = said.lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+        while s.contains("  ") { s = s.replacingOccurrences(of: "  ", with: " ") }
+        var changed = true
+        while changed {
+            changed = false
+            for filler in spanishFillers where s.hasPrefix(filler) && s.count > filler.count {
+                s = String(s.dropFirst(filler.count))
+                changed = true
+            }
+        }
+        return s.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private nonisolated(unsafe) static var asked: Set<String> = []
+
+    /// Spanish app: ask the translator once for each English name not known
+    /// yet ("a laptop" -> "una laptop"). Nothing happens without the Spanish
+    /// download; the English word is said meanwhile.
+    static func learn(_ words: [String], translate: @escaping @Sendable (String) async -> String? = {
+        await YourLanguage.translate($0, from: YourLanguageRules.english, to: AppLang.spanish)
+    }) {
+        guard AppLang.isSpanish else { return }
+        for word in words where !word.isEmpty {
+            let key = word.lowercased()
+            lock.lock()
+            let skip = spanish[key] != nil || asked.contains(key)
+            if !skip { asked.insert(key) }
+            lock.unlock()
+            if skip { continue }
+            Task.detached(priority: .utility) {
+                // Asked once per aim (forgetAll clears it), so a missing
+                // download is not retried on every camera frame.
+                if let out = await translate(AimElsewhere.article(key)) { setSpanish(key, out) }
+            }
+        }
     }
 }
