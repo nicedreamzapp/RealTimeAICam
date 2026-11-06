@@ -391,13 +391,14 @@ final class LiveCallController: ObservableObject {
         guard running, !micMuted, !hearingStopped, phase == .speaking || phase == .thinking else { return }
         let continuing = phase == .thinking && questionEndedAt.map { Date().timeIntervalSince($0) < 2.5 } == true
         let saying = [caption, lastSaid ?? ""] + memory.said.suffix(2)
-        let stop = LiveBargeIn.shouldInterrupt(heard, confidence: confidence, saying: saying, continuing: continuing)
+        let lang = listener.heardLang
+        let stop = LiveBargeIn.shouldInterrupt(heard, confidence: confidence, saying: saying, continuing: continuing, lang: lang)
         log(["event": "heard_while_talking", "text": heard, "interrupt": stop])
-        if stop { bargeIn(heard: heard) }
+        if stop { bargeIn(heard: heard, dropWords: LiveBargeIn.afterEcho(heard, saying: saying, lang: lang)) }
     }
 
     /// Talked over with a real question: stop now and take it, the words heard so far kept.
-    func bargeIn(heard: String = "") {
+    func bargeIn(heard: String = "", dropWords: Int = 0) {
         guard running, !micMuted, !hearingStopped, phase == .speaking || phase == .thinking else { return }
         // Still thinking and they kept talking right after: they weren't done, so keep what they said so far.
         if phase == .thinking, let e = questionEndedAt, Date().timeIntervalSince(e) < 2.5, !lastQuestion.isEmpty {
@@ -410,7 +411,7 @@ final class LiveCallController: ObservableObject {
         voice.stop()
         phase = .listening
         prefillArmed = false
-        listener.takeBargeAsQuestion()   // the same recognition carries on as the question
+        listener.takeBargeAsQuestion(dropWords: dropWords)   // the same recognition carries on, its own echo left out
         if !typedOnly { startWatch() }
     }
 
@@ -1031,9 +1032,10 @@ final class LiveCallController: ObservableObject {
         var line = line
         if case let .content(s) = line {
             guard let cleaned = LiveWords.spoken(s, aboutMe: askedAboutMe) else { return }
-            if tally.turn != my { tally = (my, 0, 0) }
-            // Matt 11/6: "it should not repeat phrases": a sentence already said, a looping one, a second help offer.
-            guard let vetted = sayGuard.vet(cleaned) else {
+            if tally.turn != my { tally = (my, 0, 0); sayGuard.beginTurn() }
+            // Matt 11/6: "it should not repeat phrases": a sentence repeated in this answer, a looping one, a second
+            // help offer. An answer to a question is never dropped for having been said before (review 11/6).
+            guard let vetted = sayGuard.vet(cleaned, prompted: true) else {
                 tally.dropped += 1
                 log(["event": "dropped_repeat", "text": cleaned])
                 return

@@ -133,21 +133,32 @@ struct LiveSayGuard {
     static func opening(_ s: String) -> String { LiveWords.normalize(s).split(separator: " ").prefix(3).joined(separator: " ") }
 
     /// The sentence to say, or nil to say nothing.
-    func vet(_ sentence: String) -> String? {
+    func vet(_ sentence: String, prompted: Bool = false) -> String? {
         var s = Self.cutLoop(sentence).trimmingCharacters(in: .whitespaces)
-        guard !LiveWords.normalize(s).isEmpty else { return nil }
+        let n = LiveWords.normalize(s)
+        guard !n.isEmpty else { return nil }
         if helpOffered, LiveWords.isHelpOffer(s) { return nil }
-        if said.contains(LiveWords.normalize(s)) { return nil }
+        // Review 11/6: an answer to a question is never blocked for being said before ("Yes." to two questions);
+        // only a sentence repeated inside the same answer is. Said-before applies to lines it says unasked, and only
+        // to a real sentence (5+ words).
+        if turnSaid.contains(n) { return nil }
+        if !prompted, n.split(separator: " ").count >= 5, said.contains(n) { return nil }
         if let last = lastOpening, Self.opening(s) == last || (last.hasPrefix("i see") && Self.opening(s).hasPrefix("i see")) { s = Self.reworded(s) }
-        if said.contains(LiveWords.normalize(s)) { return nil }
+        let r = LiveWords.normalize(s)
+        if turnSaid.contains(r) || (!prompted && r.split(separator: " ").count >= 5 && said.contains(r)) { return nil }
         return s
     }
+
+    /// This answer's sentences so far (a sentence repeated inside one answer is the 2B model looping).
+    private(set) var turnSaid: Set<String> = []
+    mutating func beginTurn() { turnSaid = [] }
 
     /// Remember a line that is being said (model sentences and the app's own lines alike).
     mutating func note(_ line: String) {
         let n = LiveWords.normalize(line)
         guard !n.isEmpty else { return }
         said.insert(n)
+        turnSaid.insert(n)
         lastOpening = Self.opening(line)
         if LiveWords.isHelpOffer(line) { helpOffered = true }
     }
@@ -698,7 +709,10 @@ enum LiveWords {
         if let l = lightCommand(q) { return .light(l) }
         if ["stop", "end call", "end the call", "hang up", "goodbye", "good bye", "bye", "bye bye"].contains(t)
             || t.hasPrefix("goodbye ") || t.hasSuffix(" goodbye") || t.contains("end the call") || t.contains("hang up") { return .end }
-        if ["repeat", "repeat that", "say that again", "what did you say", "come again", "say it again"].contains(t) { return .repeatLast }
+        if ["repeat", "repeat that", "say that again", "what did you say", "come again", "say it again"].contains(t)
+            || [" repeat that ", " say that again ", " repeat yourself ", " repeat it ", " come again ", " say it again ",
+                " what did you just say ", " repeat what you said ", " repeat the last "].contains(where: { (" " + t + " ").contains($0) })
+            && t.split(separator: " ").count <= 8 { return .repeatLast }   // review 11/6: "can you repeat that"
         // 11/3 Matt: "coach me on my jump shot" / "analyze the forces on this" switch the mode AND keep the rest.
         if let m = modeSwitch(t), t.split(separator: " ").count <= 6 || modeRest(q) != nil { return .mode(m) }
         // 11/1 phone test: "Hold on, stop" got a description of the room. These mean be quiet.
@@ -750,48 +764,98 @@ enum LiveTiming {
 /// It should only stop speaking when it hears a legitimate question toward it." The old loudness trigger is gone;
 /// only recognized words can interrupt, and only these.
 enum LiveBargeIn {
-    /// Sounds and fillers the recognizer turns coughs, laughs and murmurs into.
+    /// Sounds and fillers the recognizer turns coughs, laughs and murmurs into (English and Spanish).
     static let filler: Set<String> = ["um", "uh", "umm", "uhh", "hmm", "hm", "mm", "mmm", "mhm", "uh-huh", "huh", "ah", "oh", "eh",
                                       "yeah", "yep", "yes", "okay", "ok", "ha", "haha", "hahaha", "heh", "so", "well", "like", "er",
-                                      "erm", "the", "a", "and", "oops", "whoa", "wow", "cough", "ahem", "sigh", "i", "it"]
-    /// Words that stop it when they open what was said ("wait", "stop", "hold on").
-    static let stops: [[String]] = [["stop"], ["wait"], ["hold", "on"], ["hang", "on"], ["hey"], ["excuse", "me"], ["shh"],
+                                      "erm", "the", "a", "and", "oops", "whoa", "wow", "cough", "ahem", "sigh", "i", "it",
+                                      "este", "pues", "ajá", "aja", "sí", "si", "bueno", "o", "sea", "ja", "jaja", "el", "la", "y", "eeh"]
+    /// Words that stop it ("wait", "stop", "hold on"), wherever they come in what was heard.
+    static let stopsEnglish: [[String]] = [["stop"], ["wait"], ["hold", "on"], ["hang", "on"], ["hey"], ["excuse", "me"], ["shh"],
                                     ["shush"], ["be", "quiet"], ["never", "mind"], ["nevermind"], ["one", "sec"], ["one", "second"],
                                     ["live", "cam"], ["quiet"], ["pause"], ["enough"]]
+    static let stopsSpanish: [[String]] = [["espera"], ["esperá"], ["para"], ["pará"], ["alto"], ["oye"], ["basta"], ["cállate"],
+                                    ["callate"], ["silencio"], ["detente"], ["un", "momento"], ["momento"], ["live", "cam"], ["olvídalo"]]
     /// A question or ask to it: how it opens.
-    static let askStarts: Set<String> = ["what", "whats", "who", "where", "when", "why", "how", "which", "is", "are", "can", "could",
-                                         "would", "should", "will", "do", "does", "did", "tell", "describe", "show", "explain", "help",
-                                         "look", "read", "check", "find", "give", "say", "repeat"]
-    static let askPhrases = [" can you ", " could you ", " would you ", " tell me ", " look at ", " what is ", " what s ", " how do ",
+    static let askStartsEnglish: Set<String> = ["what", "whats", "who", "where", "when", "why", "how", "which", "is", "are", "can",
+                                         "could", "would", "should", "will", "do", "does", "did", "tell", "describe", "show",
+                                         "explain", "help", "look", "read", "check", "find", "give", "say", "repeat"]
+    static let askStartsSpanish: Set<String> = ["qué", "que", "cómo", "como", "dónde", "donde", "cuál", "cual", "cuándo", "cuando",
+                                         "quién", "quien", "cuánto", "cuanto", "cuántos", "cuantos", "por", "puedes", "podrías",
+                                         "podrias", "dime", "mira", "lee", "describe", "ayúdame", "ayudame", "hay", "es", "está",
+                                         "esta", "explica", "busca", "repite", "muéstrame", "muestrame", "tengo"]
+    static let askPhrasesEnglish = [" can you ", " could you ", " would you ", " tell me ", " look at ", " what is ", " what s ", " how do ",
                              " how many ", " where is ", " is this ", " is that ", " what about ", " do you ", " are you "]
+    static let askPhrasesSpanish = [" puedes ", " podrías ", " dime ", " mira ", " qué es ", " que es ", " cómo ", " dónde ", " cuál ",
+                                    " me dices ", " qué hay ", " qué ves "]
 
-    /// True only for real words meant for it: a stop word opening what was said, or a question/ask of at least three
-    /// words that are not its own voice coming back, not filler, and not low confidence. `saying`: what it is saying
-    /// now (its own words heard through the speaker never count). `continuing`: they started talking again right after
-    /// their question ended, so two real words are enough (they weren't done).
-    static func shouldInterrupt(_ heard: String, confidence: Double?, saying: [String], continuing: Bool = false) -> Bool {
+    static func isSpanish(_ lang: String) -> Bool { lang.lowercased().hasPrefix("es") }
+
+    /// The words heard minus its own voice: any run of 3+ words in a row that matches what it is saying is its own
+    /// sentence coming back through the speaker (review 11/6: a single shared word, "cup", is not an echo).
+    /// Question and stop words are never taken out. Returns the words kept and where the last echo ended.
+    static func withoutEcho(_ words: [String], saying: [String], lang: String = "en") -> (kept: [String], echoEnd: Int) {
+        let own = saying.map { LiveWords.normalize($0).split(separator: " ").map(String.init) }
+        var echo = [Bool](repeating: false, count: words.count)
+        for line in own where line.count >= 3 {
+            var i = 0
+            while i < words.count {
+                var best = 0
+                for j in 0 ..< line.count {
+                    var k = 0
+                    while i + k < words.count, j + k < line.count, words[i + k] == line[j + k] { k += 1 }
+                    best = max(best, k)
+                }
+                if best >= 3 { for x in i ..< i + best { echo[x] = true }; i += best } else { i += 1 }
+            }
+        }
+        let asks = isSpanish(lang) ? askStartsSpanish : askStartsEnglish
+        let stopWords = Set((isSpanish(lang) ? stopsSpanish : stopsEnglish).flatMap { $0 })
+        var kept: [String] = []
+        var end = 0
+        for (i, w) in words.enumerated() {
+            if echo[i], !asks.contains(w), !stopWords.contains(w) { end = i + 1; continue }
+            kept.append(w)
+        }
+        return (kept, end)
+    }
+
+    /// The question to keep when it was talked over: only the words after its own echo (review 11/6).
+    static func afterEcho(_ heard: String, saying: [String], lang: String = "en") -> Int {
+        let words = LiveWords.normalize(heard).split(separator: " ").map(String.init)
+        return withoutEcho(words, saying: saying, lang: lang).echoEnd
+    }
+
+    /// True only for real words meant for it: a stop word anywhere in the newest words, or a question/ask of at least
+    /// three words that are not its own voice coming back, not filler, and not low confidence. `saying`: what it is
+    /// saying now. `continuing`: they started talking again right after their question ended, so two real words are
+    /// enough. `lang`: the language being heard (the recognizer's).
+    static func shouldInterrupt(_ heard: String, confidence: Double?, saying: [String], continuing: Bool = false,
+                                lang: String = "en") -> Bool {
         if let c = confidence, c > 0, c < 0.3 { return false }
         if LiveWords.lightCommand(heard) != nil, LiveWords.normalize(heard).split(separator: " ").count >= 2 { return true }   // "lights on"
-        let own = Set(saying.flatMap { LiveWords.normalize($0).split(separator: " ").map(String.init) })
         let words = LiveWords.normalize(heard).split(separator: " ").map(String.init)
-        // Its own voice: the words that are not in what it is saying right now.
-        let fresh = words.filter { !own.contains($0) }
-        let real = fresh.filter { !filler.contains($0) }
-        guard !real.isEmpty else { return false }
-        // Most of what was heard is its own sentence coming back through the speaker: never a barge-in.
-        if !own.isEmpty, Double(fresh.count) / Double(max(1, words.count)) < 0.5, words.count >= 3 { return false }
-        // A stop word opening what was heard, unless it is in what it is saying ("hold on" said by it, heard back).
-        let opening = Array(words.drop(while: { filler.contains($0) }))
+        let es = isSpanish(lang)
+        // A stop word first, ahead of the echo rule: in the opening words or the newest ones ("... wait", "para").
+        let content = words.filter { !filler.contains($0) }
+        let stops = es ? stopsSpanish : stopsEnglish
+        let head = Array(content.prefix(3)), tail = Array(content.suffix(3))
+        func has(_ ws: [String], _ p: [String]) -> Bool {
+            ws.count >= p.count && (0 ... ws.count - p.count).contains { Array(ws[$0 ..< $0 + p.count]) == p }
+        }
         let ownLine = " " + saying.map { LiveWords.normalize($0) }.joined(separator: " ") + " "
-        if stops.contains(where: { opening.count >= $0.count && Array(opening.prefix($0.count)) == $0
-            && !ownLine.contains(" " + $0.joined(separator: " ") + " ") }) { return true }
+        // "para" is also "for" in Spanish: it stops only when it opens what was heard ("para, para").
+        if stops.contains(where: { ($0 == ["para"] ? content.first == "para" : has(head, $0) || has(tail, $0))
+            && !ownLine.contains(" " + $0.joined(separator: " ") + " ") }) {
+            return true
+        }
+        let fresh = withoutEcho(words, saying: saying, lang: lang).kept
+        let real = fresh.filter { !filler.contains($0) }
+        if continuing { return real.count >= 2 }
+        guard real.count >= 3 else { return false }
         let start = Array(fresh.drop(while: { filler.contains($0) }))
-        let meaningful = real
-        if continuing { return meaningful.count >= 2 }
-        guard meaningful.count >= 3 else { return false }
         let t = " " + start.joined(separator: " ") + " "
-        if let first = start.first, askStarts.contains(first) { return true }
-        return askPhrases.contains { t.contains($0) }
+        if let first = start.first, (es ? askStartsSpanish : askStartsEnglish).contains(first) { return true }
+        return (es ? askPhrasesSpanish : askPhrasesEnglish).contains { t.contains($0) }
     }
 }
 

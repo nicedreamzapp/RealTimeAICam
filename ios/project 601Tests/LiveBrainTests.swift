@@ -303,3 +303,48 @@ struct LiveFlashlightTests {
         #expect(LiveBargeIn.shouldInterrupt("lights off", confidence: nil, saying: ["The cup is white."]))
     }
 }
+
+/// The 11/6 review's five fixes.
+struct LiveReviewRound1Tests {
+    @Test func answersToQuestionsAreNeverBlockedAsSaidBefore() {
+        var g = LiveSayGuard()
+        g.beginTurn(); g.note("Yes.")
+        g.beginTurn()
+        #expect(g.vet("Yes.", prompted: true) == "Yes.")                  // "Is the door open?" "Yes." after "Yes."
+        g.note("Yes.")
+        #expect(g.vet("Yes.", prompted: true) == nil)                     // twice inside one answer: the model looping
+        g.beginTurn(); g.note("There is a red boat on the water.")
+        g.beginTurn()
+        #expect(g.vet("There is a red boat on the water.", prompted: false) == nil)   // unasked and 5+ words: said before
+        #expect(g.vet("There is a red boat on the water.", prompted: true) != nil)    // asked: always answered
+        #expect(g.vet("Need anything?", prompted: false) == "Need anything?")         // short lines are never blocked
+        #expect(LiveWords.turn("can you repeat that") == .repeatLast)
+        #expect(LiveWords.turn("sorry could you say that again") == .repeatLast)
+    }
+
+    @Test func aQuestionOnTheSameTopicIsNotAnEcho() {
+        #expect(LiveBargeIn.shouldInterrupt("what color is the cup", confidence: nil, saying: ["The cup is red."]))
+        #expect(!LiveBargeIn.shouldInterrupt("the cup is red", confidence: nil, saying: ["The cup is red."]))
+        #expect(!LiveBargeIn.shouldInterrupt("cup is red and", confidence: nil, saying: ["The cup is red and shiny."]))
+    }
+
+    @Test func stopWordsCountAnywhereInTheNewestWords() {
+        #expect(LiveBargeIn.shouldInterrupt("the cup is red wait", confidence: nil, saying: ["The cup is red and shiny."]))
+        #expect(LiveBargeIn.shouldInterrupt("hold on", confidence: nil, saying: ["The cup is on the table."]))
+        #expect(LiveBargeIn.shouldInterrupt("okay okay stop", confidence: nil, saying: ["The cup is red."]))
+    }
+
+    @Test func spanishStopAndQuestionWords() {
+        for h in ["espera", "para", "oye", "un momento", "qué es eso", "dime qué ves", "cómo lo arreglo", "puedes leer esto"] {
+            #expect(LiveBargeIn.shouldInterrupt(h, confidence: nil, saying: ["La taza es blanca."], lang: "es-ES"), "should interrupt: \(h)")
+        }
+        for h in ["eh este", "pues voy a la tienda", "la taza es blanca", "jaja", "esto es para mi mamá"] {
+            #expect(!LiveBargeIn.shouldInterrupt(h, confidence: nil, saying: ["La taza es blanca."], lang: "es-ES"), "should not: \(h)")
+        }
+    }
+
+    @Test func aBargedInQuestionLeavesOutItsOwnEcho() {
+        #expect(LiveBargeIn.afterEcho("the cup is red what is that", saying: ["The cup is red."]) == 4)
+        #expect(LiveBargeIn.afterEcho("what is that", saying: ["The cup is red."]) == 0)
+    }
+}
