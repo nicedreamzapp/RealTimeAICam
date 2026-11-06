@@ -4,7 +4,8 @@ import UIKit
 /// download window waits for a tap a blind person may not know about, while the app used to
 /// say "Still downloading" every 15 s for 7.5 minutes until Apple gave up. Now: once the window
 /// is up, where its button is; while it stays up, that it waits for a tap (often at first,
-/// then once a minute); if it closes without the language, that it closed and how to try again.
+/// then once a minute); once it has gone, the plain progress line; if Apple ends without the
+/// language after the window was up, that it closed and how to try again.
 /// Pure, so the timing is unit tested; `DownloadSheetWatch` says whether the window is up.
 struct DownloadGuide {
     enum Line: Equatable {
@@ -37,9 +38,8 @@ struct DownloadGuide {
             lastLineAt = now
             return .sheetWaiting
         }
-        // The window was up and has gone: Apple finishes (or failed) on its own; the
-        // last line comes from `finished`.
-        if sheetSeen { return nil }
+        // No window (or it has gone and Apple keeps downloading in the background): the
+        // plain progress line, 15 s after the last thing said.
         guard now - lastLineAt >= Self.stillGap else { return nil }
         lastLineAt = now
         return .stillDownloading

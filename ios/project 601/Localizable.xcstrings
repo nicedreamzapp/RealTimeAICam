@@ -518,24 +518,24 @@
         }
       }
     },
-    "Apple opened a window to download %@, in the lower half of the screen. Tap the round download button on the right, next to the language names. With VoiceOver it may be called Arrow Down Circle." : {
+    "Apple opened a window to download %@, in the lower half of the screen. Tap the round button with a down arrow on the right, next to the language names." : {
       "extractionState" : "manual",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Apple abrió una ventana para descargar %@, en la mitad de abajo de la pantalla. Toca el botón redondo de descarga a la derecha, junto a los nombres de los idiomas. Con VoiceOver puede llamarse Arrow Down Circle."
+            "value" : "Apple abrió una ventana para descargar %@, en la mitad de abajo de la pantalla. Toca el botón redondo con una flecha hacia abajo a la derecha, junto a los nombres de los idiomas."
           }
         }
       }
     },
-    "Apple's download window closed before %@ downloaded. To try again, tap %@ in Settings, under Your language." : {
+    "Apple's download window closed before %@ downloaded. Check the internet connection, then tap Download %@ again in Settings, under Your language." : {
       "extractionState" : "manual",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La ventana de descarga de Apple se cerró antes de descargar %@. Para intentarlo de nuevo, toca %@ en Ajustes, en Tu idioma."
+            "value" : "La ventana de descarga de Apple se cerró antes de descargar %@. Revisa la conexión a internet y vuelve a tocar Descargar %@ en Ajustes, en Tu idioma."
           }
         }
       }
@@ -4456,13 +4456,13 @@
         }
       }
     },
-    "The %@ download is waiting for your tap: the round download button on the right, in the lower half of the screen. If you already tapped it, it is downloading and the window closes by itself when it's done." : {
+    "The %@ download is waiting for your tap: the round button with a down arrow on the right, in the lower half of the screen. If you already tapped it, it is downloading and the window closes by itself when it's done." : {
       "extractionState" : "manual",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La descarga de %@ espera tu toque: el botón redondo de descarga a la derecha, en la mitad de abajo de la pantalla. Si ya lo tocaste, se está descargando y la ventana se cierra sola al terminar."
+            "value" : "La descarga de %@ espera tu toque: el botón redondo con una flecha hacia abajo a la derecha, en la mitad de abajo de la pantalla. Si ya lo tocaste, se está descargando y la ventana se cierra sola al terminar."
           }
         }
       }

@@ -90,13 +90,13 @@ enum YourLanguageRules {
     /// download button at its right end (VoiceOver: "Arrow Down Circle"). One tap downloads them
     /// all; the window stays open while it downloads and closes by itself when done.
     static func sheetOpenedLine(_ code: String) -> String {
-        L("Apple opened a window to download %@, in the lower half of the screen. Tap the round download button on the right, next to the language names. With VoiceOver it may be called Arrow Down Circle.", nameInSentence(code))
+        L("Apple opened a window to download %@, in the lower half of the screen. Tap the round button with a down arrow on the right, next to the language names.", nameInSentence(code))
     }
     static func sheetWaitingLine(_ code: String) -> String {
-        L("The %@ download is waiting for your tap: the round download button on the right, in the lower half of the screen. If you already tapped it, it is downloading and the window closes by itself when it's done.", nameInSentence(code))
+        L("The %@ download is waiting for your tap: the round button with a down arrow on the right, in the lower half of the screen. If you already tapped it, it is downloading and the window closes by itself when it's done.", nameInSentence(code))
     }
     static func sheetClosedLine(_ code: String) -> String {
-        L("Apple's download window closed before %@ downloaded. To try again, tap %@ in Settings, under Your language.", nameInSentence(code), downloadRow(code))
+        L("Apple's download window closed before %@ downloaded. Check the internet connection, then tap Download %@ again in Settings, under Your language.", nameInSentence(code), nameInSentence(code))
     }
     /// Read by the English voice when no voice for `code` is installed, so it stays English
     /// out loud; `noVoiceShown` is the same line for the screen in the app's language.
@@ -241,7 +241,7 @@ final class YourLanguage: ObservableObject {
         NSLog("YourLanguage: download requested by tap: %@", c)
         say(YourLanguageRules.downloadingLine(c))
         let baseline = DownloadSheetWatch.stack().depth
-        let state = DownloadGuideState(DownloadGuide(start: Date().timeIntervalSince1970))
+        let state = DownloadGuideState(DownloadGuide(start: ProcessInfo.processInfo.systemUptime))
         // Watches for Apple's download window and says where its button is (DownloadGuide).
         let progress = Task { @MainActor [weak self] in
             var lastTop = ""
@@ -253,7 +253,7 @@ final class YourLanguage: ObservableObject {
                     lastTop = now.top
                     NSLog("YourLanguage: over the app now: %@ (depth %d, was %d)", now.top, now.depth, baseline)
                 }
-                if let line = state.guide.tick(sheetShowing: now.depth > baseline, now: Date().timeIntervalSince1970) {
+                if let line = state.guide.tick(sheetShowing: now.depth > baseline, now: ProcessInfo.processInfo.systemUptime) {
                     say(DownloadGuide.text(line, code: c))
                 }
             }

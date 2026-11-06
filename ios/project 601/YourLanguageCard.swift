@@ -16,8 +16,11 @@ struct YourLanguageCard: View {
         // VoiceOver on: one announcement, so it doesn't talk over VoiceOver reading Apple's
         // download window (the same rule as UICue). Otherwise the app's voice.
         if UIAccessibility.isVoiceOverRunning {
+            // Queued, so VoiceOver finishes what it is reading instead of dropping the line.
             UIAccessibility.post(notification: .announcement,
-                                 argument: SpeechManager.voiceOverLine(line, lang: AppLang.code))
+                                 argument: NSAttributedString(string: line, attributes: [
+                                     .accessibilitySpeechLanguage: AppLang.code,
+                                     .accessibilitySpeechQueueAnnouncement: true]))
         } else {
             SpeechManager.shared.speak(line)
         }
