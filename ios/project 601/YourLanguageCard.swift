@@ -98,20 +98,21 @@ struct YourLanguageCard: View {
                     .accessibilityIdentifier("yourLanguageVoiceSettings")
                 }
             }
-        }
-        #if DEBUG
-        .overlay(alignment: .bottomTrailing) {
-            // Simulator tests only: how the object names stand.
+
+            #if DEBUG
+            // Simulator tests only (the fake translator, never in a release build): how the object
+            // names stand. Its own line under the button, so it never sits on top of it.
             if YourLanguageTranslator.isFake {
                 TimelineView(.periodic(from: .now, by: 1)) { _ in
                     let status = ObjectLabelCache.shared.status
                     Text(status).font(.system(size: 9)).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                         .accessibilityIdentifier("yourLanguageObjectNames")
                         .accessibilityLabel(status)
                 }
             }
+            #endif
         }
-        #endif
         .padding()
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
         .accessibilityElement(children: .contain)
