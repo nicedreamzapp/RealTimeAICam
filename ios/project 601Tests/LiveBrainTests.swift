@@ -134,9 +134,16 @@ struct LiveWordsTests {
         for r in 0 ..< 20 { #expect(LiveWords.ack(after: "Okay.", random: r) != "Okay.") }
     }
 
+    @Test func spokenDropsOh() {
+        #expect(LiveWords.spoken("Oh, I see a map and a monitor.", aboutMe: false) == "I see a map and a monitor.")
+        #expect(LiveWords.spoken("Ah! a dog by the door.", aboutMe: false) == "A dog by the door.")
+        #expect(LiveWords.spoken("Ohio is to your left.", aboutMe: false) == "Ohio is to your left.")
+        #expect(LiveWords.spoken("Oh wow, I see a map.", aboutMe: false) == "I see a map.")
+    }
+
     @Test func newThingLineReadsNaturally() {
-        #expect(LiveWords.newThingLine(["boat"]) == "Oh, I see a boat now.")
-        #expect(LiveWords.newThingLine(["umbrella", "boxes"]) == "Oh, I see an umbrella and boxes now.")
+        #expect(LiveWords.newThingLine(["boat"]) == "I see a boat. Anything I can help with?")
+        #expect(LiveWords.newThingLine(["umbrella", "boxes"]) == "I see an umbrella and boxes. Anything I can help with?")
     }
 }
 

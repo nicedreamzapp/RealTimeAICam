@@ -31,7 +31,7 @@ enum LiveCamWords {
     static let stillGettingReady = "I'm still getting ready. Ask me again in a second."
     static let cantSeeInBackground = "I can't see while the phone is locked or another app is open. Open RealTime AI Cam again and ask me."
     static let cameraPaused = "My camera paused, I'm restarting it. Ask me again in a second."
-    static let newThing = "Oh, I see %@ now."
+    static let newThing = "I see %@. Anything I can help with?"
     static let notFullySure = "I'm not fully sure on that one."
     static let takeBack = "Actually, I'm not sure about the %@."
     static let lostAnswer = "Sorry, I lost that. Ask me again?"

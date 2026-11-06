@@ -64,6 +64,8 @@ final class LiveCallController: ObservableObject {
     @Published private(set) var caption = ""
     /// The language the caption is in (VoiceOver reads it with a voice for it).
     @Published private(set) var captionLang = AppLang.code
+    /// The welcome is heard, never shown (Matt 11/6: "it does not need one on screen").
+    @Published private(set) var captionIsIntro = false
     @Published private(set) var progress: Double = 0
     @Published private(set) var micLevel: Float = -60
     /// The model is reading a photo or writing: the orb holds still so the GPU is all the model's.
@@ -146,6 +148,7 @@ final class LiveCallController: ObservableObject {
             guard let self else { return }
             self.caption = shown
             self.captionLang = lang
+            self.captionIsIntro = english == LiveWords.firstGreeting
             self.lastSaid = english
             self.log(["event": "say", "text": shown])
             if let o = self.openedAt { self.openedAt = nil; self.log(["event": "first_spoken_after_open", "seconds": Date().timeIntervalSince(o)]) }
@@ -192,6 +195,7 @@ final class LiveCallController: ObservableObject {
                 // The first time: say why before iOS asks (blind users hear the reason, then the two prompts).
                 phase = .speaking
                 caption = L(LiveCamWords.permissionLine)
+                captionIsIntro = false
                 captionLang = AppLang.code
                 voice.sayOwn(LiveCamWords.permissionLine)
                 while running, voice.isBusy { try? await Task.sleep(nanoseconds: 150_000_000) }
@@ -247,6 +251,7 @@ final class LiveCallController: ObservableObject {
         guard running else { return }
         phase = .failed
         caption = L(why)
+        captionIsIntro = false
         captionLang = AppLang.code
         log(["event": "failed", "why": why])
         voice.sayOwn(why)

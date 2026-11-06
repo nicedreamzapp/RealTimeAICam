@@ -242,7 +242,8 @@ enum LiveWords {
     static let describeNow = "In one short sentence, tell me what you see right now, the main thing first."
 
     /// The one look at the start of a call: what's around, never the person (11/2 Matt).
-    static let openingLook = "In one short sentence, name the main things around here. Never mention the person, their face or clothes."
+    /// Matt 11/6: "I see a map and a monitor", then it offers to help instead of just naming things.
+    static let openingLook = "In one short sentence that starts with \"I see\", name the main things around here, then ask if they want help with anything. Never mention the person, their face or clothes."
     /// The quiet look while the view changes: a bare list the code compares with what was already named.
     static let inventory = "List the main things in view as short names separated by commas, at most 8. Things only, never the person or their clothes. No sentence."
     static let personWords: Set<String> = ["man", "woman", "person", "people", "guy", "you", "your", "face", "hair", "shirt",
@@ -272,9 +273,10 @@ enum LiveWords {
     static func extractAsk(_ answer: String) -> String {
         "List the physical objects named in this sentence as short names separated by commas, nothing else. Sentence: \(answer)"
     }
-    /// "Oh, I see a boat now." for one or two new things.
+    /// "I see a boat. Anything I can help with?" for one or two new things. Matt 11/6: never "Oh", and it
+    /// engages instead of just naming things.
     static func newThingLine(_ things: [String]) -> String {
-        "Oh, I see " + newThings(things) + " now."
+        "I see " + newThings(things) + ". Anything I can help with?"
     }
     /// "a boat", "an umbrella and boxes": the English things for newThingLine (and its app-language format).
     static func newThings(_ things: [String]) -> String {
@@ -349,6 +351,11 @@ enum LiveWords {
         let l = s.lowercased()
         if !aboutMe, ["on your iphone", "on your phone", "offline", "i'm live cam", "i am live cam", "lfm", "liquid ai"].contains(where: { l.contains($0) }) { return nil }
         var out = s
+        // Matt 11/6: never "Oh, I see a map". It just says "I see a map".
+        if let r = out.range(of: #"^\s*(Oh wow|Ooh|Oh|Ah|Wow)[,!.]?\s+"#, options: [.regularExpression, .caseInsensitive]) {
+            out.removeSubrange(r)
+            if let f = out.first { out = f.uppercased() + out.dropFirst() }
+        }
         for (a, b) in [(" in the photo", ""), (" in the image", ""), (" in this photo", ""), (" in this image", ""),
                        ("the photo", "the view"), ("the image", "the view"), ("The photo", "The view"), ("The image", "The view")] {
             out = out.replacingOccurrences(of: a, with: b)

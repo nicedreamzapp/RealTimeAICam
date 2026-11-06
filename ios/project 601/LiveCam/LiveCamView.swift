@@ -1,6 +1,7 @@
 // Live Cam, full screen (ported from Moonstone's LiveCameraView, 2026-11-04): the camera, a soft orb that shows
 // listening / thinking / speaking, what it heard and what it is saying in big words, and few, big controls:
-// Mode (Normal, Funny, Analyze, Coach, plus Speak up and Words on screen), Flip camera, Mute and one red Back.
+// Mode (Normal, Funny, Analyze, Coach, plus Speak up), Words on screen, Flip camera, Mute and one red Back.
+// Matt 11/6: Words on screen off means no words at all, and its switch sits in the top bar, not the menu.
 // Built for VoiceOver first: every control is labeled with a hint, the camera itself is hidden from VoiceOver,
 // the two-finger double tap stops it talking and the escape scrub (two-finger Z) leaves.
 // Matt 11/3 kept: no yellow "Probably guessing" sign on screen in any mode (the notice is only logged).
@@ -43,7 +44,7 @@ struct LiveCamView: View {
                 } else {
                     LiveCamPreview(session: call.camera.session).ignoresSafeArea().accessibilityHidden(true)
                 }
-                if abs(zoomLabel - 1) > 0.05 {
+                if call.showCaption, abs(zoomLabel - 1) > 0.05 {
                     VStack {
                         Text(String(format: zoomLabel < 10 ? "%.1f×" : "%.0f×", zoomLabel))
                             .font(.footnote.weight(.bold)).foregroundStyle(.white)
@@ -63,6 +64,7 @@ struct LiveCamView: View {
                             .font(.callout.weight(.semibold)).foregroundStyle(.white).multilineTextAlignment(.center)
                             .padding(.horizontal, 12).padding(.vertical, 8)
                             .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
+                            .opacity(call.showCaption ? 1 : 0.001)
                             .accessibilityIdentifier("liveCamCantHear")
                     }
                     if call.typedOnly || call.hearingStopped { typedBox }
@@ -121,6 +123,18 @@ struct LiveCamView: View {
             .accessibilityLabel(L("Mode: %@", L(call.mode.label)))
             .accessibilityHint(L("Shows the modes and settings. You can also say funny mode, analyze mode, coach mode or normal mode."))
             Spacer(minLength: 0)
+            Button { call.showCaption.toggle() } label: {
+                Image(systemName: call.showCaption ? "captions.bubble.fill" : "captions.bubble").font(.title2.weight(.semibold))
+                    .frame(width: 60, height: 60)
+                    .background(call.showCaption ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.black.opacity(0.45)), in: Circle())
+                    .overlay(Circle().stroke(.white.opacity(0.35), lineWidth: 1))
+                    .foregroundStyle(call.showCaption ? .black : .white)
+            }
+            .accessibilityLabel(L("Words on screen"))
+            .accessibilityValue(call.showCaption ? L("On") : L("Off"))
+            .accessibilityAddTraits(.isToggle)
+            .accessibilityHint(L("Shows what Live Cam says in big words. VoiceOver can read them either way"))
+            .accessibilityIdentifier("liveCamWordsToggle")
             Button { call.camera.flip() } label: {
                 Image(systemName: "arrow.triangle.2.circlepath.camera").font(.title2.weight(.semibold))
                     .frame(width: 60, height: 60).background(.black.opacity(0.45), in: Circle())
@@ -155,10 +169,6 @@ struct LiveCamView: View {
             Toggle(isOn: $call.proactiveOn) { Text(L("Speak up when quiet")).font(.body.weight(.semibold)).fixedSize(horizontal: false, vertical: true) }
                 .padding(.horizontal, 16).padding(.vertical, 6).frame(minHeight: 56)
                 .accessibilityHint(L("When on, Live Cam checks in after a long quiet and mentions new things it is sure it sees"))
-            Divider().overlay(.white.opacity(0.2))
-            Toggle(isOn: $call.showCaption) { Text(L("Words on screen")).font(.body.weight(.semibold)).fixedSize(horizontal: false, vertical: true) }
-                .padding(.horizontal, 16).padding(.vertical, 6).frame(minHeight: 56)
-                .accessibilityHint(L("Shows what Live Cam says in big words. VoiceOver can read them either way"))
         }
         .tint(.teal)
         .foregroundStyle(.white)
@@ -204,7 +214,7 @@ struct LiveCamView: View {
                     .font(.system(size: wide ? 22 : 26, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white).multilineTextAlignment(.center).lineLimit(wide ? 3 : 4).minimumScaleFactor(0.6)
                     .shadow(color: .black.opacity(0.9), radius: 6)
-                    .opacity(call.showCaption ? 1 : 0.001)   // hidden words stay readable by VoiceOver
+                    .opacity(call.showCaption && !call.captionIsIntro ? 1 : 0.001)   // hidden words stay readable by VoiceOver
                     .accessibilityLabel(call.caption)
                     .accessibilityValue(call.caption)
                     .accessibilityAddTraits(.updatesFrequently)
@@ -242,6 +252,7 @@ struct LiveCamView: View {
                 .accessibilityAddTraits(.updatesFrequently)
                 .accessibilityAction { call.interrupt() }
             Text(statusLine).font(.footnote.weight(.medium)).foregroundStyle(.white.opacity(0.8))
+                .opacity(call.showCaption ? 1 : 0)
                 .accessibilityHidden(true)
         }
     }

@@ -3092,13 +3092,13 @@
         }
       }
     },
-    "Oh, I see %@ now." : {
+    "I see %@. Anything I can help with?" : {
       "extractionState" : "manual",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ah, ahora veo %@."
+            "value" : "Veo %@. ¿Te ayudo con algo?"
           }
         }
       }
