@@ -292,6 +292,8 @@ final class YourLanguageTranslator: ObservableObject {
         let from: String
         let to: String
         let prepare: Bool
+        /// One of translateMany's names: served after any single line asked meanwhile.
+        var batch = false
         let done: (String?) -> Void
     }
 
@@ -354,7 +356,15 @@ final class YourLanguageTranslator: ObservableObject {
 
     // MARK: Requests
 
+    /// How long a queued translation may wait: 20 s for one line, more for each name in a
+    /// translateMany list, since the list is served one name after another.
+    nonisolated static func batchTimeout(_ count: Int) -> TimeInterval { 20 + Double(count) * 0.25 }
+
     func translate(_ text: String, from: String, to: String) async -> String? {
+        await translate(text, from: from, to: to, batchOf: 0)
+    }
+
+    private func translate(_ text: String, from: String, to: String, batchOf count: Int) async -> String? {
         let key = "\(from)>\(to)>\(text)" as NSString
         if let hit = cache.object(forKey: key) { return hit as String }
         guard YourLanguage.shared.isReady(from), YourLanguage.shared.isReady(to) else { return nil }
@@ -364,7 +374,11 @@ final class YourLanguageTranslator: ObservableObject {
             return out
         }
         let out: String? = await withCheckedContinuation { cont in
-            enqueue(Job(text: text, from: from, to: to, prepare: false) { cont.resume(returning: $0) }, timeout: 20)
+            // A real iPhone 12 serves about 25 names a second: all 620 queued at once with 20 s
+            // each lost the last hundred, so the Spanish list never built (2026-11-05).
+            var job = Job(text: text, from: from, to: to, prepare: false) { cont.resume(returning: $0) }
+            job.batch = count > 0
+            enqueue(job, timeout: Self.batchTimeout(count))
         }
         if let out { cache.setObject(out as NSString, forKey: key) }
         return out
@@ -374,7 +388,7 @@ final class YourLanguageTranslator: ObservableObject {
     func translateMany(_ texts: [String], from: String, to: String) async -> [String?] {
         await withTaskGroup(of: (Int, String?).self) { group in
             for (i, t) in texts.enumerated() {
-                group.addTask { @MainActor in (i, await self.translate(t, from: from, to: to)) }
+                group.addTask { @MainActor in (i, await self.translate(t, from: from, to: to, batchOf: texts.count)) }
             }
             var out = [String?](repeating: nil, count: texts.count)
             for await (i, s) in group { out[i] = s }
@@ -403,7 +417,12 @@ final class YourLanguageTranslator: ObservableObject {
 
     private func enqueue(_ job: Job, timeout: TimeInterval) {
         guard Self.translatorAvailable else { job.done(nil); return }
-        jobs.append(job)
+        // A single line (Read, a cue, Help Me Aim's word) goes ahead of a waiting name list.
+        if !job.batch, let firstBatch = jobs.firstIndex(where: { $0.batch }) {
+            jobs.insert(job, at: firstBatch)
+        } else {
+            jobs.append(job)
+        }
         let id = job.id
         DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
             guard let self, let i = jobs.firstIndex(where: { $0.id == id }) else { return }

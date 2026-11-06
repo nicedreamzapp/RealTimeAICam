@@ -143,4 +143,12 @@ struct YourLanguageTests {
         #expect(out == ["taza", "taza"])
         #expect(calls == 0)
     }
+
+    /// A real iPhone 12 serves about 25 names a second: the whole object-name list must fit in
+    /// its wait, while one line keeps the short 20 s (2026-11-05, the Spanish list failed).
+    @Test func nameListWaitCoversTheWholeList() {
+        let n = ObjectLabelCache.labels.count + ObjectLabelTranslations.extras.count
+        #expect(YourLanguageTranslator.batchTimeout(0) == 20)
+        #expect(YourLanguageTranslator.batchTimeout(n) >= Double(n) / 10)
+    }
 }
