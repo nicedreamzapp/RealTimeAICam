@@ -52,6 +52,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
+import com.mattmacosko.realtimeaicam.AppLang
+import com.mattmacosko.realtimeaicam.R
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -104,6 +107,17 @@ fun HelpMeAimScreen(onBack: () -> Unit) {
         SpeechAnnouncer(context).also {
             it.setEnabled(true)
             it.localizeTo = com.mattmacosko.realtimeaicam.translation.YourLanguage.code(context)
+        }
+    }
+    // Spanish app (2026-11-05): object names inside the app's Spanish lines go through Your
+    // language's translator once (never on the main thread, never a download). See AimNames.
+    remember {
+        AimNames.translate = { text, lang ->
+            if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+                null
+            } else {
+                com.mattmacosko.realtimeaicam.translation.YourLanguage.translateBlocking(text, "en", lang)
+            }
         }
     }
     val pipeline = remember { AimPipeline(context, speaker) }
@@ -166,7 +180,7 @@ fun HelpMeAimScreen(onBack: () -> Unit) {
     ) { granted ->
         micAllowed = granted
         if (!granted) {
-            status = "I need permission to use the microphone. You can still type it below."
+            status = AppLang.str(R.string.g_aim_mic_denied)
             speaker.speak(status)
         }
     }
@@ -177,6 +191,7 @@ fun HelpMeAimScreen(onBack: () -> Unit) {
             pipeline.shutdown()
             listener.close()
             speaker.shutdown()
+            AimNames.translate = null
         }
     }
 
@@ -185,8 +200,12 @@ fun HelpMeAimScreen(onBack: () -> Unit) {
         phase = AimPhase.AIMING
         pipeline.aimAt(s)
         pipeline.start(owner, previewView)
-        val intro = if (s is AimSubject.Described) AimAsk.intro(s.word, pipeline.lookSeconds()) else AimPhrases.intro(s)
-        scope.launch { speaker.speakAndWait(intro, timeoutMs = 9000) }
+        scope.launch {
+            // The object's name in the app's language before the first line is said.
+            withContext(kotlinx.coroutines.Dispatchers.IO) { AimNames.warm(s) }
+            val intro = if (s is AimSubject.Described) AimAsk.intro(s.word, pipeline.lookSeconds()) else AimPhrases.intro(s)
+            speaker.speakAndWait(intro, timeoutMs = 9000)
+        }
     }
 
     fun backToChoices() {
@@ -198,14 +217,16 @@ fun HelpMeAimScreen(onBack: () -> Unit) {
         phase = AimPhase.CHOOSING
     }
 
-    fun findTyped(word: String) {
+    /** [word] in English for the finder; [asked] is what the person typed or said. */
+    fun findTyped(word: String, asked: String = word) {
         val match = AimVocabulary.match(word, pipeline.classNames)
         val said = AimVocabulary.normalize(word)
         if (match == null && said.isNotBlank() && pipeline.canDescribe()) {
             // No name for it in the finder: the describing model looks instead.
             beginAiming(AimSubject.Described(said))
         } else if (match == null) {
-            status = AimPhrases.cantLookFor(AimVocabulary.normalize(word))
+            // A Spanish app repeats the person's own word, not the finder's English for it.
+            status = AimPhrases.cantLookFor(if (AppLang.isSpanish) asked else AimVocabulary.normalize(word))
             speaker.speak(status)
         } else {
             beginAiming(AimSubject.Obj(match))
@@ -226,7 +247,7 @@ fun HelpMeAimScreen(onBack: () -> Unit) {
                 }
             }
             android.util.Log.i("HelpMeAim", "target [$lang] \"$word\" -> \"$english\" -> ${AimVocabulary.match(english, pipeline.classNames)}")
-            findTyped(english)
+            findTyped(english, word)
         }
     }
 
@@ -315,13 +336,13 @@ fun HelpMeAimScreen(onBack: () -> Unit) {
                 onClearRecent = {
                     recent = emptyList()
                     AimRecent.save(context, recent)
-                    speaker.speak("Recent items cleared")
+                    speaker.speak(AppLang.str(R.string.g_aim_recent_cleared))
                 },
             )
 
             AimPhase.AIMING -> Aiming(
                 previewView = previewView,
-                subjectName = subject?.spokenName ?: "your subject",
+                subjectName = subject?.spokenName ?: stringResource(R.string.g_aim_your_subject),
                 isFace = subject is AimSubject.Face,
                 isFront = isFront,
                 torchOn = torchOn,
@@ -336,14 +357,17 @@ fun HelpMeAimScreen(onBack: () -> Unit) {
             AimPhase.TAKEN -> Taken(
                 photo = lastPhoto ?: previewPhoto,
                 statusText = status,
-                subjectName = subject?.spokenName ?: "the same thing",
+                subjectName = subject?.spokenName ?: stringResource(R.string.g_aim_same_thing),
                 onTakeAnother = {
                     val s = subject
                     if (s != null) {
                         pipeline.takeAnother()
                         phase = AimPhase.AIMING
                         pipeline.start(owner, previewView)
-                        scope.launch { speaker.speakAndWait(AimPhrases.intro(s), timeoutMs = 6000) }
+                        scope.launch {
+                            withContext(kotlinx.coroutines.Dispatchers.IO) { AimNames.warm(s) }
+                            speaker.speakAndWait(AimPhrases.intro(s), timeoutMs = 6000)
+                        }
                     }
                 },
                 onBack = { backToChoices() },
@@ -377,10 +401,13 @@ private fun TopBar(title: String, backLabel: String, onBack: () -> Unit) {
             color = Color.White,
             fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.semantics { heading() },
+            textAlign = TextAlign.Center,
+            // Clear of the back pill on both sides, so a longer Spanish title
+            // ("Ayúdame a apuntar") wraps instead of running under it.
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 100.dp).semantics { heading() },
         )
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
-            SmallButton("‹ Back", backLabel, onBack)
+            SmallButton(stringResource(R.string.g_aim_back_chevron), backLabel, onBack)
         }
     }
 }
@@ -461,9 +488,9 @@ private fun Choices(
         Modifier.fillMaxSize().liveSafePadding(horizontal = true, bottom = true, navOnly = true).padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        TopBar("Help Me Aim", "Back to home", onBack)
+        TopBar(stringResource(R.string.g_aim_title), stringResource(R.string.g_aim_back_to_home), onBack)
         Text(
-            "What do you want a picture of?",
+            stringResource(R.string.g_aim_choose_heading),
             color = Color.White,
             fontSize = 22.sp,
             fontWeight = FontWeight.SemiBold,
@@ -474,16 +501,16 @@ private fun Choices(
         // the middle of the screen rather than crowding the top.
         Spacer(Modifier.weight(1f))
         AimBigButton(
-            "🙂", "Face", IosPink,
-            "Finds faces and talks you into the shot, then takes the picture", onFace,
+            "🙂", stringResource(R.string.g_aim_face_title), IosPink,
+            stringResource(R.string.g_aim_face_hint), onFace,
         )
         AimBigButton(
-            "🖼️", "Picture or Page", IosBlue,
-            "Finds a page, a sign or a picture on the wall and gets all of it in the shot", onPage,
+            "🖼️", stringResource(R.string.g_aim_page_title), IosBlue,
+            stringResource(R.string.g_aim_page_hint), onPage,
         )
         AimBigButton(
-            "🔎", "Something Else", IosOrange,
-            "Say what you're looking for, like keys or a cup", onSomethingElse,
+            "🔎", stringResource(R.string.g_aim_else_title), IosOrange,
+            stringResource(R.string.g_aim_else_hint), onSomethingElse,
         )
         Spacer(Modifier.weight(1f))
     }
@@ -506,9 +533,9 @@ private fun Asking(
         Modifier.fillMaxSize().liveSafePadding(horizontal = true, bottom = true, navOnly = true).padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        TopBar("Something Else", "Back to choices", onBack)
+        TopBar(stringResource(R.string.g_aim_else_title), stringResource(R.string.g_aim_back_to_choices), onBack)
         Text(
-            "What are you looking for?",
+            stringResource(R.string.g_aim_ask_heading),
             color = Color.White,
             fontSize = 22.sp,
             fontWeight = FontWeight.SemiBold,
@@ -516,11 +543,11 @@ private fun Asking(
         )
         AimBigButton(
             emoji = if (listening) "\uD83D\uDC42" else "\uD83C\uDF99\uFE0F",
-            title = if (listening) "Listening… tap to stop" else AimPhrases.speakTitle,
+            title = if (listening) stringResource(R.string.g_aim_listening_title) else stringResource(R.string.g_aim_speak_title),
             color = if (listening) IosRed else IosPurple,
-            hint = if (listening) "Stops listening now" else AimPhrases.speakHint,
+            hint = if (listening) stringResource(R.string.g_aim_listening_hint) else stringResource(R.string.g_aim_speak_hint),
             onClick = onListen,
-            label = if (listening) "Listening, tap to stop" else AimPhrases.speakLabel,
+            label = if (listening) stringResource(R.string.g_aim_listening_label) else stringResource(R.string.g_aim_speak_label),
         )
         if (status.isNotEmpty()) {
             Text(
@@ -540,20 +567,24 @@ private fun Asking(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            val typeDescription = stringResource(R.string.g_aim_type_description)
             OutlinedTextField(
                 value = typed,
                 onValueChange = onTyped,
                 singleLine = true,
-                label = { Text("Or type it") },
+                label = { Text(stringResource(R.string.g_aim_type_label)) },
                 modifier = Modifier
                     .weight(1f)
-                    .semantics { contentDescription = "Or type what you're looking for" },
+                    .semantics { contentDescription = typeDescription },
             )
-            Button(onClick = onSubmit, enabled = typed.isNotBlank()) { Text("Find") }
+            Button(onClick = onSubmit, enabled = typed.isNotBlank()) { Text(stringResource(R.string.g_aim_find)) }
         }
         if (recent.isNotEmpty()) {
+            val names by androidx.compose.runtime.produceState(emptyMap<String, String>(), recent) {
+                value = withContext(kotlinx.coroutines.Dispatchers.IO) { recent.associateWith { AimNames.bare(it) } }
+            }
             Text(
-                "Found before",
+                stringResource(R.string.g_aim_found_before),
                 color = Color.White,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -566,9 +597,11 @@ private fun Asking(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 for (word in recent) {
-                    SmallButton(word.replaceFirstChar { it.uppercase() }, "Look for $word") { onPickRecent(word) }
+                    // The finder's English word, shown in the app's language once translated.
+                    val name = names[word] ?: word
+                    SmallButton(name.replaceFirstChar { it.uppercase() }, stringResource(R.string.g_aim_look_for, name)) { onPickRecent(word) }
                 }
-                SmallButton("Clear list", "Clear recent items", onClearRecent)
+                SmallButton(stringResource(R.string.g_aim_clear_list), stringResource(R.string.g_aim_clear_recent), onClearRecent)
             }
         }
         Spacer(Modifier.weight(1f))
@@ -589,6 +622,7 @@ private fun Aiming(
     onToggleCamera: () -> Unit,
     onToggleTorch: () -> Unit,
 ) {
+    val cameraDescription = stringResource(R.string.g_aim_camera_description, subjectName)
     Box(Modifier.fillMaxSize()) {
         AndroidView(
             factory = { previewView },
@@ -596,8 +630,7 @@ private fun Aiming(
                 .fillMaxSize()
                 .pointerInput(Unit) { detectTapGestures(onDoubleTap = { onShootNow() }) }
                 .semantics {
-                    contentDescription = "Camera, looking for $subjectName. " +
-                        "Double tap to take the picture now"
+                    contentDescription = cameraDescription
                 },
         )
 
@@ -607,19 +640,19 @@ private fun Aiming(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                SmallButton("Back", "Back to choices", onBack)
+                SmallButton(stringResource(R.string.g_aim_back), stringResource(R.string.g_aim_back_to_choices), onBack)
                 Spacer(Modifier.weight(1f))
                 if (isFace) {
                     SmallButton(
-                        if (isFront) "Back cam" else "Front cam",
-                        if (isFront) "Switch to back camera" else "Switch to front camera",
+                        stringResource(if (isFront) R.string.g_aim_back_cam else R.string.g_aim_front_cam),
+                        stringResource(if (isFront) R.string.g_aim_switch_back else R.string.g_aim_switch_front),
                         onToggleCamera,
                     )
                 }
                 if (!isFront) {
                     SmallButton(
-                        if (torchOn) "🔦 On" else "🔦 Off",
-                        if (torchOn) "Flashlight, on" else "Flashlight, off",
+                        stringResource(if (torchOn) R.string.g_aim_torch_on_pill else R.string.g_aim_torch_off_pill),
+                        stringResource(if (torchOn) R.string.g_aim_torch_on_label else R.string.g_aim_torch_off_label),
                         onToggleTorch,
                     )
                 }
@@ -661,7 +694,7 @@ private fun Aiming(
                     textAlign = TextAlign.Center,
                 )
                 Text(
-                    "Double tap anywhere to take it now",
+                    stringResource(R.string.g_aim_double_tap_now),
                     color = Color.White.copy(alpha = 0.8f),
                     fontSize = 13.sp,
                 )
@@ -685,11 +718,11 @@ private fun Taken(
             .padding(horizontal = 16.dp).padding(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        TopBar("Picture Taken", "Back to choices", onBack)
+        TopBar(stringResource(R.string.g_aim_taken_title), stringResource(R.string.g_aim_back_to_choices), onBack)
         if (photo != null) {
             androidx.compose.foundation.Image(
                 bitmap = photo.asImageBitmap(),
-                contentDescription = "The picture you just took",
+                contentDescription = stringResource(R.string.g_aim_photo_description),
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -706,8 +739,14 @@ private fun Taken(
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
         )
-        AimBigButton("📸", "Take Another", IosGreen, "Aim at $subjectName again", onTakeAnother)
-        AimBigButton("↩️", "Back", IosGray, "Back to the three choices", onBack)
+        AimBigButton(
+            "📸", stringResource(R.string.g_aim_take_another), IosGreen,
+            stringResource(R.string.g_aim_take_another_hint, subjectName), onTakeAnother,
+        )
+        AimBigButton(
+            "↩️", stringResource(R.string.g_aim_back), IosGray,
+            stringResource(R.string.g_aim_back_to_three), onBack,
+        )
     }
 }
 

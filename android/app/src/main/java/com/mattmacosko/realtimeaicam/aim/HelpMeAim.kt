@@ -1,5 +1,7 @@
 package com.mattmacosko.realtimeaicam.aim
 
+import com.mattmacosko.realtimeaicam.AppLang
+import com.mattmacosko.realtimeaicam.R
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.max
@@ -75,13 +77,16 @@ sealed class AimSubject {
      */
     data class Described(val word: String) : AimSubject()
 
-    /** "a face", "a picture or page", "a key". */
+    /**
+     * "a face", "a picture or page", "a key", in the app's language ("una cara"). An object's
+     * name is content: see [AimNames].
+     */
     val spokenName: String
         get() = when (this) {
-            is Face -> "a face"
-            is Page -> "a picture or page"
-            is Obj -> AimVocabulary.withArticle(match.spokenName)
-            is Described -> AimVocabulary.withArticle(word)
+            is Face -> AppLang.str(R.string.g_aim_face)
+            is Page -> AppLang.str(R.string.g_aim_page)
+            is Obj -> AimNames.withArticle(match.spokenName)
+            is Described -> AimNames.withArticle(word)
         }
 
     val framing: AimSteering.Framing
@@ -326,27 +331,28 @@ object AimSteering {
 // EVERY STRING HERE MUST MATCH iOS AimPhrases WORD FOR WORD.
 
 object AimPhrases {
+    // Every line is a string resource (strings_g.xml), Spanish in values-es (2026-11-05). The
+    // English must still match iOS AimPhrases word for word.
     fun phrase(instruction: AimInstruction, subject: AimSubject, faceCount: Int = 1): String =
         when (instruction) {
-            AimInstruction.NOT_FOUND -> "I don't see ${subject.spokenName} yet, move the phone slowly"
-            AimInstruction.MOVE_LEFT -> "move the phone left"
-            AimInstruction.MOVE_RIGHT -> "move the phone right"
-            AimInstruction.MOVE_UP -> "move the phone up"
-            AimInstruction.MOVE_DOWN -> "move the phone down"
-            AimInstruction.MOVE_CLOSER -> "move closer"
-            AimInstruction.BACK_UP -> "back up"
+            AimInstruction.NOT_FOUND -> AppLang.str(R.string.g_aim_not_found, subject.spokenName)
+            AimInstruction.MOVE_LEFT -> AppLang.str(R.string.g_aim_move_left)
+            AimInstruction.MOVE_RIGHT -> AppLang.str(R.string.g_aim_move_right)
+            AimInstruction.MOVE_UP -> AppLang.str(R.string.g_aim_move_up)
+            AimInstruction.MOVE_DOWN -> AppLang.str(R.string.g_aim_move_down)
+            AimInstruction.MOVE_CLOSER -> AppLang.str(R.string.g_aim_move_closer)
+            AimInstruction.BACK_UP -> AppLang.str(R.string.g_aim_back_up)
             AimInstruction.BACK_UP_CUT_OFF ->
-                if (subject is AimSubject.Page) "back up, the page is cut off" else "back up"
+                if (subject is AimSubject.Page) AppLang.str(R.string.g_aim_back_up_cut_off) else AppLang.str(R.string.g_aim_back_up)
             AimInstruction.FRAMED ->
                 if (subject is AimSubject.Face && faceCount > 1) {
-                    "got it, ${countWord(faceCount)} faces, hold still"
+                    AppLang.str(R.string.g_aim_got_it_faces, countWord(faceCount))
                 } else {
-                    "got it, hold still"
+                    AppLang.str(R.string.g_aim_got_it)
                 }
         }
 
-    fun intro(subject: AimSubject): String =
-        "Looking for ${subject.spokenName}. Move the phone slowly. Double tap anywhere to take the picture yourself."
+    fun intro(subject: AimSubject): String = AppLang.str(R.string.g_aim_intro, subject.spokenName)
 
     /**
      * What to say while it still hasn't found the thing, in the order it is
@@ -361,50 +367,51 @@ object AimPhrases {
      * than nagging.
      */
     fun searching(step: Int, subject: AimSubject): String = when (step) {
-        0 -> "I don't see ${subject.spokenName} yet, move the phone slowly"
-        1 -> "still looking. try holding the phone a little further back"
-        2 -> "still looking. turn slowly, a bit at a time, and give me a moment to catch up"
-        3 -> "still looking. if the light is low, there's a flashlight button at the top of the screen"
-        else -> "still looking for ${subject.spokenName}. take your time, i'll say the moment i see it"
+        0 -> AppLang.str(R.string.g_aim_not_found, subject.spokenName)
+        1 -> AppLang.str(R.string.g_aim_searching_1)
+        2 -> AppLang.str(R.string.g_aim_searching_2)
+        3 -> AppLang.str(R.string.g_aim_searching_3)
+        else -> AppLang.str(R.string.g_aim_searching_4, subject.spokenName)
     }
 
-    const val lostIt = "lost it"
-    const val pictureTaken = "picture taken"
-    const val savedSuffix = ", saved to your photos"
-    const val notSavedSuffix = ", but I couldn't save it. Allow adding photos in Settings"
+    val lostIt: String get() = AppLang.str(R.string.g_aim_lost_it)
+
+    /** "picture taken, saved to your photos" or why it wasn't saved. */
+    fun pictureTaken(saved: Boolean): String =
+        AppLang.str(if (saved) R.string.g_aim_taken_saved else R.string.g_aim_taken_not_saved)
 
     /** Said the moment the shot is kept, while the vision model looks at it. */
-    const val describing = "picture taken. describing it"
+    val describing: String get() = AppLang.str(R.string.g_aim_describing)
 
     /** After the description is read out: where the photo went, with its words. */
-    const val savedWithDescription = "saved to your photos with that description"
-    const val notSavedWithDescription = "I couldn't save it. Allow adding photos in Settings"
-    const val captureFailed = "I couldn't take the picture, try again"
+    val savedWithDescription: String get() = AppLang.str(R.string.g_aim_saved_with_description)
+    val notSavedWithDescription: String get() = AppLang.str(R.string.g_aim_not_saved_with_description)
+    val captureFailed: String get() = AppLang.str(R.string.g_aim_capture_failed)
 
     // Something Else, round 2 (Matt: "you don't know when to speak, if you need
     // to press the button, or hold it"). The app asks, beeps, and listens by
     // itself; Speak is a single tap for a retry.
-    const val askWhat = "After the beep, say what you're looking for."
-    const val heardNothing = "I didn't hear anything. Tap to Speak to try again, or type it."
-    const val didntCatch = "I didn't catch that. Tap to Speak to try again."
+    val askWhat: String get() = AppLang.str(R.string.g_aim_ask_what)
+    val heardNothing: String get() = AppLang.str(R.string.g_aim_heard_nothing)
+    val didntCatch: String get() = AppLang.str(R.string.g_aim_didnt_catch)
 
     /** The retry button: one tap, nothing to hold. */
-    const val speakTitle = "Tap to Speak"
-    const val speakLabel = "Tap to speak"
-    const val speakHint = "Then say what you're looking for after the beep"
+    val speakTitle: String get() = AppLang.str(R.string.g_aim_speak_title)
+    val speakLabel: String get() = AppLang.str(R.string.g_aim_speak_label)
+    val speakHint: String get() = AppLang.str(R.string.g_aim_speak_hint)
+
+    /** Digits on screen; each voice says them in its own language ("tres"). */
     val countdown = listOf("3", "2", "1")
 
+    /** [word] is said as given: the person's own word, or the finder's in English. */
     fun cantLookFor(word: String): String {
         val w = word.trim()
-        return if (w.isEmpty()) didntCatch else "I can't look for $w yet"
+        return if (w.isEmpty()) didntCatch else AppLang.str(R.string.g_aim_cant_look_for, w)
     }
 
     fun countWord(n: Int): String {
-        val words = listOf(
-            "zero", "one", "two", "three", "four", "five",
-            "six", "seven", "eight", "nine", "ten",
-        )
-        return if (n in words.indices) words[n] else "many"
+        val words = AppLang.str(R.string.g_aim_count_words).split(",").map { it.trim() }
+        return if (n in words.indices) words[n] else AppLang.str(R.string.g_aim_count_many)
     }
 
     fun capitalized(s: String): String =
@@ -1352,6 +1359,7 @@ object AimAsk {
     /** Steering turns before taking the picture anyway. */
     const val MAX_STEERS = 4
 
+    /** A prompt for the model, which works in English: never translated. */
     fun question(word: String): String =
         "Is there ${AimVocabulary.withArticle(word)} in this photo? Start your answer with Yes or No. " +
             "If yes, say where it is in the photo: left, right, top, bottom, or middle."
@@ -1374,11 +1382,11 @@ object AimAsk {
     }
 
     fun steer(place: Place): String = when (place) {
-        Place.LEFT -> "It's on the left. Turn the phone a little left."
-        Place.RIGHT -> "It's on the right. Turn the phone a little right."
-        Place.TOP -> "It's near the top. Tilt the phone up a little."
-        Place.BOTTOM -> "It's near the bottom. Tilt the phone down a little."
-        Place.MIDDLE -> "It's right in front of you. Hold still."
+        Place.LEFT -> AppLang.str(R.string.g_aim_ask_left)
+        Place.RIGHT -> AppLang.str(R.string.g_aim_ask_right)
+        Place.TOP -> AppLang.str(R.string.g_aim_ask_top)
+        Place.BOTTOM -> AppLang.str(R.string.g_aim_ask_bottom)
+        Place.MIDDLE -> AppLang.str(R.string.g_aim_ask_middle)
     }
 
     /**
@@ -1399,21 +1407,22 @@ object AimAsk {
 
     /** [seconds] is this phone's time per look, said when it is slow. */
     fun intro(word: String, seconds: Int? = null): String {
-        val slow = if (seconds != null && seconds >= 8) " Each look takes about $seconds seconds on this phone." else ""
-        return "I don't know ${AimVocabulary.withArticle(word)} by sight, so I'll look closely every few seconds.$slow " +
-            "Point the phone where it might be and move slowly. Double tap anywhere to take the picture yourself."
+        val parts = mutableListOf(AppLang.str(R.string.g_aim_ask_intro, AimNames.withArticle(word)))
+        if (seconds != null && seconds >= 8) parts.add(AppLang.str(R.string.g_aim_ask_slow, seconds))
+        parts.add(AppLang.str(R.string.g_aim_ask_intro_end))
+        return parts.joinToString(" ")
     }
 
     /** Every other miss, so it is not a stuck record. */
-    fun notYet(word: String, misses: Int): String? = when {
-        misses % 2 == 0 -> null
-        misses == 1 -> "No $word here yet. Turn slowly."
-        else -> "Still no $word. Try another spot."
+    fun notYet(word: String, misses: Int): String? {
+        if (misses % 2 == 0) return null
+        // English says the bare word ("No key here yet"); Spanish needs "una llave".
+        val name = if (AppLang.code() == AppLang.ENGLISH) word else AimNames.withArticle(word)
+        return AppLang.str(if (misses == 1) R.string.g_aim_ask_not_yet else R.string.g_aim_ask_still_no, name)
     }
 
-    fun gaveUp(word: String): String =
-        "I couldn't find ${AimVocabulary.withArticle(word)}. Point somewhere else and double tap to take a picture, or go back to try another word."
+    fun gaveUp(word: String): String = AppLang.str(R.string.g_aim_ask_gave_up, AimNames.withArticle(word))
 
-    const val FOUND = "Found it. Hold still."
-    const val FOUND_UNSURE = "I think that's it, but I'm not sure. Hold still, I'll take the picture and tell you what it is."
+    val FOUND: String get() = AppLang.str(R.string.g_aim_found)
+    val FOUND_UNSURE: String get() = AppLang.str(R.string.g_aim_found_unsure)
 }

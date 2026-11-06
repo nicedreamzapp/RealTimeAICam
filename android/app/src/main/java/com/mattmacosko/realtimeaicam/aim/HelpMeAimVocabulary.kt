@@ -1,5 +1,7 @@
 package com.mattmacosko.realtimeaicam.aim
 
+import com.mattmacosko.realtimeaicam.AppLang
+import com.mattmacosko.realtimeaicam.R
 import kotlin.math.max
 import kotlin.math.min
 
@@ -130,18 +132,20 @@ object AimElsewhere {
             .map { it.key }
     }
 
+    /** In the app's language; the names are content ([AimNames]). */
     fun sentence(subject: AimSubject, things: List<String>): String {
         val missing = subject.spokenName
         if (things.isEmpty()) {
-            return "I don't see $missing, and nothing else stands out. Try another direction."
+            return AppLang.str(R.string.g_aim_elsewhere_nothing, missing)
         }
-        val said = things.map { article(it) }
-        val list = when (said.size) {
-            1 -> said[0]
-            2 -> "${said[0]} and ${said[1]}"
-            else -> said.dropLast(1).joinToString(", ") + " and " + said.last()
+        val said = things.map { AimNames.listed(it) }
+        val list = if (said.size == 1) {
+            said[0]
+        } else {
+            val head = said.dropLast(1).reduce { a, b -> AppLang.str(R.string.g_aim_list_more, a, b) }
+            AppLang.str(R.string.g_aim_list_two, head, said.last())
         }
-        return "I don't see $missing. I can see $list."
+        return AppLang.str(R.string.g_aim_elsewhere, missing, list)
     }
 
     /**
