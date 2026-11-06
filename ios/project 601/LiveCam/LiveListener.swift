@@ -1,8 +1,10 @@
 // Live Cam's ears (ported from Moonstone's LiveListener, 2026-11-04): one audio engine for the whole visit,
 // Apple's recognizer on the phone only (requiresOnDeviceRecognition, so it works in airplane mode), in Your
-// language when the phone can recognize it offline, else English. While Live Cam speaks nothing is
-// transcribed, so it never hears itself; only the loudness is watched, and a voice clearly above its
-// own echo is a barge-in (the last second is kept so the first words survive).
+// language when the phone can recognize it offline, else English. While Live Cam speaks, the words heard are
+// handed to the owner (onBargeHeard) and nothing else happens: Matt 11/6, "It shouldn't stop speaking when it hears
+// me cough... murmurs or any sound at all. It should only stop speaking when it hears a legitimate question toward
+// it." Sound alone never interrupts; the owner decides from the words (LiveWords.isBargeIn) and, for a real
+// question, takes the same recognition on as the question (takeBargeAsQuestion), so the first words are kept.
 import AVFoundation
 import Foundation
 import Speech
@@ -14,7 +16,12 @@ final class LiveListener {
     /// A finished utterance: text, when its last word was heard, the recognizer's average word
     /// confidence (nil if it gave none) and whether it was the recognizer's final result.
     var onQuestion: ((String, Date, Double?, Bool) -> Void)?
-    var onBargeIn: (() -> Void)?
+    /// While Live Cam talks: the words heard so far (and the recognizer's confidence on a final result).
+    var onBargeHeard: ((String, Double?) -> Void)?
+    /// Transcribing only to judge a barge-in: no question is delivered from it unless the owner takes it on.
+    private(set) var bargeOnly = false
+    /// The mic is muted by the person: nothing is transcribed while it talks either.
+    var muted = false
     var onPartial: ((String) -> Void)?
     var onLevel: ((Float) -> Void)?
     /// The recognizer kept failing the moment it started: listening has stopped for this visit.
@@ -92,10 +99,10 @@ final class LiveListener {
         let state = tap
         node.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             let (event, level) = state.handle(buffer)
+            _ = event
             Task { @MainActor in
                 if level > LiveListener.voiceLevel { self?.lastLoudAt = Date() }
                 self?.onLevel?(level)
-                if event { self?.onBargeIn?() }
             }
         }
         engine.prepare()
@@ -129,13 +136,18 @@ final class LiveListener {
 
     /// Test feed: one buffer, handled exactly like a mic buffer.
     func inject(_ buffer: AVAudioPCMBuffer) {
-        let (event, level) = tap.handle(buffer)
+        let (_, level) = tap.handle(buffer)
         onLevel?(level)
-        if event { onBargeIn?() }
     }
 
     func listen(replay: Bool = false) {
+        if bargeOnly { stopListening() }   // it stopped talking: a fresh listen for the next question
+        start(replay: replay, barge: false)
+    }
+
+    private func start(replay: Bool, barge: Bool) {
         guard isRunning, !isListening, !gaveUp, let recognizer else { return }
+        bargeOnly = barge
         retryTask?.cancel(); retryTask = nil
         let req = SFSpeechAudioBufferRecognitionRequest()
         req.shouldReportPartialResults = true
@@ -157,6 +169,12 @@ final class LiveListener {
             let conf: Double? = final && !real.isEmpty ? real.reduce(0, +) / Double(real.count) : nil
             Task { @MainActor in
                 guard let self, self.isListening, self.request === req else { return }
+                if self.bargeOnly {
+                    // While it talks: only words, judged by the owner; a failure just ends this watch quietly.
+                    if let text, text != self.transcript { self.lastChange = Date(); self.transcript = text; self.onBargeHeard?(text, conf) }
+                    if final || failed { self.stopListening(); if !failed { self.start(replay: false, barge: true) } }
+                    return
+                }
                 if let text, text != self.transcript {
                     if !self.finishing { self.lastChange = Date() }
                     self.transcript = text; self.onPartial?(text)
@@ -172,6 +190,14 @@ final class LiveListener {
                 // Listening has held past the quick-failure window: the failures before it were not "in a row".
                 if self.quickFailures > 0, now.timeIntervalSince(self.listenStarted) >= Self.quickFailure { self.quickFailures = 0 }
                 let wordsQuiet = now.timeIntervalSince(self.lastChange), micQuiet = now.timeIntervalSince(self.lastLoudAt)
+                if self.bargeOnly {
+                    // Side talk that wasn't for it: once it stops, start over so old words never pile onto new ones.
+                    if !self.transcript.isEmpty, wordsQuiet > LiveTiming.bargeForget {
+                        self.stopListening(); self.start(replay: false, barge: true); return
+                    }
+                    if now.timeIntervalSince(self.listenStarted) > LiveTiming.idleRestart { self.stopListening(); self.start(replay: false, barge: true); return }
+                    continue
+                }
                 if !self.finishing, LiveTiming.questionEnded(heard: !self.transcript.isEmpty, wordsQuiet: wordsQuiet, micQuiet: micQuiet, text: self.transcript) {
                     self.endReason = wordsQuiet >= LiveTiming.endOfSpeech ? "words stopped" : "mic quiet"
                     self.finish()
@@ -190,12 +216,31 @@ final class LiveListener {
         task?.cancel()
         task = nil; request = nil
         isListening = false
+        bargeOnly = false
     }
 
-    /// While Live Cam speaks or thinks: watch for a barge-in, transcribe nothing.
-    func watchForBargeIn(_ on: Bool) { tap.speaking(on) }
+    /// While Live Cam speaks or thinks: the words heard go to onBargeHeard (sound alone never interrupts).
+    func watchForBargeIn(_ on: Bool) {
+        tap.speaking(on)
+        if on {
+            guard !muted else { return }
+            if isListening, !bargeOnly { stopListening() }
+            if !isListening { start(replay: false, barge: true) }
+        } else if bargeOnly {
+            stopListening()
+        }
+    }
 
-    var hearingSomething: Bool { isListening && !transcript.isEmpty }
+    /// The words heard while it talked were a real question to it: the same recognition carries on as the question
+    /// (end of speech and delivery as usual), so nothing said so far is lost.
+    func takeBargeAsQuestion() {
+        guard isListening, bargeOnly else { listen(); return }
+        bargeOnly = false
+        tap.speaking(false)
+        lastChange = Date()
+    }
+
+    var hearingSomething: Bool { isListening && !bargeOnly && !transcript.isEmpty }
 
     private var finishing = false
 
@@ -254,13 +299,11 @@ private final class LiveTapState: @unchecked Sendable {
     private let lock = NSLock()
     private var isSpeaking = false
     private var feeding: SFSpeechAudioBufferRecognitionRequest?
-    private var barge = LiveBargeIn()
     private var ring: [AVAudioPCMBuffer] = []
     private var ringSeconds = 0.0
 
     func speaking(_ on: Bool) {
         lock.lock(); defer { lock.unlock() }
-        if on, !isSpeaking { barge.reset() }
         isSpeaking = on
     }
 
@@ -287,9 +330,7 @@ private final class LiveTapState: @unchecked Sendable {
                 ring.removeFirst()
             }
         }
-        guard isSpeaking else { return (false, level) }
-        if barge.feed(level: level) { isSpeaking = false; return (true, level) }
-        return (false, level)
+        return (false, level)   // Matt 11/6: sound alone (a cough, a murmur) never interrupts; only words do
     }
 
     static func level(_ b: AVAudioPCMBuffer) -> Float {

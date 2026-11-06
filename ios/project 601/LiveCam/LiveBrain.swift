@@ -702,6 +702,8 @@ enum LiveTiming {
     /// without waiting the full second for the recognizer (Fable 10/31: ~0.5 s of the ~2 s wait).
     static let audioQuiet: TimeInterval = 0.85   // 11/1 phone test: 0.6 split "Hello, how are you doing" at the comma
     static let wordsSettled: TimeInterval = 0.35
+    /// While it talks: words that went quiet this long without being a question to it are forgotten (side talk).
+    static let bargeForget: TimeInterval = 1.5
     static func questionEnded(heard: Bool, quiet: TimeInterval) -> Bool { heard && quiet >= endOfSpeech }
     /// A finished-sounding question ("what do you see", "is the light on") ends after this much quiet instead of
     /// audioQuiet (11/2 speed pass: ~0.35 s sooner on most questions; trailing words still get the longer wait).
@@ -720,21 +722,52 @@ enum LiveTiming {
     }
 }
 
-/// Talking over the app: a voice clearly above the echo, for about a quarter second.
-struct LiveBargeIn {
-    static let floor: Float = -38
-    static let margin: Float = 10
-    static let needed = 4
-    private(set) var echo: Float = -60
-    private var loud = 0
-    mutating func feed(level db: Float) -> Bool {
-        if db > max(Self.floor, echo + Self.margin) { loud += 1 } else {
-            loud = 0
-            echo = db > echo ? echo * 0.7 + db * 0.3 : echo * 0.95 + db * 0.05
-        }
-        return loud >= Self.needed
+/// Talking over it (Matt 11/6): "It shouldn't stop speaking when it hears me cough... murmurs or any sound at all.
+/// It should only stop speaking when it hears a legitimate question toward it." The old loudness trigger is gone;
+/// only recognized words can interrupt, and only these.
+enum LiveBargeIn {
+    /// Sounds and fillers the recognizer turns coughs, laughs and murmurs into.
+    static let filler: Set<String> = ["um", "uh", "umm", "uhh", "hmm", "hm", "mm", "mmm", "mhm", "uh-huh", "huh", "ah", "oh", "eh",
+                                      "yeah", "yep", "yes", "okay", "ok", "ha", "haha", "hahaha", "heh", "so", "well", "like", "er",
+                                      "erm", "the", "a", "and", "oops", "whoa", "wow", "cough", "ahem", "sigh", "i", "it"]
+    /// Words that stop it when they open what was said ("wait", "stop", "hold on").
+    static let stops: [[String]] = [["stop"], ["wait"], ["hold", "on"], ["hang", "on"], ["hey"], ["excuse", "me"], ["shh"],
+                                    ["shush"], ["be", "quiet"], ["never", "mind"], ["nevermind"], ["one", "sec"], ["one", "second"],
+                                    ["live", "cam"], ["quiet"], ["pause"], ["enough"]]
+    /// A question or ask to it: how it opens.
+    static let askStarts: Set<String> = ["what", "whats", "who", "where", "when", "why", "how", "which", "is", "are", "can", "could",
+                                         "would", "should", "will", "do", "does", "did", "tell", "describe", "show", "explain", "help",
+                                         "look", "read", "check", "find", "give", "say", "repeat"]
+    static let askPhrases = [" can you ", " could you ", " would you ", " tell me ", " look at ", " what is ", " what s ", " how do ",
+                             " how many ", " where is ", " is this ", " is that ", " what about ", " do you ", " are you "]
+
+    /// True only for real words meant for it: a stop word opening what was said, or a question/ask of at least three
+    /// words that are not its own voice coming back, not filler, and not low confidence. `saying`: what it is saying
+    /// now (its own words heard through the speaker never count). `continuing`: they started talking again right after
+    /// their question ended, so two real words are enough (they weren't done).
+    static func shouldInterrupt(_ heard: String, confidence: Double?, saying: [String], continuing: Bool = false) -> Bool {
+        if let c = confidence, c > 0, c < 0.3 { return false }
+        let own = Set(saying.flatMap { LiveWords.normalize($0).split(separator: " ").map(String.init) })
+        let words = LiveWords.normalize(heard).split(separator: " ").map(String.init)
+        // Its own voice: the words that are not in what it is saying right now.
+        let fresh = words.filter { !own.contains($0) }
+        let real = fresh.filter { !filler.contains($0) }
+        guard !real.isEmpty else { return false }
+        // Most of what was heard is its own sentence coming back through the speaker: never a barge-in.
+        if !own.isEmpty, Double(fresh.count) / Double(max(1, words.count)) < 0.5, words.count >= 3 { return false }
+        // A stop word opening what was heard, unless it is in what it is saying ("hold on" said by it, heard back).
+        let opening = Array(words.drop(while: { filler.contains($0) }))
+        let ownLine = " " + saying.map { LiveWords.normalize($0) }.joined(separator: " ") + " "
+        if stops.contains(where: { opening.count >= $0.count && Array(opening.prefix($0.count)) == $0
+            && !ownLine.contains(" " + $0.joined(separator: " ") + " ") }) { return true }
+        let start = Array(fresh.drop(while: { filler.contains($0) }))
+        let meaningful = real
+        if continuing { return meaningful.count >= 2 }
+        guard meaningful.count >= 3 else { return false }
+        let t = " " + start.joined(separator: " ") + " "
+        if let first = start.first, askStarts.contains(first) { return true }
+        return askPhrases.contains { t.contains($0) }
     }
-    mutating func reset() { echo = -60; loud = 0 }
 }
 
 /// When it may speak up on its own: only when the view really changed, never over the person,

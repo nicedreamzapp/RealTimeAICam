@@ -168,7 +168,7 @@ final class LiveCallController: ObservableObject {
         }
         voice.onQuiet = { [weak self] in self?.wentQuiet() }
         listener.onQuestion = { [weak self] q, at, conf, fin in self?.heardInTheirLanguage(q, endedAt: at, confidence: conf, isFinal: fin) }
-        listener.onBargeIn = { [weak self] in self?.bargeIn() }
+        listener.onBargeHeard = { [weak self] t, c in self?.heardWhileTalking(t, confidence: c) }
         listener.onGaveUp = { [weak self] in self?.hearingGaveUp() }
         listener.onRetry = { [weak self] in
             guard let self, self.running, self.phase == .listening, !self.micMuted, !self.hearingStopped else { return }
@@ -322,7 +322,10 @@ final class LiveCallController: ObservableObject {
 
     private func micMutedChanged() {
         log(["event": "mic", "muted": micMuted])
-        if micMuted { listener.stopListening() } else if phase == .listening, !hearingStopped { listener.listen() }
+        listener.muted = micMuted
+        if micMuted { listener.stopListening() }
+        else if phase == .listening, !hearingStopped { listener.listen() }
+        else if phase == .speaking || phase == .thinking, !hearingStopped { listener.watchForBargeIn(true) }
     }
 
     /// The recognizer gave up (see LiveListener.recognizerFailed): say so in words, show it, offer typing.
@@ -345,16 +348,33 @@ final class LiveCallController: ObservableObject {
     private var cutOff: (text: String, at: Date)?
     private var lastQuestion = ""
 
-    func bargeIn() {
+    /// Words heard while it talks or thinks (Matt 11/6): a cough, a murmur, side talk or its own voice never stop it;
+    /// only a real question or a stop word for it does (LiveBargeIn.shouldInterrupt).
+    private func heardWhileTalking(_ heard: String, confidence: Double?) {
+        guard running, !micMuted, !hearingStopped, phase == .speaking || phase == .thinking else { return }
+        let continuing = phase == .thinking && questionEndedAt.map { Date().timeIntervalSince($0) < 2.5 } == true
+        let saying = [caption, lastSaid ?? ""] + memory.said.suffix(2)
+        let stop = LiveBargeIn.shouldInterrupt(heard, confidence: confidence, saying: saying, continuing: continuing)
+        log(["event": "heard_while_talking", "text": heard, "interrupt": stop])
+        if stop { bargeIn(heard: heard) }
+    }
+
+    /// Talked over with a real question: stop now and take it, the words heard so far kept.
+    func bargeIn(heard: String = "") {
         guard running, !micMuted, !hearingStopped, phase == .speaking || phase == .thinking else { return }
         // Still thinking and they kept talking right after: they weren't done, so keep what they said so far.
         if phase == .thinking, let e = questionEndedAt, Date().timeIntervalSince(e) < 2.5, !lastQuestion.isEmpty {
             cutOff = (lastQuestion, Date())
         }
-        log(["event": "barge_in", "phase": "\(phase)", "kept_start": cutOff?.text ?? ""])
-        stopTalking()
+        log(["event": "barge_in", "phase": "\(phase)", "heard": heard, "kept_start": cutOff?.text ?? ""])
+        turn += 1
+        current?.cancel(); current = nil
+        answerDone = true
+        voice.stop()
         phase = .listening
-        listener.listen(replay: true)
+        prefillArmed = false
+        listener.takeBargeAsQuestion()   // the same recognition carries on as the question
+        if !typedOnly { startWatch() }
     }
 
     /// The orb tapped: stop talking and listen.

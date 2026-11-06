@@ -161,11 +161,28 @@ struct LiveTimingTests {
         #expect(!LiveTiming.questionEnded(heard: false, wordsQuiet: 5, micQuiet: 5, text: ""))
     }
 
-    @Test func bargeInNeedsAVoiceClearlyAboveTheEcho() {
-        var b = LiveBargeIn()
-        for _ in 0 ..< 10 { let r = b.feed(level: -45); #expect(!r) }   // its own echo, quiet
-        do { let r = b.feed(level: -20); #expect(!(r)) }; do { let r = b.feed(level: -20); #expect(!(r)) }; do { let r = b.feed(level: -20); #expect(!(r)) }
-        let last = b.feed(level: -20); #expect(last)   // a quarter second of a real voice
+    /// Matt 11/6: "It shouldn't stop speaking when it hears me cough... It should only stop speaking when it hears a
+    /// legitimate question toward it." Sound never interrupts; only these words do.
+    @Test func onlyARealQuestionOrStopWordInterrupts() {
+        let saying = ["I see a white cup on a wooden desk next to a lamp."]
+        func stops(_ h: String, _ c: Double? = nil, continuing: Bool = false) -> Bool {
+            LiveBargeIn.shouldInterrupt(h, confidence: c, saying: saying, continuing: continuing)
+        }
+        // Coughs, murmurs, fillers, side talk, its own voice: it keeps talking.
+        for h in ["", "huh", "um", "uh uh", "hmm", "mm hmm", "ahem", "ha ha", "yeah okay", "oh", "I'm gonna grab that",
+                  "put it over there", "yeah I know right", "I see a white cup", "on a wooden desk next to", "white cup lamp"] {
+            #expect(!stops(h), "should not interrupt: \(h)")
+        }
+        #expect(!stops("what is that thing", 0.1))   // too unsure
+        #expect(!stops("what is"))                    // not three words yet
+        // Real questions and stop words: it stops.
+        for h in ["what is that", "wait stop", "wait", "stop", "hold on", "how do I fix this", "can you read this sign",
+                  "um what color is the lamp", "tell me about the cup", "hey", "is that a dog"] {
+            #expect(stops(h), "should interrupt: \(h)")
+        }
+        // Right after their own question: they weren't done, two real words carry on.
+        #expect(stops("in this room", continuing: true))
+        #expect(!stops("um", continuing: true))
     }
 }
 
