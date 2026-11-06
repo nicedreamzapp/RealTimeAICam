@@ -34,6 +34,12 @@ final class YourLanguageUITests: XCTestCase {
         app.terminate()
     }
 
+    /// Your language Spanish makes the app Spanish (2026-11-05): a button by its label in
+    /// either language, since the home screen and these screens are translated separately.
+    private func button(_ app: XCUIApplication, _ english: String, _ spanish: String) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "label == %@ OR label == %@", english, spanish)).firstMatch
+    }
+
     private func openSettings(_ app: XCUIApplication) -> XCUIElement {
         let settings = app.buttons["Settings"].firstMatch
         XCTAssertTrue(settings.waitForExistence(timeout: 20), "no Settings on home")
@@ -126,16 +132,17 @@ final class YourLanguageUITests: XCTestCase {
         let app = launch(["-userLanguage", "es", "-fakeTranslatorPacks", "(es)", "-readerLanguageMode", "english",
                           "-ocrReadMode", "tap"],
                          env: ["RTCAM_FAKE_OCR_TRANSLATE": "1.0::Exit"])
-        let read = app.buttons["Read"].firstMatch
+        let read = button(app, "Read", "Leer")
         XCTAssertTrue(read.waitForExistence(timeout: 20))
         sleep(3)
         read.tap()
-        let pill = app.buttons["Language"].firstMatch
+        // The app is in Spanish now (Your language Spanish).
+        let pill = app.buttons["Idioma"].firstMatch
         XCTAssertTrue(pill.waitForExistence(timeout: 15), "no Language pill")
-        XCTAssertEqual(pill.value as? String, "English, translated to Spanish")
+        XCTAssertEqual(pill.value as? String, "Inglés, traducido al español")
         // Tap to read: the camera "sees" Exit, then Speak translates and shows it.
         sleep(4)
-        let speak = app.buttons.matching(NSPredicate(format: "label == 'Read text aloud'")).firstMatch
+        let speak = app.buttons.matching(NSPredicate(format: "label == 'Leer el texto en voz alta'")).firstMatch
         XCTAssertTrue(speak.waitForExistence(timeout: 10), "no Speak button")
         speak.tap()
         let salida = app.descendants(matching: .any).matching(NSPredicate(format: "value CONTAINS 'Salida'")).firstMatch
@@ -144,13 +151,13 @@ final class YourLanguageUITests: XCTestCase {
 
         // A French page into Spanish: pick French on the pill.
         pill.tap()
-        let fr = app.buttons["French → Spanish"].firstMatch
+        let fr = app.buttons["Francés → Español"].firstMatch
         XCTAssertTrue(fr.waitForExistence(timeout: 5), "no French → Spanish in the pill menu")
         fr.tap()
-        let p = app.buttons["Language"].firstMatch
+        let p = app.buttons["Idioma"].firstMatch
         let deadline = Date().addingTimeInterval(10)
-        while (p.value as? String) != "French, translated to Spanish", Date() < deadline { sleep(1) }
-        XCTAssertEqual(p.value as? String, "French, translated to Spanish")
+        while (p.value as? String) != "Francés, traducido al español", Date() < deadline { sleep(1) }
+        XCTAssertEqual(p.value as? String, "Francés, traducido al español")
         keep(app, "read-fr-to-es-pill")
         app.terminate()
     }
@@ -191,18 +198,19 @@ final class YourLanguageUITests: XCTestCase {
         let app = launch(["-userLanguage", "es", "-fakeTranslatorPacks", "(es)", "-countdownBeforeCapture", "NO"],
                          env: ["RTCAM_FAKE_ANSWER": "A white coffee mug on a wooden table.",
                                "RTCAM_FAKE_FOLLOWUP": "The cup is white."])
-        let home = app.buttons["What's this?"].firstMatch
+        let home = button(app, "What's this?", "¿Qué es esto?")
         XCTAssertTrue(home.waitForExistence(timeout: 20))
         sleep(3)
         home.tap()
-        let capture = app.buttons["What's this?"].firstMatch
+        // The app is in Spanish now (Your language Spanish).
+        let capture = app.buttons["¿Qué es esto?"].firstMatch
         XCTAssertTrue(capture.waitForExistence(timeout: 15))
         sleep(2)
         capture.tap()
         let answer = app.descendants(matching: .any).matching(NSPredicate(format: "value CONTAINS 'Una taza de café blanca'")).firstMatch
         XCTAssertTrue(answer.waitForExistence(timeout: 20), "answer not in Spanish")
         keep(app, "whatsthis-es")
-        let field = app.textFields["Or type a question about this photo"].firstMatch
+        let field = app.textFields["O escribe una pregunta sobre esta foto"].firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10), "no question field")
         field.tap()
         field.typeText("De que color es la taza\n")

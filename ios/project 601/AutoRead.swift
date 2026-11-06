@@ -13,12 +13,13 @@ enum ReadMode: String, CaseIterable {
 
     static let storageKey = "ocrReadMode"
 
-    /// What the button is called, said out loud and given to VoiceOver as its value.
+    /// What the button is called, said out loud and given to VoiceOver as its value,
+    /// in the app's language.
     var title: String {
         switch self {
-        case .tap: "Tap to read"
-        case .auto: "Auto read"
-        case .mute: "Mute"
+        case .tap: L("Tap to read")
+        case .auto: L("Auto read")
+        case .mute: L("Mute")
         }
     }
 
