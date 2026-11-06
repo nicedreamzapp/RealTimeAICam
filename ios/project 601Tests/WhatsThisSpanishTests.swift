@@ -1,3 +1,4 @@
+import AVFoundation
 import XCTest
 @testable import RealTime_Ai_Cam
 
@@ -21,6 +22,22 @@ final class WhatsThisSpanishTests: XCTestCase {
         let c = LiveOCRViewModel.countdownWords(lang: "es", hasVoice: false)
         XCTAssertEqual(c.lang, "en")
         XCTAssertEqual(c.words, ["three", "two", "one"])
+    }
+
+    /// The real count in a Spanish app: Spanish words in a Spanish voice, even with an English
+    /// voice picked (the bug: "three, two, one" in English).
+    func testCountdownUtterancesAreSpanishWithASpanishVoice() throws {
+        try XCTSkipIf(YourLanguageVoice.best(for: "es") == nil, "no Spanish voice on this Simulator")
+        UserDefaults.standard.set("es", forKey: AppLang.forcedKey)
+        UserDefaults.standard.set(true, forKey: "speakAnswersAloud")
+        defer { UserDefaults.standard.removeObject(forKey: AppLang.forcedKey) }
+        let vm = LiveOCRViewModel()
+        let english = YourLanguageVoice.best(for: "en")?.identifier ?? ""
+        vm.startCountdown(voiceIdentifier: english) {}
+        let said = vm.countdownUtterances
+        vm.cancelCountdown()
+        XCTAssertEqual(said.map(\.speechString), ["tres", "dos", "uno"])
+        for u in said { XCTAssertTrue(u.voice?.language.hasPrefix("es") == true, u.voice?.language ?? "no voice") }
     }
 
     /// The cut-off sentence follows the answer's language, not the phone's.

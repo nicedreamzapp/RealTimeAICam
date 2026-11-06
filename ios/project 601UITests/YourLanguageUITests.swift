@@ -153,6 +153,7 @@ final class YourLanguageUITests: XCTestCase {
         pill.tap()
         let fr = app.buttons["Francés → Español"].firstMatch
         XCTAssertTrue(fr.waitForExistence(timeout: 5), "no French → Spanish in the pill menu")
+        sleep(1) // the menu is still opening on a Pro Max: not hittable yet
         fr.tap()
         let p = app.buttons["Idioma"].firstMatch
         let deadline = Date().addingTimeInterval(10)

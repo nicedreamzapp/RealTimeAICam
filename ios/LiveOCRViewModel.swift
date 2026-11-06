@@ -512,7 +512,7 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
     // time, and sound focused and controlled, on the speaker and on AirPods.
 
     private let countdownHaptic = UIImpactFeedbackGenerator(style: .medium)
-    private var countdownUtterances: [AVSpeechUtterance] = []
+    private(set) var countdownUtterances: [AVSpeechUtterance] = []
     private var countdownTask: Task<Void, Never>?
     private var onCountdownFinished: (() -> Void)?
 
