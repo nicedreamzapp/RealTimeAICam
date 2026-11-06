@@ -81,7 +81,7 @@ struct DetectionOverlayView: View {
             // read dozens of floating fragments scattered over the camera. Collapse
             // the whole overlay into one element that reads the current list.
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Detected objects")
+            .accessibilityLabel(L("Detected objects"))
             .accessibilityValue(spokenSummary)
         }
     }
@@ -92,8 +92,10 @@ struct DetectionOverlayView: View {
     /// Users, 2026-09-25) could only hear the first letter of each line because
     /// the value used to change every frame and the screen reader restarted it.
     private var spokenSummary: String {
-        if detectedObjects.isEmpty { return "Nothing detected yet" }
-        return Set(detectedObjects.map { $0.className.lowercased() })
+        if detectedObjects.isEmpty { return L("Nothing detected yet") }
+        // In Your language once its object names are built, the same names the voice says.
+        let cache = ObjectLabelCache.shared
+        return Set(detectedObjects.map { cache.name(for: $0.className) ?? $0.className.lowercased() })
             .sorted()
             .joined(separator: ", ")
     }
@@ -207,7 +209,8 @@ struct DetectionOverlayView: View {
     // UPDATED: Enhanced label with position info when LiDAR is active
     private func buildEnhancedLabel(for detection: YOLODetection) -> String {
         let confidence = Int((detection.score * 100).rounded())
-        var label = "\(detection.className.lowercased()) \(confidence)%"
+        let name = ObjectLabelCache.shared.name(for: detection.className) ?? detection.className.lowercased()
+        var label = "\(name) \(confidence)%"
 
         // Add LiDAR info only when enabled and running
         if LiDARManager.shared.isEnabled, LiDARManager.shared.isRunning {

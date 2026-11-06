@@ -12,6 +12,8 @@ struct HomeView: View {
     /// VoiceOver lands on Settings when the guide closes (first-time-user test, 2026-11-04).
     @AccessibilityFocusState private var settingsFocused: Bool
     @ObservedObject private var modelDownloader = VisionModelDownloader.shared
+    /// Redraws the buttons when Your language switches the app between Spanish and English.
+    @ObservedObject private var appLang = AppLangObserver.shared
     /// Last quarter (25/50/75/100) already spoken aloud, so each is said once.
     @State private var spokenDownloadQuarter = 0
 
@@ -39,20 +41,20 @@ struct HomeView: View {
             let verifying = modelDownloader.state(level) == .verifying
             let percent = Int((modelDownloader.progress * 100).rounded(.down))
             VStack(spacing: 4) {
-                Text(verifying ? "Checking the \(level.name) model…"
-                     : "Downloading the \(level.name) model… \(percent)%")
+                Text(verifying ? L("Checking the %@ model…", level.name)
+                     : L("Downloading the %@ model… %ld%%", level.name, percent))
                     .font(.footnote.weight(.semibold))
                 ProgressView(value: modelDownloader.progress)
                     .tint(.white)
             }
             .padding(.bottom, 6)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(verifying ? "Checking the \(level.name) model"
-                                : "Downloading the \(level.name) model, \(percent) percent")
+            .accessibilityLabel(verifying ? L("Checking the %@ model…", level.name)
+                                : L("Downloading the %@ model, %ld percent", level.name, percent))
         } else if let level = modelSetup.missingWanted.first {
             VStack(spacing: 4) {
                 if case .failed(let why) = modelDownloader.state(level) {
-                    Text("Download failed: \(why)")
+                    Text(L("Download failed: %@", why))
                         .font(.footnote)
                         .foregroundColor(.white)
                         .multilineTextAlignment(.center)
@@ -60,7 +62,7 @@ struct HomeView: View {
                 Button {
                     modelSetup.fetchWanted(automatic: false)
                 } label: {
-                    Text("Get the \(level.name) model for this phone (\(level.sizeDescription), one time, Wi-Fi recommended)")
+                    Text(L("Get the %@ model for this phone (%@, one time, Wi-Fi recommended)", level.name, level.sizeDescription))
                         .font(.footnote.weight(.semibold))
                         .multilineTextAlignment(.center)
                         .padding(.vertical, 8)
@@ -69,8 +71,8 @@ struct HomeView: View {
                         .background(Color.white.opacity(0.15))
                         .cornerRadius(10)
                 }
-                .accessibilityLabel("Get the \(level.name) model for this phone")
-                .accessibilityHint("\(level.sizeDescription), one time, Wi-Fi recommended. What's this? gets more accurate. It already works without it.")
+                .accessibilityLabel(L("Get the %@ model for this phone", level.name))
+                .accessibilityHint(L("%@, one time, Wi-Fi recommended. What's this? gets more accurate. It already works without it.", level.sizeDescription))
             }
             .padding(.bottom, 6)
         }
@@ -85,7 +87,7 @@ struct HomeView: View {
         if quarter >= 4 {
             // "ready" is said by the downloader once the check passes.
         } else {
-            SpeechManager.shared.speak("\(level.name) model download \(quarter * 25) percent.")
+            SpeechManager.shared.speak(L("%@ model download %ld percent.", level.name, quarter * 25))
         }
     }
 
@@ -185,10 +187,10 @@ struct HomeView: View {
             // Still home (not straight into a tool): otherwise say nothing.
             guard mode == .home, !showInstructions else { return }
             await UICue.say(UICue.home, stillWanted: { mode == .home && !showInstructions }) { text, lang in
-                let utterance = AVSpeechUtterance(string: text)
-                utterance.voice = lang == YourLanguageRules.english
-                    ? (AVSpeechSynthesisVoice(identifier: voiceId) ?? AVSpeechSynthesisVoice(language: "en-US"))
-                    : AVSpeechSynthesisVoice(language: lang)
+                // The picked voice only for its own language, else the best voice for `lang`.
+                let prepared = YourLanguageVoice.prepare(text, lang: lang, selected: voiceId)
+                let utterance = AVSpeechUtterance(string: prepared.text)
+                utterance.voice = prepared.voice
                 utterance.rate = 0.5
                 synth.speak(utterance)
             }
@@ -220,7 +222,7 @@ struct HomeView: View {
                 // Read + Translate in one: English, or 17 languages into
                 // English from the pill at the top (2026-11-03).
                 Text("📖").font(.system(size: 32 * scale))
-                OutlinedText(text: "Read", fontSize: 20 * scale)
+                OutlinedText(text: L("Read"), fontSize: 20 * scale)
                 Text("🌍").font(.system(size: 26 * scale))
             }
             .padding(.vertical, 14 * scale)
@@ -258,8 +260,8 @@ struct HomeView: View {
         .shadow(color: Color.blue.opacity(0.50), radius: 12 * scale)
         .scaleEffect(animationState.button1 ? 1 : 0.7)
         .animation(.easeOut(duration: 0.3), value: animationState.button1)
-        .accessibilityLabel("Read")
-        .accessibilityHint("Reads text out loud. Pick another language at the top to translate it into English")
+        .accessibilityLabel(L("Read"))
+        .accessibilityHint(L("Reads text out loud. Pick another language at the top to translate it into English"))
         .accessibilityAddTraits(.isButton)
     }
 
@@ -270,7 +272,7 @@ struct HomeView: View {
         }) {
             HStack(spacing: 4 * scale) {
                 Text("🐶").font(.system(size: 35 * scale))
-                OutlinedText(text: "Object Detection", fontSize: 20 * scale)
+                OutlinedText(text: L("Object Detection"), fontSize: 20 * scale)
             }
             .padding(.vertical, 14 * scale)
             .frame(maxWidth: .infinity)
@@ -307,8 +309,8 @@ struct HomeView: View {
         .shadow(color: Color.orange.opacity(0.50), radius: 12 * scale)
         .scaleEffect(animationState.button3 ? 1 : 0.7)
         .animation(.easeOut(duration: 0.3), value: animationState.button3)
-        .accessibilityLabel("Object Detection")
-        .accessibilityHint("Identify objects around you and hear them announced")
+        .accessibilityLabel(L("Object Detection"))
+        .accessibilityHint(L("Identify objects around you and hear them announced"))
         .accessibilityAddTraits(.isButton)
     }
 
@@ -318,8 +320,8 @@ struct HomeView: View {
             onReadMail()
         }) {
             HStack(spacing: 4 * scale) {
-                Text("\u{1F4C4}").font(.system(size: 32 * scale))
-                OutlinedText(text: "What's this?", fontSize: 20 * scale)
+                Text(verbatim: "\u{1F4C4}").font(.system(size: 32 * scale))
+                OutlinedText(text: L("What's this?"), fontSize: 20 * scale)
             }
             .padding(.vertical, 14 * scale)
             .frame(maxWidth: .infinity)
@@ -355,8 +357,8 @@ struct HomeView: View {
         .shadow(color: Color.purple.opacity(0.50), radius: 12 * scale)
         .scaleEffect(animationState.button4 ? 1 : 0.7)
         .animation(.easeOut(duration: 0.3), value: animationState.button4)
-        .accessibilityLabel("What's this?")
-        .accessibilityHint("Point the camera at a page, a bill, a package, or a room to hear what it is")
+        .accessibilityLabel(L("What's this?"))
+        .accessibilityHint(L("Point the camera at a page, a bill, a package, or a room to hear what it is"))
         .accessibilityAddTraits(.isButton)
     }
 
@@ -368,8 +370,8 @@ struct HomeView: View {
             onHelpMeAim()
         }) {
             HStack(spacing: 4 * scale) {
-                Text("\u{1F3AF}").font(.system(size: 32 * scale))
-                OutlinedText(text: "Help Me Aim", fontSize: 20 * scale)
+                Text(verbatim: "\u{1F3AF}").font(.system(size: 32 * scale))
+                OutlinedText(text: L("Help Me Aim"), fontSize: 20 * scale)
             }
             .padding(.vertical, 14 * scale)
             .frame(maxWidth: .infinity)
@@ -405,8 +407,8 @@ struct HomeView: View {
         .shadow(color: Color.teal.opacity(0.50), radius: 12 * scale)
         .scaleEffect(animationState.button5 ? 1 : 0.7)
         .animation(.easeOut(duration: 0.3), value: animationState.button5)
-        .accessibilityLabel("Help Me Aim")
-        .accessibilityHint("Tell the camera what you want a picture of. It talks you into the shot, then takes the photo")
+        .accessibilityLabel(L("Help Me Aim"))
+        .accessibilityHint(L("Tell the camera what you want a picture of. It talks you into the shot, then takes the photo"))
         .accessibilityAddTraits(.isButton)
     }
 
@@ -418,12 +420,12 @@ struct HomeView: View {
             onLiveCam()
         }) {
             HStack(spacing: 4 * scale) {
-                Text("\u{1F4AC}").font(.system(size: 32 * scale))
+                Text(verbatim: "\u{1F4AC}").font(.system(size: 32 * scale))
                 // Matt 11/4: Live Cam says it's experimental. The tag sits under the name, inside the
                 // emoji's line height, so the button is no taller than the others.
                 VStack(spacing: 0) {
                     OutlinedText(text: "Live Cam", fontSize: 20 * scale)
-                    Text("EXPERIMENTAL")
+                    Text(L("EXPERIMENTAL"))
                         .font(.system(size: 9 * scale, weight: .heavy, design: .rounded))
                         .kerning(0.6 * scale)
                         .foregroundColor(.white)
@@ -465,8 +467,8 @@ struct HomeView: View {
         .shadow(color: Color.pink.opacity(0.50), radius: 12 * scale)
         .scaleEffect(animationState.button5 ? 1 : 0.7)
         .animation(.easeOut(duration: 0.3), value: animationState.button5)
-        .accessibilityLabel("Live Cam, experimental")
-        .accessibilityHint("Talk with the camera. Ask out loud about what's in front of you and hear the answer")
+        .accessibilityLabel(L("Live Cam, experimental"))
+        .accessibilityHint(L("Talk with the camera. Ask out loud about what's in front of you and hear the answer"))
         .accessibilityAddTraits(.isButton)
     }
 
@@ -489,7 +491,7 @@ struct HomeView: View {
         }) {
             HStack(spacing: 6) {
                 Text("⚙️").font(.system(size: 14))
-                OutlinedText(text: "SETTINGS", fontSize: 14)
+                OutlinedText(text: L("Settings").uppercased(with: AppLang.locale), fontSize: 14)
             }
             .foregroundColor(.white)
             .padding(.vertical, 12)
@@ -512,8 +514,8 @@ struct HomeView: View {
         .shadow(color: Color.black.opacity(0.38), radius: 12, y: 5)
         .clipShape(Capsule())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Settings")
-        .accessibilityHint("Models, voice and other settings")
+        .accessibilityLabel(L("Settings"))
+        .accessibilityHint(L("Models, voice and other settings"))
         .accessibilityAddTraits(.isButton)
         .accessibilityFocused($settingsFocused)
     }
@@ -606,9 +608,9 @@ struct HomeView: View {
             showInstructions = true
         }) {
             HStack(spacing: 6) {
-                OutlinedText(text: "INFO", fontSize: 14)
+                OutlinedText(text: L("INFO"), fontSize: 14)
                 Text("💡").font(.system(size: 14))
-                OutlinedText(text: "GUIDE", fontSize: 14)
+                OutlinedText(text: L("GUIDE"), fontSize: 14)
             }
             .foregroundColor(.white)
             .padding(.vertical, 12)
@@ -639,8 +641,8 @@ struct HomeView: View {
         .shadow(color: Color.black.opacity(0.38), radius: 12, y: 5)
         .clipShape(Capsule())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Info and guide")
-        .accessibilityHint("Opens the instructions, including a spoken audio tutorial")
+        .accessibilityLabel(L("Info and guide"))
+        .accessibilityHint(L("Opens the instructions, including a spoken audio tutorial"))
         .accessibilityAddTraits(.isButton)
     }
 

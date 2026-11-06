@@ -12,12 +12,13 @@ enum ModelLevel: String, CaseIterable, Codable, Identifiable {
 
     var id: String { rawValue }
 
+    /// The level's name in the app's language (the raw value is the saved key).
     var name: String {
         switch self {
-        case .sharp: "Sharp"
-        case .clear: "Clear"
-        case .balanced: "Balanced"
-        case .quick: "Quick"
+        case .sharp: L("Sharp")
+        case .clear: L("Clear")
+        case .balanced: L("Balanced")
+        case .quick: L("Quick")
         }
     }
 
@@ -33,10 +34,10 @@ enum ModelLevel: String, CaseIterable, Codable, Identifiable {
 
     var blurb: String {
         switch self {
-        case .sharp: "The most accurate answers. Best on newer phones."
-        case .clear: "Almost as accurate as Sharp, half the download."
-        case .balanced: "Built into the app, always ready, even with no internet."
-        case .quick: "The fastest answers, for older phones. Less detail."
+        case .sharp: L("The most accurate answers. Best on newer phones.")
+        case .clear: L("Almost as accurate as Sharp, half the download.")
+        case .balanced: L("Built into the app, always ready, even with no internet.")
+        case .quick: L("The fastest answers, for older phones. Less detail.")
         }
     }
 
@@ -84,7 +85,7 @@ enum ModelLevel: String, CaseIterable, Codable, Identifiable {
         }
     }
 
-    var technicalLine: String { "Model: \(modelName), \(sizeDescription)." }
+    var technicalLine: String { L("Model: %@, %@.", modelName, sizeDescription) }
 
     var sizeDescription: String {
         ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
@@ -134,13 +135,13 @@ enum ModelPriority: String, CaseIterable, Identifiable {
     case accuracy, speed
     var id: String { rawValue }
 
-    var name: String { self == .accuracy ? "Most accurate" : "Fastest" }
+    var name: String { self == .accuracy ? L("Most accurate") : L("Fastest") }
 
     /// One plain line under the choice.
     var explanation: String {
         self == .accuracy
-            ? "Best answers. Mail, money and medicine may take up to a minute, everything else up to 20 seconds."
-            : "Quicker answers, about 10 seconds where this phone can, a little less accurate."
+            ? L("Best answers. Mail, money and medicine may take up to a minute, everything else up to 20 seconds.")
+            : L("Quicker answers, about 10 seconds where this phone can, a little less accurate.")
     }
 
     /// The longest a level may take and still be picked automatically.
@@ -241,10 +242,10 @@ enum ModelPicker {
 
     /// "about 4 seconds", for the screen and VoiceOver.
     static func spoken(_ seconds: Double?) -> String {
-        guard let s = seconds else { return "speed not checked yet" }
-        if s < 1.5 { return "about 1 second" }
-        if s < 60 { return "about \(Int(s.rounded())) seconds" }
+        guard let s = seconds else { return L("speed not checked yet") }
+        if s < 1.5 { return L("about 1 second") }
+        if s < 60 { return L("about %ld seconds", Int(s.rounded())) }
         let m = Int((s / 60).rounded())
-        return m == 1 ? "about a minute" : "about \(m) minutes"
+        return m == 1 ? L("about a minute") : L("about %ld minutes", m)
     }
 }

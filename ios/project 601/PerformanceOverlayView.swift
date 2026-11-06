@@ -34,7 +34,7 @@ struct PerformanceOverlayView: View {
                     Image(systemName: "eye")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(objectCountColor)
-                    Text("\(objectCount)")
+                    Text(verbatim: "\(objectCount)")
                         .font(.system(size: 14, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
                 }
@@ -56,7 +56,7 @@ struct PerformanceOverlayView: View {
                         .shadow(color: .black.opacity(0.5), radius: 8, x: 0, y: 4)
                 )
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(objectCount == 1 ? "1 object in view" : "\(objectCount) objects in view")
+                .accessibilityLabel(objectCount == 1 ? L("1 object in view") : L("%ld objects in view", objectCount))
             }
 
             // FPS Indicator
@@ -67,7 +67,7 @@ struct PerformanceOverlayView: View {
                 Text(String(format: "%.2f", fps))
                     .font(.system(size: 14, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
-                Text("FPS")
+                Text(verbatim: "FPS")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white.opacity(0.8))
             }

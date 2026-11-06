@@ -16,7 +16,7 @@ enum SpokenLabel {
             if ch == "↔" || ch == "→" {
                 let before = worded.last(where: { $0 != " " })
                 if let before, before.isLetter || before.isNumber {
-                    worded += ch == "↔" ? " or " : " to "
+                    worded += ch == "↔" ? " \(L("or")) " : " \(L("to")) "
                 }
                 continue
             }
@@ -250,13 +250,16 @@ struct AnimatedVoicePicker: View {
     let onVoiceChange: () -> Void
     let speechSynthesizer: AVSpeechSynthesizer
     @State private var showVoiceGrid = false
+    /// The list follows the app's language: redraw when Your language changes it.
+    @ObservedObject private var appLang = AppLangObserver.shared
 
     private func isPremiumPlus(_ voice: AVSpeechSynthesisVoice) -> Bool {
         let name = voice.name.lowercased()
         return name.contains("premium") || name.contains("plus") || name.contains("ava")
     }
 
-    /// Every English voice the phone actually has, best first.
+    /// Every voice the phone has for the app's language, best first (Spanish voices when the
+    /// app is in Spanish, 2026-11-05; the picked voice reads only its own language).
     ///
     /// Asked for by Joseph Weakland on AppleVis (2026-09-13): he enabled new
     /// voices from another app and this picker could not see them. It was not
@@ -267,13 +270,15 @@ struct AnimatedVoicePicker: View {
     /// premium first, then enhanced, then the rest, favourites on top within
     /// each band and alphabetical after that. The grid below scrolls now, so a
     /// long list is a scroll, not an unreachable popup.
-    private var premiumEnglishVoices: [AVSpeechSynthesisVoice] {
-        let allVoices = AVSpeechSynthesisVoice.speechVoices().filter { v in
+    private var pickerVoices: [AVSpeechSynthesisVoice] {
+        let lang = AppLang.code
+        let allVoices = YourLanguageVoice.all(for: lang).filter { v in
             let name = v.name.lowercased()
-            return v.language.hasPrefix("en")
-                && !name.contains("robot") && !name.contains("whisper") && !name.contains("grandma")
+            return !name.contains("robot") && !name.contains("whisper") && !name.contains("grandma")
         }
-        let favoriteNames = ["Ava", "Samantha", "Daniel", "Karen", "Moira", "Serena", "Martha", "Aaron", "Fred", "Tessa", "Fiona", "Allison", "Nicky", "Joelle", "Oliver"]
+        let favoriteNames = lang == AppLang.spanish
+            ? ["Paulina", "Mónica", "Marisol", "Jorge", "Juan", "Diego", "Isabela", "Francisca"]
+            : ["Ava", "Samantha", "Daniel", "Karen", "Moira", "Serena", "Martha", "Aaron", "Fred", "Tessa", "Fiona", "Allison", "Nicky", "Joelle", "Oliver"]
         func ranked(_ voices: [AVSpeechSynthesisVoice]) -> [AVSpeechSynthesisVoice] {
             voices.sorted { lhs, rhs in
                 let f1 = favoriteNames.firstIndex(of: lhs.name) ?? Int.max
@@ -286,10 +291,14 @@ struct AnimatedVoicePicker: View {
         let enhanced = ranked(allVoices.filter { $0.quality == .enhanced && !isPremiumPlus($0) })
         let regular = ranked(allVoices.filter { $0.quality != .enhanced && !isPremiumPlus($0) })
         var result = premiumPlus + enhanced + regular
-        if let ava = allVoices.first(where: { $0.name == "Ava" }),
-           let at = result.firstIndex(where: { $0.identifier == ava.identifier }), at != 0 {
+        // English: Ava on top, as before. Other languages: the best voice for the language
+        // (the phone's region first), the same one the app falls back to.
+        let top = lang == YourLanguageRules.english
+            ? allVoices.first(where: { $0.name == "Ava" })
+            : YourLanguageVoice.best(for: lang)
+        if let top, let at = result.firstIndex(where: { $0.identifier == top.identifier }), at != 0 {
             result.remove(at: at)
-            result.insert(ava, at: 0)
+            result.insert(top, at: 0)
         }
         return result
     }
@@ -331,16 +340,16 @@ struct AnimatedVoicePicker: View {
 
     private func qualityTag(for voice: AVSpeechSynthesisVoice) -> String {
         if isPremiumPlus(voice) {
-            return "(Premium)"
+            return L("(Premium)")
         }
         if voice.quality == .enhanced {
-            return "(Enhanced)"
+            return L("(Enhanced)")
         }
         return ""
     }
 
     private var selectedVoice: AVSpeechSynthesisVoice? {
-        premiumEnglishVoices.first(where: { $0.identifier == viewModel.selectedVoiceIdentifier })
+        pickerVoices.first(where: { $0.identifier == viewModel.selectedVoiceIdentifier })
     }
 
     /// Marks the currently chosen voice as selected for VoiceOver.
@@ -353,10 +362,9 @@ struct AnimatedVoicePicker: View {
         let name = voice.name
             .replacingOccurrences(of: " (Enhanced)", with: "")
             .replacingOccurrences(of: " (Premium)", with: "")
-        let tag = qualityTag(for: voice)
-            .replacingOccurrences(of: "(", with: "")
-            .replacingOccurrences(of: ")", with: "")
-        return tag.isEmpty ? name : "\(name), \(tag) quality"
+        if isPremiumPlus(voice) { return L("%@, Premium quality", name) }
+        if voice.quality == .enhanced { return L("%@, Enhanced quality", name) }
+        return name
     }
 
     var body: some View {
@@ -366,10 +374,12 @@ struct AnimatedVoicePicker: View {
             }
         }) {
             let voice = selectedVoice
-            let defaultVoice = premiumEnglishVoices.first ?? AVSpeechSynthesisVoice(language: "en-US")!
+            let defaultVoice = pickerVoices.first
+                ?? YourLanguageVoice.best(for: AppLang.code)
+                ?? AVSpeechSynthesisVoice(language: "en-US")!
             let voiceToUse = voice ?? defaultVoice
             let tag = qualityTag(for: voiceToUse)
-            let cleanedName = (voice?.name ?? "Select Voice")
+            let cleanedName = (voice?.name ?? L("Select Voice"))
                 .replacingOccurrences(of: " (Enhanced)", with: "")
                 .replacingOccurrences(of: " (Premium)", with: "")
             // Spelled out: the one-line ternary timed out the type checker on a busy build machine.
@@ -391,7 +401,7 @@ struct AnimatedVoicePicker: View {
             .overlay(Capsule().stroke(Color.black, lineWidth: 1.1))
             // Same words as Android's pill; the face emoji is left out.
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Voice, " + pillText)
+            .accessibilityLabel(L("Voice, %@", pillText))
         }
         .opacity(animateIn ? 1 : 0)
         .scaleEffect(animateIn ? 1 : 0.7)
@@ -399,9 +409,9 @@ struct AnimatedVoicePicker: View {
         // These must stay ABOVE the overlay below. Applied after it, they collapse
         // the popup grid into this one element and the voice buttons become
         // unreachable with VoiceOver.
-        .accessibilityLabel("Voice Selection")
-        .accessibilityValue(selectedVoice?.name ?? "No voice selected")
-        .accessibilityHint(showVoiceGrid ? "Closes the list of voices" : "Opens a list of voices to choose from")
+        .accessibilityLabel(L("Voice Selection"))
+        .accessibilityValue(selectedVoice?.name ?? L("No voice selected"))
+        .accessibilityHint(showVoiceGrid ? L("Closes the list of voices") : L("Opens a list of voices to choose from"))
         .accessibilityAddTraits(.isButton)
         .overlay(
             Group {
@@ -422,7 +432,7 @@ struct AnimatedVoicePicker: View {
                     // the screen and VoiceOver cannot reach the ones underneath.
                     ScrollView {
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                        ForEach(premiumEnglishVoices, id: \.identifier) { voice in
+                        ForEach(pickerVoices, id: \.identifier) { voice in
                             Button(action: {
                                 viewModel.selectedVoiceIdentifier = voice.identifier
                                 onVoiceChange()
@@ -437,7 +447,7 @@ struct AnimatedVoicePicker: View {
                             }
                             .accessibilityElement(children: .ignore)
                             .accessibilityLabel(accessibilityLabel(for: voice))
-                            .accessibilityHint("Sets this as the voice that reads text aloud")
+                            .accessibilityHint(L("Sets this as the voice that reads text aloud"))
                             .accessibilityAddTraits(traits(for: voice))
                         }
                     }
@@ -459,8 +469,8 @@ struct AnimatedVoicePicker: View {
                 }
             }
         )
-        .accessibilityLabel("Voice Selection")
-        .accessibilityHint("Choose your preferred voice for speech feedback")
+        .accessibilityLabel(L("Voice Selection"))
+        .accessibilityHint(L("Choose your preferred voice for speech feedback"))
     }
 }
 

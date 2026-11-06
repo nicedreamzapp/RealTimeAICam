@@ -219,8 +219,8 @@ final class VisionModelDownloader: NSObject, ObservableObject {
         current = level
         states[level] = .downloading
         progress = 0
-        SpeechManager.shared.speak("Getting the \(level.name) model for this phone, \(level.sizeDescription). "
-                                   + "What's this? keeps working while it downloads.")
+        SpeechManager.shared.speak(L("Getting the %@ model for this phone, %@. What's this? keeps working while it downloads.",
+                                     level.name, level.sizeDescription))
         Task { await fetchManifestAndQueue(level) }
     }
 
@@ -361,7 +361,7 @@ final class VisionModelDownloader: NSObject, ObservableObject {
         case .success:
             progress = 1
             states[level] = .ready
-            SpeechManager.shared.speak("The \(level.name) model is ready. What's this? will use it from now on.")
+            SpeechManager.shared.speak(L("The %@ model is ready. What's this? will use it from now on.", level.name))
             finishCurrent()
         case .failure(let error):
             // A bad file must not be trusted next time round.
@@ -374,7 +374,7 @@ final class VisionModelDownloader: NSObject, ObservableObject {
 
     private func fail(_ level: ModelLevel, _ message: String) {
         states[level] = .failed(message)
-        SpeechManager.shared.speak("The \(level.name) model download stopped. You can try again in Settings, under Models. What's this? still works.")
+        SpeechManager.shared.speak(L("The %@ model download stopped. You can try again in Settings, under Models. What's this? still works.", level.name))
         if current == level { finishCurrent() }
     }
 
@@ -394,11 +394,11 @@ final class VisionModelDownloader: NSObject, ObservableObject {
 
         var errorDescription: String? {
             switch self {
-            case .http(let code, let name): return "The server answered \(code) for \(name)."
-            case .emptyManifest: return "The model list on the server is empty."
-            case .sizeMismatch(let name): return "\(name) came down the wrong size."
-            case .hashMismatch(let name): return "\(name) failed its integrity check."
-            case .noFile(let name): return "\(name) did not arrive."
+            case .http(let code, let name): return L("The server answered %ld for %@.", code, name)
+            case .emptyManifest: return L("The model list on the server is empty.")
+            case .sizeMismatch(let name): return L("%@ came down the wrong size.", name)
+            case .hashMismatch(let name): return L("%@ failed its integrity check.", name)
+            case .noFile(let name): return L("%@ did not arrive.", name)
             }
         }
     }

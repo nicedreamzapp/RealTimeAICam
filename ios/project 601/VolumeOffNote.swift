@@ -9,7 +9,9 @@ import UIKit
 /// volume comes up, or when it is tapped.
 @MainActor
 final class VolumeWatcher: ObservableObject {
-    static let line = "Volume is off. Turn it up to hear the app."
+    static let englishLine = "Volume is off. Turn it up to hear the app."
+    /// In the app's language.
+    static var line: String { L(englishLine) }
 
     @Published private(set) var isOff = false
     private var observation: NSKeyValueObservation?
@@ -45,7 +47,8 @@ final class VolumeWatcher: ObservableObject {
             announced = true
             // A beat later, so the first screen's own VoiceOver focus doesn't cut it off.
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                UIAccessibility.post(notification: .announcement, argument: Self.line)
+                UIAccessibility.post(notification: .announcement,
+                                     argument: SpeechManager.voiceOverLine(Self.line, lang: AppLang.code))
             }
         } else if !off {
             announced = false
@@ -74,7 +77,7 @@ struct VolumeOffNote: View {
                 .padding(.top, 100)
                 .accessibilityIdentifier("volumeOffNote")
                 .accessibilityLabel(VolumeWatcher.line)
-                .accessibilityHint("Double tap to hide this note")
+                .accessibilityHint(L("Double tap to hide this note"))
                 .transition(.opacity)
             }
         }

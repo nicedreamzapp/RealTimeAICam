@@ -2,6 +2,8 @@ import SwiftUI
 
 struct SettingsOverlayView: View {
     @ObservedObject var viewModel: CameraViewModel
+    /// Picking Spanish in Your language redraws the whole panel in Spanish.
+    @ObservedObject private var appLang = AppLangObserver.shared
     @Binding var isPresented: Bool
     let mode: AppMode
 
@@ -32,7 +34,7 @@ struct SettingsOverlayView: View {
 
             VStack(spacing: 0) {
                 HStack {
-                    Text("Settings")
+                    Text(L("Settings"))
                         .font(.title2)
                         .fontWeight(.semibold)
 
@@ -50,7 +52,7 @@ struct SettingsOverlayView: View {
                             .symbolRenderingMode(.hierarchical)
                             .foregroundStyle(.secondary)
                     }
-                    .accessibilityLabel("Close settings")
+                    .accessibilityLabel(L("Close settings"))
                 }
                 .padding()
 
@@ -66,14 +68,14 @@ struct SettingsOverlayView: View {
                                         Image(systemName: "timer")
                                             .font(.system(size: 20))
                                             .foregroundStyle(.purple)
-                                        Text("Countdown before photo")
+                                        Text(L("Countdown before photo"))
                                             .font(.headline)
                                     }
                                 }
-                                .accessibilityLabel("Countdown before photo")
-                                .accessibilityHint("When on, the app counts three, two, one out loud and then takes the picture, so you are not touching the phone when it fires")
+                                .accessibilityLabel(L("Countdown before photo"))
+                                .accessibilityHint(L("When on, the app counts three, two, one out loud and then takes the picture, so you are not touching the phone when it fires"))
 
-                                Text("Counts three, two, one out loud, then takes the picture — your hand is off the phone when it fires.")
+                                Text(L("Counts three, two, one out loud, then takes the picture — your hand is off the phone when it fires."))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -89,14 +91,14 @@ struct SettingsOverlayView: View {
                                         Image(systemName: "speaker.wave.2")
                                             .font(.system(size: 20))
                                             .foregroundStyle(.blue)
-                                        Text("Speak in the app's own voice")
+                                        Text(L("Speak in the app's own voice"))
                                             .font(.headline)
                                     }
                                 }
-                                .accessibilityLabel("Speak in the app's own voice")
-                                .accessibilityHint("Turn this off and VoiceOver reads the descriptions instead, so two voices are not talking at once")
+                                .accessibilityLabel(L("Speak in the app's own voice"))
+                                .accessibilityHint(L("Turn this off and VoiceOver reads the descriptions instead, so two voices are not talking at once"))
 
-                                Text("Turn this off and VoiceOver reads everything instead, in your voice and at your speed, so the app is not talking over it.")
+                                Text(L("Turn this off and VoiceOver reads everything instead, in your voice and at your speed, so the app is not talking over it."))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -114,13 +116,13 @@ struct SettingsOverlayView: View {
                                         .font(.system(size: 20))
                                         .foregroundStyle(.orange)
 
-                                    Text("Copy History")
+                                    Text(L("Copy History"))
                                         .font(.headline)
 
                                     Spacer()
 
                                     if !copyHistory.isEmpty {
-                                        Button("Clear") {
+                                        Button(L("Clear")) {
                                             if buttonDebouncer.canPress("SettingsOverlayView-3") {
                                                 copyHistory.removeAll()
                                                 UserDefaults.standard.removeObject(forKey: "ocrCopyHistory")
@@ -128,13 +130,13 @@ struct SettingsOverlayView: View {
                                         }
                                         .font(.caption)
                                         .foregroundStyle(.red)
-                                        .accessibilityLabel("Clear copy history")
-                                        .accessibilityHint("Deletes every saved copy from this device")
+                                        .accessibilityLabel(L("Clear copy history"))
+                                        .accessibilityHint(L("Deletes every saved copy from this device"))
                                     }
                                 }
 
                                 if copyHistory.isEmpty {
-                                    Text("No copied text yet")
+                                    Text(L("No copied text yet"))
                                         .font(.body)
                                         .foregroundStyle(.secondary)
                                         .frame(maxWidth: .infinity)
@@ -166,7 +168,7 @@ struct SettingsOverlayView: View {
                                                     if copiedIndex == index {
                                                         HStack(spacing: 3) {
                                                             Image(systemName: "checkmark.circle.fill")
-                                                            Text("Copied").font(.caption.bold())
+                                                            Text(L("Copied")).font(.caption.bold())
                                                         }
                                                         .foregroundStyle(.green)
                                                     } else {
@@ -175,8 +177,8 @@ struct SettingsOverlayView: View {
                                                             .foregroundStyle(.blue)
                                                     }
                                                 }
-                                                .accessibilityLabel(copiedIndex == index ? "Copied" : "Copy this saved text")
-                                                .accessibilityHint("Copies it to the clipboard")
+                                                .accessibilityLabel(copiedIndex == index ? L("Copied") : L("Copy this saved text"))
+                                                .accessibilityHint(L("Copies it to the clipboard"))
                                             }
                                             .padding(12)
                                             .background(
@@ -200,7 +202,7 @@ struct SettingsOverlayView: View {
                                     .font(.system(size: 20))
                                     .foregroundStyle(.purple)
 
-                                Text("Camera Zoom")
+                                Text(L("Camera Zoom"))
                                     .font(.headline)
 
                                 Spacer()
@@ -226,30 +228,30 @@ struct SettingsOverlayView: View {
                                     .font(.system(size: 20))
                                     .foregroundStyle(.blue)
 
-                                Text("Tips")
+                                Text(L("Tips"))
                                     .font(.headline)
                             }
 
                             // This overlay is only ever presented from the OCR screens
-                            Text("• 🤏 Pinch to zoom the camera")
-                                .voiceOverWords("• 🤏 Pinch to zoom the camera")
-                            Text("• 📋 Copy detected/translated text")
-                                .voiceOverWords("• 📋 Copy detected/translated text")
+                            Text(L("• 🤏 Pinch to zoom the camera"))
+                                .voiceOverWords(L("• 🤏 Pinch to zoom the camera"))
+                            Text(L("• 📋 Copy detected/translated text"))
+                                .voiceOverWords(L("• 📋 Copy detected/translated text"))
                             HStack {
                                 Image(systemName: "arrow.clockwise")
-                                Text("Reset/Stop — Clears text, translation, and stops speaking")
+                                Text(L("Reset/Stop — Clears text, translation, and stops speaking"))
                             }
-                            Text("• 🗣️ Speak detected/translated text")
-                                .voiceOverWords("• 🗣️ Speak detected/translated text")
-                            Text("• 🔦 Flashlight: one tap on, one tap off")
-                                .voiceOverWords("• 🔦 Flashlight: one tap on, one tap off")
+                            Text(L("• 🗣️ Speak detected/translated text"))
+                                .voiceOverWords(L("• 🗣️ Speak detected/translated text"))
+                            Text("• " + L("🔦 Flashlight, one tap on, one tap off"))
+                                .voiceOverWords(L("🔦 Flashlight, one tap on, one tap off"))
                             // No lens line here: these screens have no lens
                             // toggle at all — it lives in Object Detection, and
                             // only on phones with a second rear lens. Listing it
                             // here sent Matt on AppleVis hunting for a control
                             // that was never on this screen (2026-09-17).
-                            Text("• ⚙️ Open settings/history")
-                                .voiceOverWords("• ⚙️ Open settings/history")
+                            Text(L("• ⚙️ Open settings/history"))
+                                .voiceOverWords(L("• ⚙️ Open settings/history"))
                         }
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -309,21 +311,23 @@ struct SettingsOverlayView: View {
 }
 
 private struct PrivacyCardView: View {
+    @ObservedObject private var appLang = AppLangObserver.shared
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 Image(systemName: "lock.shield")
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(.green)
-                Text("Private by Design")
+                Text(L("Private by Design"))
                     .font(.headline)
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Label("Works 100% offline — even in Airplane Mode (the optional bigger models download once, then stay offline)", systemImage: "airplane")
-                Label("No tracking, no analytics, no accounts", systemImage: "eye.slash")
-                Label("Camera frames are processed on-device only", systemImage: "camera.viewfinder")
-                Label("Copy history stays on this device (you can clear it anytime)", systemImage: "doc.on.clipboard")
+                Label(L("Works 100% offline — even in Airplane Mode (the optional bigger models download once, then stay offline)"), systemImage: "airplane")
+                Label(L("No tracking, no analytics, no accounts"), systemImage: "eye.slash")
+                Label(L("Camera frames are processed on-device only"), systemImage: "camera.viewfinder")
+                Label(L("Copy history stays on this device (you can clear it anytime)"), systemImage: "doc.on.clipboard")
             }
             .font(.subheadline)
             .foregroundStyle(.secondary)
@@ -345,6 +349,7 @@ private struct PrivacyCardView: View {
 /// (it ships inside the VisionModel folder).
 private struct CreditsCardView: View {
     @State private var showLicense = false
+    @ObservedObject private var appLang = AppLangObserver.shared
 
     private var licenseText: String {
         guard let url = Bundle.main.url(forResource: "VisionModel", withExtension: nil)?
@@ -359,14 +364,13 @@ private struct CreditsCardView: View {
                 Image(systemName: "heart.text.square")
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(.pink)
-                Text("Credits")
+                Text(L("Credits"))
                     .font(.headline)
             }
             VStack(alignment: .leading, spacing: 6) {
-                Text("What's this? runs LFM3-Omni-2B by Liquid AI, on this phone, under the LFM Open License v1.0. "
-                     + "Nice Dreamz converted it to GGUF in three sizes (Sharp Q8_0, Clear Q3_K_M, Balanced IQ2_XS); the weights are otherwise unchanged.")
-                Text("Quick: Vision Narrator 0.8B by Nice Dreamz, fine-tuned from Qwen3.5-0.8B by Alibaba Cloud (Apache-2.0)")
-                Button(showLicense ? "Hide the LFM Open License" : "Read the LFM Open License v1.0") {
+                Text(L("What's this? runs LFM3-Omni-2B by Liquid AI, on this phone, under the LFM Open License v1.0. Nice Dreamz converted it to GGUF in three sizes (Sharp Q8_0, Clear Q3_K_M, Balanced IQ2_XS); the weights are otherwise unchanged."))
+                Text(L("Quick: Vision Narrator 0.8B by Nice Dreamz, fine-tuned from Qwen3.5-0.8B by Alibaba Cloud (Apache-2.0)"))
+                Button(showLicense ? L("Hide the LFM Open License") : L("Read the LFM Open License v1.0")) {
                     showLicense.toggle()
                 }
                 if showLicense {
@@ -374,8 +378,8 @@ private struct CreditsCardView: View {
                         .font(.caption2)
                         .textSelection(.enabled)
                 }
-                Text("On-device engine: llama.cpp by ggml-org (MIT)")
-                Text("Object Detection: YOLOv8 by Ultralytics (AGPL-3.0), trained on Open Images V7 by Google (CC BY 4.0)")
+                Text(L("On-device engine: llama.cpp by ggml-org (MIT)"))
+                Text(L("Object Detection: YOLOv8 by Ultralytics (AGPL-3.0), trained on Open Images V7 by Google (CC BY 4.0)"))
             }
             .font(.subheadline)
             .foregroundStyle(.secondary)

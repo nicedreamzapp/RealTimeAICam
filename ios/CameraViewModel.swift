@@ -180,8 +180,9 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
         set { SpeechManager.shared.selectedVoiceIdentifier = newValue }
     }
 
-    var availableEnglishVoices: [AVSpeechSynthesisVoice] {
-        SpeechManager.shared.availableEnglishVoices
+    /// The voices for the app's language (Spanish voices when the app is in Spanish).
+    var availableVoices: [AVSpeechSynthesisVoice] {
+        SpeechManager.shared.availableVoices
     }
 
     // MARK: - Internal Properties
@@ -878,7 +879,7 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
             if !modelFailureNotified {
                 modelFailureNotified = true
                 DispatchQueue.main.async {
-                    self.showLiDARNotification("Detection engine failed to load — please restart the app")
+                    self.showLiDARNotification(L("Detection engine failed to load — please restart the app"))
                 }
             }
             return
@@ -1065,8 +1066,8 @@ class CameraViewModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
         // be set on main or SwiftUI never shows the alert.
         DispatchQueue.main.async { [weak self] in
             self?.cameraPermissionAlert = CameraPermissionAlert(
-                title: "Camera Access Needed",
-                message: "This app requires access to your camera to function. Please allow camera access in Settings.",
+                title: L("Camera Access Needed"),
+                message: L("This app requires access to your camera to function. Please allow camera access in Settings."),
                 openSettings: {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(url)

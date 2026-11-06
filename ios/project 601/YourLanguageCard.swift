@@ -7,6 +7,7 @@ import UIKit
 /// nothing downloads until the person clearly wants it). Same as Android's card.
 struct YourLanguageCard: View {
     @ObservedObject private var yourLanguage = YourLanguage.shared
+    @ObservedObject private var appLang = AppLangObserver.shared
 
     private func say(_ line: String) {
         #if DEBUG
@@ -23,7 +24,7 @@ struct YourLanguageCard: View {
                     .font(.system(size: 20))
                     .foregroundStyle(.green)
                     .accessibilityHidden(true)
-                Text("Your language")
+                Text(L("Your language"))
                     .font(.headline)
                 Spacer()
                 if YourLanguage.translatorAvailable {
@@ -32,10 +33,11 @@ struct YourLanguageCard: View {
                             Button {
                                 pick(lang.code)
                             } label: {
+                                // Each name in the app's language ("Francés" in Spanish).
                                 if lang.code == code {
-                                    Label(lang.name, systemImage: "checkmark")
+                                    Label(YourLanguageRules.name(lang.code), systemImage: "checkmark")
                                 } else {
-                                    Text(lang.name)
+                                    Text(YourLanguageRules.name(lang.code))
                                 }
                             }
                             .accessibilityIdentifier("yourLanguage_\(lang.code)")
@@ -46,17 +48,17 @@ struct YourLanguageCard: View {
                             .foregroundStyle(.purple)
                     }
                     .accessibilityIdentifier("yourLanguagePicker")
-                    .accessibilityLabel("Your language")
+                    .accessibilityLabel(L("Your language"))
                     .accessibilityValue(YourLanguageRules.name(code))
-                    .accessibilityHint("Double tap to choose the language results are spoken in")
+                    .accessibilityHint(L("Double tap to choose the language results are spoken in"))
                 } else {
-                    Text("English").font(.system(size: 15, weight: .medium)).foregroundStyle(.secondary)
+                    Text(YourLanguageRules.name(YourLanguageRules.english)).font(.system(size: 15, weight: .medium)).foregroundStyle(.secondary)
                 }
             }
 
             Text(YourLanguage.translatorAvailable
-                 ? "Read, Object Detection, Help Me Aim and What's this? speak in this language. Buttons stay in English for now."
-                 : "Other languages need iOS 18 or later. On this phone everything is spoken in English.")
+                 ? L("Read, Object Detection, Help Me Aim and What's this? speak in this language.")
+                 : L("Other languages need iOS 18 or later. On this phone everything is spoken in English."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -86,10 +88,10 @@ struct YourLanguageCard: View {
                 .accessibilityIdentifier("yourLanguageDownload")
             } else if code != YourLanguageRules.english, YourLanguageVoice.best(for: code) == nil {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(YourLanguageRules.noVoiceLine(code))
+                    Text(YourLanguageRules.noVoiceShown(code))
                         .font(.caption)
                         .fixedSize(horizontal: false, vertical: true)
-                    Button("Open phone settings") {
+                    Button(L("Open phone settings")) {
                         if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
                     }
                     .font(.caption.bold())
@@ -127,11 +129,11 @@ struct YourLanguageCard: View {
 
     private func announce(_ new: String) {
         if new == YourLanguageRules.english {
-            say("Your language is English.")
+            say(L("Your language is English."))
         } else if yourLanguage.isReady(new) {
-            say("Your language is \(YourLanguageRules.name(new)).")
+            say(L("Your language is %@.", YourLanguageRules.nameInSentence(new)))
         } else {
-            say("Your language is \(YourLanguageRules.name(new)). Tap \(YourLanguageRules.downloadRow(new)).")
+            say(L("Your language is %@. Tap %@.", YourLanguageRules.nameInSentence(new), YourLanguageRules.downloadRow(new)))
         }
     }
 }
