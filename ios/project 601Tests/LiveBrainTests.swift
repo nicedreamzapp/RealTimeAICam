@@ -466,3 +466,24 @@ struct LiveReviewRound3Tests {
         #expect(seen.values.last == true)
     }
 }
+
+/// Live Cam money (merged 11/6) keeps the 11/6 rules: its counting line takes turns, and an answer passes the
+/// repeat guard as is.
+struct LiveMoneyRulesTests {
+    @Test func countingLinesTakeTurnsAndNeverOfferHelp() {
+        var r = LiveRotation()
+        var last = ""
+        for i in 0 ..< 9 {
+            let l = r.next(from: LiveCamWords.countingLines, random: i)!
+            #expect(l != last); #expect(!LiveWords.isHelpOffer(l)); last = l
+        }
+        #expect(Set(LiveCamWords.countingLines.map(LiveSayGuard.opening)).count == LiveCamWords.countingLines.count)
+    }
+
+    @Test func aMoneyAnswerPassesTheGuardUnchangedEvenIfSaidBefore() {
+        var g = LiveSayGuard()
+        g.beginTurn(); g.note("I count 3 bills, $45 total.")
+        g.beginTurn()
+        #expect(g.vet("I count 3 bills, $45 total.", prompted: true) == "I count 3 bills, $45 total.")
+    }
+}

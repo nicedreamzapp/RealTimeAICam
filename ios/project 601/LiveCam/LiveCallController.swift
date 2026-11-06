@@ -676,9 +676,16 @@ final class LiveCallController: ObservableObject {
     /// Money answers are the app's own words (LiveLine.own): said in the app language. Their numbers and plurals
     /// are built in code, so the Spanish comes from MoneyWordsES rather than the string catalog.
     private var moneyLang: MoneyLang { MoneyLang.from(AppLang.code) }
+    /// Money answers go through the repeat guard like every answer (Matt 11/6): never a looping or repeated sentence
+    /// inside one answer, never a second help offer, never "I see" opening two lines in a row.
     private func sayMoney(_ line: String, english: String) {
-        if moneyLang == .en { voice.sayOwn(english) } else { voice.sayLine(line, lang: AppLang.code, english: english) }
+        sayGuard.beginTurn()
+        guard let vetted = sayGuard.vet(english, prompted: true) else { log(["event": "dropped_repeat", "text": english]); return }
+        sayGuard.note(vetted)
+        if moneyLang == .en { voice.sayOwn(vetted) } else { voice.sayLine(line, lang: AppLang.code, english: english) }
     }
+    /// "Let me count." and its turns: never the same words twice in a row.
+    private var countLines = LiveRotation()
 
     /// Counts the bills in view: the full camera frame (1280 x 720, not the 512 px look), each bill found and read
     /// on its own, the total added in code. One frame, a second only if a bill couldn't be read.
@@ -700,7 +707,10 @@ final class LiveCallController: ObservableObject {
         phase = .thinking
         listener.stopListening()
         listener.watchForBargeIn(true)
-        voice.sayOwn("Let me count.")
+        let counting = countLines.next(from: LiveCamWords.countingLines.filter { LiveSayGuard.opening($0) != sayGuard.lastOpening })
+            ?? LiveCamWords.countingLines[0]
+        sayGuard.note(counting)
+        voice.sayOwn(counting)
         phase = .speaking
         modelBusy = true
         let camera = camera

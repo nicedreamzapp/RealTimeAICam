@@ -2377,6 +2377,28 @@
         }
       }
     },
+    "Counting now." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contando."
+          }
+        }
+      }
+    },
+    "One sec, counting." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un momento, estoy contando."
+          }
+        }
+      }
+    },
     "Let me count." : {
       "extractionState" : "manual",
       "localizations" : {
