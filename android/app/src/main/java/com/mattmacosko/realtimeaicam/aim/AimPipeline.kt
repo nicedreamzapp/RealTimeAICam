@@ -276,13 +276,15 @@ class AimPipeline(
 
     /**
      * Flashlight. Only the back camera has one, same as the iPhone, and the app
-     * says "flashlight on" / "flashlight off" in those exact words.
+     * says "flashlight on" / "flashlight off" in those exact words (in the app's language).
      */
     fun toggleTorch(): String {
         val on = !_torchOn.value && !_isFront.value
         _torchOn.value = on
         camera?.cameraControl?.enableTorch(on)
-        return if (on) "flashlight on" else "flashlight off"
+        return com.mattmacosko.realtimeaicam.AppLang.str(
+            if (on) com.mattmacosko.realtimeaicam.R.string.g_aim_flashlight_on else com.mattmacosko.realtimeaicam.R.string.g_aim_flashlight_off,
+        )
     }
 
     fun setTorch(on: Boolean) {
@@ -303,7 +305,9 @@ class AimPipeline(
         val owner = boundOwner
         val preview = boundPreview
         if (owner != null && preview != null) start(owner, preview)
-        return if (_isFront.value) "front camera" else "back camera"
+        return com.mattmacosko.realtimeaicam.AppLang.str(
+            if (_isFront.value) com.mattmacosko.realtimeaicam.R.string.g_aim_front_camera else com.mattmacosko.realtimeaicam.R.string.g_aim_back_camera,
+        )
     }
 
     fun stop() {
@@ -554,20 +558,71 @@ class AimPipeline(
         }
         // Taking another or leaving must not be talked over.
         if (shot != shotNumber) return
+        val savedLine = AimPhrases.capitalized(
+            if (saved) AimPhrases.savedWithDescription else AimPhrases.notSavedWithDescription,
+        )
+        val app = com.mattmacosko.realtimeaicam.AppLang.code()
+        if (description != null && app != com.mattmacosko.realtimeaicam.AppLang.ENGLISH) {
+            // Spanish app (2026-11-05): the saved line is already Spanish, the description is
+            // the model's English (content). Put the description into the same language when
+            // that pack is on the phone and say both as one line in one voice; otherwise the
+            // description is said in its own language and the saved line after it.
+            val said = if (speaker.outputLanguage() == app) {
+                withContext(Dispatchers.IO) {
+                    com.mattmacosko.realtimeaicam.translation.YourLanguage.translateBlocking(description, "en", app)
+                }
+            } else {
+                null
+            }
+            if (shot != shotNumber) return
+            if (said != null) {
+                val line = "$said $savedLine."
+                Log.i(TAG, "SAY $line")
+                _spoken.value = line
+                speaker.speakIn(line, app, result = true)
+                _done.value = line
+            } else {
+                val line = "$description $savedLine."
+                Log.i(TAG, "SAY $line")
+                _spoken.value = line
+                _done.value = line
+                val aloud = appContext.getSharedPreferences("rtcam", Context.MODE_PRIVATE)
+                    .getBoolean("speakAnswersAloud", true)
+                if (aloud) {
+                    speaker.speakResult(description)
+                    sayWhenQuiet("$savedLine.", shot)
+                } else {
+                    // TalkBack reads it in the person's own voice: one announcement, nothing cut off.
+                    speaker.speakResult(line)
+                }
+            }
+            return
+        }
         val line = if (description != null) {
-            description + " " + AimPhrases.capitalized(
-                if (saved) AimPhrases.savedWithDescription else AimPhrases.notSavedWithDescription,
-            ) + "."
+            "$description $savedLine."
         } else {
-            AimPhrases.capitalized(
-                AimPhrases.pictureTaken + if (saved) AimPhrases.savedSuffix else AimPhrases.notSavedSuffix,
-            )
+            AimPhrases.capitalized(AimPhrases.pictureTaken(saved))
         }
         Log.i(TAG, "SAY $line")
         _spoken.value = line
         // A description read to the end is a success moment for the rating card.
         if (description != null) speaker.speakResult(line) else speaker.speak(line)
         _done.value = line
+    }
+
+    /**
+     * Say an app line once the voice has finished the line before it (a description in
+     * another language). Gives up waiting after a while so the line is never lost, and stays
+     * quiet if another shot was started meanwhile.
+     */
+    private suspend fun sayWhenQuiet(line: String, shot: Int) {
+        val start = SystemClock.elapsedRealtime()
+        // The description may still be in the translator: wait for the voice to start...
+        while (!speaker.speakingNow.value && SystemClock.elapsedRealtime() - start < 4000) delay(50)
+        // ...and to finish.
+        while (speaker.speakingNow.value && SystemClock.elapsedRealtime() - start < 180_000) delay(100)
+        if (shot != shotNumber) return
+        speaker.speak(line)
     }
 
     /** Aim at the same thing again (iOS "Take Another"). */
