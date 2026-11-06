@@ -522,7 +522,6 @@ enum LiveMoney {
     /// Nothing at all suggests money (detector path). Still no claim that there is none: a rolled bill in a hand
     /// (CC0 xh_25) shows nothing the detector, the look or the text reader knows.
     static let noMoney = "I can't find any bills here. If there's money, hold it flat, about a foot from the camera."
-    static let gettingReader = "Getting the money reader, one moment."
 
     // MARK: - Vision (the part that needs the frame)
 
@@ -615,6 +614,11 @@ enum LiveMoney {
         return out.reduce(into: [Serial]()) { acc, s in
             if !acc.contains(where: { $0.text == s.text && hypot($0.at.x - s.at.x, $0.at.y - s.at.y) < min(W, H) * 0.03 }) { acc.append(s) }
         }
+    }
+
+    /// A box left out as a mirror image: a real bill may be missing too, so the count is a floor, never a total.
+    static func floorIfReflectionDropped(_ c: inout Count, _ dropped: Bool) {
+        if dropped, !c.doubts.contains(.countUnsure) { c.doubts.append(.countUnsure) }
     }
 
     /// Printed money words or a serial number anywhere in the frame ("THE UNITED STATES", "DOLLARS", "L89823401J"):
@@ -982,7 +986,8 @@ enum LiveMoney {
         // counted twice and two $1s side by side still count as two.
         // Detector path: serials are read only inside the detected bills' area (11/6 review: the whole frame both
         // ways up cost seconds a look).
-        let frameSerials = boxed.flatMap { b in serialArea(b.map(\.quad), width: CGFloat(image.width), height: CGFloat(image.height)).map { _ in serialsInFrame(image, within: b.map(\.quad)) } }
+        // Nothing detected: no serial pass at all (the money-words check below is the one OCR of an empty frame).
+        let frameSerials = boxed.map { b in b.isEmpty ? [] : serialArea(b.map(\.quad), width: CGFloat(image.width), height: CGFloat(image.height)).map { _ in serialsInFrame(image, within: b.map(\.quad)) } ?? serialsInFrame(image) }
             ?? serialsInFrame(image)
         func read(_ crop: CGImage) -> (Int?, [String: Any]) {
             let (lines, upright) = printedTextAndWayUp(crop)
@@ -1144,6 +1149,7 @@ enum LiveMoney {
         let unseen = smoothMoney.contains { q in !kept.contains { q.covered(by: $0.quad) > 0.2 || $0.quad.covered(by: q) > 0.2 } }
         let missed = !stray.isEmpty || unseen || (modelCount.map { $0 > kept.count } ?? false)
         var c = count(kept, moreSeen: missed, pile: anyPile ? pileValues : nil, boxed: boxed != nil)
+        floorIfReflectionDropped(&c, detection?.droppedReflection == true)
         // No bill found, but something still looks like money: never "no money" (CC0 xh_10, xh_25).
         if let detection, kept.isEmpty, let i = c.doubts.firstIndex(of: .none),
            detection.maybeMoney || moneyWords(in: image) { c.doubts[i] = .unclear }
@@ -1206,7 +1212,6 @@ enum MoneyWordsES {
     static let tooMany = "Son muchos billetes; puedo contar hasta 12 a la vez. Sepáralos en montones más pequeños."
     static let unclear = "No veo ningún billete con claridad. Sostenlos planos, a unos 30 centímetros de la cámara."
     static let noMoney = "No encuentro billetes aquí. Si hay dinero, sostenlo plano, a unos 30 centímetros de la cámara."
-    static let gettingReader = "Preparando el lector de billetes, un momento."
     static func number(_ n: Int) -> String {
         let w = ["cero", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez", "once", "doce"]
         return n < w.count ? w[n] : "\(n)"

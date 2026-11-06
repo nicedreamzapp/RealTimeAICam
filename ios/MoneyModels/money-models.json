@@ -1,0 +1,1 @@
+{"version": "money-v3", "detector": "MoneyOBB-v3.mlmodelc", "classifier": "MoneyDenom-v3.mlmodelc", "decode": "decode_cfg_v3.json"}

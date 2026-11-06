@@ -112,8 +112,6 @@ struct ModelsChooserView: View {
     @AppStorage(ModelPicker.chosenKey) private var choice = "auto"
     @AppStorage(ModelPicker.priorityKey) private var priority = ModelPriority.accuracy.rawValue
     @AppStorage(ModelPicker.balancedSecondsKey) private var balancedSeconds = 0.0
-    @State private var moneyInstalled = MoneyPack.installedFolder != nil
-    @State private var moneyBusy = false
 
     var body: some View {
         let redraw = [choice, priority, "\(balancedSeconds)"]
@@ -144,24 +142,6 @@ struct ModelsChooserView: View {
                     }
                     ForEach(ModelLevel.allCases) { level in
                         modelRow(level)
-                    }
-                }
-
-                // Live Cam's money reader (8 MB): its own small item, beside the vision models.
-                Section(L("Live Cam money reader")) {
-                    bigRow(title: L("Money reader"),
-                           detail: moneyInstalled ? L("Downloaded, 8 MB. Live Cam uses it to count bills.")
-                               : moneyBusy ? L("Downloading, 8 MB.")
-                               : L("8 MB. It downloads with your first money question, or tap to get it now."),
-                           selected: moneyInstalled) {
-                        guard !moneyInstalled, !moneyBusy else { return }
-                        moneyBusy = true
-                        Task {
-                            let ok = (try? await MoneyPack.install()) != nil
-                            moneyBusy = false
-                            moneyInstalled = MoneyPack.installedFolder != nil
-                            confirm(ok ? L("Money reader ready.") : L("The money reader didn't download. Check the internet and try again."))
-                        }
                     }
                 }
 

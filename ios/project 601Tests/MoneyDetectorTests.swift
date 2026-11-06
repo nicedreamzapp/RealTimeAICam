@@ -282,31 +282,19 @@ struct MoneyReviewRound2Tests {
     }
 }
 
-/// The published money pack (https://ineedhemp.com/models/rtcam/money/money-v3/), downloaded for real: every file
-/// checked against its size and SHA-256, the version stamp checked, and both models loaded by the real loader.
-struct MoneyPackLiveTests {
-    @Test func thePublishedPackDownloadsAndLoads() async throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("money-live-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: root) }
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let dir = try await MoneyPack.install(into: root)
-        #expect(MoneyPack.isComplete(dir))
+/// The money models built into the app (Matt 11/6): they load from the bundle, and the stamp is checked.
+struct MoneyBundledModelTests {
+    @Test func theBuiltInModelsLoadAndTheStampIsChecked() throws {
+        MoneyDetector.reload()
+        #expect(MoneyDetector.models != nil)
+        guard let src = Bundle.main.url(forResource: "MoneyModels", withExtension: nil) else { Issue.record("no MoneyModels in the app"); return }
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent("money-stamp-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: dir) }
+        try fm.copyItem(at: src, to: dir)
         #expect(MoneyDetector.load(from: [dir]) != nil)
-        // A wrong stamp is refused even with good models beside it.
-        let stamp = dir.appendingPathComponent(MoneyDetector.stampName)
-        let good = try Data(contentsOf: stamp)
-        try Data(#"{"version": "money-v0"}"#.utf8).write(to: stamp)
+        try Data(#"{"version": "money-v0"}"#.utf8).write(to: dir.appendingPathComponent(MoneyDetector.stampName))
         #expect(MoneyDetector.load(from: [dir]) == nil)
-        try good.write(to: stamp)
-        #expect(MoneyDetector.load(from: [dir]) != nil)
-    }
-
-    @Test func aBadPackURLInstallsNothing() async throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("money-bad-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: root) }
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        await #expect(throws: (any Error).self) { try await MoneyPack.install(from: URL(string: "https://ineedhemp.com/models/rtcam/money/nope/")!, into: root) }
-        #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("money-v3").path))
     }
 }
 
@@ -350,7 +338,6 @@ final class LinesBox: @unchecked Sendable { private let l = NSLock(); private va
 
     /// The real published models on the real photo: one $1 standing on a glossy table is never two.
     @Test func oneDollarAndItsReflectionIsOneBill() async throws {
-        try await MoneyPack.install()
         MoneyDetector.reload()
         #expect(MoneyDetector.models != nil)
         guard let img = Self.image("MoneyCC0-xh18-one-dollar-reflection") else { Issue.record("missing image"); return }
@@ -364,7 +351,6 @@ final class LinesBox: @unchecked Sendable { private let l = NSLock(); private va
 
     /// Memory stays flat over 50 money answers in one task (the phone run grew 79 -> 961 MB in its test loop).
     @Test func memoryStaysFlatOverFiftyAnswers() async throws {
-        try await MoneyPack.install()
         MoneyDetector.reload()
         guard MoneyDetector.models != nil, let img = Self.image("MoneyCC0-xh18-one-dollar-reflection") else { Issue.record("no models"); return }
         _ = LiveMoney.countBurst(maxFrames: 2, frame: { img }, ask: nil)   // warm up
@@ -386,4 +372,28 @@ struct MoneyMirrorGeometryTests {
         #expect(!MoneyDetector.mirrorGeometry(Self.det(500, 400), Self.det(500, 430)))          // overlapping: a stack
         #expect(!MoneyDetector.mirrorGeometry(Self.det(500, 400), Self.det(505, 575, 440, 190, 0.3)))   // turned: a fan
     }
+}
+
+/// Re-review fixes (11/6): reflections raise a floor, pixels can keep a real bill.
+@Suite(.serialized) struct MoneyReReviewTests {
+    @Test func aDroppedReflectionMakesTheCountAFloor() {
+        var c = LiveMoney.count(MoneyDetectorDecodeTests.bills([1]), boxed: true)
+        #expect(c.sure && c.total == 1)
+        LiveMoney.floorIfReflectionDropped(&c, true)
+        #expect(!c.sure)
+        #expect(LiveMoney.sentence(c).hasPrefix("At least 1 bill.") && !LiveMoney.sentence(c).contains("That's"))
+    }
+
+    @Test func thePixelsCanKeepARealBillEdgeToEdge() {
+        let w = 48, h = 20
+        let a: [Float] = (0 ..< w * h).map { i in Float((i % w) * 3 + (i / w) * 11 + ((i * 7919) % 13) * 5) }
+        let same = a.map { $0 * 0.95 + 4 }                                        // a second $20 the same way round
+        let mirror: [Float] = (0 ..< h).flatMap { r in a[(h - 1 - r) * w ..< (h - r) * w] }.map { $0 * 0.6 }
+        #expect(MoneyDetector.mirrorVerdict(a, same) == .real)
+        #expect(MoneyDetector.mirrorVerdict(a, mirror) == .mirror)
+        // Kept as real and read: two $20s edge to edge are $40.
+        let c = LiveMoney.count(MoneyDetectorDecodeTests.bills([20, 20]), boxed: true)
+        #expect(c.sure && c.total == 40)
+    }
+
 }

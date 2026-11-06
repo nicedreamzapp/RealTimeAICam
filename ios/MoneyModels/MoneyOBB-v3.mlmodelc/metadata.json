@@ -1,0 +1,100 @@
+[
+  {
+    "shortDescription" : "Ultralytics YOLO26n-obb model trained on \/Users\/dtribe\/Desktop\/PROJECTS\/rtcam-money-detector\/src\/v2\/data_v2.yaml",
+    "metadataOutputVersion" : "3.0",
+    "outputSchema" : [
+      {
+        "hasShapeFlexibility" : "0",
+        "isOptional" : "0",
+        "dataType" : "Float32",
+        "formattedType" : "MultiArray (Float32 1 × 300 × 7)",
+        "shortDescription" : "",
+        "shape" : "[1, 300, 7]",
+        "name" : "var_1568",
+        "type" : "MultiArray"
+      }
+    ],
+    "version" : "8.4.202",
+    "modelParameters" : [
+
+    ],
+    "author" : "Ultralytics",
+    "specificationVersion" : 6,
+    "storagePrecision" : "Float16",
+    "license" : "AGPL-3.0 License (https:\/\/ultralytics.com\/license)",
+    "mlProgramOperationTypeHistogram" : {
+      "Transpose" : 3,
+      "ReduceMax" : 1,
+      "UpsampleNearestNeighbor" : 2,
+      "Sub" : 3,
+      "FloorDiv" : 2,
+      "Silu" : 93,
+      "Sigmoid" : 1,
+      "Reshape" : 16,
+      "Topk" : 2,
+      "Matmul" : 4,
+      "Cast" : 3,
+      "Softmax" : 2,
+      "Split" : 14,
+      "Concat" : 26,
+      "Cos" : 1,
+      "Add" : 23,
+      "ExpandDims" : 2,
+      "GatherNd" : 4,
+      "Conv" : 111,
+      "Sin" : 1,
+      "Stack" : 3,
+      "MaxPool" : 3,
+      "Mul" : 10
+    },
+    "computePrecision" : "Mixed (Float16, Float32, Int32)",
+    "stateSchema" : [
+
+    ],
+    "isUpdatable" : "0",
+    "availability" : {
+      "macOS" : "12.0",
+      "tvOS" : "15.0",
+      "visionOS" : "1.0",
+      "watchOS" : "8.0",
+      "iOS" : "15.0",
+      "macCatalyst" : "15.0"
+    },
+    "modelType" : {
+      "name" : "MLModelType_mlProgram"
+    },
+    "inputSchema" : [
+      {
+        "height" : "640",
+        "colorspace" : "RGB",
+        "isOptional" : "0",
+        "width" : "640",
+        "isColor" : "1",
+        "formattedType" : "Image (Color 640 × 640)",
+        "hasSizeFlexibility" : "0",
+        "type" : "Image",
+        "shortDescription" : "",
+        "name" : "image"
+      }
+    ],
+    "userDefinedMetadata" : {
+      "batch" : "1",
+      "head" : "OBB26",
+      "com.github.apple.coremltools.version" : "9.0",
+      "names" : "{0: 'bill', 1: 'corner_1', 2: 'corner_2', 3: 'corner_5', 4: 'corner_10', 5: 'corner_20', 6: 'corner_50', 7: 'corner_100', 8: 'feature_1', 9: 'feature_2', 10: 'feature_5', 11: 'feature_10', 12: 'feature_20', 13: 'feature_50', 14: 'feature_100'}",
+      "imgsz" : "[640, 640]",
+      "docs" : "https:\/\/docs.ultralytics.com",
+      "channels" : "3",
+      "com.github.apple.coremltools.conversion_date" : "2026-11-05",
+      "stride" : "32",
+      "date" : "2026-11-05T17:33:05.141705-08:00",
+      "args" : "{'batch': 1, 'quantize': 16, 'nms': False, 'dynamic': False}",
+      "com.github.apple.coremltools.source_dialect" : "TorchScript",
+      "com.github.apple.coremltools.source" : "torch==2.15.0",
+      "task" : "obb",
+      "end2end" : "True"
+    },
+    "generatedClassName" : "MoneyOBB_v3",
+    "method" : "predict"
+  }
+]

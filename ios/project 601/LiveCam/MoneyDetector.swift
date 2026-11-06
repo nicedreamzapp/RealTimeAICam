@@ -1,9 +1,6 @@
 import CoreGraphics
 import CoreImage
 import CoreML
-#if canImport(CryptoKit)
-import CryptoKit
-#endif
 import Foundation
 
 /// The on-device money detector (v3): a YOLO OBB model finds and boxes every bill (whole bills, fan strips, edge
@@ -47,12 +44,11 @@ enum MoneyDetector {
         }
     }
 
-    /// The models are NOT in the app download (review.md: no change may add MB to the app download; models come
-    /// only with a download the user tapped). They are a `money` folder inside a vision model pack the user already
-    /// downloaded (Application Support/VisionModels/<level>/money/), or, for money-replay on the Mac, the folder named
-    /// by MONEY_MODELS. The folder holds MoneyOBB-v3.mlmodelc and MoneyDenom-v3.mlmodelc, compiled before shipping
-    /// (never compiled on the phone), and `money-models.json` with `"version": "money-v3"`. A folder that doesn't
-    /// check out (missing, a wrong stamp, an output of the wrong shape) loads nothing, and Live Cam counts the old way.
+    /// The models are built into the app (Matt 11/6: "just put it on there, it's only 10 MB"): the folder
+    /// `MoneyModels` in the bundle holds MoneyOBB-v3.mlmodelc and MoneyDenom-v3.mlmodelc, compiled before shipping
+    /// (never on the phone), and `money-models.json` with `"version": "money-v3"`. money-replay on the Mac points
+    /// MONEY_MODELS at a folder laid out the same way. A folder that doesn't check out (a wrong stamp, an output of
+    /// the wrong shape) loads nothing, and Live Cam counts the old way.
     static let modelVersion = "money-v3"
     static let stampName = "money-models.json"
     private static var cached: Models??
@@ -62,19 +58,13 @@ enum MoneyDetector {
         if let c = cached { return c }
         let m = load(from: searchFolders()); cached = .some(m); return m
     }
-    /// Called when a vision model pack finishes installing or is deleted: look again on the next money question.
+    /// Look for the models again on the next money question (tests).
     static func reload() { cacheLock.lock(); cached = nil; cacheLock.unlock() }
 
     static func searchFolders() -> [URL] {
         var dirs: [URL] = []
         if let d = ProcessInfo.processInfo.environment["MONEY_MODELS"] { dirs.append(URL(fileURLWithPath: d)) }
-        if let own = MoneyPack.installedFolder { dirs.append(own) }
-        if let support = try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false) {
-            let packs = support.appendingPathComponent("VisionModels", isDirectory: true)
-            for p in ((try? FileManager.default.contentsOfDirectory(at: packs, includingPropertiesForKeys: nil)) ?? []).sorted(by: { $0.path < $1.path }) {
-                dirs.append(p.appendingPathComponent("money", isDirectory: true))
-            }
-        }
+        if let b = Bundle.main.url(forResource: "MoneyModels", withExtension: nil) { dirs.append(b) }
         return dirs
     }
 
@@ -231,7 +221,9 @@ enum MoneyDetector {
     /// What one look found: the bills, and whether anything in the frame still suggests money when no bill was
     /// found (a weak or vetoed bill box, a numeral, or the classifier on the whole frame), so "no bills" is never
     /// said about a frame that may hold money.
-    struct Detection { var found: [Found]; var maybeMoney: Bool }
+    /// `droppedReflection`: a box was left out as a bill's mirror image, so a real bill may be missing too: the
+    /// count is then a floor, never a total.
+    struct Detection { var found: [Found]; var maybeMoney: Bool; var droppedReflection = false }
 
     /// Debug trace (MONEY_TRACE=1 on the Mac replay, or a test's own sink).
     nonisolated(unsafe) static var traceSink: ((String) -> Void)?
@@ -302,15 +294,25 @@ enum MoneyDetector {
         let c = config
         var found: [Found] = []
         var kept: [Det] = []
+        var dropped = false
         for (d, votes, merged) in billsMerged(dets, c) {
             let probs = look(src, d.box, H, m)
             let (keep, val, lk) = value(votes: votes, probs: probs, c)
             guard keep else { continue }
             // A bill's mirror image on a glossy table (CC0 xh_18: one $1 counted as three) is not a bill.
-            if kept.contains(where: { isReflection(of: $0, d, in: src, H) }) { continue }
-            // Laid against a kept bill's long side like a reflection, but the pixels can't tell: it may be a mirror
-            // image, so it never adds to the sure count and is never named (the count becomes "at least").
-            let maybeMirror = kept.contains { mirrorGeometry($0, d) }
+            // Where a kept bill's mirror image would lie: the pixels decide. A clear mirror is dropped (and the count
+            // becomes a floor); a clear real bill (two $20s edge to edge) is kept as it is; anything between is kept
+            // but never named or counted as sure.
+            var isMirror = false, maybeMirror = false
+            for k in kept where mirrorGeometry(k, d) {
+                switch mirrorVerdict(k, d, in: src, H) {
+                case .mirror: isMirror = true
+                case .unsure: maybeMirror = true
+                case .real: break
+                }
+                if isMirror { break }
+            }
+            if isMirror { dropped = true; continue }
             if traceOn { for k in kept { trace("MONEY_TRACE refl? \(reflectionTrace(k, d, src, H))") } }
             kept.append(d)
             let q = LiveMoney.Quad(corners: d.poly.map { CGPoint(x: $0.x, y: H - $0.y) })
@@ -333,14 +335,26 @@ enum MoneyDetector {
             let b = dets.filter { $0.cls == 0 && $0.conf >= c.billConf }
             trace("MONEY_TRACE raw=\(raw.count) nms=\(dets.count) bills>=conf=\(b.count) kept=\(bills(dets, c).count) found=\(found.count) confs=\(b.map { String(format: "%.2f", $0.conf) })")
         }
-        return Detection(found: found, maybeMoney: maybe)
+        return Detection(found: found, maybeMoney: maybe, droppedReflection: dropped)
     }
 
     /// `b` is the mirror image of `a`: about the same size and angle, lying against `a`'s long side, and its crop
     /// matches `a`'s crop flipped (a mirror) clearly better than turned (a real bill upside down).
     static func isReflection(of a: Det, _ b: Det, in src: CIImage, _ H: CGFloat) -> Bool {
-        guard mirrorGeometry(a, b), let ga = grey(src, a.box, H), let gb = grey(src, b.box, H) else { return false }
-        return mirrorScore(ga, gb)
+        mirrorGeometry(a, b) && mirrorVerdict(a, b, in: src, H) == .mirror
+    }
+
+    enum MirrorVerdict { case mirror, real, unsure }
+    static func mirrorVerdict(_ a: Det, _ b: Det, in src: CIImage, _ H: CGFloat) -> MirrorVerdict {
+        guard let ga = grey(src, a.box, H), let gb = grey(src, b.box, H) else { return .unsure }
+        return mirrorVerdict(ga, gb)
+    }
+    /// Pure: a clear mirror (see mirrorScore), a clear real bill (it matches turned or as it is clearly better than
+    /// flipped), or can't tell.
+    static func mirrorVerdict(_ a: [Float], _ b: [Float]) -> MirrorVerdict {
+        if mirrorScore(a, b) { return .mirror }
+        let (mirror, turn) = mirrorScores(a, b)
+        return turn > 0.5 && turn > mirror + 0.1 ? .real : .unsure
     }
 
     /// Pure: `b` lies where `a`'s mirror image would: about the same size and angle, against `a`'s long side
@@ -483,78 +497,5 @@ enum MoneyDetector {
         m.ci.render(img, to: buf, bounds: CGRect(x: 0, y: 0, width: CVPixelBufferGetWidth(buf), height: CVPixelBufferGetHeight(buf)),
                     colorSpace: CGColorSpaceCreateDeviceRGB())
         return buf
-    }
-}
-
-
-/// The money models' own small download (8.4 MB), published beside the vision model packs at
-/// https://ineedhemp.com/models/rtcam/money/money-v3/ with its own `money-manifest.json` (name, size, sha256 per
-/// file). The vision packs and their manifests are untouched, so apps that don't know about money never see it.
-/// It is fetched only after a tap (a vision model download the user started; review.md: downloads only after a tap).
-enum MoneyPack {
-    static let base = URL(string: "https://ineedhemp.com/models/rtcam/money/money-v3/")!
-    static let manifestName = "money-manifest.json"
-    struct Manifest: Codable { struct File: Codable { let name: String; let size: Int64; let sha256: String }; let version: String; let files: [File] }
-    enum PackError: Error { case badManifest, badFile(String), http(Int, String) }
-
-    static var root: URL? {
-        try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-            .appendingPathComponent("MoneyModels", isDirectory: true)
-    }
-    /// The installed folder, when its manifest says every file is there at its size.
-    static var installedFolder: URL? {
-        guard let dir = root?.appendingPathComponent(MoneyDetector.modelVersion, isDirectory: true) else { return nil }
-        return isComplete(dir) ? dir : nil
-    }
-    static func isComplete(_ dir: URL) -> Bool {
-        guard let d = try? Data(contentsOf: dir.appendingPathComponent(manifestName)),
-              let m = try? JSONDecoder().decode(Manifest.self, from: d), m.version == MoneyDetector.modelVersion else { return false }
-        return m.files.allSatisfy { f in
-            (try? FileManager.default.attributesOfItem(atPath: dir.appendingPathComponent(f.name).path)[.size] as? Int64) == f.size
-        }
-    }
-
-    /// Downloads every file into a staging folder, checks each one's size and SHA-256, then moves the folder into
-    /// place in one step. Nothing is half-installed: a bad file throws and the staging folder is removed.
-    @discardableResult
-    static func install(from base: URL = base, into rootDir: URL? = root, session: URLSession = .shared) async throws -> URL {
-        guard let rootDir else { throw PackError.badManifest }
-        let fm = FileManager.default
-        let final = rootDir.appendingPathComponent(MoneyDetector.modelVersion, isDirectory: true)
-        if isComplete(final) { return final }
-        let staging = rootDir.appendingPathComponent(MoneyDetector.modelVersion + ".partial", isDirectory: true)
-        try? fm.removeItem(at: staging)
-        try fm.createDirectory(at: staging, withIntermediateDirectories: true)
-        do {
-            let (md, mr) = try await session.data(from: base.appendingPathComponent(manifestName))
-            if let h = mr as? HTTPURLResponse, !(200 ..< 300).contains(h.statusCode) { throw PackError.http(h.statusCode, manifestName) }
-            guard let m = try? JSONDecoder().decode(Manifest.self, from: md), m.version == MoneyDetector.modelVersion, !m.files.isEmpty
-            else { throw PackError.badManifest }
-            for f in m.files {
-                guard !f.name.contains(".."), !f.name.hasPrefix("/") else { throw PackError.badFile(f.name) }
-                let (d, r) = try await session.data(from: base.appendingPathComponent(f.name))
-                if let h = r as? HTTPURLResponse, !(200 ..< 300).contains(h.statusCode) { throw PackError.http(h.statusCode, f.name) }
-                guard Int64(d.count) == f.size, sha256Hex(d) == f.sha256 else { throw PackError.badFile(f.name) }
-                let dst = staging.appendingPathComponent(f.name)
-                try fm.createDirectory(at: dst.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try d.write(to: dst, options: .atomic)
-            }
-            try md.write(to: staging.appendingPathComponent(manifestName), options: .atomic)
-            try? fm.removeItem(at: final)
-            try fm.moveItem(at: staging, to: final)
-        } catch {
-            try? fm.removeItem(at: staging)
-            throw error
-        }
-        MoneyDetector.reload()
-        return final
-    }
-
-    static func sha256Hex(_ d: Data) -> String {
-        #if canImport(CryptoKit)
-        return SHA256.hash(data: d).map { String(format: "%02x", $0) }.joined()
-        #else
-        return ""
-        #endif
     }
 }

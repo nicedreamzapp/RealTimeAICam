@@ -66,7 +66,6 @@ enum VisionModelStore {
         guard !level.isBundled else { return }
         try? FileManager.default.removeItem(at: downloadedURL(level))
         try? FileManager.default.removeItem(at: stagingURL(level))
-        MoneyDetector.reload()
     }
 
     /// Before 1.3.6 the one model could be downloaded to
@@ -362,8 +361,6 @@ final class VisionModelDownloader: NSObject, ObservableObject {
         case .success:
             progress = 1
             states[level] = .ready
-            MoneyDetector.reload()   // a pack with a money/ folder: Live Cam's money detector picks it up next question
-            Task.detached { try? await MoneyPack.install() }   // the 8.4 MB money models ride on this tapped download
             SpeechManager.shared.speak(L("The %@ model is ready. What's this? will use it from now on.", level.name))
             finishCurrent()
         case .failure(let error):

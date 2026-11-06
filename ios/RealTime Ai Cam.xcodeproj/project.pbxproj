@@ -51,6 +51,7 @@
 		AA0000072E4400000000A007 /* NarratorModel in Resources */ = {isa = PBXBuildFile; fileRef = AA0000062E4400000000A006 /* NarratorModel */; };
 		AA0000082E4400000000A008 /* MLXVLM in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000092E4400000000A009 /* MLXVLM */; };
 		AA0000112E4400000000A011 /* VisionModel in Resources */ = {isa = PBXBuildFile; fileRef = AA0000102E4400000000A010 /* VisionModel */; };
+		AA0000132E4400000000A013 /* MoneyModels in Resources */ = {isa = PBXBuildFile; fileRef = AA0000122E4400000000A012 /* MoneyModels */; };
 		BB0000162E4400000000B016 /* MLXHuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000112E4400000000B011 /* MLXHuggingFace */; };
 		BB0000172E4400000000B017 /* Tokenizers in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000122E4400000000B012 /* Tokenizers */; };
 		BB0000182E4400000000B018 /* HuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000132E4400000000B013 /* HuggingFace */; };
@@ -135,6 +136,7 @@
 		99EE6CEE2E67071800A2F3F3 /* es_final_with_rules.json.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; path = es_final_with_rules.json.gz; sourceTree = "<group>"; };
 		AA0000062E4400000000A006 /* NarratorModel */ = {isa = PBXFileReference; lastKnownFileType = folder; path = NarratorModel; sourceTree = "<group>"; };
 		AA0000102E4400000000A010 /* VisionModel */ = {isa = PBXFileReference; lastKnownFileType = folder; path = VisionModel; sourceTree = "<group>"; };
+		AA0000122E4400000000A012 /* MoneyModels */ = {isa = PBXFileReference; lastKnownFileType = folder; path = MoneyModels; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -231,6 +233,7 @@
 			children = (
 				AA0000062E4400000000A006 /* NarratorModel */,
 				AA0000102E4400000000A010 /* VisionModel */,
+				AA0000122E4400000000A012 /* MoneyModels */,
 				996869012E513773001898DB /* ResourceManager.swift */,
 				9919DE3C2E50A79F0053038B /* SpanishTranslationEngine.swift */,
 				99502F932E509A3F0064DD92 /* UIComponents.swift */,
@@ -412,6 +415,7 @@
 			files = (
 				AA0000072E4400000000A007 /* NarratorModel in Resources */,
 				AA0000112E4400000000A011 /* VisionModel in Resources */,
+				AA0000132E4400000000A013 /* MoneyModels in Resources */,
 				99EE6CEF2E67071800A2F3F3 /* es_final_with_rules.json.gz in Resources */,
 				99D7E6A72E47639F007BBFB7 /* PrivacyInfo.xcprivacy in Resources */,
 				990EECF12E489EBD00B7CD8C /* LICENSE in Resources */,

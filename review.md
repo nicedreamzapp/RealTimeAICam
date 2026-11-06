@@ -14,7 +14,8 @@ report format, loop limits). These are the RT Cam additions (11/04).
   line in a Spanish voice, never an English one. Hand-fixed words (taza) skip the translator. Check both
   iOS and Android, since they mirror each other.
 - **Downloads only after a tap.** Language packs and models download only when the user picks them.
-  No change may add MB to the app download.
+  No change may add MB to the app download. One exception, Matt 11/06: Live Cam's money reader models
+  (`ios/MoneyModels`, about 8 MB) are built into the app.
 - **Live Cam is experimental.** It stays labeled Experimental on screen and in the spoken label, reuses
   the picked model and never downloads one.
 - **Parity.** A fix on one platform names its mirror commit on the other, or says why it has none.

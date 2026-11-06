@@ -1,0 +1,106 @@
+[
+  {
+    "metadataOutputVersion" : "3.0",
+    "userDefinedMetadata" : {
+      "batch" : "1",
+      "head" : "Classify",
+      "com.github.apple.coremltools.version" : "9.0",
+      "names" : "{0: 'd1', 1: 'd10', 2: 'd100', 3: 'd2', 4: 'd20', 5: 'd5', 6: 'd50', 7: 'none'}",
+      "imgsz" : "[224, 224]",
+      "docs" : "https:\/\/docs.ultralytics.com",
+      "channels" : "3",
+      "com.github.apple.coremltools.conversion_date" : "2026-11-05",
+      "stride" : "1",
+      "date" : "2026-11-05T17:33:07.410477-08:00",
+      "args" : "{'batch': 1, 'quantize': 16, 'nms': False, 'dynamic': False}",
+      "com.github.apple.coremltools.source_dialect" : "TorchScript",
+      "com.apple.coreml.model.preview.type" : "imageClassifier",
+      "com.github.apple.coremltools.source" : "torch==2.15.0",
+      "task" : "classify",
+      "end2end" : "False"
+    },
+    "classLabels" : [
+      "d1",
+      "d10",
+      "d100",
+      "d2",
+      "d20",
+      "d5",
+      "d50",
+      "none"
+    ],
+    "availability" : {
+      "macOS" : "12.0",
+      "tvOS" : "15.0",
+      "visionOS" : "1.0",
+      "watchOS" : "8.0",
+      "iOS" : "15.0",
+      "macCatalyst" : "15.0"
+    },
+    "inputSchema" : [
+      {
+        "height" : "224",
+        "colorspace" : "RGB",
+        "isOptional" : "0",
+        "width" : "224",
+        "isColor" : "1",
+        "formattedType" : "Image (Color 224 × 224)",
+        "hasSizeFlexibility" : "0",
+        "type" : "Image",
+        "shortDescription" : "",
+        "name" : "image"
+      }
+    ],
+    "outputSchema" : [
+      {
+        "isOptional" : "0",
+        "formattedType" : "String",
+        "type" : "String",
+        "name" : "classLabel",
+        "shortDescription" : ""
+      },
+      {
+        "isOptional" : "0",
+        "keyType" : "String",
+        "formattedType" : "Dictionary (String → Double)",
+        "type" : "Dictionary",
+        "name" : "classLabel_probs",
+        "shortDescription" : ""
+      }
+    ],
+    "modelParameters" : [
+
+    ],
+    "storagePrecision" : "Float16",
+    "method" : "predict",
+    "version" : "8.4.202",
+    "isUpdatable" : "0",
+    "specificationVersion" : 6,
+    "stateSchema" : [
+
+    ],
+    "computePrecision" : "Mixed (Float16, Float32, Float64, Int32)",
+    "mlProgramOperationTypeHistogram" : {
+      "Concat" : 7,
+      "Silu" : 35,
+      "Linear" : 1,
+      "Transpose" : 1,
+      "Matmul" : 2,
+      "Softmax" : 2,
+      "Mul" : 2,
+      "Cast" : 2,
+      "Reshape" : 4,
+      "Add" : 9,
+      "ReduceMean" : 1,
+      "Split" : 6,
+      "Conv" : 39
+    },
+    "shortDescription" : "Ultralytics YOLO26n-cls model trained on \/Users\/dtribe\/Desktop\/PROJECTS\/rtcam-money-detector\/data\/cls3",
+    "license" : "AGPL-3.0 License (https:\/\/ultralytics.com\/license)",
+    "generatedClassName" : "MoneyDenom_v3",
+    "author" : "Ultralytics",
+    "modelType" : {
+      "name" : "MLModelType_mlProgram"
+    }
+  }
+]
