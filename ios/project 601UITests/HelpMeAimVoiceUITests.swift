@@ -53,8 +53,8 @@ final class HelpMeAimVoiceUITests: XCTestCase {
         app.descendants(matching: .any)["Camera, looking for \(name)"].firstMatch
     }
 
-    private var listening: XCUIElement { app.buttons["Listening, tap to stop"].firstMatch }
-    private var retry: XCUIElement { app.buttons["Tap to speak"].firstMatch }
+    private var listening: XCUIElement { app.buttons["Listening… tap to stop"].firstMatch }
+    private var retry: XCUIElement { app.buttons["Tap to Speak"].firstMatch }
     private var takeAnother: XCUIElement { app.buttons["Take Another"].firstMatch }
 
     private func openHelpMeAim() {

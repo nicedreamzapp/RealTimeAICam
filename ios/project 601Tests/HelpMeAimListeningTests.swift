@@ -10,7 +10,7 @@ struct HelpMeAimListeningTests {
         #expect(AimPhrases.heardNothing == "I didn't hear anything. Tap to Speak to try again, or type it.")
         #expect(AimPhrases.didntCatch == "I didn't catch that. Tap to Speak to try again.")
         #expect(AimPhrases.speakTitle == "Tap to Speak")
-        #expect(AimPhrases.speakLabel == "Tap to speak")
+        #expect(AimPhrases.speakLabel == "Tap to Speak")
         #expect(AimPhrases.speakHint == "Then say what you're looking for after the beep")
         let key = AimSubject.object(AimVocabulary.Match(spokenName: "key", classNames: ["key"], classIDs: [1]))
         #expect(AimPhrases.intro(for: key).hasPrefix("Looking for a key."))
