@@ -112,6 +112,11 @@ final class LiveCallController: ObservableObject {
     }()
 
     private var memory = LiveMemory()
+    /// Matt 11/6: never the same sentence twice, one help offer per visit, no two lines opening the same way.
+    private var sayGuard = LiveSayGuard()
+    private var checkInTurns = LiveRotation()
+    /// This turn's model sentences: how many were said and how many were dropped as repeats.
+    private var tally = (turn: -1, said: 0, dropped: 0)
     private var watch = LiveProactive()
     private var current: LiveStreamBox?
     private var turn = 0
@@ -285,7 +290,9 @@ final class LiveCallController: ObservableObject {
         listener.watchForBargeIn(true)
         describedOnce = true
         memory = LiveMemory()
-        voice.sayOwn(LiveWords.firstGreeting)
+        sayGuard = LiveSayGuard()
+        checkInTurns = LiveRotation()
+        say(.own(LiveWords.firstGreeting))
         if !typedOnly { look(prompt: LiveWords.openingLook, unprompted: false, first: true) }   // what's around, once (11/2 Matt)
         else { answerDone = true }
         if LiveCamTest.forceCantHear { hearingGaveUp() }
@@ -671,10 +678,11 @@ final class LiveCallController: ObservableObject {
     /// Hands a line to the voice: the app's own words in the app language, content in Your language.
     private func say(_ line: LiveLine) {
         switch line {
-        case let .own(english): voice.sayOwn(english)
-        case let .content(english): voice.say(english)
+        case let .own(english): sayGuard.note(english); voice.sayOwn(english)
+        case let .content(english): sayGuard.note(english); voice.say(english)
         case let .withContent(format, piece):
             let english = String(format: format, piece)
+            sayGuard.note(english)
             // Your language is the app language and its translator is ready (Spanish): the whole sentence is
             // translated, so the piece (the English goal or thing) never sits English inside a Spanish line.
             if LiveLine.translatesWhole(appCode: AppLang.code, yourCode: YourLanguage.activeCode) { voice.say(english) }
@@ -833,6 +841,12 @@ final class LiveCallController: ObservableObject {
                 if let firstAt { self.recentFirstSentence = firstAt.timeIntervalSince(asked) }
                 if withPhoto, let e = answer?.encodeMs, e > 0 { self.recentEncodeMs = e }
                 let said = LiveSentenceStream.cleaned(answer?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                if !unprompted, !said.isEmpty {
+                    // Every sentence was one it had already said: say so briefly instead of going silent.
+                    if self.tally.turn == my, self.tally.said == 0, self.tally.dropped > 0 { self.sayPart(.own(LiveCamWords.sameAsBefore), turn: my) }
+                    // The one help offer of the visit comes after the opening look (Matt 11/6), never from the model.
+                    else if first, !self.sayGuard.helpOffered { self.sayPart(.own(LiveCamWords.helpOffer), turn: my) }
+                }
                 self.log(["event": unprompted ? "watch_answer" : "answer", "text": said,
                           "thermal": ProcessInfo.processInfo.thermalState.rawValue,
                           "question": question ?? (first ? "(opening look)" : ""),
@@ -861,11 +875,14 @@ final class LiveCallController: ObservableObject {
                             self.log(["event": "confirm", "things": fresh.joined(separator: ", "), "confirmed": ok.joined(separator: ", ")])
                             guard !ok.isEmpty, self.running, self.phase == .listening, !self.listener.hearingSomething else { return }
                             let things = fresh.filter(ok.contains)
-                            let line = LiveWords.newThingLine(things)
+                            // Matt 11/6: the help offer only once a visit; after it, just "I see a boat."
+                            let format = self.sayGuard.newThingFormat
+                            let line = String(format: format, LiveWords.newThings(things))
+                            guard self.sayGuard.vet(line) != nil else { self.log(["event": "dropped_repeat", "text": line]); return }
                             self.watch.commented(at: Date())
                             self.memory.noteSeen(line)
                             self.listener.stopListening()
-                            self.speakAll(.withContent(LiveCamWords.newThing, LiveWords.newThings(things)))
+                            self.speakAll(.withContent(format, LiveWords.newThings(things)))
                         }
                     }
                     return
@@ -879,6 +896,7 @@ final class LiveCallController: ObservableObject {
                     let verdict: String
                     if LiveWords.isNothingNew(said) { verdict = "silent: nothing new" }
                     else if LiveWords.isRepeat(said, of: lastSeen) || LiveWords.overlapsSaid(said, said: self.memory.said) { verdict = "silent: already said" }
+                    else if self.sayGuard.vet(said) == nil { verdict = "silent: repeat guard" }
                     else if self.phase != .listening || self.listener.hearingSomething { verdict = "silent: person talking" }
                     else { verdict = "spoke" }
                     self.log(["event": "watch_decision", "decision": verdict, "view_change": (self.watch.lastDifference * 10).rounded() / 10])
@@ -887,7 +905,7 @@ final class LiveCallController: ObservableObject {
                         self.watch.described(thumb)
                         self.memory.noteSeen(said)
                         self.listener.stopListening()
-                        self.speakAll(content: said)
+                        self.speakAll(content: self.sayGuard.vet(said) ?? said)
                     }
                     return
                 }
@@ -953,7 +971,15 @@ final class LiveCallController: ObservableObject {
         var line = line
         if case let .content(s) = line {
             guard let cleaned = LiveWords.spoken(s, aboutMe: askedAboutMe) else { return }
-            line = .content(cleaned)
+            if tally.turn != my { tally = (my, 0, 0) }
+            // Matt 11/6: "it should not repeat phrases": a sentence already said, a looping one, a second help offer.
+            guard let vetted = sayGuard.vet(cleaned) else {
+                tally.dropped += 1
+                log(["event": "dropped_repeat", "text": cleaned])
+                return
+            }
+            tally.said += 1
+            line = .content(vetted)
         }
         phase = .speaking
         listener.watchForBargeIn(true)
@@ -982,7 +1008,10 @@ final class LiveCallController: ObservableObject {
                 // came out unasked and sounded like it was hearing itself). No "Now I see", just a check-in after a long quiet.
                 do {
                     if quiet, self.watch.shouldCheckIn(at: Date(), quietSince: max(self.lastHeardAt, self.lastSpokeEnd)),
-                       let line = LiveWords.checkIns.filter({ $0 != self.memory.said.last }).randomElement() {
+                       // Matt 11/6: the lines take turns (none twice until all are used), and once help was offered
+                       // only the ones that don't offer it again.
+                       let line = self.checkInTurns.next(from: self.sayGuard.helpOffered
+                                                              ? LiveWords.checkIns.filter { !LiveWords.isHelpOffer($0) } : LiveWords.checkIns) {
                         self.log(["event": "watch_fired", "why": "check in"])
                         self.watch.commented(at: Date())
                         self.memory.noteSeen(line)

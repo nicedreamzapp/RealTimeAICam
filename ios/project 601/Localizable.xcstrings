@@ -3125,6 +3125,50 @@
         }
       }
     },
+    "Anything I can help with?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Te ayudo con algo?"
+          }
+        }
+      }
+    },
+    "I see %@." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Veo %@."
+          }
+        }
+      }
+    },
+    "There's %@." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hay %@."
+          }
+        }
+      }
+    },
+    "Same as before." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Igual que antes."
+          }
+        }
+      }
+    },
     "I see %@. Anything I can help with?" : {
       "extractionState" : "manual",
       "localizations" : {

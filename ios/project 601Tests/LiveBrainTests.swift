@@ -206,3 +206,62 @@ struct LiveProactiveTests {
         #expect(LiveMode.funny.ask("what is this", coachGoal: nil).contains("funny"))
     }
 }
+
+/// Matt 11/6: "I don't want it to keep asking if it can help constantly, and not to repeat itself."
+struct LiveSayGuardTests {
+    @Test func helpIsOfferedOncePerVisit() {
+        var g = LiveSayGuard()
+        #expect(g.newThingFormat == LiveCamWords.newThing)
+        #expect(g.vet("Need a hand with that?") == "Need a hand with that?")
+        g.note(LiveCamWords.helpOffer)
+        #expect(g.helpOffered)
+        #expect(g.vet("Anything else I can help with?") == nil)
+        #expect(g.vet("Need a hand with anything?") == nil)
+        #expect(g.newThingFormat == LiveCamWords.newThingPlain)
+        g.note("I see a boat.")
+        #expect(g.newThingFormat == LiveCamWords.newThingThere)   // never "I see" twice in a row
+        #expect(!LiveWords.isHelpOffer(LiveCamWords.newThingPlain))
+        #expect(LiveWords.isHelpOffer(LiveCamWords.newThing))
+        #expect(!LiveWords.openingLook.lowercased().contains("help"))
+    }
+
+    @Test func aSentenceAlreadySaidIsDropped() {
+        var g = LiveSayGuard()
+        g.note("The cup is white.")
+        #expect(g.vet("The cup is white.") == nil)
+        #expect(g.vet("the cup is WHITE") == nil)
+        #expect(g.vet("The mug is blue.") == "The mug is blue.")
+    }
+
+    @Test func aLoopingSentenceIsCut() {
+        let s = "The cup is on the table and the cup is on the table and the cup is on the table"
+        #expect(LiveSayGuard.cutLoop(s) == "The cup is on the table.")
+        #expect(LiveSayGuard.cutLoop("A red mug sits next to a blue bowl on a wooden desk.") == "A red mug sits next to a blue bowl on a wooden desk.")
+        let g = LiveSayGuard()
+        #expect(g.vet(s) == "The cup is on the table.")
+    }
+
+    @Test func noTwoLinesInARowOpenTheSameWay() {
+        var g = LiveSayGuard()
+        g.note("I see a book on the desk.")
+        #expect(g.vet("I see a red cup.") == "There's a red cup.")
+        #expect(g.vet("I see two cups.") == "There are two cups.")
+        #expect(g.vet("I see that the light is on.") == "The light is on.")
+        g.note("There's a red cup.")
+        #expect(g.vet("I see a lamp.") == "I see a lamp.")
+    }
+
+    @Test func checkInsNeverRepeatBackToBack() {
+        var r = LiveRotation()
+        let lines = LiveWords.checkIns
+        var picked: [String] = []
+        for i in 0 ..< 40 { picked.append(r.next(from: lines, random: i * 7 + 3)!) }
+        for i in 1 ..< picked.count { #expect(picked[i] != picked[i - 1]) }
+        #expect(Set(picked.prefix(lines.count)).count == lines.count)   // all used before any comes back
+        let noHelp = lines.filter { !LiveWords.isHelpOffer($0) }
+        #expect(!noHelp.isEmpty && noHelp.count < lines.count)
+        var r2 = LiveRotation()
+        var last = ""
+        for i in 0 ..< 12 { let p = r2.next(from: noHelp, random: i)!; #expect(p != last); #expect(!LiveWords.isHelpOffer(p)); last = p }
+    }
+}

@@ -117,6 +117,98 @@ struct LiveMemory {
     var lastAnswer: String? { exchanges.last?.answer }
 }
 
+// MARK: - Never the same words twice (Matt 11/6)
+
+/// Matt 11/6: "I don't want it to keep asking if it can help constantly, and not to repeat itself. Repeating itself,
+/// it glitches, and should not repeat phrases." Every model sentence is vetted here before it is spoken: a sentence
+/// already said this visit is dropped, a sentence that loops (a 4+ word phrase twice inside it) is cut where it starts
+/// again, a second help offer is dropped, and an "I see..." right after another "I see..." is reworded.
+struct LiveSayGuard {
+    private(set) var said: Set<String> = []
+    /// The first three words of the last line said (normalized), so no two lines in a row open the same way.
+    private(set) var lastOpening: String?
+    /// It has offered help once this visit.
+    private(set) var helpOffered = false
+
+    static func opening(_ s: String) -> String { LiveWords.normalize(s).split(separator: " ").prefix(3).joined(separator: " ") }
+
+    /// The sentence to say, or nil to say nothing.
+    func vet(_ sentence: String) -> String? {
+        var s = Self.cutLoop(sentence).trimmingCharacters(in: .whitespaces)
+        guard !LiveWords.normalize(s).isEmpty else { return nil }
+        if helpOffered, LiveWords.isHelpOffer(s) { return nil }
+        if said.contains(LiveWords.normalize(s)) { return nil }
+        if let last = lastOpening, Self.opening(s) == last || (last.hasPrefix("i see") && Self.opening(s).hasPrefix("i see")) { s = Self.reworded(s) }
+        if said.contains(LiveWords.normalize(s)) { return nil }
+        return s
+    }
+
+    /// Remember a line that is being said (model sentences and the app's own lines alike).
+    mutating func note(_ line: String) {
+        let n = LiveWords.normalize(line)
+        guard !n.isEmpty else { return }
+        said.insert(n)
+        lastOpening = Self.opening(line)
+        if LiveWords.isHelpOffer(line) { helpOffered = true }
+    }
+
+    /// The new-thing line for now: the one help offer if it hasn't been made, else just the thing, never opening
+    /// with "I see" twice in a row.
+    var newThingFormat: String {
+        if !helpOffered { return LiveCamWords.newThing }
+        return lastOpening?.hasPrefix("i see") == true ? LiveCamWords.newThingThere : LiveCamWords.newThingPlain
+    }
+
+    /// "I see a red cup" after "I see a book" becomes "There's a red cup" (the small model opens every line with it).
+    static func reworded(_ s: String) -> String {
+        guard let r = s.range(of: #"^\s*I see\s+"#, options: [.regularExpression, .caseInsensitive]) else { return s }
+        let rest = String(s[r.upperBound...])
+        let next = LiveWords.normalize(rest).split(separator: " ").first.map(String.init) ?? ""
+        if let r2 = rest.range(of: #"^that\s+"#, options: [.regularExpression, .caseInsensitive]) {
+            let t = String(rest[r2.upperBound...]); return t.prefix(1).uppercased() + t.dropFirst()
+        }
+        return (["a", "an", "one", "the", "some"].contains(next) ? "There's " : "There are ") + rest
+    }
+
+    /// The 2B model sometimes loops ("the cup is on the table and the cup is on the table and the cup..."): the
+    /// sentence is cut where a phrase of 4+ words starts over, and ends cleanly.
+    static func cutLoop(_ s: String) -> String {
+        let words = s.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+        let norm = words.map { LiveWords.normalize($0) }
+        guard words.count >= 8 else { return s }
+        var seen: [String: Int] = [:]
+        for i in 0 ... words.count - 4 {
+            let gram = norm[i ..< i + 4].joined(separator: " ")
+            if let j = seen[gram], i >= j + 4 {
+                var kept = Array(words[..<i])
+                while let last = kept.last, LiveTiming.trailing.contains(LiveWords.normalize(last)) || LiveWords.normalize(last).isEmpty { kept.removeLast() }
+                guard !kept.isEmpty else { return s }
+                var out = kept.joined(separator: " ")
+                while let c = out.last, ",;:-".contains(c) { out.removeLast() }
+                if let c = out.last, !".!?".contains(c) { out += "." }
+                return out
+            }
+            if seen[gram] == nil { seen[gram] = i }
+        }
+        return s
+    }
+}
+
+/// Lines that take turns: none comes back until all have been used, and never the one just said (Matt 11/6).
+struct LiveRotation {
+    private(set) var used: [String] = []
+    private(set) var last: String?
+    mutating func next(from lines: [String], random: Int = Int.random(in: 0 ..< 1000)) -> String? {
+        guard !lines.isEmpty else { return nil }
+        var fresh = lines.filter { !used.contains($0) }
+        if fresh.isEmpty { used.removeAll(); fresh = lines.filter { $0 != last } }
+        if fresh.isEmpty { fresh = lines }
+        let pick = fresh[random % fresh.count]
+        used.append(pick); last = pick
+        return pick
+    }
+}
+
 // MARK: - Words
 
 /// One line for Live Cam's voice (2026-11-05, Spanish UI). `own`: the app's own words, an English key said in the
@@ -145,8 +237,16 @@ enum LiveWords {
     /// Normal mode, after a long quiet: a friend in the room checking in, never a description of the scene or of
     /// them (11/2 Matt: "not something that's just critiquing everything"). Fixed lines, so the small model can't
     /// slip back into "Now I see...".
+    /// Matt 11/6: "I don't want it to keep asking if it can help constantly": the lines that offer help are used only
+    /// while no help offer has been made this visit (LiveSayGuard.helpOffered); the rest rotate (LiveRotation).
     static let checkIns = ["What are you up to?", "How's it going over there?", "Working on anything I can help with?",
                            "Need a hand with anything?", "What are you working on?", "Anything you want to talk through?"]
+    /// An offer of help ("Anything I can help with?", "Need a hand?"), said or written: at most one per visit (Matt 11/6).
+    static func isHelpOffer(_ s: String) -> Bool {
+        let t = " " + normalize(s) + " "
+        return [" help with ", " help you ", " can i help ", " i can help ", " a hand ", " anything i can do ", " talk through ",
+                " need help ", " want help ", " help me help "].contains { t.contains($0) }
+    }
     static let system = """
     You are Live Cam, talking with someone live through their phone camera. They may be blind or have low vision, so when you say where something is, say left, right, ahead, near or far. You see the photo of what the camera shows right now. Reply like a friend: one or two short spoken sentences, under 25 words, answer first, unless they ask for more. Use the earlier conversation to know what "it", "that" or "this" means. If they ask how to do or fix something, give only the next step or two. If the question has nothing to do with the photo, ignore the photo and just answer it. How-to questions get real steps from what you know even when the thing isn't in view, and you can do math. If the photo does not show the answer, say so. Be kind about people: never criticize or rate anyone's looks, hair, body or clothes, never call anyone bald or messy, and be extra gentle with children. Don't comment on the person, their face or how they look unless they ask about it, and don't narrate the room: you are a friend who can see, not a commentator. Never say "the photo" or "the image": talk as if you are looking through the camera ("I see..."). No lists, no markdown, no emoji.
     """
@@ -245,8 +345,9 @@ enum LiveWords {
     static let describeNow = "In one short sentence, tell me what you see right now, the main thing first."
 
     /// The one look at the start of a call: what's around, never the person (11/2 Matt).
-    /// Matt 11/6: "I see a map and a monitor", then it offers to help instead of just naming things.
-    static let openingLook = "In one short sentence that starts with \"I see\", name the main things around here, then ask if they want help with anything. Never mention the person, their face or clothes."
+    /// Matt 11/6: "I see a map and a monitor". The one help offer of the visit is added by the code after it
+    /// (LiveCamWords.helpOffer), never asked of the model, so it can't come back on every look.
+    static let openingLook = "In one short sentence that starts with \"I see\", name the main things around here. Never mention the person, their face or clothes."
     /// The quiet look while the view changes: a bare list the code compares with what was already named.
     static let inventory = "List the main things in view as short names separated by commas, at most 8. Things only, never the person or their clothes. No sentence."
     static let personWords: Set<String> = ["man", "woman", "person", "people", "guy", "you", "your", "face", "hair", "shirt",

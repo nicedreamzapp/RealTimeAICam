@@ -32,6 +32,13 @@ enum LiveCamWords {
     static let cantSeeInBackground = "I can't see while the phone is locked or another app is open. Open RealTime AI Cam again and ask me."
     static let cameraPaused = "My camera paused, I'm restarting it. Ask me again in a second."
     static let newThing = "I see %@. Anything I can help with?"
+    /// After the one help offer of the visit (Matt 11/6): just the thing.
+    static let newThingPlain = "I see %@."
+    static let newThingThere = "There's %@."
+    /// The one help offer of the visit, after the opening look (Matt 11/6: never asked of the model every time).
+    static let helpOffer = "Anything I can help with?"
+    /// An answer whose every sentence was already said this visit (Matt 11/6: never the same words twice).
+    static let sameAsBefore = "Same as before."
     static let notFullySure = "I'm not fully sure on that one."
     static let takeBack = "Actually, I'm not sure about the %@."
     static let lostAnswer = "Sorry, I lost that. Ask me again?"
@@ -42,7 +49,7 @@ enum LiveCamWords {
     static var indirectKeys: [String] {
         [permissionLine, notAllowed, cantHear, cantHearNote, noOfflineSpeech, LiveWords.firstGreeting,
          needsCamera, modelFailed, sayAgain, lostTrack, bye, gotIt, coachGoalSet, nothingSaidYet, coachGoalHeard,
-         flipToSeeYou, stillGettingReady, cantSeeInBackground, cameraPaused, newThing, notFullySure, takeBack, lostAnswer]
+         flipToSeeYou, stillGettingReady, cantSeeInBackground, cameraPaused, newThing, newThingPlain, newThingThere, helpOffer, sameAsBefore, notFullySure, takeBack, lostAnswer]
             + LiveWords.checkIns + LiveWords.acks
             + LiveMode.allCases.flatMap { [$0.label, $0.confirm] }
     }
