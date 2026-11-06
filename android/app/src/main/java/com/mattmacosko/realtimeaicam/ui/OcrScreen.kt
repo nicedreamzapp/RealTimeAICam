@@ -87,6 +87,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
+import com.mattmacosko.realtimeaicam.AppLang
+import com.mattmacosko.realtimeaicam.R
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.onClick
@@ -271,7 +274,8 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
                     val translating = i > 0
                     ReaderChoice.remember(context, translating)
                     if (translating) pipeline.setSourceLanguage(ReaderLanguages.all[i - 1])
-                    val spoken = com.mattmacosko.realtimeaicam.translation.YourLanguageRules.pillSpoken(
+                    // In the app's language: an app line, said in a voice for it.
+                    val spoken = ReaderChoice.pillSpoken(
                         if (i > 0) ReaderLanguages.all[i - 1] else null, outputLang)
                     if (translating == isSpanish) {
                         pipeline.speaker.speak(spoken)
@@ -327,15 +331,15 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
             val displayText = notice ?: translated ?: text
             val isTranslationShown = translated != null && notice == null
             val cardHeading = when {
-                !isSpanish -> "Detected"
-                readerOffer || readerDownloading -> "${sourceLang.name} reader"
-                notice != null -> "Language pack"
-                isTranslationShown -> "Translation"
-                else -> "${sourceLang.name} text"
+                !isSpanish -> stringResource(R.string.f_detected)
+                readerOffer || readerDownloading -> stringResource(R.string.f_reader_heading, sourceLang.nameInSentence)
+                notice != null -> stringResource(R.string.f_language_pack)
+                isTranslationShown -> stringResource(R.string.f_translation)
+                else -> stringResource(R.string.f_text_heading, sourceLang.nameInSentence)
             }
             val cardTappable = isSpanish && (isTranslationShown || readerOffer)
-            val cardClickLabel = if (readerOffer) "Download the ${sourceLang.name} reader"
-                else "Show copy, continue reading and new scan"
+            val cardClickLabel = if (readerOffer) stringResource(R.string.f_card_download, sourceLang.nameInSentence)
+                else stringResource(R.string.f_card_actions)
             val onCardTap = {
                 // The reader downloads only on this tap, never when the pill passes by.
                 if (readerOffer) pipeline.downloadReader(activity)
@@ -383,13 +387,7 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
                             )
                     )
                     Text(
-                        when {
-                            !isSpanish -> "Detected"
-                            readerOffer || readerDownloading -> "${sourceLang.name} reader"
-                            notice != null -> "Language pack"
-                            isTranslationShown -> "Translation"
-                            else -> "${sourceLang.name} Text"
-                        },
+                        cardHeading,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
                         color = Color.White.copy(alpha = 0.9f),
@@ -420,8 +418,8 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
         ) {
             // 1. Settings
             CircleControlButton(
-                label = "Settings",
-                clickLabel = "Open settings and tips",
+                label = stringResource(R.string.f_settings),
+                clickLabel = stringResource(R.string.f_settings_click_read),
                 onClick = { showSettings = true },
             ) {
                 Icon(Icons.Default.Settings, null, tint = Color.White, modifier = Modifier.size(22.dp))
@@ -431,9 +429,9 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
             // appears costs screen-reader flicks at the moment you cannot see.
             CircleControlButton(
                 ringColor = if (torchOn) IosColors.Yellow.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.2f),
-                label = "Flashlight",
-                stateLabel = if (torchOn) "On" else "Off",
-                clickLabel = if (torchOn) "Turn the flashlight off" else "Turn the flashlight on",
+                label = stringResource(R.string.f_flashlight),
+                stateLabel = stringResource(if (torchOn) R.string.f_torch_on_state else R.string.f_torch_off_state),
+                clickLabel = stringResource(if (torchOn) R.string.f_torch_turn_off else R.string.f_torch_turn_on),
                 onClick = { pipeline.setTorch(!torchOn) },
             ) {
                 Icon(
@@ -446,9 +444,12 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
             // 3. Translate (Spanish, pre-translation) or Copy
             if (isSpanish && translated == null) {
                 CircleControlButton(
-                    label = "Translate",
-                    stateLabel = if (translating) "Translating" else null,
-                    clickLabel = "Translate the ${sourceLang.name} text on screen into ${com.mattmacosko.realtimeaicam.translation.YourLanguageRules.name(outputLang)}",
+                    label = stringResource(R.string.f_translate),
+                    stateLabel = if (translating) stringResource(R.string.f_translating) else null,
+                    clickLabel = stringResource(
+                        R.string.f_translate_click, sourceLang.nameInSentence,
+                        com.mattmacosko.realtimeaicam.translation.LanguageNames.inSentence(outputLang),
+                    ),
                     onClick = { if (debouncer.tryFire()) pipeline.translate() },
                 ) {
                     Icon(
@@ -460,8 +461,8 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
                 }
             } else {
                 CircleControlButton(
-                    label = "Copy text",
-                    clickLabel = "Copy the text on screen to the clipboard",
+                    label = stringResource(R.string.f_copy_text),
+                    clickLabel = stringResource(R.string.f_copy_text_click),
                     onClick = {
                         val t = translated ?: text
                         if (t.isNotBlank()) copyToClipboard(context, t)
@@ -475,9 +476,9 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
             CircleControlButton(
                 fillColor = if (isSpeaking) IosColors.Green.copy(alpha = 0.30f)
                 else Color.Black.copy(alpha = 0.32f),
-                label = if (isSpeaking) "Stop reading" else "Read text aloud",
-                stateLabel = if (isSpeaking) "Speaking" else "Not speaking",
-                clickLabel = if (isSpeaking) "Stop speaking" else "Speak the text the camera has found",
+                label = stringResource(if (isSpeaking) R.string.f_stop_reading else R.string.f_read_aloud),
+                stateLabel = stringResource(if (isSpeaking) R.string.f_speaking else R.string.f_not_speaking),
+                clickLabel = stringResource(if (isSpeaking) R.string.f_stop_speaking else R.string.f_speak_found),
                 onClick = {
                     if (debouncer.tryFire()) pipeline.speakCurrent()
                 },
@@ -492,8 +493,8 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
             )
             // 5. Reset
             CircleControlButton(
-                label = "Clear and stop",
-                clickLabel = "Clear the detected text and stop speaking",
+                label = stringResource(R.string.f_clear_stop),
+                clickLabel = stringResource(R.string.f_clear_stop_click_read),
                 onClick = { pipeline.reset() },
             ) {
                 Icon(Icons.Default.Refresh, null, tint = Color.White, modifier = Modifier.size(22.dp))
@@ -502,15 +503,16 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
 
         // Tap anywhere outside the torch popup to dismiss it
         if (showTorchPopup && !torchOn) {
+            val closeTorch = stringResource(R.string.f_torch_brightness_close)
             Box(
                 Modifier
                     .fillMaxSize()
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClickLabel = "Close the flashlight brightness choices",
+                        onClickLabel = stringResource(R.string.f_torch_choices_close),
                     ) { showTorchPopup = false }
-                    .semantics { contentDescription = "Close flashlight brightness" }
+                    .semantics { contentDescription = closeTorch }
             )
         }
 
@@ -537,6 +539,8 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
             ) {
                 for (preset in listOf(100, 75, 50, 25)) {
                     val selected = preset == torchPreset
+                    val presetLabel = stringResource(R.string.f_torch_percent, preset)
+                    val selectedLabel = stringResource(if (selected) R.string.f_selected else R.string.f_not_selected)
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
@@ -558,8 +562,8 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
                                 showTorchPopup = false
                             }
                             .semantics(mergeDescendants = true) {
-                                contentDescription = "Flashlight $preset percent"
-                                stateDescription = if (selected) "Selected" else "Not selected"
+                                contentDescription = presetLabel
+                                stateDescription = selectedLabel
                             },
                     ) {
                         Text("$preset%", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Color.White)
@@ -597,8 +601,8 @@ private fun ReadingModeButton(mode: ReadingMode, onClick: () -> Unit) {
     CircleControlButton(
         fillColor = if (auto) IosColors.Blue.copy(alpha = 0.30f) else Color.Black.copy(alpha = 0.32f),
         ringColor = if (auto) IosColors.Blue.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.2f),
-        label = "Reading mode, ${mode.label}",
-        clickLabel = "switch to ${mode.next.label}",
+        label = stringResource(R.string.f_reading_mode, mode.label),
+        clickLabel = stringResource(R.string.f_switch_to, mode.next.label),
         onClick = onClick,
     ) {
         Icon(
@@ -621,6 +625,7 @@ private fun TranslationActionsPopup(
     onContinue: () -> Unit,
     onNewScan: () -> Unit,
 ) {
+    val closeOptions = stringResource(R.string.f_close_translation_options)
     Box(
         Modifier
             .fillMaxSize()
@@ -628,10 +633,10 @@ private fun TranslationActionsPopup(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClickLabel = "Close and keep reading",
+                onClickLabel = stringResource(R.string.f_close_keep_reading),
                 onClick = onContinue,
             )
-            .semantics { contentDescription = "Close translation options" },
+            .semantics { contentDescription = closeOptions },
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -649,15 +654,15 @@ private fun TranslationActionsPopup(
                 .padding(24.dp),
         ) {
             Text(
-                "Translation Ready",
+                stringResource(R.string.f_translation_ready),
                 fontSize = 20.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color.White,
                 modifier = Modifier.padding(bottom = 8.dp),
             )
-            PopupActionButton("Copy Translation", Icons.Default.ContentCopy, IosColors.Blue, onCopy)
-            PopupActionButton("Continue Reading", Icons.Default.Visibility, IosColors.Green, onContinue)
-            PopupActionButton("New Scan", Icons.Default.Refresh, IosColors.Orange, onNewScan)
+            PopupActionButton(stringResource(R.string.f_copy_translation), Icons.Default.ContentCopy, IosColors.Blue, onCopy)
+            PopupActionButton(stringResource(R.string.f_continue_reading), Icons.Default.Visibility, IosColors.Green, onContinue)
+            PopupActionButton(stringResource(R.string.f_new_scan), Icons.Default.Refresh, IosColors.Orange, onNewScan)
         }
     }
 }
@@ -741,6 +746,11 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit, fromHome: Boolean = fals
     // Says the Your language choice and the download progress (kept for the app's life, so
     // "ready" is still said after Settings is closed).
     val settingsVoice = remember { AppVoice.get(context) }
+    val closeSettings = stringResource(R.string.f_close_settings)
+    val countdownTitle = stringResource(R.string.f_countdown_title)
+    val ownVoiceTitle = stringResource(R.string.f_own_voice_title)
+    val clearHistory = stringResource(R.string.f_clear_history)
+    val copySaved = stringResource(R.string.f_copy_saved)
 
     Box(
         Modifier
@@ -750,10 +760,10 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit, fromHome: Boolean = fals
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClickLabel = "Close settings",
+                onClickLabel = closeSettings,
                 onClick = onDismiss,
             )
-            .semantics { contentDescription = "Close settings" },
+            .semantics { contentDescription = closeSettings },
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -774,7 +784,7 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit, fromHome: Boolean = fals
                 Modifier.fillMaxWidth().padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Settings", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                Text(stringResource(R.string.f_settings), fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                 Spacer(Modifier.weight(1f))
                 Text(
                     "✕",
@@ -788,7 +798,7 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit, fromHome: Boolean = fals
                             onClick = onDismiss,
                         )
                         .padding(4.dp)
-                        .semantics { contentDescription = "Close settings" },
+                        .semantics { contentDescription = closeSettings },
                 )
             }
             Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.15f)))
@@ -810,10 +820,10 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit, fromHome: Boolean = fals
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Timer, null, tint = IosColors.Purple, modifier = Modifier.size(20.dp))
                         Column(Modifier.weight(1f).padding(start = 8.dp)) {
-                            Text("Countdown before photo", fontSize = 17.sp,
+                            Text(countdownTitle, fontSize = 17.sp,
                                 fontWeight = FontWeight.SemiBold, color = Color.White)
                             Text(
-                                "Counts three, two, one out loud, then takes the picture, so your hand is off the phone when it fires.",
+                                stringResource(R.string.f_countdown_desc),
                                 fontSize = 12.sp, color = IosColors.Gray,
                             )
                         }
@@ -824,7 +834,7 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit, fromHome: Boolean = fals
                                 prefs.edit().putBoolean("countdownBeforeCapture", it).apply()
                             },
                             modifier = Modifier.semantics {
-                                contentDescription = "Countdown before photo"
+                                contentDescription = countdownTitle
                             },
                         )
                     }
@@ -835,10 +845,10 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit, fromHome: Boolean = fals
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.VolumeUp, null, tint = IosColors.Blue, modifier = Modifier.size(20.dp))
                         Column(Modifier.weight(1f).padding(start = 8.dp)) {
-                            Text("Speak in the app's own voice", fontSize = 17.sp,
+                            Text(ownVoiceTitle, fontSize = 17.sp,
                                 fontWeight = FontWeight.SemiBold, color = Color.White)
                             Text(
-                                "Turn this off and TalkBack reads everything instead, in your voice and at your speed, so the app is not talking over it.",
+                                stringResource(R.string.f_own_voice_desc),
                                 fontSize = 12.sp, color = IosColors.Gray,
                             )
                         }
@@ -849,7 +859,7 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit, fromHome: Boolean = fals
                                 prefs.edit().putBoolean("speakAnswersAloud", it).apply()
                             },
                             modifier = Modifier.semantics {
-                                contentDescription = "Speak in the app's own voice"
+                                contentDescription = ownVoiceTitle
                             },
                         )
                     }
@@ -863,28 +873,28 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit, fromHome: Boolean = fals
                             tint = IosColors.Orange, modifier = Modifier.size(20.dp),
                         )
                         Text(
-                            "  Copy History", fontSize = 17.sp,
+                            "  " + stringResource(R.string.f_copy_history), fontSize = 17.sp,
                             fontWeight = FontWeight.SemiBold, color = Color.White,
                         )
                         Spacer(Modifier.weight(1f))
                         if (history.isNotEmpty()) {
                             Text(
-                                "Clear", fontSize = 12.sp, color = IosColors.Red,
+                                stringResource(R.string.f_clear), fontSize = 12.sp, color = IosColors.Red,
                                 modifier = Modifier
                                     .clickable(
                                         role = Role.Button,
-                                        onClickLabel = "Delete every saved copy from this device",
+                                        onClickLabel = stringResource(R.string.f_clear_history_click),
                                     ) {
                                         CopyHistory.clear(context)
                                         history = emptyList()
                                     }
-                                    .semantics { contentDescription = "Clear copy history" },
+                                    .semantics { contentDescription = clearHistory },
                             )
                         }
                     }
                     if (history.isEmpty()) {
                         Text(
-                            "No copied text yet",
+                            stringResource(R.string.f_no_copies),
                             fontSize = 17.sp,
                             color = IosColors.Secondary,
                             modifier = Modifier
@@ -916,7 +926,7 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit, fromHome: Boolean = fals
                                     modifier = Modifier
                                         .size(18.dp)
                                         .clickable(role = Role.Button) { copyToClipboard(context, item) }
-                                        .semantics { contentDescription = "Copy this saved text" },
+                                        .semantics { contentDescription = copySaved },
                                 )
                             }
                         }
@@ -929,7 +939,7 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit, fromHome: Boolean = fals
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("🔍", fontSize = 18.sp, modifier = Modifier.clearAndSetSemantics { })
                             Text(
-                                "  Camera Zoom", fontSize = 17.sp,
+                                "  " + stringResource(R.string.f_camera_zoom), fontSize = 17.sp,
                                 fontWeight = FontWeight.SemiBold, color = Color.White,
                             )
                             Spacer(Modifier.weight(1f))
@@ -947,17 +957,17 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit, fromHome: Boolean = fals
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("ℹ️", fontSize = 18.sp, modifier = Modifier.clearAndSetSemantics { })
                         Text(
-                            "  Tips", fontSize = 17.sp,
+                            "  " + stringResource(R.string.f_tips), fontSize = 17.sp,
                             fontWeight = FontWeight.SemiBold, color = Color.White,
                         )
                     }
-                    TipLine("• 🤏 Pinch to zoom the camera")
-                    TipLine("• 📋 Copy detected/translated text")
-                    TipLine("• 🔁 Reset/Stop — clears text, translation, and stops speaking")
-                    TipLine("• 🗣️ Speak detected/translated text")
-                    TipLine("• 👂 Reading mode button — Tap to read, Auto read (new text is read by itself), or Mute")
-                    TipLine("• 🔦 Flashlight: one tap on, one tap off")
-                    TipLine("• ⚙️ Open settings/history")
+                    TipLine("• 🤏 " + stringResource(R.string.f_tip_pinch))
+                    TipLine("• 📋 " + stringResource(R.string.f_tip_copy))
+                    TipLine("• 🔁 " + stringResource(R.string.f_tip_reset))
+                    TipLine("• 🗣️ " + stringResource(R.string.f_tip_speak))
+                    TipLine("• 👂 " + stringResource(R.string.f_tip_mode))
+                    TipLine("• 🔦 " + stringResource(R.string.f_tip_torch))
+                    TipLine("• ⚙️ " + stringResource(R.string.f_tip_settings))
                 }
 
                 // Private by Design
@@ -965,14 +975,14 @@ fun SettingsOverlay(zoom: Float, onDismiss: () -> Unit, fromHome: Boolean = fals
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("🔒", fontSize = 18.sp, modifier = Modifier.clearAndSetSemantics { })
                         Text(
-                            "  Private by Design", fontSize = 17.sp,
+                            "  " + stringResource(R.string.f_private_design), fontSize = 17.sp,
                             fontWeight = FontWeight.SemiBold, color = IosColors.Green,
                         )
                     }
-                    TipLine("✈️ Works 100% offline — even in Airplane Mode")
-                    TipLine("🙈 No tracking, no analytics, no accounts")
-                    TipLine("📷 Camera frames are processed on-device only")
-                    TipLine("📋 Copy history stays on this device")
+                    TipLine("✈️ " + stringResource(R.string.f_priv_offline))
+                    TipLine("🙈 " + stringResource(R.string.f_priv_tracking))
+                    TipLine("📷 " + stringResource(R.string.f_priv_camera))
+                    TipLine("📋 " + stringResource(R.string.f_priv_history))
                 }
             }
         }
@@ -1015,8 +1025,11 @@ private fun LanguagePill(index: Int, target: String = "en", onSelect: (Int) -> U
     val count = ReaderChoice.count
     val i = index.coerceIn(0, count - 1)
     val page = if (i > 0) ReaderLanguages.all[i - 1] else null
-    val pillText = com.mattmacosko.realtimeaicam.translation.YourLanguageRules.pillLabel(page, target)
-    val pillSpoken = com.mattmacosko.realtimeaicam.translation.YourLanguageRules.pillSpoken(page, target)
+    // In the app's language: "Francés → Ing" on screen, "Francés, traducido al inglés" in TalkBack.
+    val pillText = ReaderChoice.pillLabel(page, target)
+    val pillSpoken = ReaderChoice.pillSpoken(page, target)
+    val changeLabel = stringResource(R.string.f_change)
+    val previousLabel = stringResource(R.string.f_previous_language)
     val next = { onSelect(ReaderChoice.next(i)) }
     Row(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -1033,9 +1046,9 @@ private fun LanguagePill(index: Int, target: String = "en", onSelect: (Int) -> U
                 contentDescription = OcrCardSemantics.languageLabel(pillSpoken)
                 role = Role.Button
                 testTag = "readLanguagePill"
-                onClick(label = "change") { next(); true }
+                onClick(label = changeLabel) { next(); true }
                 customActions = listOf(
-                    androidx.compose.ui.semantics.CustomAccessibilityAction("Previous language") {
+                    androidx.compose.ui.semantics.CustomAccessibilityAction(previousLabel) {
                         onSelect(ReaderChoice.previous(i)); true
                     },
                 )
@@ -1058,6 +1071,6 @@ object OcrCardSemantics {
     /** "Detected. <the text>": the heading, then the text, each once. */
     fun label(heading: String, text: String): String = if (text.isBlank()) heading else "$heading. $text"
 
-    /** "Language, English" (TalkBack adds "button, double tap to change"). */
-    fun languageLabel(spoken: String): String = "Language, $spoken"
+    /** "Language, English" / "Idioma, Inglés" (TalkBack adds "button, double tap to change"). */
+    fun languageLabel(spoken: String): String = AppLang.str(R.string.f_language_label, spoken)
 }

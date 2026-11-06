@@ -105,6 +105,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
+import com.mattmacosko.realtimeaicam.AppLang
+import com.mattmacosko.realtimeaicam.R
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -207,10 +210,28 @@ fun WhatsThisScreen(
     var countdownJob by remember { mutableStateOf<Job?>(null) }
     val haptics = LocalHapticFeedback.current
 
+    /**
+     * One place where an app line (status, error, hint) is shown and said: already in the app's
+     * language (AppLang.str), said in a voice for it, and tagged with that language so "hear it
+     * again" never reads a Spanish line in an English voice. Model answers go through [sayAnswer].
+     */
+    fun say(sentence: String) {
+        isScanning = false
+        summary = sentence
+        summaryLang = AppLang.code()
+        speaker.speak(sentence)
+    }
+
+    /** An app line shown on the card only (progress: "Thinking…"), tagged with the app's language. */
+    fun show(line: String) {
+        summary = line
+        summaryLang = AppLang.code()
+    }
+
     val micPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
-        if (!granted) summary = "Microphone access is needed to ask a question. Allow it in Settings."
+        if (!granted) say(AppLang.str(R.string.f_wt_mic_needed))
     }
 
     DisposableEffect(lifecycleOwner) {
@@ -235,15 +256,7 @@ fun WhatsThisScreen(
         val ok = withContext(Dispatchers.IO) { engine.ensureLoaded() }
         ready = ok
         modelMissing = !ok
-        if (!ok) summary = MODEL_MISSING
-    }
-
-    /** One place where a sentence becomes speech, so no path can drift. */
-    fun say(sentence: String) {
-        isScanning = false
-        summary = sentence
-        summaryLang = "en"
-        speaker.speak(sentence)
+        if (!ok) show(AppLang.str(R.string.f_wt_model_missing))
     }
 
     /**
@@ -272,7 +285,7 @@ fun WhatsThisScreen(
         if (isScanning || !ready) return
         isScanning = true
         speaker.stop()
-        summary = "Working it out…"
+        show(AppLang.str(R.string.f_wt_working))
         scope.launch {
             val raw = File(context.cacheDir, "whats-this-raw.jpg")
             val shot = File(context.cacheDir, "whats-this.jpg")
@@ -283,16 +296,14 @@ fun WhatsThisScreen(
                 withContext(Dispatchers.IO) { runCatching { testShot.copyTo(raw, overwrite = true) }.isSuccess }
             } else camera.capture(raw)
             if (!captured) {
-                isScanning = false
-                summary = "The camera couldn't take the picture. Try again."
+                say(AppLang.str(R.string.f_wt_camera_failed))
                 return@launch
             }
             // Hold this exact frame on screen — it's what the model is looking
             // at. Upright and no longer than 1024 px, exactly like the iPhone.
             val bitmap = withContext(Dispatchers.IO) { prepareShot(raw, shot) }
             if (bitmap == null) {
-                isScanning = false
-                summary = "The camera couldn't take the picture. Try again."
+                say(AppLang.str(R.string.f_wt_camera_failed))
                 return@launch
             }
             frozenPhoto = bitmap
@@ -327,7 +338,7 @@ fun WhatsThisScreen(
                 // they can act on.
                 description = said.trim()
                 if (said.isNotBlank()) sayAnswer(said)
-                else say("It's hard to see clearly, and I couldn't make out enough to say.")
+                else say(AppLang.str(R.string.f_wt_hard_to_see))
             } finally {
                 camera.resume(lifecycleOwner, previewView)
             }
@@ -344,8 +355,8 @@ fun WhatsThisScreen(
     /** Wait for the narrator model if the person tapped before it finished loading. */
     suspend fun awaitNarrator() {
         if (ready || modelMissing) return
-        summary = "One moment…"
-        speaker.speak("One moment")
+        show(AppLang.str(R.string.f_wt_one_moment_shown))
+        speaker.speak(AppLang.str(R.string.f_wt_one_moment))
         while (!ready && !modelMissing) delay(100)
         summary = ""
     }
@@ -366,7 +377,13 @@ fun WhatsThisScreen(
         countdownRemaining = 3
         countdownJob = scope.launch {
             speaker.prepareToSpeak()
-            for ((number, word) in listOf(3 to "three", 2 to "two", 1 to "one")) {
+            // The count is an app line: in the app's language, in a voice for it ("tres, dos, uno").
+            val words = listOf(
+                3 to AppLang.str(R.string.f_count_three),
+                2 to AppLang.str(R.string.f_count_two),
+                1 to AppLang.str(R.string.f_count_one),
+            )
+            for ((number, word) in words) {
                 countdownRemaining = number
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 // The app says the count in its own voice rather than leaving it
@@ -401,7 +418,7 @@ fun WhatsThisScreen(
         if (question.isBlank() || frozenPhoto == null || !photo.isFile || isAsking) return
         scope.launch {
             isAsking = true
-            summary = "Thinking…"
+            show(AppLang.str(R.string.f_wt_thinking_shown))
             var cutOff = false
             val answer = withContext(Dispatchers.IO) {
                 // Your language: the question goes to the model in English.
@@ -420,7 +437,7 @@ fun WhatsThisScreen(
             }
             isAsking = false
             if (answer.isNotBlank()) sayAnswer(answer, cutOff)
-            else say("Sorry, I couldn't work that out. Try asking again.")
+            else say(AppLang.str(R.string.f_wt_sorry_ask))
         }
     }
 
@@ -435,9 +452,9 @@ fun WhatsThisScreen(
             if (uri != null) {
                 saved = true
                 speaker.stop()
-                speaker.speak("Saved to your photos with that description.")
+                speaker.speak(AppLang.str(R.string.f_wt_saved))
             } else {
-                speaker.speak("Sorry, the photo could not be saved.")
+                speaker.speak(AppLang.str(R.string.f_wt_save_failed))
             }
         }
     }
@@ -452,7 +469,7 @@ fun WhatsThisScreen(
             return
         }
         if (!listener.available) {
-            summary = "Voice questions aren't available on this phone."
+            say(AppLang.str(R.string.f_wt_no_voice_questions))
             return
         }
         speaker.stop()
@@ -469,7 +486,7 @@ fun WhatsThisScreen(
             val heard = listener.stopAndTranscribe().trim()
             val photo = File(context.cacheDir, "whats-this.jpg")
             if (heard.isEmpty() || frozenPhoto == null || !photo.isFile) {
-                summary = "I didn't catch that. Hold the button and ask again."
+                say(AppLang.str(R.string.f_wt_didnt_catch))
                 return@launch
             }
             askAbout(heard)
@@ -534,8 +551,9 @@ fun WhatsThisScreen(
             verticalAlignment = Alignment.Top,
         ) {
             BackPill(onBack)
+            val modeDesc = stringResource(R.string.f_wt_mode_desc)
             Text(
-                "What's this?",
+                stringResource(R.string.f_whats_this),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 color = Color.White,
@@ -543,7 +561,7 @@ fun WhatsThisScreen(
                     .clip(RoundedCornerShape(20.dp))
                     .background(IosColors.Material.copy(alpha = 0.85f), RoundedCornerShape(20.dp))
                     .padding(horizontal = 12.dp, vertical = 10.dp)
-                    .semantics { contentDescription = "Mode, summarizing what you point at" },
+                    .semantics { contentDescription = modeDesc },
             )
         }
 
@@ -592,6 +610,7 @@ fun WhatsThisScreen(
                 exit = slideOutVertically(tween(200)) { it / 2 } + fadeOut(tween(200)),
                 modifier = Modifier.padding(horizontal = 20.dp),
             ) {
+                val summaryLabel = stringResource(R.string.f_wt_summary_label, summary)
                 Column(
                     Modifier
                         .fillMaxWidth()
@@ -601,14 +620,14 @@ fun WhatsThisScreen(
                             enabled = !isScanning && !isAsking && summary.isNotEmpty(),
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
-                            onClickLabel = "Hear it again",
+                            onClickLabel = stringResource(R.string.f_wt_hear_again),
                         ) {
                             speaker.stop()
                             speaker.speakIn(summary, summaryLang)
                         }
                         .padding(16.dp)
                         .semantics(mergeDescendants = true) {
-                            contentDescription = "Summary. $summary"
+                            contentDescription = summaryLabel
                         },
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
@@ -618,7 +637,7 @@ fun WhatsThisScreen(
                     ) {
                         Box(Modifier.size(8.dp).background(IosColors.Blue, CircleShape))
                         Text(
-                            "Summary",
+                            stringResource(R.string.f_wt_summary),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
                             color = Color.White.copy(alpha = 0.9f),
@@ -650,6 +669,18 @@ fun WhatsThisScreen(
             // aim and press. Once a shot is frozen it becomes Hold to ask +
             // Next shot, to let go and aim again.
             if (frozenPhoto != null && !isScanning) {
+                val askLabel = stringResource(R.string.f_wt_ask_photo)
+                val askState = stringResource(
+                    when {
+                        isListening -> R.string.f_wt_listening
+                        isAsking -> R.string.f_wt_thinking
+                        else -> R.string.f_wt_hold_hint
+                    }
+                )
+                val typeDesc = stringResource(R.string.f_wt_type_q_desc)
+                val askShort = stringResource(R.string.f_wt_ask)
+                val saveDesc = stringResource(if (saved) R.string.f_wt_photo_saved else R.string.f_wt_save_desc)
+                val nextShot = stringResource(R.string.f_wt_next_shot)
                 Column(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 0.dp).padding(bottom = 14.dp),
@@ -676,12 +707,8 @@ fun WhatsThisScreen(
                             }
                             .padding(vertical = 16.dp)
                             .semantics(mergeDescendants = true) {
-                                contentDescription = "Ask about this photo"
-                                stateDescription = when {
-                                    isListening -> "Listening"
-                                    isAsking -> "Thinking"
-                                    else -> "Hold, speak your question, then let go to hear the answer"
-                                }
+                                contentDescription = askLabel
+                                stateDescription = askState
                             },
                     ) {
                         Icon(
@@ -693,11 +720,13 @@ fun WhatsThisScreen(
                             null, tint = Color.White, modifier = Modifier.size(22.dp),
                         )
                         Text(
-                            when {
-                                isListening -> "Listening… let go to ask"
-                                isAsking -> "Thinking…"
-                                else -> "Hold to ask about this"
-                            },
+                            stringResource(
+                                when {
+                                    isListening -> R.string.f_wt_listening_let_go
+                                    isAsking -> R.string.f_wt_thinking_shown
+                                    else -> R.string.f_wt_hold_to_ask
+                                }
+                            ),
                             color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
                         )
                     }
@@ -712,7 +741,7 @@ fun WhatsThisScreen(
                         androidx.compose.material3.OutlinedTextField(
                             value = typedQuestion,
                             onValueChange = { typedQuestion = it },
-                            placeholder = { Text("Type a question", color = Color.White.copy(alpha = 0.6f)) },
+                            placeholder = { Text(stringResource(R.string.f_wt_type_q), color = Color.White.copy(alpha = 0.6f)) },
                             singleLine = true,
                             enabled = !isAsking && !isListening,
                             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
@@ -725,7 +754,7 @@ fun WhatsThisScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(12.dp))
-                                .semantics { contentDescription = "Type a question about this photo" },
+                                .semantics { contentDescription = typeDesc },
                         )
                         Box(
                             contentAlignment = Alignment.Center,
@@ -736,12 +765,12 @@ fun WhatsThisScreen(
                                 .clickable(
                                     enabled = typedQuestion.isNotBlank() && !isAsking,
                                     role = Role.Button,
-                                    onClickLabel = "Ask the typed question",
+                                    onClickLabel = stringResource(R.string.f_wt_ask_typed),
                                 ) { askAbout(typedQuestion.trim()); typedQuestion = "" }
                                 .padding(horizontal = 20.dp, vertical = 16.dp)
-                                .clearAndSetSemantics { contentDescription = "Ask" },
+                                .clearAndSetSemantics { contentDescription = askShort },
                         ) {
-                            Text("Ask", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                            Text(askShort, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                     Row(
@@ -757,15 +786,15 @@ fun WhatsThisScreen(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
                                 role = Role.Button,
-                                onClickLabel = "Save this picture to your photos with its description",
+                                onClickLabel = stringResource(R.string.f_wt_save_click),
                             ) { if (debouncer.tryFire()) savePhoto() }
                             .padding(vertical = 16.dp)
                             .clearAndSetSemantics {
-                                contentDescription = if (saved) "Photo saved" else "Save photo with this description"
+                                contentDescription = saveDesc
                             },
                     ) {
                         Icon(Icons.Default.Download, null, tint = Color.White, modifier = Modifier.size(22.dp))
-                        Text(if (saved) "Saved" else "Save Photo", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(if (saved) R.string.f_wt_saved_short else R.string.f_wt_save_photo), color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
                     }
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
@@ -779,13 +808,13 @@ fun WhatsThisScreen(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
                                 role = Role.Button,
-                                onClickLabel = "Clear this photo and return to the camera for a new picture",
+                                onClickLabel = stringResource(R.string.f_wt_next_click),
                             ) { if (debouncer.tryFire()) nextShot() }
                             .padding(vertical = 16.dp)
-                            .semantics(mergeDescendants = true) { contentDescription = "Next shot" },
+                            .semantics(mergeDescendants = true) { contentDescription = nextShot },
                     ) {
                         Icon(Icons.Default.CameraAlt, null, tint = Color.White, modifier = Modifier.size(22.dp))
-                        Text("Next shot", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
+                        Text(nextShot, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             } else {
@@ -793,6 +822,14 @@ fun WhatsThisScreen(
                 // load, and the shot waits for it. Before, a tap in the first few seconds
                 // after opening the screen did nothing at all (found 2026-09-28).
                 val enabled = !isScanning && !modelMissing
+                val shutterLabel = stringResource(
+                    when {
+                        isScanning -> R.string.f_wt_looking
+                        countdownRemaining != null -> R.string.f_wt_cancel_countdown
+                        !ready && !modelMissing -> R.string.f_wt_getting_ready
+                        else -> R.string.f_whats_this
+                    }
+                )
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
                     verticalAlignment = Alignment.CenterVertically,
@@ -808,20 +845,13 @@ fun WhatsThisScreen(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
                             role = Role.Button,
-                            onClickLabel = if (countdownRemaining != null) {
-                                "Stop the countdown without taking the picture"
-                            } else {
-                                "Take a picture and say what it is: a letter, a bill, a label, or whatever is in front of you"
-                            },
+                            onClickLabel = stringResource(
+                                if (countdownRemaining != null) R.string.f_wt_stop_countdown else R.string.f_wt_take_click
+                            ),
                         ) { if (countdownRemaining == null) startCapture() else cancelCountdown() }
                         .padding(vertical = 16.dp)
                         .semantics(mergeDescendants = true) {
-                            contentDescription = when {
-                                isScanning -> "Looking"
-                                countdownRemaining != null -> "Cancel countdown"
-                                !ready && !modelMissing -> "Getting ready"
-                                else -> "What's this?"
-                            }
+                            contentDescription = shutterLabel
                         },
                 ) {
                     Icon(
@@ -830,10 +860,10 @@ fun WhatsThisScreen(
                     )
                     Text(
                         when {
-                            isScanning -> "Looking…"
+                            isScanning -> stringResource(R.string.f_wt_looking_shown)
                             countdownRemaining != null -> "${countdownRemaining}…"
-                            !ready && !modelMissing -> "Getting ready…"
-                            else -> "What's this?"
+                            !ready && !modelMissing -> stringResource(R.string.f_wt_getting_ready_shown)
+                            else -> stringResource(R.string.f_whats_this)
                         },
                         color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.SemiBold,
                     )
@@ -853,8 +883,8 @@ fun WhatsThisScreen(
         ) {
             // 1. Settings
             CircleControlButton(
-                label = "Settings",
-                clickLabel = "Open settings, copy history and tips",
+                label = stringResource(R.string.f_settings),
+                clickLabel = stringResource(R.string.f_wt_settings_click),
                 onClick = { showSettings = true },
             ) {
                 Icon(Icons.Default.Settings, null, tint = Color.White, modifier = Modifier.size(22.dp))
@@ -865,9 +895,9 @@ fun WhatsThisScreen(
             // exact moment you cannot see, and nobody wants a dim flashlight.
             CircleControlButton(
                 ringColor = if (torchOn) IosColors.Yellow.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.2f),
-                label = "Flashlight",
-                stateLabel = if (torchOn) "On" else "Off",
-                clickLabel = if (torchOn) "Turn the flashlight off" else "Turn the flashlight on",
+                label = stringResource(R.string.f_flashlight),
+                stateLabel = stringResource(if (torchOn) R.string.f_torch_on_state else R.string.f_torch_off_state),
+                clickLabel = stringResource(if (torchOn) R.string.f_torch_turn_off else R.string.f_torch_turn_on),
                 onClick = { camera.setTorch(!torchOn) },
             ) {
                 Icon(
@@ -884,8 +914,8 @@ fun WhatsThisScreen(
             // rear lens to switch to.
             // 4. Copy the summary
             CircleControlButton(
-                label = "Copy summary",
-                clickLabel = "Copy the summary to the clipboard",
+                label = stringResource(R.string.f_wt_copy_summary),
+                clickLabel = stringResource(R.string.f_wt_copy_summary_click),
                 onClick = { if (summary.isNotBlank() && !isScanning) copySummary(context, summary) },
             ) {
                 Icon(Icons.Default.ContentCopy, null, tint = Color.White, modifier = Modifier.size(22.dp))
@@ -893,9 +923,9 @@ fun WhatsThisScreen(
             // 5. Speak — green ONLY while audio is actually playing
             CircleControlButton(
                 fillColor = if (isSpeaking) IosColors.Green.copy(alpha = 0.30f) else Color.Black.copy(alpha = 0.32f),
-                label = if (isSpeaking) "Stop reading" else "Say the summary again",
-                stateLabel = if (isSpeaking) "Speaking" else "Not speaking",
-                clickLabel = if (isSpeaking) "Stop speaking" else "Repeat the summary out loud",
+                label = stringResource(if (isSpeaking) R.string.f_stop_reading else R.string.f_wt_say_again),
+                stateLabel = stringResource(if (isSpeaking) R.string.f_speaking else R.string.f_not_speaking),
+                clickLabel = stringResource(if (isSpeaking) R.string.f_stop_speaking else R.string.f_wt_repeat_click),
                 onClick = {
                     if (!debouncer.tryFire()) return@CircleControlButton
                     if (isSpeaking) speaker.stop()
@@ -906,8 +936,8 @@ fun WhatsThisScreen(
             }
             // 6. Reset
             CircleControlButton(
-                label = "Clear and stop",
-                clickLabel = "Clear the summary and stop speaking",
+                label = stringResource(R.string.f_clear_stop),
+                clickLabel = stringResource(R.string.f_wt_clear_click),
                 onClick = {
                     speaker.stop()
                     if (!isScanning && !isAsking) summary = ""
@@ -949,7 +979,6 @@ private fun imageSize(f: File): String {
 
 internal const val PAGE_LONG_SIDE = 1024
 internal const val SCENE_LONG_SIDE = 768
-private const val MODEL_MISSING = "The vision model is not installed on this phone yet."
 
 private fun copySummary(context: Context, text: String) {
     val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
