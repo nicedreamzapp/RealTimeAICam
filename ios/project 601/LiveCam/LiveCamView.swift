@@ -25,6 +25,7 @@ private struct LiveCamPreview: UIViewRepresentable {
 struct LiveCamView: View {
     let onBack: () -> Void
     @StateObject private var call = LiveCallController()
+    @ObservedObject private var appLang = AppLangObserver.shared
     @State private var showModes = false
     @State private var zoomStart: CGFloat?
     @State private var zoomLabel: CGFloat = 1
@@ -58,7 +59,7 @@ struct LiveCamView: View {
                     Spacer(minLength: 0)
                     words(wide: wide)
                     if call.hearingStopped {
-                        Text(LiveCamWords.cantHearNote)
+                        Text(L(LiveCamWords.cantHearNote))
                             .font(.callout.weight(.semibold)).foregroundStyle(.white).multilineTextAlignment(.center)
                             .padding(.horizontal, 12).padding(.vertical, 8)
                             .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
@@ -94,7 +95,8 @@ struct LiveCamView: View {
             call.onEnd = { onBack() }
             call.start()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                UIAccessibility.post(notification: .screenChanged, argument: "Live Cam")
+                UIAccessibility.post(notification: .screenChanged,
+                                     argument: SpeechManager.voiceOverLine(L("Live Cam, experimental"), lang: AppLang.code))
             }
         }
         .onDisappear { call.end() }
@@ -107,7 +109,7 @@ struct LiveCamView: View {
             // Matt 11/1 (Moonstone): a real dropdown. Tap the pill, the modes show, tap one, it stays until changed.
             Button { withAnimation(.easeOut(duration: 0.15)) { showModes.toggle() } } label: {
                 HStack(spacing: 6) {
-                    Text("Mode: \(call.mode.label)")
+                    Text(L("Mode: %@", L(call.mode.label)))
                     Image(systemName: showModes ? "chevron.up" : "chevron.down").font(.caption.weight(.bold))
                 }
                 .font(.body.weight(.semibold))
@@ -116,16 +118,16 @@ struct LiveCamView: View {
                 .background(.black.opacity(0.45), in: Capsule())
                 .overlay(Capsule().stroke(.white.opacity(0.35), lineWidth: 1))
             }
-            .accessibilityLabel("Mode, \(call.mode.label)")
-            .accessibilityHint("Shows the modes and settings. You can also say funny mode, analyze mode, coach mode or normal mode.")
+            .accessibilityLabel(L("Mode: %@", L(call.mode.label)))
+            .accessibilityHint(L("Shows the modes and settings. You can also say funny mode, analyze mode, coach mode or normal mode."))
             Spacer(minLength: 0)
             Button { call.camera.flip() } label: {
                 Image(systemName: "arrow.triangle.2.circlepath.camera").font(.title2.weight(.semibold))
                     .frame(width: 60, height: 60).background(.black.opacity(0.45), in: Circle())
                     .overlay(Circle().stroke(.white.opacity(0.35), lineWidth: 1))
             }
-            .accessibilityLabel("Flip camera")
-            .accessibilityHint("Switches between the back camera and the selfie camera")
+            .accessibilityLabel(L("Flip camera"))
+            .accessibilityHint(L("Switches between the back camera and the selfie camera"))
         }
         .foregroundStyle(.white)
         .padding(.top, 8)
@@ -139,24 +141,24 @@ struct LiveCamView: View {
                     withAnimation(.easeOut(duration: 0.15)) { showModes = false }
                 } label: {
                     HStack {
-                        Text(m.label).font(.body.weight(.semibold))
+                        Text(L(m.label)).font(.body.weight(.semibold))
                         Spacer()
                         if m == call.mode { Image(systemName: "checkmark").font(.body.weight(.bold)) }
                     }
                     .padding(.horizontal, 16).frame(minHeight: 56).contentShape(Rectangle())
                 }
-                .accessibilityLabel("\(m.label) mode")
+                .accessibilityLabel(modeName(m))
                 .accessibilityHint(modeHint(m))
                 .accessibilityAddTraits(m == call.mode ? .isSelected : [])
                 Divider().overlay(.white.opacity(0.2))
             }
-            Toggle(isOn: $call.proactiveOn) { Text("Speak up when quiet").font(.body.weight(.semibold)) }
-                .padding(.horizontal, 16).frame(minHeight: 56)
-                .accessibilityHint("When on, Live Cam checks in after a long quiet and mentions new things it is sure it sees")
+            Toggle(isOn: $call.proactiveOn) { Text(L("Speak up when quiet")).font(.body.weight(.semibold)).fixedSize(horizontal: false, vertical: true) }
+                .padding(.horizontal, 16).padding(.vertical, 6).frame(minHeight: 56)
+                .accessibilityHint(L("When on, Live Cam checks in after a long quiet and mentions new things it is sure it sees"))
             Divider().overlay(.white.opacity(0.2))
-            Toggle(isOn: $call.showCaption) { Text("Words on screen").font(.body.weight(.semibold)) }
-                .padding(.horizontal, 16).frame(minHeight: 56)
-                .accessibilityHint("Shows what Live Cam says in big words. VoiceOver can read them either way")
+            Toggle(isOn: $call.showCaption) { Text(L("Words on screen")).font(.body.weight(.semibold)).fixedSize(horizontal: false, vertical: true) }
+                .padding(.horizontal, 16).padding(.vertical, 6).frame(minHeight: 56)
+                .accessibilityHint(L("Shows what Live Cam says in big words. VoiceOver can read them either way"))
         }
         .tint(.teal)
         .foregroundStyle(.white)
@@ -166,12 +168,21 @@ struct LiveCamView: View {
         .transition(.opacity)
     }
 
+    private func modeName(_ m: LiveMode) -> String {
+        switch m {
+        case .normal: L("Normal mode")
+        case .funny: L("Funny mode")
+        case .analyze: L("Analyze mode")
+        case .coach: L("Coach mode")
+        }
+    }
+
     private func modeHint(_ m: LiveMode) -> String {
         switch m {
-        case .normal: "A friendly helper that answers what you ask"
-        case .funny: "Answers, then adds a joke"
-        case .analyze: "Digs into the how and why, and reads everything when you say analyze this"
-        case .coach: "Practical tips on whatever you want to get better at"
+        case .normal: L("A friendly helper that answers what you ask")
+        case .funny: L("Answers, then adds a joke")
+        case .analyze: L("Digs into the how and why, and reads everything when you say analyze this")
+        case .coach: L("Practical tips on whatever you want to get better at")
         }
     }
 
@@ -181,11 +192,11 @@ struct LiveCamView: View {
     private func words(wide: Bool) -> some View {
         VStack(spacing: 8) {
             if call.showCaption, !call.heardText.isEmpty {
-                Text("You: \(call.heardText)")
+                Text(L("You: %@", call.heardText))
                     .font(.system(size: wide ? 17 : 19, weight: .medium, design: .rounded))
                     .foregroundStyle(.white.opacity(0.85)).multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.7)
                     .shadow(color: .black.opacity(0.9), radius: 4)
-                    .accessibilityLabel("You said: \(call.heardText)")
+                    .accessibilityLabel(L("You said: %@", call.heardText))
                     .accessibilityIdentifier("liveCamHeard")
             }
             if !call.caption.isEmpty {
@@ -198,9 +209,11 @@ struct LiveCamView: View {
                     .accessibilityValue(call.caption)
                     .accessibilityAddTraits(.updatesFrequently)
                     .accessibilityIdentifier("liveCamCaption")
+                    // The caption's own language (content may be in Your language, not the app's), like the app root does.
+                    .environment(\.locale, Locale(identifier: call.captionLang))
             }
             if call.phase == .loading || call.phase == .starting {
-                ProgressView().tint(.white).accessibilityLabel("Getting Live Cam ready")
+                ProgressView().tint(.white).accessibilityLabel(L("Getting Live Cam ready"))
             }
         }
         .frame(maxWidth: .infinity)
@@ -208,12 +221,12 @@ struct LiveCamView: View {
 
     private var typedBox: some View {
         HStack(spacing: 8) {
-            TextField("Type a question", text: $typed)
+            TextField(L("Type a question"), text: $typed)
                 .textFieldStyle(.roundedBorder)
                 .submitLabel(.send)
                 .onSubmit { call.ask(typed: typed); typed = "" }
                 .accessibilityIdentifier("liveCamTyped")
-            Button("Ask") { call.ask(typed: typed); typed = "" }
+            Button(L("Ask")) { call.ask(typed: typed); typed = "" }
                 .frame(minWidth: 56, minHeight: 44).foregroundStyle(.white)
         }
     }
@@ -225,7 +238,7 @@ struct LiveCamView: View {
                 .onTapGesture { call.interrupt() }
                 .accessibilityElement()
                 .accessibilityLabel(orbLabel)
-                .accessibilityHint(call.phase == .speaking || call.phase == .thinking ? "Double tap to stop it talking and ask something else" : "")
+                .accessibilityHint(call.phase == .speaking || call.phase == .thinking ? L("Double tap to stop it talking and ask something else") : "")
                 .accessibilityAddTraits(.updatesFrequently)
                 .accessibilityAction { call.interrupt() }
             Text(statusLine).font(.footnote.weight(.medium)).foregroundStyle(.white.opacity(0.8))
@@ -245,42 +258,44 @@ struct LiveCamView: View {
                         .background(call.micMuted ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.black.opacity(0.45)), in: Circle())
                         .overlay(Circle().stroke(.white.opacity(0.35), lineWidth: 1))
                         .foregroundStyle(call.micMuted ? .black : .white)
-                    Text(call.micMuted ? "Unmute" : "Mute").font(.footnote.weight(.semibold)).foregroundStyle(.white)
+                    Text(call.micMuted ? L("Unmute") : L("Mute")).font(.footnote.weight(.semibold)).foregroundStyle(.white)
+                        .lineLimit(1).minimumScaleFactor(0.8)
                 }
             }
-            .accessibilityLabel(call.micMuted ? "Unmute microphone" : "Mute microphone")
-            .accessibilityHint(call.micMuted ? "Live Cam starts listening again" : "Live Cam stops listening until you unmute")
+            .accessibilityLabel(call.micMuted ? L("Unmute microphone") : L("Mute microphone"))
+            .accessibilityHint(call.micMuted ? L("Live Cam starts listening again") : L("Live Cam stops listening until you unmute"))
             Button { call.end() } label: {
                 VStack(spacing: 6) {
                     Image(systemName: "xmark").font(.system(size: 28, weight: .bold))
                         .frame(width: 76, height: 76).background(Color.red, in: Circle()).foregroundStyle(.white)
-                    Text("Back").font(.footnote.weight(.semibold)).foregroundStyle(.white)
+                    Text(L("Back")).font(.footnote.weight(.semibold)).foregroundStyle(.white)
+                        .lineLimit(1).minimumScaleFactor(0.8)
                 }
             }
-            .accessibilityLabel("Back")
-            .accessibilityHint("Stops Live Cam and goes back to the home screen")
+            .accessibilityLabel(L("Back"))
+            .accessibilityHint(L("Stops Live Cam and goes back to the home screen"))
         }
     }
 
     private var statusLine: String {
         switch call.phase {
-        case .listening: call.micMuted ? "Microphone muted" : (call.typedOnly || call.hearingStopped ? "Type a question" : "Listening · just talk")
-        case .thinking: "Looking"
-        case .speaking: "Speaking"
-        case .downloading, .loading, .starting: "Getting ready"
-        case .ended: "Ended"
-        case .failed: "Not working"
+        case .listening: call.micMuted ? L("Microphone muted") : (call.typedOnly || call.hearingStopped ? L("Type a question") : L("Listening · just talk"))
+        case .thinking: L("Looking")
+        case .speaking: L("Speaking")
+        case .downloading, .loading, .starting: L("Getting ready")
+        case .ended: L("Ended")
+        case .failed: L("Not working")
         }
     }
 
     private var orbLabel: String {
         switch call.phase {
-        case .listening: call.micMuted ? "Microphone muted" : (call.hearingStopped ? "Not listening. Type a question." : "Always listening. Just talk.")
-        case .thinking: "Looking"
-        case .speaking: "Speaking"
-        case .downloading, .loading, .starting: "Getting ready"
-        case .ended: "Ended"
-        case .failed: "Not working"
+        case .listening: call.micMuted ? L("Microphone muted") : (call.hearingStopped ? L("Not listening. Type a question.") : L("Always listening. Just talk."))
+        case .thinking: L("Looking")
+        case .speaking: L("Speaking")
+        case .downloading, .loading, .starting: L("Getting ready")
+        case .ended: L("Ended")
+        case .failed: L("Not working")
         }
     }
 }

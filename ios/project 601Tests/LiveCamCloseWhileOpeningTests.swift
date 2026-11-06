@@ -10,12 +10,13 @@ struct LiveCamCloseWhileOpeningTests {
     /// A voice that makes no sound and says it is busy until stopped (like the permission line mid-sentence).
     final class SilentVoice: LiveVoiceOutput {
         var muted = true
-        var onStart: ((String, String) -> Void)?
+        var onStart: ((String, String, String) -> Void)?
         var onQuiet: (() -> Void)?
         var said: [String] = []
         private var talking = false
         var isBusy: Bool { talking }
         func say(_ english: String) { said.append(english); talking = true }
+        func sayLine(_: String, lang _: String, english: String) { said.append(english); talking = true }
         func stop() { talking = false }
     }
 
