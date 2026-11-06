@@ -13,7 +13,14 @@ struct YourLanguageCard: View {
         #if DEBUG
         SpeakLog.note("yourLanguage", line)
         #endif
-        SpeechManager.shared.speak(line)
+        // VoiceOver on: one announcement, so it doesn't talk over VoiceOver reading Apple's
+        // download window (the same rule as UICue). Otherwise the app's voice.
+        if UIAccessibility.isVoiceOverRunning {
+            UIAccessibility.post(notification: .announcement,
+                                 argument: SpeechManager.voiceOverLine(line, lang: AppLang.code))
+        } else {
+            SpeechManager.shared.speak(line)
+        }
     }
 
     var body: some View {

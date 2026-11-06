@@ -85,6 +85,19 @@ enum YourLanguageRules {
     static func failedLine(_ code: String) -> String {
         L("%@ didn't download. Connect to the internet, then tap the download button again.", name(code))
     }
+    /// Apple's download window (seen on an iPhone 12, 2026-11-05): a "Translate" sheet over the
+    /// lower half of the screen, "Required Downloads", one line per language, each with a round
+    /// download button at its right end (VoiceOver: "Arrow Down Circle"). One tap downloads them
+    /// all; the window stays open while it downloads and closes by itself when done.
+    static func sheetOpenedLine(_ code: String) -> String {
+        L("Apple opened a window to download %@, in the lower half of the screen. Tap the round download button on the right, next to the language names. With VoiceOver it may be called Arrow Down Circle.", nameInSentence(code))
+    }
+    static func sheetWaitingLine(_ code: String) -> String {
+        L("The %@ download is waiting for your tap: the round download button on the right, in the lower half of the screen. If you already tapped it, it is downloading and the window closes by itself when it's done.", nameInSentence(code))
+    }
+    static func sheetClosedLine(_ code: String) -> String {
+        L("Apple's download window closed before %@ downloaded. To try again, tap %@ in Settings, under Your language.", nameInSentence(code), downloadRow(code))
+    }
     /// Read by the English voice when no voice for `code` is installed, so it stays English
     /// out loud; `noVoiceShown` is the same line for the screen in the app's language.
     static func noVoiceLine(_ code: String) -> String {
@@ -227,21 +240,33 @@ final class YourLanguage: ObservableObject {
         downloading = c
         NSLog("YourLanguage: download requested by tap: %@", c)
         say(YourLanguageRules.downloadingLine(c))
+        let baseline = DownloadSheetWatch.stack().depth
+        let state = DownloadGuideState(DownloadGuide(start: Date().timeIntervalSince1970))
+        // Watches for Apple's download window and says where its button is (DownloadGuide).
         let progress = Task { @MainActor [weak self] in
+            var lastTop = ""
             while true {
-                try? await Task.sleep(nanoseconds: 15_000_000_000)
-                guard !Task.isCancelled, self?.downloading == c else { return }
-                say(YourLanguageRules.stillDownloadingLine(c))
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard !Task.isCancelled, !state.done, self?.downloading == c else { return }
+                let now = DownloadSheetWatch.stack()
+                if now.top != lastTop {
+                    lastTop = now.top
+                    NSLog("YourLanguage: over the app now: %@ (depth %d, was %d)", now.top, now.depth, baseline)
+                }
+                if let line = state.guide.tick(sheetShowing: now.depth > baseline, now: Date().timeIntervalSince1970) {
+                    say(DownloadGuide.text(line, code: c))
+                }
             }
         }
         Task { @MainActor in
             let ok = await YourLanguageTranslator.shared.prepare(to: c)
+            state.done = true
             progress.cancel()
             downloading = nil
             if ok { readyCodes.insert(c) }
             publish()
             NSLog("YourLanguage: download %@ ok=%d", c, ok ? 1 : 0)
-            say(ok ? YourLanguageRules.readyLine(c) : YourLanguageRules.failedLine(c))
+            say(DownloadGuide.text(state.guide.finished(ok: ok), code: c))
         }
     }
 

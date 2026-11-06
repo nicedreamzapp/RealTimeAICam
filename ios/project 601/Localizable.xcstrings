@@ -518,6 +518,28 @@
         }
       }
     },
+    "Apple opened a window to download %@, in the lower half of the screen. Tap the round download button on the right, next to the language names. With VoiceOver it may be called Arrow Down Circle." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple abrió una ventana para descargar %@, en la mitad de abajo de la pantalla. Toca el botón redondo de descarga a la derecha, junto a los nombres de los idiomas. Con VoiceOver puede llamarse Arrow Down Circle."
+          }
+        }
+      }
+    },
+    "Apple's download window closed before %@ downloaded. To try again, tap %@ in Settings, under Your language." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La ventana de descarga de Apple se cerró antes de descargar %@. Para intentarlo de nuevo, toca %@ en Ajustes, en Tu idioma."
+          }
+        }
+      }
+    },
     "Apple's translator can't do %@ on this device." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4430,6 +4452,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No se pudo abrir esa foto."
+          }
+        }
+      }
+    },
+    "The %@ download is waiting for your tap: the round download button on the right, in the lower half of the screen. If you already tapped it, it is downloading and the window closes by itself when it's done." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La descarga de %@ espera tu toque: el botón redondo de descarga a la derecha, en la mitad de abajo de la pantalla. Si ya lo tocaste, se está descargando y la ventana se cierra sola al terminar."
           }
         }
       }
