@@ -1,6 +1,6 @@
 [
   {
-    "shortDescription" : "Ultralytics YOLO26n-obb model trained on \/Users\/dtribe\/Desktop\/PROJECTS\/rtcam-money-detector\/src\/v2\/data_v2.yaml",
+    "shortDescription" : "RT Cam money detector v3 (YOLO26n-OBB): bills, corner numerals, portraits",
     "metadataOutputVersion" : "3.0",
     "outputSchema" : [
       {
@@ -81,9 +81,9 @@
       "batch" : "1",
       "head" : "OBB26",
       "com.github.apple.coremltools.version" : "9.0",
-      "names" : "{0: 'bill', 1: 'corner_1', 2: 'corner_2', 3: 'corner_5', 4: 'corner_10', 5: 'corner_20', 6: 'corner_50', 7: 'corner_100', 8: 'feature_1', 9: 'feature_2', 10: 'feature_5', 11: 'feature_10', 12: 'feature_20', 13: 'feature_50', 14: 'feature_100'}",
-      "imgsz" : "[640, 640]",
       "docs" : "https:\/\/docs.ultralytics.com",
+      "imgsz" : "[640, 640]",
+      "names" : "{0: 'bill', 1: 'corner_1', 2: 'corner_2', 3: 'corner_5', 4: 'corner_10', 5: 'corner_20', 6: 'corner_50', 7: 'corner_100', 8: 'feature_1', 9: 'feature_2', 10: 'feature_5', 11: 'feature_10', 12: 'feature_20', 13: 'feature_50', 14: 'feature_100'}",
       "channels" : "3",
       "com.github.apple.coremltools.conversion_date" : "2026-11-05",
       "stride" : "32",

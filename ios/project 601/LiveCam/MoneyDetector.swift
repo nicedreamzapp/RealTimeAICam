@@ -58,6 +58,23 @@ enum MoneyDetector {
         if let c = cached { return c }
         let m = load(from: searchFolders()); cached = .some(m); return m
     }
+    /// When Live Cam opens (off the main thread): both models loaded and run once on a blank picture, so the first
+    /// money question doesn't wait on the load or the Neural Engine's first compile. Also removes the download
+    /// folder earlier test builds left behind (the models are built in now).
+    static func warmUp() {
+        if let support = try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false) {
+            let old = support.appendingPathComponent("MoneyModels", isDirectory: true)
+            if FileManager.default.fileExists(atPath: old.path) { try? FileManager.default.removeItem(at: old) }
+        }
+        guard let m = models,
+              let ctx = CGContext(data: nil, width: 64, height: 48, bitsPerComponent: 8, bytesPerRow: 256,
+                                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+        ctx.setFillColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1); ctx.fill(CGRect(x: 0, y: 0, width: 64, height: 48))
+        guard let img = ctx.makeImage() else { return }
+        _ = detect(img, models: m)
+        autoreleasepool { _ = look(CIImage(cgImage: img), (32, 24, 64, 48, 0), 48, m) }
+    }
+
     /// Look for the models again on the next money question (tests).
     static func reload() { cacheLock.lock(); cached = nil; cacheLock.unlock() }
 
@@ -221,9 +238,10 @@ enum MoneyDetector {
     /// What one look found: the bills, and whether anything in the frame still suggests money when no bill was
     /// found (a weak or vetoed bill box, a numeral, or the classifier on the whole frame), so "no bills" is never
     /// said about a frame that may hold money.
-    /// `droppedReflection`: a box was left out as a bill's mirror image, so a real bill may be missing too: the
-    /// count is then a floor, never a total.
-    struct Detection { var found: [Found]; var maybeMoney: Bool; var droppedReflection = false }
+    /// A box lying where `found[partner]`'s mirror image would (a glossy table): `clear` when its pixels are a
+    /// fainter flipped copy.
+    struct Mirror { var bill: Found; var partner: Int; var clear: Bool }
+    struct Detection { var found: [Found]; var maybeMoney: Bool; var mirrors: [Mirror] = [] }
 
     /// Debug trace (MONEY_TRACE=1 on the Mac replay, or a test's own sink).
     nonisolated(unsafe) static var traceSink: ((String) -> Void)?
@@ -294,36 +312,28 @@ enum MoneyDetector {
         let c = config
         var found: [Found] = []
         var kept: [Det] = []
-        var dropped = false
+        var mirrors: [Mirror] = []
         for (d, votes, merged) in billsMerged(dets, c) {
             let probs = look(src, d.box, H, m)
             let (keep, val, lk) = value(votes: votes, probs: probs, c)
             guard keep else { continue }
-            // A bill's mirror image on a glossy table (CC0 xh_18: one $1 counted as three) is not a bill.
-            // Where a kept bill's mirror image would lie: the pixels decide. A clear mirror is dropped (and the count
-            // becomes a floor); a clear real bill (two $20s edge to edge) is kept as it is; anything between is kept
-            // but never named or counted as sure.
-            var isMirror = false, maybeMirror = false
-            for k in kept where mirrorGeometry(k, d) {
-                switch mirrorVerdict(k, d, in: src, H) {
-                case .mirror: isMirror = true
-                case .unsure: maybeMirror = true
-                case .real: break
-                }
-                if isMirror { break }
-            }
-            if isMirror { dropped = true; continue }
-            if traceOn { for k in kept { trace("MONEY_TRACE refl? \(reflectionTrace(k, d, src, H))") } }
-            kept.append(d)
             let q = LiveMoney.Quad(corners: d.poly.map { CGPoint(x: $0.x, y: H - $0.y) })
             // Sure of it as a bill only when the classifier also sees money in it (phone run 11/6, CC0 xh_18: a
             // patch of brick wall boxed at 0.5+ made "at least 2" of one $1).
             let looksLikeMoney = probs["none", default: 1] < 0.5 && (lk.1 >= 0.5)
             if traceOn { trace(String(format: "MONEY_TRACE bill conf=%.2f none=%.2f top=%@ %.2f", d.conf, probs["none", default: -1], "\(lk.0 ?? 0)", lk.1)) }
-            found.append(Found(quad: q, conf: d.conf, value: maybeMirror ? nil : val, look: lk, numerals: votes,
-                               sure: d.conf >= sureConf && !merged && !maybeMirror && looksLikeMoney))
+            let f = Found(quad: q, conf: d.conf, value: val, look: lk, numerals: votes, sure: d.conf >= sureConf && !merged && looksLikeMoney)
+            // Where a kept bill's mirror image would lie (CC0 xh_18: a $1 on a glossy table). It is set aside, and
+            // LiveMoney keeps it as a bill only when it reads a different value or its own serial number.
+            if let k = kept.firstIndex(where: { mirrorGeometry($0, d) }) {
+                if traceOn { trace("MONEY_TRACE refl? \(reflectionTrace(kept[k], d, src, H))") }
+                mirrors.append(Mirror(bill: f, partner: k, clear: mirrorVerdict(kept[k], d, in: src, H) == .mirror))
+                continue
+            }
+            kept.append(d)
+            found.append(f)
         }
-        var maybe = !found.isEmpty
+        var maybe = !found.isEmpty || !mirrors.isEmpty
         if !maybe {
             maybe = dets.contains { ($0.cls == 0 && $0.conf >= 0.1) || ($0.cls != 0 && $0.conf >= 0.25) }
             if !maybe {
@@ -335,7 +345,7 @@ enum MoneyDetector {
             let b = dets.filter { $0.cls == 0 && $0.conf >= c.billConf }
             trace("MONEY_TRACE raw=\(raw.count) nms=\(dets.count) bills>=conf=\(b.count) kept=\(bills(dets, c).count) found=\(found.count) confs=\(b.map { String(format: "%.2f", $0.conf) })")
         }
-        return Detection(found: found, maybeMoney: maybe, droppedReflection: dropped)
+        return Detection(found: found, maybeMoney: maybe, mirrors: mirrors)
     }
 
     /// `b` is the mirror image of `a`: about the same size and angle, lying against `a`'s long side, and its crop

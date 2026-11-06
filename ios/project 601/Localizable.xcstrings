@@ -1497,6 +1497,17 @@
         }
       }
     },
+    "Downloading, %ld percent." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descargando, %ld por ciento."
+          }
+        }
+      }
+    },
     "Ended" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2340,6 +2351,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Idioma"
+          }
+        }
+      }
+    },
+    "Let me count." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déjame contar."
           }
         }
       }
@@ -5585,17 +5607,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "🤏 Pellizca para hacer zoom"
-          }
-        }
-      }
-    },
-    "Let me count." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Déjame contar."
           }
         }
       }

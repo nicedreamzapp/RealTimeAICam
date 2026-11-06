@@ -616,6 +616,24 @@ enum LiveMoney {
         }
     }
 
+    /// Boxes lying where a bill's mirror image would (a glossy table). One is a real bill only when it reads a
+    /// different value from its partner or carries a serial of its own (mirrored print can't be read); otherwise it
+    /// is a reflection and left out. Leaving one out adds doubt only when it was ambiguous (not a clearly fainter,
+    /// flipped copy): then a real bill may be missing, so the count is a floor.
+    static func resolveMirrors(_ found: [MoneyDetector.Found], _ mirrors: [MoneyDetector.Mirror], serials: [Serial])
+        -> (found: [MoneyDetector.Found], ambiguous: Bool) {
+        var out = found, ambiguous = false
+        for m in mirrors {
+            let partner = found[m.partner]
+            let theirs = Set(serials.filter { partner.quad.contains($0.at) }.map(\.text))
+            let own = serials.filter { m.bill.quad.contains($0.at) && !partner.quad.contains($0.at) }.map(\.text)
+            let differentValue = m.bill.value != nil && partner.value != nil && m.bill.value != partner.value
+            if differentValue || own.contains(where: { !theirs.contains($0) }) { out.append(m.bill); continue }
+            if !m.clear { ambiguous = true }
+        }
+        return (out, ambiguous)
+    }
+
     /// A box left out as a mirror image: a real bill may be missing too, so the count is a floor, never a total.
     static func floorIfReflectionDropped(_ c: inout Count, _ dropped: Bool) {
         if dropped, !c.doubts.contains(.countUnsure) { c.doubts.append(.countUnsure) }
@@ -960,13 +978,13 @@ enum LiveMoney {
         // too), and its boxes are the count. The patch and rectangle search below is then skipped, and the reader
         // reads only inside the boxes. Without the models, the search runs as before.
         let detection = MoneyDetector.detect(image)
-        let boxed = detection?.found
-        let blobs = boxed == nil ? paperBlobs(in: image) : []
+        let detected = detection.map { $0.found.map(\.quad) + $0.mirrors.map(\.bill.quad) }   // incl. mirror-position boxes
+        let blobs = detection == nil ? paperBlobs(in: image) : []
         var single = blobs.filter(\.billLike)
         // Bills Vision finds by their straight edges that no pale patch already covers (a bill on a pale table,
         // or one the patch search cut in two).
         let area = CGFloat(image.width * image.height)
-        for q in boxed == nil ? bills(from: rectangles(in: image), frameArea: area) : []
+        for q in detection == nil ? bills(from: rectangles(in: image), frameArea: area) : []
         where !single.contains(where: { q.covered(by: $0.quad) > 0.4 || $0.quad.covered(by: q) > 0.4 }) {
             let edge = q.touchesEdge(width: CGFloat(image.width), height: CGFloat(image.height), margin: CGFloat(min(image.width, image.height)) * 0.01)
             single.append(Blob(quad: q, pixels: Int(q.area * pow(360 / CGFloat(max(image.width, image.height)), 2)), fill: 1, billLike: true, atEdge: edge))
@@ -987,8 +1005,11 @@ enum LiveMoney {
         // Detector path: serials are read only inside the detected bills' area (11/6 review: the whole frame both
         // ways up cost seconds a look).
         // Nothing detected: no serial pass at all (the money-words check below is the one OCR of an empty frame).
-        let frameSerials = boxed.map { b in b.isEmpty ? [] : serialArea(b.map(\.quad), width: CGFloat(image.width), height: CGFloat(image.height)).map { _ in serialsInFrame(image, within: b.map(\.quad)) } ?? serialsInFrame(image) }
+        let frameSerials = detected.map { b in b.isEmpty ? [] : serialArea(b, width: CGFloat(image.width), height: CGFloat(image.height)).map { _ in serialsInFrame(image, within: b) } ?? serialsInFrame(image) }
             ?? serialsInFrame(image)
+        // Mirror-position boxes: a bill only with a different value or its own serial; otherwise a reflection.
+        let resolved = detection.map { resolveMirrors($0.found, $0.mirrors, serials: frameSerials) }
+        let boxed = resolved?.found
         func read(_ crop: CGImage) -> (Int?, [String: Any]) {
             let (lines, upright) = printedTextAndWayUp(crop)
             let (word, numeral) = ocrVotes(lines)
@@ -1149,7 +1170,7 @@ enum LiveMoney {
         let unseen = smoothMoney.contains { q in !kept.contains { q.covered(by: $0.quad) > 0.2 || $0.quad.covered(by: q) > 0.2 } }
         let missed = !stray.isEmpty || unseen || (modelCount.map { $0 > kept.count } ?? false)
         var c = count(kept, moreSeen: missed, pile: anyPile ? pileValues : nil, boxed: boxed != nil)
-        floorIfReflectionDropped(&c, detection?.droppedReflection == true)
+        floorIfReflectionDropped(&c, resolved?.ambiguous == true)
         // No bill found, but something still looks like money: never "no money" (CC0 xh_10, xh_25).
         if let detection, kept.isEmpty, let i = c.doubts.firstIndex(of: .none),
            detection.maybeMoney || moneyWords(in: image) { c.doubts[i] = .unclear }

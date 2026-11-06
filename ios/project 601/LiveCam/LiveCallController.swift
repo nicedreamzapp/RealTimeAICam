@@ -135,6 +135,7 @@ final class LiveCallController: ObservableObject {
         guard !running else { return }
         running = true
         moneyMemory.forget()   // a new call never answers from an old count
+        Task.detached(priority: .utility) { MoneyDetector.warmUp() }   // both money models loaded off the main thread
         UIApplication.shared.isIdleTimerDisabled = true
         watch.enabled = proactiveOn
         LiveCamTest.beginSession()
