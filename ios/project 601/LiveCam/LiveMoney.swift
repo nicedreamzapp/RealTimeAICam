@@ -632,6 +632,11 @@ enum LiveMoney {
         return out
     }
 
+    /// A clear mirror left out that reads a different value from its kept bill: it may be a real bill after all (a
+    /// real $10 against a $1 must never come out as "That's $1"), so the count becomes "At least".
+    static func mirrorDoubt(_ found: [MoneyDetector.Found], _ mirrors: [MoneyDetector.Mirror]) -> Bool {
+        mirrors.contains { m in m.clear && m.bill.value != nil && m.bill.value != found[m.partner].value }
+    }
 
     /// Printed money words or a serial number anywhere in the frame ("THE UNITED STATES", "DOLLARS", "L89823401J"):
     /// only asked when the detector found no bill, so a rolled or crumpled bill (CC0 xh_25) is never "no money".
@@ -1163,6 +1168,7 @@ enum LiveMoney {
         let unseen = smoothMoney.contains { q in !kept.contains { q.covered(by: $0.quad) > 0.2 || $0.quad.covered(by: q) > 0.2 } }
         let missed = !stray.isEmpty || unseen || (modelCount.map { $0 > kept.count } ?? false)
         var c = count(kept, moreSeen: missed, pile: anyPile ? pileValues : nil, boxed: boxed != nil)
+        if let detection, mirrorDoubt(detection.found, detection.mirrors), !c.doubts.contains(.countUnsure) { c.doubts.append(.countUnsure) }
         // No bill found, but something still looks like money: never "no money" (CC0 xh_10, xh_25).
         if let detection, kept.isEmpty, let i = c.doubts.firstIndex(of: .none),
            detection.maybeMoney || moneyWords(in: image) { c.doubts[i] = .unclear }

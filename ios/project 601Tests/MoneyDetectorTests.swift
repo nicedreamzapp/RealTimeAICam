@@ -367,14 +367,25 @@ final class LinesBox: @unchecked Sendable { private let l = NSLock(); private va
         MoneyDetector.reload()
         guard MoneyDetector.models != nil, let img = Self.image("MoneyCC0-xh18-one-dollar-reflection") else { Issue.record("no models"); return }
         for _ in 0 ..< 10 { _ = LiveMoney.countBurst(maxFrames: 2, frame: { img }, ask: nil) }   // warm up
-        var xs: [Double] = [], ys: [Double] = []
-        for k in 0 ..< 50 {
+        var ys: [Double] = []
+        for _ in 0 ..< 80 {
             _ = LiveMoney.countBurst(maxFrames: 2, frame: { img }, ask: nil)
-            xs.append(Double(k)); ys.append(Self.footprintMB())
+            ys.append(Self.footprintMB())
         }
-        let slope = Self.slope(xs, ys)
-        // A leak of even 0.5 MB an answer would be 25 MB over these 50 and climb without end.
+        let slope = Self.robustSlope(ys)
+        // A leak of even 0.5 MB an answer would be 40 MB over these 80 and climb without end.
         #expect(slope < 0.5, "slope \(slope) MB per answer, \(Int(ys.first ?? 0)) -> \(Int(ys.last ?? 0)) MB")
+    }
+
+    /// Theil-Sen slope: the median of the slopes between every pair of answers. Swings and spikes don't move it; a
+    /// steady leak moves every pair. Simulated with +-25 MB swings over 80 answers: no false alarm and no missed
+    /// 0.8 MB-per-answer leak in 1,000 runs each (the plain least-squares slope over 50 tripped ~2-3% of runs).
+    static func robustSlope(_ ys: [Double]) -> Double {
+        var s: [Double] = []
+        for i in ys.indices { for j in ys.indices where j > i { s.append((ys[j] - ys[i]) / Double(j - i)) } }
+        guard !s.isEmpty else { return 0 }
+        s.sort()
+        return s.count % 2 == 1 ? s[s.count / 2] : (s[s.count / 2 - 1] + s[s.count / 2]) / 2
     }
 
     /// Least-squares slope of y over x.
@@ -391,6 +402,14 @@ final class LinesBox: @unchecked Sendable { private let l = NSLock(); private va
         let leak = x.map { 200 + 0.8 * $0 }
         #expect(abs(Self.slope(x, swings)) < 0.5)
         #expect(Self.slope(x, leak) > 0.5)
+        // The robust slope: big swings and one jump don't trip it; a 0.8 MB-per-answer leak always does.
+        var noisy: [Double] = []
+        for i in 0 ..< 80 { noisy.append(200 + (i % 3 == 0 ? 30 : i % 3 == 1 ? -20 : 5)) }
+        noisy[45] += 60   // one spike
+        #expect(abs(Self.robustSlope(noisy)) < 0.5)
+        var leaking: [Double] = []
+        for i in 0 ..< 80 { leaking.append(200 + 0.8 * Double(i) + (i % 2 == 0 ? 25 : -25)) }
+        #expect(Self.robustSlope(leaking) > 0.5)
     }
 }
 
@@ -429,18 +448,24 @@ struct MoneyMirrorResolveTests {
         MoneyDetector.Found(quad: LiveMoneyGroupingTests.bill(x, y, scale: 2), conf: 0.95, value: v, look: (v, 0.95), numerals: [:], sure: true)
     }
     /// What Live Cam says for these boxes, with the floor worked out as `look` does (bills it is sure of).
-    static func say(_ f: [MoneyDetector.Found]) -> String {
+    static func say(_ f: [MoneyDetector.Found], doubt: Bool = false) -> String {
         let bills = f.map { LiveMoney.Bill(quad: $0.quad, value: $0.mirror ? nil : $0.value, cutOff: false, sure: $0.sure, mirror: $0.mirror) }
         var c = LiveMoney.count(bills, boxed: true)
+        if doubt, !c.doubts.contains(.countUnsure) { c.doubts.append(.countUnsure) }
         c.atLeast = max(bills.filter(\.sure).count, bills.filter { $0.value != nil }.count)
         return LiveMoney.sentence(c)
     }
 
     @Test func aReflectedOneMisreadAsTenIsNotEleven() {
+        // The mirror reads $10 against a $1: never "$11", and never "That's $1" either (it may be a real $10).
         let real = Self.found(400, 400, 1), reflection = Self.found(400, 260, 10)
-        let s = Self.say(LiveMoney.resolveMirrors([real], [MoneyDetector.Mirror(bill: reflection, partner: 0, clear: true)]))
-        #expect(s == "1 bill. I can read a $1. That's $1.")
-        #expect(!s.contains("$11"))
+        let mirrors = [MoneyDetector.Mirror(bill: reflection, partner: 0, clear: true)]
+        let s = Self.say(LiveMoney.resolveMirrors([real], mirrors), doubt: LiveMoney.mirrorDoubt([real], mirrors))
+        #expect(!s.contains("$11") && !s.contains("That's"), "\(s)")
+        #expect(s.hasPrefix("At least 1 bill."), "\(s)")
+        // The same clear mirror reading the same value adds no doubt: "$1".
+        let same = [MoneyDetector.Mirror(bill: Self.found(400, 260, 1), partner: 0, clear: true)]
+        #expect(!LiveMoney.mirrorDoubt([real], same))
     }
 
     @Test func aGlareFreeReflectionOutscoringTheRealBillIsNotTwoDollars() {
