@@ -10,7 +10,7 @@ enum UICue {
     /// Looked up by key when said (`line`), not through L() at the call. Listed through L()
     /// here only so ios/tools/es-strings.py counts them; never read at run time. A Spanish app
     /// said both in English with the Spanish voice until they were in the catalog (2026-11-05).
-    static let keysSaidByKey = [L("Home"), L("Point the camera at some text")]
+    static var keysSaidByKey: [String] { [L("Home"), L("Point the camera at some text")] }
     /// How long Read waits after opening before its hint, so text found right away wins.
     static let readHintDelay: TimeInterval = 1.2
     /// After "Home", the pause before VoiceOver's focus moves to Settings (which cuts speech off).
@@ -41,7 +41,12 @@ enum UICue {
     /// language in another language still goes through the translator. Same as Android cue().
     static func line(_ english: String) async -> (text: String, lang: String) {
         let app = AppLang.code
-        if app != AppLang.english { return (AppLang.text(english, in: app), app) }
+        if app != AppLang.english {
+            // A cue with no Spanish entry is said in English by an English voice, never English
+            // words in the Spanish voice (2026-11-05 review).
+            guard AppLang.hasSpanish(english) else { return (english, AppLang.english) }
+            return (AppLang.text(english, in: app), app)
+        }
         if YourLanguage.activeCode == YourLanguageRules.english { return (english, YourLanguageRules.english) }
         return await YourLanguage.intoActive(english)
     }

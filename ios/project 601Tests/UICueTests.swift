@@ -52,5 +52,9 @@ final class UICueTests: XCTestCase {
         let home = await UICue.line(UICue.home)
         XCTAssertEqual(home.text, "Inicio")
         XCTAssertEqual(home.lang, "es")
+        // A cue the catalog lacks: English words get the English voice, not the Spanish one.
+        let missing = await UICue.line("A cue with no Spanish yet")
+        XCTAssertEqual(missing.text, "A cue with no Spanish yet")
+        XCTAssertEqual(missing.lang, "en")
     }
 }
