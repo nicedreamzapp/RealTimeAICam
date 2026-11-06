@@ -520,10 +520,15 @@ final class LiveCallController: ObservableObject {
         switch LiveMoney.route(q, last: moneyMemory.recent()) {
         case .fromLastCount:
             guard let last = moneyMemory.recent() else { break }
-            let line = LiveMoney.followUp(q, last: last, lang: moneyLang)
-            log(["event": "money_follow_up", "question": q, "answer": line])
-            memory.note(question: q, answer: line)
-            speakAll(line)
+            let english = LiveMoney.followUp(q, last: last)
+            let line = moneyLang == .en ? english : LiveMoney.followUp(q, last: last, lang: moneyLang)
+            log(["event": "money_follow_up", "question": q, "answer": english])
+            memory.note(question: q, answer: english)
+            turn += 1
+            answerDone = true
+            phase = .speaking
+            listener.watchForBargeIn(true)
+            sayMoney(line, english: english)
             lastUsedPhoto = true
             return
         case .countAgain:
@@ -561,18 +566,19 @@ final class LiveCallController: ObservableObject {
 
     private var moneyMemory = MoneyMemory()
 
-    /// The language money answers are written in. This branch speaks every answer through `voice.say`, which
-    /// puts English into Your language, so it stays English here. MERGE NOTE (spanish-ui): use
-    /// `MoneyLang.from(AppLang.code)` and say the line as the app's own words in that language
-    /// (`voice.sayLine(line, lang: AppLang.code, english: englishLine)`), with "Let me count." through `sayOwn`.
-    private var moneyLang: MoneyLang { .en }
+    /// Money answers are the app's own words (LiveLine.own): said in the app language. Their numbers and plurals
+    /// are built in code, so the Spanish comes from MoneyWordsES rather than the string catalog.
+    private var moneyLang: MoneyLang { MoneyLang.from(AppLang.code) }
+    private func sayMoney(_ line: String, english: String) {
+        if moneyLang == .en { voice.sayOwn(english) } else { voice.sayLine(line, lang: AppLang.code, english: english) }
+    }
 
     /// Counts the bills in view: the full camera frame (1280 x 720, not the 512 px look), each bill found and read
     /// on its own, the total added in code. One frame, a second only if a bill couldn't be read.
     private func countMoney(_ q: String) {
-        guard let engine else { speakAll("I'm still getting ready. Ask me again in a second."); return }
+        guard let engine else { speakAll(own: LiveCamWords.stillGettingReady); return }
         if UIApplication.shared.applicationState != .active {
-            speakAll("I can't see while the phone is locked or another app is open. Open RealTime AI Cam again and ask me.")
+            speakAll(own: LiveCamWords.cantSeeInBackground)
             return
         }
         current?.cancel()
@@ -586,7 +592,7 @@ final class LiveCallController: ObservableObject {
         phase = .thinking
         listener.stopListening()
         listener.watchForBargeIn(true)
-        voice.say("Let me count.")
+        voice.sayOwn("Let me count.")
         phase = .speaking
         modelBusy = true
         let camera = camera
@@ -615,12 +621,15 @@ final class LiveCallController: ObservableObject {
                 if self.current === box || self.current == nil { self.modelBusy = false }
                 if self.current === box { self.current = nil }
                 guard box.isAlive, self.running, self.turn == my else { return }
-                let line = LiveMoney.sentence(count, lang: self.moneyLang)
-                self.log(["event": "money_answer", "question": q, "answer": line, "sure": count.sure, "total": count.total,
+                let english = LiveMoney.sentence(count)
+                let line = self.moneyLang == .en ? english : LiveMoney.sentence(count, lang: self.moneyLang)
+                self.log(["event": "money_answer", "question": q, "answer": english, "sure": count.sure, "total": count.total,
                           "seconds": Date().timeIntervalSince(asked)])
                 if !count.doubts.contains(.noCamera) { self.moneyMemory.note(count) }
-                self.memory.note(question: q, answer: line)
-                self.sayPart(line, turn: my)
+                self.memory.note(question: q, answer: english)
+                self.phase = .speaking
+                self.listener.watchForBargeIn(true)
+                self.sayMoney(line, english: english)
                 self.answerDone = true
                 if !self.voice.isBusy { self.wentQuiet() }
             }

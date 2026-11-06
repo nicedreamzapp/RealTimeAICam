@@ -5599,6 +5599,17 @@
           }
         }
       }
+    },
+    "Let me count." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déjame contar."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

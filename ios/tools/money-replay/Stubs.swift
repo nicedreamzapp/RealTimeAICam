@@ -15,3 +15,5 @@ enum VisionModelStore {
   static func isInstalled(_ l: ModelLevel) -> Bool { true }
 }
 enum ModelPicker { static func level(for: PhotoKind) -> ModelLevel { .balanced } }
+// spanish-ui (11/6): LiveBrain's LiveLine names the English code.
+enum YourLanguageRules { static let english = "en" }
