@@ -619,8 +619,8 @@ class AimPipeline(
         val start = SystemClock.elapsedRealtime()
         // The description may still be in the translator: wait for the voice to start...
         // (A first translation can take several seconds; saying the line sooner would cut the
-        // description off before it is heard.)
-        while (!speaker.speakingNow.value && SystemClock.elapsedRealtime() - start < 20_000) delay(50)
+        // description off. Capped at 8 s so a description that never comes is not long silence.)
+        while (!speaker.speakingNow.value && SystemClock.elapsedRealtime() - start < 8_000) delay(50)
         // ...and to finish.
         while (speaker.speakingNow.value && SystemClock.elapsedRealtime() - start < 180_000) delay(100)
         if (shot != shotNumber) return

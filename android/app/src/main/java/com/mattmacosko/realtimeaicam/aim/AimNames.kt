@@ -64,13 +64,16 @@ object AimNames {
         // A miss (no Spanish pack, or asked on the main thread) is not asked again for a while:
         // the camera path builds these lines every frame.
         val now = System.nanoTime() / 1_000_000
-        missed[key]?.let { if (now - it < MISS_RETRY_MS) return null }
+        missed[key]?.let { if (now - it < MISS_RETRY_MS) return null else missed.remove(key) }
         val t = translate ?: return null
+        // On the main thread the hook declines without trying (no blocking there): that is not a
+        // miss, or warm() right after on a worker would be skipped.
+        val onMain = Thread.currentThread().name == "main"
         val raw = t(phrase, lang)
-        if (raw == null) { missed[key] = now; return null }
+        if (raw == null) { if (!onMain) missed[key] = now; return null }
         val clean = if (bare) ObjectLabelTranslations.cleanOutput(raw, lang) else ObjectLabelTranslations.cleanOutput(raw)
         val out = clean.trim().trimEnd('.', '!', '?')
-        if (out.isEmpty()) return null
+        if (out.isEmpty()) { missed[key] = now; return null }
         cache[key] = out
         return out
     }
