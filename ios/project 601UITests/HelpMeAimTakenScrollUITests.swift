@@ -19,7 +19,7 @@ final class HelpMeAimTakenScrollUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments += ["-hasShownInstructions", "YES", "-aimPreviewTaken"]
         app.launch()
-        let home = app.buttons["Help Me Aim"].firstMatch
+        let home = app.buttons[T("Help Me Aim")].firstMatch
         XCTAssertTrue(home.waitForExistence(timeout: 20), "Help Me Aim home button not found")
         sleep(3)
         home.tap()
@@ -33,7 +33,7 @@ final class HelpMeAimTakenScrollUITests: XCTestCase {
         app.swipeUp()
         sleep(1)
         keep(app.screenshot())
-        let back = app.buttons["Back"].firstMatch
+        let back = app.buttons[T("Back")].firstMatch
         XCTAssertTrue(back.exists && back.isHittable, "Back button not reachable after scrolling")
         let frame = text.frame
         let screen = app.windows.firstMatch.frame

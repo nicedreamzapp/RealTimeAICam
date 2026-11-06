@@ -26,7 +26,7 @@ final class ShotTests: XCTestCase {
         sleep(4)
 
         // First launch shows the instructions sheet.
-        let done = app.buttons["Done"].firstMatch
+        let done = app.buttons[T("Done")].firstMatch
         if done.waitForExistence(timeout: 8) {
             done.tap()
             sleep(2)
@@ -46,11 +46,11 @@ final class ShotTests: XCTestCase {
         }
 
         // English reader, fed from a picture already on the iPad.
-        let english = app.buttons["Read"].firstMatch
+        let english = app.buttons[T("Read")].firstMatch
         if english.waitForExistence(timeout: 8) {
             english.tap()
             sleep(4)
-            let library = app.buttons["Describe a photo from my library"].firstMatch
+            let library = app.buttons[T("Describe a photo from my library")].firstMatch
             if library.waitForExistence(timeout: 8) {
                 library.tap()
                 sleep(5)
@@ -60,7 +60,7 @@ final class ShotTests: XCTestCase {
             } else {
                 save("english-reader")
             }
-            let back = app.buttons["Back"].firstMatch
+            let back = app.buttons[T("Back")].firstMatch
             if back.waitForExistence(timeout: 5) { back.tap(); sleep(3) }
         }
 
@@ -69,7 +69,7 @@ final class ShotTests: XCTestCase {
         if spanish.waitForExistence(timeout: 8) {
             spanish.tap()
             sleep(4)
-            let library = app.buttons["Describe a photo from my library"].firstMatch
+            let library = app.buttons[T("Describe a photo from my library")].firstMatch
             if library.waitForExistence(timeout: 8) {
                 library.tap()
                 sleep(5)
@@ -77,17 +77,17 @@ final class ShotTests: XCTestCase {
                 sleep(12)
                 save("spanish-menu")
             }
-            let back = app.buttons["Back"].firstMatch
+            let back = app.buttons[T("Back")].firstMatch
             if back.waitForExistence(timeout: 5) { back.tap(); sleep(3) }
         }
 
         // "What's this?" — the mode that puts the answer on screen as well as
         // speaking it, so the shot shows the app having read something.
-        let whats = app.buttons["What's this?"].firstMatch
+        let whats = app.buttons[T("What's this?")].firstMatch
         if whats.waitForExistence(timeout: 8) {
             whats.tap()
             sleep(4)
-            let library = app.buttons["Describe a photo from my library"].firstMatch
+            let library = app.buttons[T("Describe a photo from my library")].firstMatch
             if library.waitForExistence(timeout: 8) {
                 library.tap()
                 sleep(5)
@@ -95,7 +95,7 @@ final class ShotTests: XCTestCase {
                 sleep(14)
                 save("whats-this")
             }
-            let back = app.buttons["Back"].firstMatch
+            let back = app.buttons[T("Back")].firstMatch
             if back.waitForExistence(timeout: 5) { back.tap(); sleep(3) }
         }
 

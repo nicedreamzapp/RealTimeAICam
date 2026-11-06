@@ -13,7 +13,7 @@ final class ReadModeUITests: XCTestCase {
         let home = app.buttons[name].firstMatch
         XCTAssertTrue(home.waitForExistence(timeout: 30), "no \(name) on home")
         home.tap()
-        let button = app.buttons["readModeButton"].firstMatch
+        let button = app.buttons[T("readModeButton")].firstMatch
         XCTAssertTrue(button.waitForExistence(timeout: 15), "no read mode button in \(name)")
         return button
     }
@@ -33,9 +33,9 @@ final class ReadModeUITests: XCTestCase {
 
         // 1. Cycle through all three, in order, label stays "Read mode".
         var app = launch()
-        var button = openReader(app, "Read")
-        XCTAssertEqual(button.label, "Read mode")
-        let order = ["Tap to read", "Auto read", "Mute"]
+        var button = openReader(app, T("Read"))
+        XCTAssertEqual(button.label, T("Read mode"))
+        let order = ["Tap to read", "Auto read", "Mute"].map { T($0) }
         var seen: [String] = [button.value as? String ?? ""]
         for _ in 0..<3 {
             button.tap()
@@ -47,13 +47,13 @@ final class ReadModeUITests: XCTestCase {
         XCTAssertNotEqual(start, -1, "unknown start value \(seen[0])")
         for i in 0..<4 { XCTAssertEqual(seen[i], order[(start + i) % 3], "step \(i)") }
         // Leave it on Auto read.
-        while (button.value as? String) != "Auto read" { button.tap(); sleep(2) }
+        while (button.value as? String) != T("Auto read") { button.tap(); sleep(2) }
 
         // 2. Persists across a relaunch.
         app.terminate()
         app = launch()
-        button = openReader(app, "Read")
-        XCTAssertEqual(button.value as? String, "Auto read", "mode did not survive relaunch")
+        button = openReader(app, T("Read"))
+        XCTAssertEqual(button.value as? String, T("Auto read"), "mode did not survive relaunch")
         print("READMODE_PERSISTED \(button.value ?? "")")
         app.terminate()
 
@@ -73,7 +73,7 @@ final class ReadModeUITests: XCTestCase {
             "0.6::Thank you for shopping with us", "0.6::Thank you for shopping with us",
         ].joined(separator: "||")
         app = launch(["RTCAM_FAKE_OCR": wobble])
-        _ = openReader(app, "Read")
+        _ = openReader(app, T("Read"))
         sleep(30)
         XCTAssertEqual(app.state, .runningForeground)
         app.terminate()
@@ -84,13 +84,13 @@ final class ReadModeUITests: XCTestCase {
             "0.6::Salida de emergencia", "0.6::Salida de emergencia",
         ].joined(separator: "||") + "||" + Array(repeating: "0.6::Prohibido fumar", count: 10).joined(separator: "||")
         app = launch(["RTCAM_FAKE_OCR_TRANSLATE": spanish], translating: true)
-        _ = openReader(app, "Read")
+        _ = openReader(app, T("Read"))
         sleep(25)
         XCTAssertEqual(app.state, .runningForeground)
 
         // 5. Back to Auto read (the default since 2026-11-04) for whoever uses this simulator next.
-        button = app.buttons["readModeButton"].firstMatch
-        while (button.value as? String) != "Auto read" { button.tap(); sleep(2) }
+        button = app.buttons[T("readModeButton")].firstMatch
+        while (button.value as? String) != T("Auto read") { button.tap(); sleep(2) }
         app.terminate()
     }
 }

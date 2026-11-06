@@ -72,7 +72,7 @@ final class DuoLiveFoldUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments += ["-hasShownInstructions", "YES"]
         app.launch()
-        XCTAssertTrue(app.buttons["Settings"].firstMatch.waitForExistence(timeout: 20), "home did not load")
+        XCTAssertTrue(app.buttons[T("Settings")].firstMatch.waitForExistence(timeout: 20), "home did not load")
         sleep(4) // buttons animate in
         let start = app.windows.firstMatch.frame.size
         measure(app, "start")

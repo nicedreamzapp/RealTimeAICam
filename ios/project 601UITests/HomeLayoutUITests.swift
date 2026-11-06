@@ -11,7 +11,7 @@ import XCTest
 
 final class HomeLayoutUITests: XCTestCase {
     private let order = ["Settings", "Info and guide", "Read", "Object Detection", "What's this?",
-                         "Help Me Aim", "Live Cam, experimental"]
+                         "Help Me Aim", "Live Cam, experimental"].map { T($0) }
 
     private func keep(_ shot: XCUIScreenshot, _ name: String) {
         let a = XCTAttachment(screenshot: shot)
@@ -25,7 +25,7 @@ final class HomeLayoutUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments += ["-hasShownInstructions", "YES"]
         app.launch()
-        let first = app.buttons["Settings"].firstMatch
+        let first = app.buttons[T("Settings")].firstMatch
         XCTAssertTrue(first.waitForExistence(timeout: 20), "home did not load")
         sleep(4) // buttons animate in
         keep(app.screenshot(), "home")
@@ -33,7 +33,7 @@ final class HomeLayoutUITests: XCTestCase {
 
         let items = order.map { app.buttons[$0].firstMatch }
         for (name, el) in zip(order, items) { XCTAssertTrue(el.exists, "\(name) missing") }
-        let voice = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'voice'")).firstMatch
+        let voice = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", TestLanguage.isSpanish ? "voz" : "voice")).firstMatch
         var frames = zip(order, items).map { ($0, $1.frame) }
         if voice.exists { frames.append(("Voice", voice.frame)) }
 

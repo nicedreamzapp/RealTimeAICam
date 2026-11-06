@@ -25,12 +25,12 @@ final class PlayReviewFixesUITests: XCTestCase {
     func testFreshInstallReadsAuto() throws {
         continueAfterFailure = false
         let app = launch(["-rtcamFreshReadMode"])
-        let read = app.buttons["Read"].firstMatch
+        let read = app.buttons[T("Read")].firstMatch
         XCTAssertTrue(read.waitForExistence(timeout: 30), "no Read on home")
         read.tap()
-        let button = app.buttons["readModeButton"].firstMatch
+        let button = app.buttons[T("readModeButton")].firstMatch
         XCTAssertTrue(button.waitForExistence(timeout: 15), "no read mode button")
-        XCTAssertEqual(button.value as? String, "Auto read", "a new install should start in Auto read")
+        XCTAssertEqual(button.value as? String, T("Auto read"), "a new install should start in Auto read")
         screenshot(app, "fresh-install-read-auto")
         app.terminate()
     }
@@ -39,29 +39,29 @@ final class PlayReviewFixesUITests: XCTestCase {
     func testVolumeZeroShowsNote() throws {
         continueAfterFailure = false
         let app = launch(["-rtcamFakeVolumeZero"])
-        let note = app.buttons["volumeOffNote"].firstMatch
+        let note = app.buttons[T("volumeOffNote")].firstMatch
         XCTAssertTrue(note.waitForExistence(timeout: 20), "no volume note with the volume at 0")
-        XCTAssertEqual(note.label, "Volume is off. Turn it up to hear the app.")
+        XCTAssertEqual(note.label, T("Volume is off. Turn it up to hear the app."))
         screenshot(app, "volume-off-note-home")
         // Still there on the Read screen, and the camera screen still works under it.
-        let read = app.buttons["Read"].firstMatch
+        let read = app.buttons[T("Read")].firstMatch
         if read.waitForExistence(timeout: 10), read.isHittable {
             read.tap()
-            XCTAssertTrue(app.buttons["readModeButton"].firstMatch.waitForExistence(timeout: 15))
-            XCTAssertTrue(app.buttons["volumeOffNote"].firstMatch.exists)
+            XCTAssertTrue(app.buttons[T("readModeButton")].firstMatch.waitForExistence(timeout: 15))
+            XCTAssertTrue(app.buttons[T("volumeOffNote")].firstMatch.exists)
             screenshot(app, "volume-off-note-read")
         }
         // Tapping the note hides it.
-        app.buttons["volumeOffNote"].firstMatch.tap()
-        XCTAssertFalse(app.buttons["volumeOffNote"].firstMatch.waitForExistence(timeout: 3))
+        app.buttons[T("volumeOffNote")].firstMatch.tap()
+        XCTAssertFalse(app.buttons[T("volumeOffNote")].firstMatch.waitForExistence(timeout: 3))
         app.terminate()
     }
 
     @MainActor
     func testNoNoteWithVolumeUp() throws {
         let app = launch([])
-        XCTAssertTrue(app.buttons["Read"].firstMatch.waitForExistence(timeout: 30))
-        XCTAssertFalse(app.buttons["volumeOffNote"].firstMatch.exists)
+        XCTAssertTrue(app.buttons[T("Read")].firstMatch.waitForExistence(timeout: 30))
+        XCTAssertFalse(app.buttons[T("volumeOffNote")].firstMatch.exists)
         app.terminate()
     }
 }

@@ -29,12 +29,12 @@ final class HelpMeAimLiveUITests: XCTestCase {
         app.launchArguments += ["-hasShownInstructions", "YES"]
         app.launch()
 
-        let home = app.buttons["Help Me Aim"].firstMatch
+        let home = app.buttons[T("Help Me Aim")].firstMatch
         XCTAssertTrue(home.waitForExistence(timeout: 20), "Help Me Aim home button not found")
         sleep(3) // buttons animate in
         home.tap()
 
-        let other = app.buttons["Something Else"].firstMatch
+        let other = app.buttons[T("Something Else")].firstMatch
         XCTAssertTrue(other.waitForExistence(timeout: 10), "Something Else not found")
         other.tap()
 
@@ -42,7 +42,7 @@ final class HelpMeAimLiveUITests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 10), "text field not found")
         field.tap()
         field.typeText("dog")
-        let find = app.buttons["Find"].firstMatch
+        let find = app.buttons[T("Find")].firstMatch
         XCTAssertTrue(find.waitForExistence(timeout: 5), "Find not found")
         find.tap()
 
@@ -50,7 +50,7 @@ final class HelpMeAimLiveUITests: XCTestCase {
         wait(45)
         XCTAssertEqual(app.state, .runningForeground, "app left the foreground")
 
-        let again = app.buttons["Take Another"].firstMatch
+        let again = app.buttons[T("Take Another")].firstMatch
         if again.exists {
             again.tap()
         } else {

@@ -40,8 +40,14 @@ final class YourLanguageUITests: XCTestCase {
         app.buttons.matching(NSPredicate(format: "label == %@ OR label == %@", english, spanish)).firstMatch
     }
 
-    private func openSettings(_ app: XCUIApplication) -> XCUIElement {
-        let settings = app.buttons["Settings"].firstMatch
+    /// The app's label when the app is Spanish (phone or Your language Spanish), else English,
+    /// whatever language the simulator runs these tests in.
+    private func L(_ english: String, spanish: Bool) -> String {
+        spanish ? TestLanguage.spanish(english) : english
+    }
+
+    private func openSettings(_ app: XCUIApplication, spanish: Bool = TestLanguage.isSpanish) -> XCUIElement {
+        let settings = app.buttons[L("Settings", spanish: spanish)].firstMatch
         XCTAssertTrue(settings.waitForExistence(timeout: 20), "no Settings on home")
         sleep(3)
         settings.tap()
@@ -69,11 +75,12 @@ final class YourLanguageUITests: XCTestCase {
         continueAfterFailure = false
         let spanishPhone = ["-AppleLanguages", "(es)", "-AppleLocale", "es_ES"]
         var app = launch(["-rtcamFreshYourLanguage"] + spanishPhone)
-        var picker = openSettings(app)
-        XCTAssertEqual(picker.value as? String, "Spanish", "default did not follow the phone")
+        // A Spanish phone gets the whole app in Spanish (2026-11-05).
+        var picker = openSettings(app, spanish: true)
+        XCTAssertEqual(picker.value as? String, "Español", "default did not follow the phone")
         let row = app.buttons["yourLanguageDownload"].firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5), "no download row")
-        XCTAssertEqual(row.label, "Download Spanish once, then it works offline")
+        XCTAssertEqual(row.label, "Descarga español una vez y luego funciona sin internet")
         // Nothing downloads by itself: the row stays and no names are built.
         sleep(6)
         XCTAssertTrue(row.exists, "Spanish downloaded without a tap")
@@ -90,8 +97,8 @@ final class YourLanguageUITests: XCTestCase {
 
         // Next launch: the names come from the file, no translating.
         app = launch(spanishPhone)
-        picker = openSettings(app)
-        XCTAssertEqual(picker.value as? String, "Spanish")
+        picker = openSettings(app, spanish: true)
+        XCTAssertEqual(picker.value as? String, "Español")
         XCTAssertFalse(app.buttons["yourLanguageDownload"].firstMatch.exists, "asked to download again")
         XCTAssertTrue(waitForObjectNames(app, containing: "es 605 from file", 15), "names not reused: \(objectNames(app))")
         print("YOURLANG_OBJECT_NAMES \(objectNames(app))")
@@ -104,7 +111,8 @@ final class YourLanguageUITests: XCTestCase {
     func testEnglishPhoneThenPickFrench() throws {
         continueAfterFailure = false
         let app = launch(["-rtcamFreshYourLanguage", "-AppleLanguages", "(en)"])
-        let picker = openSettings(app)
+        // English phone, Your language French: the app's own words stay English.
+        let picker = openSettings(app, spanish: false)
         XCTAssertEqual(picker.value as? String, "English")
         XCTAssertFalse(app.buttons["yourLanguageDownload"].firstMatch.exists, "English should never download")
         keep(app, "settings-english")
@@ -137,7 +145,7 @@ final class YourLanguageUITests: XCTestCase {
         sleep(3)
         read.tap()
         // The app is in Spanish now (Your language Spanish).
-        let pill = app.buttons["Idioma"].firstMatch
+        let pill = app.buttons[T("Idioma")].firstMatch
         XCTAssertTrue(pill.waitForExistence(timeout: 15), "no Language pill")
         XCTAssertEqual(pill.value as? String, "Inglés, traducido al español")
         // Tap to read: the camera "sees" Exit, then Speak translates and shows it.
@@ -151,11 +159,11 @@ final class YourLanguageUITests: XCTestCase {
 
         // A French page into Spanish: pick French on the pill.
         pill.tap()
-        let fr = app.buttons["Francés → Español"].firstMatch
+        let fr = app.buttons[T("Francés → Español")].firstMatch
         XCTAssertTrue(fr.waitForExistence(timeout: 5), "no French → Spanish in the pill menu")
         sleep(1) // the menu is still opening on a Pro Max: not hittable yet
         fr.tap()
-        let p = app.buttons["Idioma"].firstMatch
+        let p = app.buttons[T("Idioma")].firstMatch
         let deadline = Date().addingTimeInterval(10)
         while (p.value as? String) != "Francés, traducido al español", Date() < deadline { sleep(1) }
         XCTAssertEqual(p.value as? String, "Francés, traducido al español")
@@ -167,11 +175,12 @@ final class YourLanguageUITests: XCTestCase {
     @MainActor
     func testHelpMeAimTazaIsACup() throws {
         let app = launch(["-userLanguage", "es", "-fakeTranslatorPacks", "(es)"])
-        let home = app.buttons["Help Me Aim"].firstMatch
+        // Your language Spanish: the app is in Spanish.
+        let home = app.buttons[L("Help Me Aim", spanish: true)].firstMatch
         XCTAssertTrue(home.waitForExistence(timeout: 20))
         sleep(3)
         home.tap()
-        let other = app.buttons["Something Else"].firstMatch
+        let other = app.buttons[L("Something Else", spanish: true)].firstMatch
         XCTAssertTrue(other.waitForExistence(timeout: 10))
         other.tap()
         let field = app.textFields.firstMatch
@@ -181,8 +190,9 @@ final class YourLanguageUITests: XCTestCase {
         for label in ["Allow", "OK"] where springboard.buttons[label].exists { springboard.buttons[label].tap() }
         field.tap()
         field.typeText("taza")
-        app.buttons["Find"].firstMatch.tap()
-        let cup = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Camera, looking for' AND label CONTAINS 'cup'")).firstMatch
+        app.buttons[L("Find", spanish: true)].firstMatch.tap()
+        // The steering label is Spanish and names the person's own word; underneath it looks for a cup.
+        let cup = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Cámara, buscando' AND label CONTAINS[c] 'taza'")).firstMatch
         XCTAssertTrue(cup.waitForExistence(timeout: 15), "taza did not become a cup")
         print("YOURLANG_AIM \(cup.label)")
         keep(app, "aim-taza-cup")
@@ -204,14 +214,14 @@ final class YourLanguageUITests: XCTestCase {
         sleep(3)
         home.tap()
         // The app is in Spanish now (Your language Spanish).
-        let capture = app.buttons["¿Qué es esto?"].firstMatch
+        let capture = app.buttons[T("¿Qué es esto?")].firstMatch
         XCTAssertTrue(capture.waitForExistence(timeout: 15))
         sleep(2)
         capture.tap()
         let answer = app.descendants(matching: .any).matching(NSPredicate(format: "value CONTAINS 'Una taza de café blanca'")).firstMatch
         XCTAssertTrue(answer.waitForExistence(timeout: 20), "answer not in Spanish")
         keep(app, "whatsthis-es")
-        let field = app.textFields["O escribe una pregunta sobre esta foto"].firstMatch
+        let field = app.textFields[T("O escribe una pregunta sobre esta foto")].firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10), "no question field")
         field.tap()
         field.typeText("De que color es la taza\n")
@@ -229,17 +239,17 @@ final class YourLanguageUITests: XCTestCase {
         func run(_ extra: [String], shots: Int) {
             let app = launch(extra + ["-rtcamRatePromptLog", "-countdownBeforeCapture", "NO"],
                              env: ["RTCAM_FAKE_ANSWER": "A white coffee mug on a wooden table."])
-            let home = app.buttons["What's this?"].firstMatch
+            let home = app.buttons[T("What's this?")].firstMatch
             XCTAssertTrue(home.waitForExistence(timeout: 20))
             sleep(3)
             home.tap()
             for i in 0 ..< shots {
-                let capture = app.buttons["What's this?"].firstMatch
+                let capture = app.buttons[T("What's this?")].firstMatch
                 XCTAssertTrue(capture.waitForExistence(timeout: 15), "no capture button, shot \(i)")
                 sleep(1)
                 capture.tap()
                 sleep(6) // the answer is read aloud to the end
-                let next = app.buttons["Next shot"].firstMatch
+                let next = app.buttons[T("Next shot")].firstMatch
                 if next.waitForExistence(timeout: 5) { next.tap() }
                 sleep(1)
             }

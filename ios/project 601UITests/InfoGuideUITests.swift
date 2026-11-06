@@ -14,11 +14,11 @@ final class InfoGuideUITests: XCTestCase {
         app.launch()
 
         for round in 1...3 {
-            let info = app.buttons["Info and guide"].firstMatch
+            let info = app.buttons[T("Info and guide")].firstMatch
             XCTAssertTrue(info.waitForExistence(timeout: 20), "round \(round): info button not found")
             info.tap()
 
-            let play = app.buttons["Play full audio tutorial"].firstMatch
+            let play = app.buttons[T("Play full audio tutorial")].firstMatch
             XCTAssertTrue(play.waitForExistence(timeout: 10), "round \(round): guide did not open")
             XCTAssertEqual(app.state, .runningForeground, "round \(round): crashed opening the guide")
             play.tap()
@@ -27,7 +27,7 @@ final class InfoGuideUITests: XCTestCase {
             sleep(1)
             XCTAssertEqual(app.state, .runningForeground, "round \(round): crashed during the tutorial")
 
-            let done = app.buttons["Done"].firstMatch
+            let done = app.buttons[T("Done")].firstMatch
             XCTAssertTrue(done.waitForExistence(timeout: 5), "round \(round): no Done button")
             done.tap()
             sleep(2)

@@ -50,16 +50,16 @@ final class HelpMeAimVoiceUITests: XCTestCase {
     }
 
     private func camera(_ name: String) -> XCUIElement {
-        app.descendants(matching: .any)["Camera, looking for \(name)"].firstMatch
+        app.descendants(matching: .any)[T("Camera, looking for %@", T(name))].firstMatch
     }
 
-    private var listening: XCUIElement { app.buttons["Listening… tap to stop"].firstMatch }
-    private var retry: XCUIElement { app.buttons["Tap to Speak"].firstMatch }
-    private var takeAnother: XCUIElement { app.buttons["Take Another"].firstMatch }
+    private var listening: XCUIElement { app.buttons[T("Listening… tap to stop")].firstMatch }
+    private var retry: XCUIElement { app.buttons[T("Tap to Speak")].firstMatch }
+    private var takeAnother: XCUIElement { app.buttons[T("Take Another")].firstMatch }
 
     private func openHelpMeAim() {
         app.launch()
-        let home = app.buttons["Help Me Aim"].firstMatch
+        let home = app.buttons[T("Help Me Aim")].firstMatch
         XCTAssertTrue(home.waitForExistence(timeout: 20), "Help Me Aim home button not found")
         sleep(3)
         home.tap()
@@ -68,7 +68,7 @@ final class HelpMeAimVoiceUITests: XCTestCase {
 
     private func openSomethingElse() {
         openHelpMeAim()
-        let other = app.buttons["Something Else"].firstMatch
+        let other = app.buttons[T("Something Else")].firstMatch
         XCTAssertTrue(other.waitForExistence(timeout: 10), "Something Else not found")
         other.tap()
         log("tapped Something Else")
@@ -131,7 +131,7 @@ final class HelpMeAimVoiceUITests: XCTestCase {
         idle(12)
         snap("after wallet")
         let steering = app.descendants(matching: .any).matching(
-            NSPredicate(format: "label BEGINSWITH 'Camera, looking for'")).firstMatch.exists
+            NSPredicate(format: "label BEGINSWITH %@", T("Camera, looking for %@", ""))).firstMatch.exists
         log("steering = \(steering), retry visible = \(retry.exists)")
         XCTAssertFalse(steering, "should not steer for wallet")
         XCTAssertTrue(retry.exists, "should be back on the ask screen")
@@ -165,7 +165,7 @@ final class HelpMeAimVoiceUITests: XCTestCase {
         sleep(2)
         field.tap()
         field.typeText("laptop")
-        app.buttons["Find"].firstMatch.tap()
+        app.buttons[T("Find")].firstMatch.tap()
         log("typed laptop")
         let steering = waitFor(camera("a laptop"), 10)
         log("steering for a laptop = \(steering)")
@@ -177,13 +177,13 @@ final class HelpMeAimVoiceUITests: XCTestCase {
     @MainActor
     func testG_faceFrontCamera() throws {
         openHelpMeAim()
-        let face = app.buttons["Face"].firstMatch
+        let face = app.buttons[T("Face")].firstMatch
         XCTAssertTrue(face.waitForExistence(timeout: 10))
         face.tap()
         let steering = waitFor(camera("a face"), 10)
         log("steering for a face = \(steering)")
         XCTAssertTrue(steering)
-        let flip = app.buttons["Switch to front camera"].firstMatch
+        let flip = app.buttons[T("Switch to front camera")].firstMatch
         if waitFor(flip, 5) { flip.tap(); log("switched to front camera") } else { log("no camera switch button") }
         _ = waitForShot(30)
     }
@@ -192,11 +192,11 @@ final class HelpMeAimVoiceUITests: XCTestCase {
     @MainActor
     func testI_faceMattFrontCamera() throws {
         openHelpMeAim()
-        let face = app.buttons["Face"].firstMatch
+        let face = app.buttons[T("Face")].firstMatch
         XCTAssertTrue(face.waitForExistence(timeout: 10))
         face.tap()
         XCTAssertTrue(waitFor(camera("a face"), 10))
-        let flip = app.buttons["Switch to front camera"].firstMatch
+        let flip = app.buttons[T("Switch to front camera")].firstMatch
         if waitFor(flip, 5) { flip.tap(); log("switched to front camera") } else { log("no camera switch button") }
         let shot = waitForShot(35)
         XCTAssertTrue(shot, "no picture taken in 35 s")
@@ -207,7 +207,7 @@ final class HelpMeAimVoiceUITests: XCTestCase {
     @MainActor
     func testJ_faceBackCameraPhoto() throws {
         openHelpMeAim()
-        let face = app.buttons["Face"].firstMatch
+        let face = app.buttons[T("Face")].firstMatch
         XCTAssertTrue(face.waitForExistence(timeout: 10))
         face.tap()
         XCTAssertTrue(waitFor(camera("a face"), 10))
@@ -221,7 +221,7 @@ final class HelpMeAimVoiceUITests: XCTestCase {
     @MainActor
     func testK_pictureOrPage() throws {
         openHelpMeAim()
-        let page = app.buttons["Picture or Page"].firstMatch
+        let page = app.buttons[T("Picture or Page")].firstMatch
         XCTAssertTrue(page.waitForExistence(timeout: 10))
         page.tap()
         XCTAssertTrue(waitFor(camera("a picture or page"), 10))
@@ -244,10 +244,10 @@ final class HelpMeAimVoiceUITests: XCTestCase {
         sleep(1)
         field.tap()
         field.typeText(word)
-        app.buttons["Find"].firstMatch.tap()
+        app.buttons[T("Find")].firstMatch.tap()
         log("typed \(word), expecting \(expect)")
         let steering = app.descendants(matching: .any).matching(
-            NSPredicate(format: "label BEGINSWITH 'Camera, looking for'")).firstMatch
+            NSPredicate(format: "label BEGINSWITH %@", T("Camera, looking for %@", ""))).firstMatch
         let steers = waitFor(steering, 8)
         log("steering = \(steers)")
         switch expect {
@@ -282,27 +282,27 @@ final class HelpMeAimVoiceUITests: XCTestCase {
         openHelpMeAim()
         switch mode {
         case "page":
-            let b = app.buttons["Picture or Page"].firstMatch
+            let b = app.buttons[T("Picture or Page")].firstMatch
             XCTAssertTrue(b.waitForExistence(timeout: 10)); b.tap()
         case "word":
-            let b = app.buttons["Something Else"].firstMatch
+            let b = app.buttons[T("Something Else")].firstMatch
             XCTAssertTrue(b.waitForExistence(timeout: 10)); b.tap()
             let field = app.textFields.firstMatch
             XCTAssertTrue(field.waitForExistence(timeout: 10))
             sleep(1)
             field.tap()
             field.typeText(word)
-            app.buttons["Find"].firstMatch.tap()
+            app.buttons[T("Find")].firstMatch.tap()
         default:
-            let b = app.buttons["Face"].firstMatch
+            let b = app.buttons[T("Face")].firstMatch
             XCTAssertTrue(b.waitForExistence(timeout: 10)); b.tap()
         }
         let steering = app.descendants(matching: .any).matching(
-            NSPredicate(format: "label BEGINSWITH 'Camera, looking for'")).firstMatch
+            NSPredicate(format: "label BEGINSWITH %@", T("Camera, looking for %@", ""))).firstMatch
         let steers = waitFor(steering, 8)
         log("steering = \(steers)")
         if front, mode == "face" {
-            let flip = app.buttons["Switch to front camera"].firstMatch
+            let flip = app.buttons[T("Switch to front camera")].firstMatch
             if waitFor(flip, 3) { flip.tap(); log("switched to front camera") }
         }
         var shots = 0
@@ -330,7 +330,7 @@ final class HelpMeAimVoiceUITests: XCTestCase {
         sleep(2)
         field.tap()
         field.typeText("umbrella")
-        app.buttons["Find"].firstMatch.tap()
+        app.buttons[T("Find")].firstMatch.tap()
         XCTAssertTrue(waitFor(camera("an umbrella"), 10), "no steering before backgrounding")
         idle(4)
         XCUIDevice.shared.press(.home)

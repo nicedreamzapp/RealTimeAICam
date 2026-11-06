@@ -22,7 +22,7 @@ final class LensToggleUITests: XCTestCase {
 
     private func lensText(_ app: XCUIApplication) -> XCUIElement {
         app.staticTexts.containing(
-            NSPredicate(format: "label CONTAINS[c] 'ultra-wide' OR label CONTAINS[c] 'Lens Toggle'")
+            NSPredicate(format: "label CONTAINS[c] %@", T("🌐 Lens toggle, wide or ultra-wide (Object Detection)"))
         ).firstMatch
     }
 
@@ -33,18 +33,18 @@ final class LensToggleUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
 
-        let info = app.buttons["Info and guide"].firstMatch
+        let info = app.buttons[T("Info and guide")].firstMatch
         XCTAssertTrue(info.waitForExistence(timeout: 30), "no info button on home")
         info.tap()
         XCTAssertTrue(
-            app.buttons["Play full audio tutorial"].firstMatch.waitForExistence(timeout: 15),
+            app.buttons[T("Play full audio tutorial")].firstMatch.waitForExistence(timeout: 15),
             "the guide did not open"
         )
 
         // An absence only means something once the list is on screen, so anchor
         // on the line next to it first.
         let torchLine = app.staticTexts.containing(
-            NSPredicate(format: "label CONTAINS[c] 'Torch'")
+            NSPredicate(format: "label CONTAINS[c] %@", T("Flashlight"))
         ).firstMatch
         XCTAssertTrue(torchLine.waitForExistence(timeout: 10), "the Controls list never rendered")
 
@@ -60,7 +60,7 @@ final class LensToggleUITests: XCTestCase {
             )
         }
 
-        let done = app.buttons["Done"].firstMatch
+        let done = app.buttons[T("Done")].firstMatch
         if done.waitForExistence(timeout: 5) { done.tap() }
     }
 
@@ -70,19 +70,19 @@ final class LensToggleUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
 
-        let od = app.buttons["Object Detection"].firstMatch
+        let od = app.buttons[T("Object Detection")].firstMatch
         XCTAssertTrue(od.waitForExistence(timeout: 30), "no Object Detection button on home")
         od.tap()
         sleep(5)
 
         let wide = app.buttons.matching(
-            NSPredicate(format: "label CONTAINS[c] 'wide angle camera' OR label CONTAINS[c] 'Switch to normal camera'")
+            NSPredicate(format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@", T("Switch to wide angle camera"), T("Switch to normal camera"))
         ).firstMatch
 
         // The lens button sits next to the camera flip in the same bar. If the
         // flip is there, the bar drew, and a missing lens button is a decision
         // rather than a screen that never appeared.
-        let flip = app.buttons["Switch Camera"].firstMatch
+        let flip = app.buttons[T("Switch Camera")].firstMatch
         XCTAssertTrue(flip.waitForExistence(timeout: 20), "the control bar never rendered")
 
         if hasUltraWide {
@@ -99,17 +99,17 @@ final class LensToggleUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
 
-        let wt = app.buttons["What's this?"].firstMatch
+        let wt = app.buttons[T("What's this?")].firstMatch
         XCTAssertTrue(wt.waitForExistence(timeout: 30), "no What's this? button on home")
         wt.tap()
 
-        let settings = app.buttons["Settings"].firstMatch
+        let settings = app.buttons[T("Settings")].firstMatch
         XCTAssertTrue(settings.waitForExistence(timeout: 20), "no Settings button on the What's this? screen")
         settings.tap()
         sleep(2)
 
         let tipsAnchor = app.staticTexts.containing(
-            NSPredicate(format: "label CONTAINS[c] 'flashlight' OR label CONTAINS[c] 'Pinch'")
+            NSPredicate(format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@", T("Flashlight"), T("Pinch the screen to zoom in or out."))
         ).firstMatch
         XCTAssertTrue(tipsAnchor.waitForExistence(timeout: 10), "the tips list never rendered")
 

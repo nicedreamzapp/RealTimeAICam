@@ -13,7 +13,7 @@ final class CameraShotUITests: XCTestCase {
         let camera = XCUIApplication(bundleIdentifier: "com.apple.camera")
         camera.launch()
         sleep(3)
-        let shutter = camera.buttons["PhotoCapture"].firstMatch
+        let shutter = camera.buttons[T("PhotoCapture")].firstMatch
         if !shutter.waitForExistence(timeout: 8) {
             print("SHOT tree: \(camera.debugDescription.prefix(3000))")
             XCTFail("no shutter button"); return

@@ -8,6 +8,12 @@
 
 import XCTest
 
+private func langName(_ english: String, _ code: String) -> String {
+    guard TestLanguage.isSpanish, let local = Locale(identifier: "es").localizedString(forIdentifier: code) else { return english }
+    return local.prefix(1).uppercased() + local.dropFirst()
+}
+private let langCodes = ["Spanish": "es", "French": "fr", "German": "de", "Italian": "it", "Portuguese": "pt"]
+
 final class TranslatePhotoUITests: XCTestCase {
     private let env = ProcessInfo.processInfo.environment
 
@@ -38,11 +44,11 @@ final class TranslatePhotoUITests: XCTestCase {
 
         // Read and Translate are one button since 2026-11-03; Read opens
         // translating when that is how it was left.
-        let translator = app.buttons["Read"].firstMatch
+        let translator = app.buttons[T("Read")].firstMatch
         XCTAssertTrue(translator.waitForExistence(timeout: 20), "no Read on home")
         translator.tap()
 
-        let pill = app.buttons["Language"].firstMatch
+        let pill = app.buttons[T("Language")].firstMatch
         XCTAssertTrue(pill.waitForExistence(timeout: 15), "no Language pill")
         sleep(2)
         let screen = app.windows.firstMatch.frame
@@ -52,10 +58,11 @@ final class TranslatePhotoUITests: XCTestCase {
         shot("00-translate-mode-pill")
 
         for (index, name) in languages.enumerated() {
-            let stopReading = app.buttons["Stop reading"].firstMatch
+            let stopReading = app.buttons[T("Stop reading")].firstMatch
             if stopReading.exists { stopReading.tap(); sleep(1) }
             // Pick the language from the pill's menu.
-            let item = app.buttons["\(name) → English"].firstMatch
+            let shownName = langName(name, langCodes[name] ?? "en")
+            let item = app.buttons[TestLanguage.isSpanish ? T("%@ → Eng", shownName) : "\(name) → English"].firstMatch
             for _ in 0..<3 {
                 pill.tap()
                 if item.waitForExistence(timeout: 4) { break }
@@ -64,7 +71,7 @@ final class TranslatePhotoUITests: XCTestCase {
             shot(String(format: "%02d-menu-%@", index + 2, name))
             item.tap()
             sleep(1)
-            let want = "\(name), translated to English"
+            let want = TestLanguage.isSpanish ? T("%@, translated to %@", shownName, langName("English", "en").lowercased()) : "\(name), translated to English"
             for _ in 0..<3 where (pill.value as? String) != want {
                 sleep(2)
                 pill.tap(); if item.waitForExistence(timeout: 5) { item.tap() }; sleep(1)
@@ -74,11 +81,11 @@ final class TranslatePhotoUITests: XCTestCase {
             probe("LANG \(name) pillValue=\(pill.value ?? "")")
 
             // Pick the sign from the library.
-            let picker = app.buttons["Translate a photo from my library"].firstMatch
+            let picker = app.buttons[T("Translate a photo from my library")].firstMatch
             XCTAssertTrue(picker.waitForExistence(timeout: 5), "no library button in Translate mode")
             picker.tap()
             sleep(3)
-            let photos = app.images.matching(NSPredicate(format: "label BEGINSWITH 'Photo'"))
+            let photos = app.images.matching(NSPredicate(format: "label BEGINSWITH %@", TestLanguage.isSpanish ? "Foto" : "Photo"))
             if index == 0 {
                 for p in photos.allElementsBoundByIndex { probe("PHOTO \(p.label) \(p.frame)") }
                 shot("01b-picker")
@@ -92,14 +99,14 @@ final class TranslatePhotoUITests: XCTestCase {
             for _ in 0..<10 where !photo.isHittable { usleep(500_000) }
             photo.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
             // Wait for the English: the result card is one element labelled "Translation".
-            let card = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Translation'")).firstMatch
+            let card = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", T("Translation"))).firstMatch
             var english = ""
             if card.waitForExistence(timeout: 40) { english = (card.value as? String) ?? "" }
             probe("RESULT \(name) => \(english)")
             shot(String(format: "%02d-%@", index + 2, name))
             if english.isEmpty { probe("TREE \(name)\n\(app.debugDescription)") }
             // Back to a clean live screen for the next language.
-            let stop = app.buttons["Stop reading"].firstMatch
+            let stop = app.buttons[T("Stop reading")].firstMatch
             if stop.exists { stop.tap() }
         }
     }

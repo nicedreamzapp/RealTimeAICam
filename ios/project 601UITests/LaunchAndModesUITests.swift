@@ -16,7 +16,7 @@ final class LaunchAndModesUITests: XCTestCase {
 
     private func back(_ app: XCUIApplication, _ step: String) {
         // Lying flat, Object Detection uses its landscape Back, whose label is "Back, Back".
-        let b = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Back'")).firstMatch
+        let b = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", T("Back"))).firstMatch
         if !b.waitForExistence(timeout: 10) { print("TREE_DUMP_START\n\(app.debugDescription)\nTREE_DUMP_END") }
         XCTAssertTrue(b.exists, "\(step): no Back button")
         b.tap()
@@ -24,7 +24,7 @@ final class LaunchAndModesUITests: XCTestCase {
         alive(app, "\(step) back to home")
         // The launch argument keeps "first launch" true, so home re-opens the
         // guide every time it appears. Close it; that is one more pause call.
-        let d = app.buttons["Done"].firstMatch
+        let d = app.buttons[T("Done")].firstMatch
         if d.waitForExistence(timeout: 4) { sleep(2); d.tap(); sleep(2) }
         alive(app, "\(step) guide closed again")
     }
@@ -36,7 +36,7 @@ final class LaunchAndModesUITests: XCTestCase {
         app.launchArguments += ["-hasShownInstructions", "NO"]
         app.launch()
 
-        let done = app.buttons["Done"].firstMatch
+        let done = app.buttons[T("Done")].firstMatch
         XCTAssertTrue(done.waitForExistence(timeout: 20), "first-launch guide did not open")
         sleep(10)
         alive(app, "first-launch guide open")
@@ -46,20 +46,20 @@ final class LaunchAndModesUITests: XCTestCase {
 
         for round in 1...2 {
             // What's this: open, capture, wait for the answer, leave.
-            let wt = app.buttons["What's this?"].firstMatch
+            let wt = app.buttons[T("What's this?")].firstMatch
             XCTAssertTrue(wt.waitForExistence(timeout: 20), "round \(round): no What's this? on home")
             wt.tap()
-            let capture = app.buttons["What's this?"].firstMatch
+            let capture = app.buttons[T("What's this?")].firstMatch
             XCTAssertTrue(capture.waitForExistence(timeout: 20), "round \(round): no capture button")
             sleep(3)
             capture.tap()
-            _ = app.buttons["Looking"].firstMatch.waitForExistence(timeout: 5)
-            _ = app.buttons["What's this?"].firstMatch.waitForExistence(timeout: 150)
+            _ = app.buttons[T("Looking")].firstMatch.waitForExistence(timeout: 5)
+            _ = app.buttons[T("What's this?")].firstMatch.waitForExistence(timeout: 150)
             alive(app, "round \(round) what's this answered")
             back(app, "round \(round) what's this")
 
             // Object detection: run the camera for a bit, leave.
-            let od = app.buttons["Object Detection"].firstMatch
+            let od = app.buttons[T("Object Detection")].firstMatch
             XCTAssertTrue(od.waitForExistence(timeout: 10), "round \(round): no Object Detection")
             od.tap()
             sleep(15)
@@ -67,7 +67,7 @@ final class LaunchAndModesUITests: XCTestCase {
             back(app, "round \(round) object detection")
 
             // Reading mode.
-            let tts = app.buttons["Read"].firstMatch
+            let tts = app.buttons[T("Read")].firstMatch
             XCTAssertTrue(tts.waitForExistence(timeout: 10), "round \(round): no Text to Speech")
             tts.tap()
             sleep(8)
@@ -75,8 +75,8 @@ final class LaunchAndModesUITests: XCTestCase {
             back(app, "round \(round) reading")
 
             // Guide from home again.
-            app.buttons["Info and guide"].firstMatch.tap()
-            let d2 = app.buttons["Done"].firstMatch
+            app.buttons[T("Info and guide")].firstMatch.tap()
+            let d2 = app.buttons[T("Done")].firstMatch
             XCTAssertTrue(d2.waitForExistence(timeout: 10), "round \(round): guide did not open")
             sleep(3)
             d2.tap()
