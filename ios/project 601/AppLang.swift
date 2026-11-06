@@ -46,6 +46,9 @@ enum AppLang {
     static var code: String {
         #if DEBUG
         if let forced = UserDefaults.standard.string(forKey: forcedKey), shipped.contains(forced) { return forced }
+        // Unit tests check the English lines whatever the simulator's language; a test that
+        // wants Spanish sets `forcedKey`. (UI tests launch the app without this variable.)
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return english }
         #endif
         return uiCode(appLanguage: appLanguage, yourLanguage: savedYourLanguage)
     }
