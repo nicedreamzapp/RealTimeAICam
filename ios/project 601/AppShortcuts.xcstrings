@@ -1,0 +1,171 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "What's this in ${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qué es esto en ${applicationName}"
+          }
+        }
+      }
+    },
+    "What is this in ${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qué es esto con ${applicationName}"
+          }
+        }
+      }
+    },
+    "Describe this with ${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Describe esto con ${applicationName}"
+          }
+        }
+      }
+    },
+    "What's in front of me in ${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qué tengo enfrente en ${applicationName}"
+          }
+        }
+      }
+    },
+    "Help me aim with ${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ayúdame a apuntar con ${applicationName}"
+          }
+        }
+      }
+    },
+    "Help me take a picture with ${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ayúdame a tomar una foto con ${applicationName}"
+          }
+        }
+      }
+    },
+    "Help me aim in ${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ayúdame a apuntar en ${applicationName}"
+          }
+        }
+      }
+    },
+    "Read this with ${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lee esto con ${applicationName}"
+          }
+        }
+      }
+    },
+    "Read text with ${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leer texto con ${applicationName}"
+          }
+        }
+      }
+    },
+    "Read this in ${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lee esto en ${applicationName}"
+          }
+        }
+      }
+    },
+    "Translate this with ${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traduce esto con ${applicationName}"
+          }
+        }
+      }
+    },
+    "Translate with ${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traducir con ${applicationName}"
+          }
+        }
+      }
+    },
+    "What's around me in ${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qué hay a mi alrededor en ${applicationName}"
+          }
+        }
+      }
+    },
+    "Find objects with ${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Busca objetos con ${applicationName}"
+          }
+        }
+      }
+    },
+    "Start object detection in ${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inicia la detección de objetos en ${applicationName}"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

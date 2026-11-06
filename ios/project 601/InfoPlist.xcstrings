@@ -1,0 +1,50 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "NSCameraUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La app usa la cámara para detectar objetos en tiempo real, leer texto y traducirlo. No se guardan ni se envían imágenes."
+          }
+        }
+      }
+    },
+    "NSMicrophoneUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El micrófono escucha las preguntas que haces en voz alta: mientras mantienes presionado el botón de preguntar y todo el tiempo que Live Cam está abierto. No se graba ni se envía nada."
+          }
+        }
+      }
+    },
+    "NSPhotoLibraryAddUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ayúdame a apuntar guarda en tu fototeca las fotos que tomas. No se sube nada."
+          }
+        }
+      }
+    },
+    "NSSpeechRecognitionUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tus preguntas habladas se convierten en texto en este teléfono, sin internet. No se envía nada."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

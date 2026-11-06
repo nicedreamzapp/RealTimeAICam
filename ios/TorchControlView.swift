@@ -38,8 +38,8 @@ struct TorchButton: View {
                         )
                 )
         }
-        .accessibilityLabel("Flashlight")
-        .accessibilityValue(isOn ? "On" : "Off")
+        .accessibilityLabel(L("Flashlight"))
+        .accessibilityValue(isOn ? L("On") : L("Off"))
         .accessibilityAddTraits(.isButton)
         // The app turns the light off on its own when you leave; never let the
         // button (or VoiceOver) keep saying "On" after that.

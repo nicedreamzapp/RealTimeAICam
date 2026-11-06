@@ -90,7 +90,7 @@ struct ContentView: View {
                         if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
                            let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String
                         {
-                            Text("v\(version) (\(build))")
+                            Text(verbatim: "v\(version) (\(build))")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                                 .padding(.leading, 14)
@@ -132,8 +132,8 @@ struct ContentView: View {
             Alert(
                 title: Text(alert.title),
                 message: Text(alert.message),
-                primaryButton: .default(Text("Open Settings")) { alert.openSettings() },
-                secondaryButton: .cancel()
+                primaryButton: .default(Text(L("Open Settings"))) { alert.openSettings() },
+                secondaryButton: .cancel(Text(L("Cancel")))
             )
         }
     }
@@ -223,7 +223,8 @@ struct ContentView: View {
     private func closeLiveCam() {
         showLiveCam = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-            UIAccessibility.post(notification: .screenChanged, argument: "Home screen")
+            UIAccessibility.post(notification: .screenChanged,
+                                 argument: SpeechManager.voiceOverLine(L("Home screen"), lang: AppLang.code))
         }
     }
 
@@ -282,9 +283,14 @@ struct ContentView: View {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             let selectedVoice = AVSpeechSynthesisVoice(identifier: viewModel.selectedVoiceIdentifier)
-            let voiceName = selectedVoice?.name ?? "Selected"
-            let utterance = AVSpeechUtterance(string: SpeakableText.spoken("Welcome to the real-time AI. iOS Detection app. \(voiceName) voice chosen"))
-            utterance.voice = selectedVoice
+            let line = selectedVoice.map { L("Welcome to RealTime AI Cam. %@ voice chosen.", $0.name) }
+                ?? L("Welcome to RealTime AI Cam.")
+            // The picker lists the app language's voices, so the chosen one says it in that language.
+            let lang = AppLang.code
+            let prepared = YourLanguageVoice.prepare(SpeakableText.spoken(line, lang: lang), lang: lang,
+                                                     selected: viewModel.selectedVoiceIdentifier)
+            let utterance = AVSpeechUtterance(string: prepared.text)
+            utterance.voice = prepared.voice
             utterance.rate = 0.5
             utterance.volume = 0.9
             speechSynthesizer.speak(utterance)
@@ -322,16 +328,17 @@ struct ContentView: View {
     /// focus and says where it landed instead of going silent.
     private func announceScreenChange(to newMode: AppMode) {
         let name: String = switch newMode {
-        case .home: "Home screen"
-        case .objectDetection: "Object detection camera"
-        case .ocrEnglish: "English text reader"
-        case .ocrSpanish: "Translator"
-        case .mail: "Mail reader"
-        case .helpMeAim: "Help me aim"
+        case .home: L("Home screen")
+        case .objectDetection: L("Object detection camera")
+        case .ocrEnglish: L("English text reader")
+        case .ocrSpanish: L("Translator")
+        case .mail: L("Mail reader")
+        case .helpMeAim: L("Help Me Aim")
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            UIAccessibility.post(notification: .screenChanged, argument: name)
+            UIAccessibility.post(notification: .screenChanged,
+                                 argument: SpeechManager.voiceOverLine(name, lang: AppLang.code))
         }
     }
 

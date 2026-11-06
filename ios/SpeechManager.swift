@@ -178,15 +178,25 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
     /// The app's own voice is off: one VoiceOver announcement for the whole
     /// cycle, then hold the queue closed until it has had time to be heard.
     private func announceCycleToVoiceOver(_ names: [String]) {
-        let line = SpeakableText.spoken(names.joined(separator: ", "))
+        // Names in Your language once its list is built, else the detector's English: VoiceOver
+        // gets the line tagged with that language, the same one the app's voice would use.
+        let lang = Self.objectLineLanguage
+        let line = SpeakableText.spoken(names.joined(separator: ", "), lang: lang)
         isProcessingQueue = true
-        UIAccessibility.post(notification: .announcement, argument: line)
+        UIAccessibility.post(notification: .announcement, argument: Self.voiceOverLine(line, lang: lang))
         announceGeneration += 1
         let generation = announceGeneration
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.estimatedAnnouncementSeconds(line)) { [weak self] in
             guard let self, announceGeneration == generation else { return }
             isProcessingQueue = false
         }
+    }
+
+    /// The language an object line is in: Your language once its names (and the distance
+    /// words) are built, else English, since the detector's names are English. Position and
+    /// distance words follow the names, so one line is never half Spanish in an English voice.
+    static var objectLineLanguage: String {
+        ObjectLabelCache.shared.name(for: "feet") != nil ? YourLanguage.activeCode : YourLanguageRules.english
     }
 
     // MARK: - NEW: Build Speech Text Based on LiDAR Status
@@ -214,7 +224,8 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
                     let side = cache.name(for: position == "L" ? "to the left" : (position == "R" ? "to the right" : "in the center")) ?? positionWord
                     return "\(objectName) \(side) \(distanceFeet) \(cache.name(for: "feet") ?? "feet")"
                 }
-                // Format: "bottle left 3 feet"
+                // Format: "bottle left 3 feet". English on purpose: the names are the detector's
+                // English here and the line is read by an English voice (see objectLineLanguage).
                 return "\(objectName) \(positionWord) \(distanceFeet) \(distanceFeet == 1 ? "foot" : "feet")"
             }
         }
@@ -274,7 +285,7 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
         guard !isSpeaking else { return }
 
         // Names in Your language get a voice for that language.
-        let lang = ObjectLabelCache.shared.name(for: "feet") != nil ? YourLanguage.activeCode : YourLanguageRules.english
+        let lang = Self.objectLineLanguage
         let prepared = YourLanguageVoice.prepare(text, lang: lang, selected: selectedVoiceIdentifier)
         let utterance = AVSpeechUtterance(string: prepared.text)
         if let chosenVoice = prepared.voice {

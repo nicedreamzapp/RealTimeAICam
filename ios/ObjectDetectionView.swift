@@ -77,7 +77,7 @@ struct ObjectDetectionView: View {
                                     Image(systemName: "chevron.left")
                                         .font(.system(size: 16, weight: .bold))
                                         .foregroundColor(.white)
-                                    Text("Back")
+                                    Text(L("Back"))
                                         .font(.system(size: 16, weight: .bold))
                                         .foregroundColor(.white)
                                 }
@@ -90,8 +90,8 @@ struct ObjectDetectionView: View {
                                 )
                             }
                             .padding(.leading, max(geometry.safeAreaInsets.leading + 16, 28))
-                            .accessibilityLabel("Back")
-                            .accessibilityHint("Returns to the home screen")
+                            .accessibilityLabel(L("Back"))
+                            .accessibilityHint(L("Returns to the home screen"))
 
                             Spacer()
 
@@ -104,7 +104,7 @@ struct ObjectDetectionView: View {
                                     Text(String(format: "%.2f", viewModel.framesPerSecond))
                                         .font(.system(size: 14, weight: .bold, design: .rounded))
                                         .foregroundColor(.white)
-                                    Text("FPS")
+                                    Text(verbatim: "FPS")
                                         .font(.system(size: 11, weight: .medium))
                                         .foregroundColor(.white.opacity(0.8))
                                 }
@@ -138,7 +138,7 @@ struct ObjectDetectionView: View {
                                     Image(systemName: "eye")
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundColor(objectCountColor)
-                                    Text("\(viewModel.detectedObjectCount)")
+                                    Text(verbatim: "\(viewModel.detectedObjectCount)")
                                         .font(.system(size: 14, weight: .bold, design: .rounded))
                                         .foregroundColor(.white)
                                 }
@@ -157,8 +157,8 @@ struct ObjectDetectionView: View {
                                 .accessibilityElement(children: .ignore)
                                 .accessibilityLabel(
                                     viewModel.detectedObjectCount == 1
-                                        ? "1 object in view"
-                                        : "\(viewModel.detectedObjectCount) objects in view"
+                                        ? L("1 object in view")
+                                        : L("%ld objects in view", viewModel.detectedObjectCount)
                                 )
                             }
                         }
@@ -188,7 +188,7 @@ struct ObjectDetectionView: View {
                             Image(systemName: "chevron.left")
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundColor(.white)
-                            Text("Back")
+                            Text(L("Back"))
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundColor(.white)
                         }
@@ -295,26 +295,30 @@ struct ObjectDetectionView: View {
             // These are on-screen toasts. Speak them so a VoiceOver user hears
             // why LiDAR just switched off instead of being left guessing.
             if let message = newValue, !message.isEmpty {
-                SpeakableText.announce(message)
+                // Tagged with the app's language so VoiceOver reads a Spanish toast in Spanish.
+                let lang = AppLang.code
+                UIAccessibility.post(notification: .announcement,
+                                     argument: SpeechManager.voiceOverLine(SpeakableText.spoken(message, lang: lang), lang: lang))
             }
         }
         .onChange(of: lidar.isAvailable) { newValue in
             if viewModel.useLiDAR, !newValue {
                 viewModel.setLiDAR(enabled: false)
-                viewModel.showLiDARNotification("LiDAR not available in \(viewModel.isUltraWide ? "ultra-wide" : "this") mode")
+                viewModel.showLiDARNotification(viewModel.isUltraWide ? L("LiDAR not available in ultra-wide mode")
+                                                                    : L("LiDAR not available in this mode"))
             }
         }
         .onChange(of: viewModel.isUltraWide) { _ in
             if viewModel.useLiDAR, lidar.isEnabled, !lidar.isAvailable {
                 viewModel.setLiDAR(enabled: false)
-                viewModel.showLiDARNotification("LiDAR only works with 1x camera")
+                viewModel.showLiDARNotification(L("LiDAR only works with 1x camera"))
             }
         }
         .onChange(of: viewModel.currentZoomLevel) { newValue in
             if viewModel.useLiDAR, lidar.isEnabled, lidar.isAvailable {
                 if newValue < 0.95 || newValue > 1.05 {
                     viewModel.setLiDAR(enabled: false)
-                    viewModel.showLiDARNotification("LiDAR works best at 1x zoom")
+                    viewModel.showLiDARNotification(L("LiDAR works best at 1x zoom"))
                 }
             }
         }
@@ -334,10 +338,10 @@ struct ObjectDetectionView: View {
 
                         HStack {
                             Spacer()
-                            Picker("Mode", selection: $viewModel.filterMode) {
-                                Text("All").tag("all")
-                                Text("Indoor").tag("indoor")
-                                Text("Outdoor").tag("outdoor")
+                            Picker(L("Mode"), selection: $viewModel.filterMode) {
+                                Text(L("All")).tag("all")
+                                Text(L("Indoor")).tag("indoor")
+                                Text(L("Outdoor")).tag("outdoor")
                             }
                             .pickerStyle(SegmentedPickerStyle())
                             .frame(width: segmentWidth, height: 36)
@@ -376,9 +380,9 @@ struct ObjectDetectionView: View {
                                 viewModel.handleFlipCamera()
                             }
                         )
-                        .accessibilityLabel("Switch Camera")
-                        .accessibilityHint("Switches between front and rear camera")
-                        .accessibilityValue(viewModel.cameraPosition == .back ? "Using rear camera" : "Using front camera")
+                        .accessibilityLabel(L("Switch Camera"))
+                        .accessibilityHint(L("Switches between front and rear camera"))
+                        .accessibilityValue(viewModel.cameraPosition == .back ? L("Using rear camera") : L("Using front camera"))
 
                         // Only phones with a second rear lens get this button at all.
                         // Asked about by Matt on AppleVis (iPhone 16e, 2026-09-17):
@@ -398,8 +402,8 @@ struct ObjectDetectionView: View {
                             .opacity(viewModel.cameraPosition == .back ? 1.0 : 0.0)
                             .disabled(viewModel.cameraPosition == .front)
                             .accessibilityHidden(viewModel.cameraPosition == .front)
-                            .accessibilityLabel(viewModel.isUltraWide ? "Switch to normal camera" : "Switch to wide angle camera")
-                            .accessibilityHint("Changes camera field of view for wider or normal view")
+                            .accessibilityLabel(viewModel.isUltraWide ? L("Switch to normal camera") : L("Switch to wide angle camera"))
+                            .accessibilityHint(L("Changes camera field of view for wider or normal view"))
                         }
 
                         TorchButton(
@@ -420,19 +424,19 @@ struct ObjectDetectionView: View {
                                 let newState = !viewModel.useLiDAR
                                 viewModel.setLiDAR(enabled: newState)
                                 if newState {
-                                    viewModel.showLiDARNotification("LiDAR distance enabled")
+                                    viewModel.showLiDARNotification(L("LiDAR distance enabled"))
                                 } else {
-                                    viewModel.showLiDARNotification("LiDAR distance disabled")
+                                    viewModel.showLiDARNotification(L("LiDAR distance disabled"))
                                 }
                             }
                         )
                         .opacity(viewModel.isLiDARSupported && viewModel.cameraPosition == .back && LiDARManager.shared.isAvailable ? 1.0 : 0.0)
                         .disabled(!(viewModel.isLiDARSupported && viewModel.cameraPosition == .back && LiDARManager.shared.isAvailable))
                         .accessibilityLabel(
-                            viewModel.useLiDAR ? "Turn off distance measurement" : "Turn on distance measurement"
+                            viewModel.useLiDAR ? L("Turn off distance measurement") : L("Turn on distance measurement")
                         )
-                        .accessibilityHint("Announces how far away each object is, in feet")
-                        .accessibilityValue(viewModel.useLiDAR ? "On" : "Off")
+                        .accessibilityHint(L("Announces how far away each object is, in feet"))
+                        .accessibilityValue(viewModel.useLiDAR ? L("On") : L("Off"))
 
                         Button(action: {
                             guard buttonDebouncer.canPress("ObjectDetectionView-6") else { return }
@@ -456,9 +460,9 @@ struct ObjectDetectionView: View {
                                 .shadow(color: Color.black.opacity(0.18), radius: 2, y: 1)
                                 .foregroundColor(viewModel.isSpeechEnabled ? .black : .primary)
                         }
-                        .accessibilityLabel(viewModel.isSpeechEnabled ? "Turn off speech announcements" : "Turn on speech announcements")
-                        .accessibilityHint("Controls automatic object detection announcements")
-                        .accessibilityValue(viewModel.isSpeechEnabled ? "Speech enabled" : "Speech disabled")
+                        .accessibilityLabel(viewModel.isSpeechEnabled ? L("Turn off speech announcements") : L("Turn on speech announcements"))
+                        .accessibilityHint(L("Controls automatic object detection announcements"))
+                        .accessibilityValue(viewModel.isSpeechEnabled ? L("Speech enabled") : L("Speech disabled"))
 
                         Button(action: {
                             guard buttonDebouncer.canPress("ObjectDetectionView-7") else { return }
@@ -469,7 +473,7 @@ struct ObjectDetectionView: View {
                             VStack(spacing: 2) {
                                 Image(systemName: "eye")
                                     .font(.system(size: isVerySmallScreen ? 18 : 20, weight: .medium))
-                                Text("\(Int(viewModel.confidenceThreshold * 100))%")
+                                Text(verbatim: "\(Int(viewModel.confidenceThreshold * 100))%")
                                     .font(.system(size: isVerySmallScreen ? 12 : 14, weight: .bold, design: .rounded))
                             }
                             .foregroundColor(.primary)
@@ -482,9 +486,9 @@ struct ObjectDetectionView: View {
                         // inside it gets folded into this element and VoiceOver
                         // users can never reach it.
                         .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("Detection sensitivity")
-                        .accessibilityValue("\(Int(viewModel.confidenceThreshold * 100)) percent")
-                        .accessibilityHint("Opens a slider to control how sure the app must be before naming something")
+                        .accessibilityLabel(L("Detection sensitivity"))
+                        .accessibilityValue(L("%ld percent", Int(viewModel.confidenceThreshold * 100)))
+                        .accessibilityHint(L("Opens a slider to control how sure the app must be before naming something"))
                         .accessibilityAddTraits(.isButton)
                         .overlay(
                             confidenceSliderOverlay(isPortrait: true)
@@ -512,9 +516,9 @@ struct ObjectDetectionView: View {
                     viewModel.handleFlipCamera()
                 }
             )
-            .accessibilityLabel("Switch Camera")
-            .accessibilityHint("Switches between front and rear camera")
-            .accessibilityValue(viewModel.cameraPosition == .back ? "Using rear camera" : "Using front camera")
+            .accessibilityLabel(L("Switch Camera"))
+            .accessibilityHint(L("Switches between front and rear camera"))
+            .accessibilityValue(viewModel.cameraPosition == .back ? L("Using rear camera") : L("Using front camera"))
 
             // Ultra-wide button - hidden but maintains space in front camera,
             // and absent entirely on phones with only one rear lens.
@@ -532,8 +536,8 @@ struct ObjectDetectionView: View {
                 .opacity(viewModel.cameraPosition == .back ? 1.0 : 0.0)
                 .disabled(viewModel.cameraPosition == .front)
                 .accessibilityHidden(viewModel.cameraPosition == .front)
-                .accessibilityLabel(viewModel.isUltraWide ? "Switch to normal camera" : "Switch to wide angle camera")
-                .accessibilityHint("Changes camera field of view for wider or normal view")
+                .accessibilityLabel(viewModel.isUltraWide ? L("Switch to normal camera") : L("Switch to wide angle camera"))
+                .accessibilityHint(L("Changes camera field of view for wider or normal view"))
             }
 
             // TorchButton properly connected to viewModel
@@ -558,18 +562,18 @@ struct ObjectDetectionView: View {
                     let newState = !viewModel.useLiDAR
                     viewModel.setLiDAR(enabled: newState)
                     if newState {
-                        viewModel.showLiDARNotification("LiDAR distance enabled")
+                        viewModel.showLiDARNotification(L("LiDAR distance enabled"))
                     } else {
-                        viewModel.showLiDARNotification("LiDAR distance disabled")
+                        viewModel.showLiDARNotification(L("LiDAR distance disabled"))
                     }
                 }
             )
             .opacity(viewModel.isLiDARSupported && viewModel.cameraPosition == .back && LiDARManager.shared.isAvailable ? 1.0 : 0.0)
             .disabled(!(viewModel.isLiDARSupported && viewModel.cameraPosition == .back && LiDARManager.shared.isAvailable))
             .accessibilityLabel(
-                viewModel.useLiDAR ? "Turn off LiDAR distance measurement" : "Turn on LiDAR distance measurement"
+                viewModel.useLiDAR ? L("Turn off LiDAR distance measurement") : L("Turn on LiDAR distance measurement")
             )
-            .accessibilityHint("Measures distance to detected objects")
+            .accessibilityHint(L("Measures distance to detected objects"))
 
             Button(action: {
                 guard buttonDebouncer.canPress("ObjectDetectionView-11") else { return }
@@ -596,9 +600,9 @@ struct ObjectDetectionView: View {
                     .shadow(color: Color.black.opacity(0.18), radius: 4, y: 2)
                     .foregroundColor(viewModel.isSpeechEnabled ? .black : .primary)
             }
-            .accessibilityLabel(viewModel.isSpeechEnabled ? "Turn off speech announcements" : "Turn on speech announcements")
-            .accessibilityHint("Controls automatic object detection announcements")
-            .accessibilityValue(viewModel.isSpeechEnabled ? "Speech enabled" : "Speech disabled")
+            .accessibilityLabel(viewModel.isSpeechEnabled ? L("Turn off speech announcements") : L("Turn on speech announcements"))
+            .accessibilityHint(L("Controls automatic object detection announcements"))
+            .accessibilityValue(viewModel.isSpeechEnabled ? L("Speech enabled") : L("Speech disabled"))
 
             Button(action: {
                 guard buttonDebouncer.canPress("ObjectDetectionView-12") else { return }
@@ -609,7 +613,7 @@ struct ObjectDetectionView: View {
                 VStack(spacing: 2) {
                     Image(systemName: "eye")
                         .font(.system(size: 22, weight: .medium))
-                    Text("\(Int(viewModel.confidenceThreshold * 100))%")
+                    Text(verbatim: "\(Int(viewModel.confidenceThreshold * 100))%")
                         .font(.system(size: 14, weight: .bold, design: .rounded))
                 }
                 .foregroundColor(.primary)
@@ -619,18 +623,18 @@ struct ObjectDetectionView: View {
                 .clipShape(Circle())
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Detection sensitivity")
-            .accessibilityValue("\(Int(viewModel.confidenceThreshold * 100)) percent")
-            .accessibilityHint("Opens a slider to control how sure the app must be before naming something")
+            .accessibilityLabel(L("Detection sensitivity"))
+            .accessibilityValue(L("%ld percent", Int(viewModel.confidenceThreshold * 100)))
+            .accessibilityHint(L("Opens a slider to control how sure the app must be before naming something"))
             .accessibilityAddTraits(.isButton)
             .overlay(
                 confidenceSliderOverlay(isPortrait: false)
             )
 
-            Picker("Mode", selection: $viewModel.filterMode) {
-                Text("All").tag("all")
-                Text("Indoor").tag("indoor")
-                Text("Outdoor").tag("outdoor")
+            Picker(L("Mode"), selection: $viewModel.filterMode) {
+                Text(L("All")).tag("all")
+                Text(L("Indoor")).tag("indoor")
+                Text(L("Outdoor")).tag("outdoor")
             }
             .pickerStyle(SegmentedPickerStyle())
             .frame(width: 200)
@@ -685,9 +689,9 @@ struct ObjectDetectionView: View {
                         .accentColor(.blue)
                         .rotationEffect(.degrees(-90))
                         .frame(width: 160, height: 32)
-                        .accessibilityLabel("Detection sensitivity")
-                        .accessibilityValue("\(Int(viewModel.confidenceThreshold * 100)) percent")
-                        Text("\(Int(viewModel.confidenceThreshold * 100))%")
+                        .accessibilityLabel(L("Detection sensitivity"))
+                        .accessibilityValue(L("%ld percent", Int(viewModel.confidenceThreshold * 100)))
+                        Text(verbatim: "\(Int(viewModel.confidenceThreshold * 100))%")
                             .font(.caption.bold())
                             .foregroundColor(.primary)
                     }
@@ -702,9 +706,9 @@ struct ObjectDetectionView: View {
                         })
                         .accentColor(.blue)
                         .frame(width: 160, height: 32)
-                        .accessibilityLabel("Detection sensitivity")
-                        .accessibilityValue("\(Int(viewModel.confidenceThreshold * 100)) percent")
-                        Text("\(Int(viewModel.confidenceThreshold * 100))%")
+                        .accessibilityLabel(L("Detection sensitivity"))
+                        .accessibilityValue(L("%ld percent", Int(viewModel.confidenceThreshold * 100)))
+                        Text(verbatim: "\(Int(viewModel.confidenceThreshold * 100))%")
                             .font(.caption.bold())
                             .foregroundColor(.primary)
                     }
@@ -736,12 +740,12 @@ private extension CameraViewModel {
 private extension View {
     func filterModeAdjustable(_ mode: Binding<String>) -> some View {
         let modes = ["all", "indoor", "outdoor"]
-        let names = ["all": "All objects", "indoor": "Indoor", "outdoor": "Outdoor"]
+        let names = ["all": L("All objects"), "indoor": L("Indoor"), "outdoor": L("Outdoor")]
         return self
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("What to look for")
-            .accessibilityValue(names[mode.wrappedValue] ?? "All objects")
-            .accessibilityHint("Swipe up or down to change")
+            .accessibilityLabel(L("What to look for"))
+            .accessibilityValue(names[mode.wrappedValue] ?? L("All objects"))
+            .accessibilityHint(L("Swipe up or down to change"))
             .accessibilityAdjustableAction { direction in
                 let i = modes.firstIndex(of: mode.wrappedValue) ?? 0
                 switch direction {

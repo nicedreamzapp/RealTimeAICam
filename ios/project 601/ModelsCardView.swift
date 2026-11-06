@@ -15,6 +15,7 @@ struct ModelsCardView: View {
     @AppStorage(ModelPicker.priorityKey) private var priority = ModelPriority.accuracy.rawValue
     @AppStorage(ModelPicker.balancedSecondsKey) private var balancedSeconds = 0.0
     @State private var showChooser = false
+    @ObservedObject private var appLang = AppLangObserver.shared
 
     var body: some View {
         let summary = ModelsText.summary(checking: setup.checkingSpeed, downloading: downloader.current,
@@ -25,7 +26,7 @@ struct ModelsCardView: View {
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(.teal)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Models").font(.headline)
+                    Text(L("Models")).font(.headline)
                     Text(summary)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -42,8 +43,8 @@ struct ModelsCardView: View {
         .background(RoundedRectangle(cornerRadius: 12).fill(.ultraThinMaterial.opacity(0.3)))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.15), lineWidth: 1))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Models. " + summary)
-        .accessibilityHint("Double-tap to change which model What's this? uses. You don't need to.")
+        .accessibilityLabel(L("Models") + ". " + summary)
+        .accessibilityHint(L("Double-tap to change which model What's this? uses. You don't need to."))
         .accessibilityAddTraits(.isButton)
         .sheet(isPresented: $showChooser) { ModelsChooserView() }
     }
@@ -55,21 +56,21 @@ enum ModelsText {
     @MainActor
     static func summary(checking: Bool, downloading: ModelLevel?, progress: Double, redraw: [String] = []) -> String {
         _ = redraw
-        if checking { return "Measuring this phone's speed. This takes a few seconds." }
+        if checking { return L("Measuring this phone's speed. This takes a few seconds.") }
         if let level = downloading {
-            return "Getting \(level.name), \(Int(progress * 100)) percent. What's this? works meanwhile."
+            return L("Getting %@, %ld percent. What's this? works meanwhile.", level.name, Int(progress * 100))
         }
         guard ModelPicker.balancedSeconds != nil else {
-            return "Using the built-in model. The best one for this phone is picked in a moment."
+            return L("Using the built-in model. The best one for this phone is picked in a moment.")
         }
         let using = ModelPicker.level(for: .scene)
-        if ModelPicker.manualLevel != nil { return "Using \(using.name), the one you picked." }
+        if ModelPicker.manualLevel != nil { return L("Using %@, the one you picked.", using.name) }
         let page = ModelPicker.ideal(for: .page), scene = ModelPicker.ideal(for: .scene)
         if !VisionModelStore.isInstalled(page) || !VisionModelStore.isInstalled(scene) {
-            return "Using \(using.name) for now. \(page.name), the best fit, downloads on Wi-Fi."
+            return L("Using %@ for now. %@, the best fit, downloads on Wi-Fi.", using.name, page.name)
         }
-        if page == scene { return "Using \(page.name), the best fit for this phone." }
-        return "Using \(page.name) for mail, money and medicine, \(scene.name) for everything else."
+        if page == scene { return L("Using %@, the best fit for this phone.", page.name) }
+        return L("Using %@ for mail, money and medicine, %@ for everything else.", page.name, scene.name)
     }
 
     /// Everything about one model in one sentence, after its name.
@@ -79,26 +80,26 @@ enum ModelsText {
         let downloader = VisionModelDownloader.shared
         let state = downloader.state(level)
         if !level.fitsThisPhone {
-            parts.append("Too big for this phone's memory.")
+            parts.append(L("Too big for this phone's memory."))
         } else if case .downloading = state {
             let pct = downloader.current == level ? Int(downloader.progress * 100) : 0
-            parts.append("Downloading, \(pct) percent.")
+            parts.append(L("Downloading, %ld percent.", pct))
         } else if state == .queued {
-            parts.append("Waiting to download.")
+            parts.append(L("Waiting to download."))
         } else if state == .verifying {
-            parts.append("Checking the download.")
+            parts.append(L("Checking the download."))
         } else if level.isBundled {
             // the blurb already says it is built in
         } else if VisionModelStore.isInstalled(level) {
-            parts.append("On this phone.")
+            parts.append(L("On this phone."))
         } else {
-            parts.append("Not downloaded. \(level.sizeDescription), downloads when you pick it.")
+            parts.append(L("Not downloaded. %@, downloads when you pick it.", level.sizeDescription))
         }
-        if case .failed = state { parts.append("The last download stopped. Pick it to try again.") }
+        if case .failed = state { parts.append(L("The last download stopped. Pick it to try again.")) }
         if level.fitsThisPhone, let s = ModelPicker.estimate(level, kind: .scene) {
-            parts.append("Answers in \(ModelPicker.spoken(s)).")
+            parts.append(L("Answers in %@.", ModelPicker.spoken(s)))
         }
-        parts.append("Accuracy \(level.score) out of 100.")
+        parts.append(L("Accuracy %ld out of 100.", level.score))
         return parts.joined(separator: " ")
     }
 }
@@ -117,27 +118,27 @@ struct ModelsChooserView: View {
         NavigationStack {
             List {
                 Section {
-                    Text("You don't need to change anything. Automatic picks the best model this phone can run, and What's this? keeps working while it downloads.")
+                    Text(L("You don't need to change anything. Automatic picks the best model this phone can run, and What's this? keeps working while it downloads."))
                 }
 
-                Section("What matters more to you?") {
+                Section(L("What matters more to you?")) {
                     ForEach(ModelPriority.allCases) { p in
                         bigRow(title: p.name, detail: p.explanation, selected: priority == p.rawValue) {
                             priority = p.rawValue
                             setup.fetchWanted(automatic: true)
-                            confirm("\(p.name) selected.")
+                            confirm(L("%@ selected.", p.name))
                         }
                     }
                 }
 
-                Section("Which model") {
-                    bigRow(title: "Automatic (recommended)",
+                Section(L("Which model")) {
+                    bigRow(title: L("Automatic (recommended)"),
                            detail: ModelsText.summary(checking: setup.checkingSpeed, downloading: nil,
                                                       progress: 0, redraw: redraw),
                            selected: choice == "auto") {
                         choice = "auto"
                         setup.fetchWanted(automatic: true)
-                        confirm("Automatic selected. " + ModelsText.summary(checking: false, downloading: nil, progress: 0))
+                        confirm(L("Automatic selected.") + " " + ModelsText.summary(checking: false, downloading: nil, progress: 0))
                     }
                     ForEach(ModelLevel.allCases) { level in
                         modelRow(level)
@@ -145,10 +146,10 @@ struct ModelsChooserView: View {
                 }
 
             }
-            .navigationTitle("Models")
+            .navigationTitle(L("Models"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button(L("Done")) { dismiss() } }
             }
         }
         .preferredColorScheme(.dark)
@@ -204,47 +205,47 @@ struct ModelsChooserView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(level.name + ". " + sentence + " " + level.technicalLine)
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
-        .accessibilityHint(level.fitsThisPhone && !selected ? "Double-tap to use \(level.name)." : "")
+        .accessibilityHint(level.fitsThisPhone && !selected ? L("Double-tap to use %@.", level.name) : "")
         // Delete is the swipe-left action and a VoiceOver action (swipe up or
         // down to hear it), so it is never an extra stop on every row.
         .swipeActions {
             if !level.isBundled, VisionModelStore.isInstalled(level) {
-                Button("Delete", role: .destructive) { delete(level) }
+                Button(L("Delete"), role: .destructive) { delete(level) }
             }
         }
         .accessibilityActions {
             if !level.isBundled, VisionModelStore.isInstalled(level) {
-                Button("Delete \(level.name) to free \(level.sizeDescription)") { delete(level) }
+                Button(L("Delete %@ to free %@", level.name, level.sizeDescription)) { delete(level) }
             }
             if !level.isBundled, downloading || state == .queued {
-                Button("Stop downloading \(level.name)") { downloader.cancel(level) }
+                Button(L("Stop downloading %@", level.name)) { downloader.cancel(level) }
             }
         }
     }
 
     private func pick(_ level: ModelLevel) {
         guard level.fitsThisPhone else {
-            confirm("\(level.name) is too big for this phone's memory.")
+            confirm(L("%@ is too big for this phone's memory.", level.name))
             return
         }
         choice = level.rawValue
         if VisionModelStore.isInstalled(level) {
-            confirm("\(level.name) selected. What's this? uses it from now on.")
+            confirm(L("%@ selected. What's this? uses it from now on.", level.name))
         } else {
             downloader.start(level)
             // The downloader says the rest ("Getting Sharp, 2 GB…"), once.
-            confirm("\(level.name) selected.")
+            confirm(L("%@ selected.", level.name))
         }
     }
 
     private func delete(_ level: ModelLevel) {
         downloader.delete(level)
         if choice == level.rawValue { choice = "auto" }
-        confirm("\(level.name) deleted. \(level.sizeDescription) freed.")
+        confirm(L("%@ deleted. %@ freed.", level.name, level.sizeDescription))
     }
 
     /// Every choice is said out loud, so nobody has to go looking for what changed.
     private func confirm(_ text: String) {
-        UIAccessibility.post(notification: .announcement, argument: text)
+        UIAccessibility.post(notification: .announcement, argument: SpeechManager.voiceOverLine(text, lang: AppLang.code))
     }
 }
