@@ -90,8 +90,18 @@ final class DownloadGuideTests: XCTestCase {
         var g = DownloadGuide(start: 0)
         _ = g.tick(sheetShowing: true, now: 1)
         XCTAssertNil(g.tick(sheetShowing: true, now: 121))
-        for t in stride(from: 122.0, through: 135, by: 1) { XCTAssertNil(g.tick(sheetShowing: true, now: t)) }
-        XCTAssertEqual(g.tick(sheetShowing: true, now: 136), .sheetWaiting)
+        for t in stride(from: 122.0, through: 138, by: 1) { XCTAssertNil(g.tick(sheetShowing: true, now: t)) }
+        XCTAssertEqual(g.tick(sheetShowing: true, now: 139), .sheetWaiting)
+    }
+
+    /// Apple's window came up while the phone was locked: quiet for 3 s after waking, then where the button is.
+    func testWindowThatOpenedDuringALockWaitsAfterWaking() {
+        var g = DownloadGuide(start: 0)
+        _ = g.tick(sheetShowing: false, now: 1)
+        XCTAssertNil(g.tick(sheetShowing: true, now: 100))
+        XCTAssertNil(g.tick(sheetShowing: true, now: 101))
+        XCTAssertNil(g.tick(sheetShowing: true, now: 102))
+        XCTAssertEqual(g.tick(sheetShowing: true, now: 103), .sheetOpened)
     }
 
     /// Up for minutes, then gone: no progress line on the very tick it closes.
@@ -118,6 +128,6 @@ final class DownloadGuideTests: XCTestCase {
                        "Apple abrió una ventana para descargar español, en la mitad de abajo de la pantalla. Toca el botón redondo con una flecha hacia abajo a la derecha, junto a los nombres de los idiomas.")
         XCTAssertTrue(DownloadGuide.text(.sheetWaiting, code: "es").hasPrefix("La descarga de español espera tu toque"))
         XCTAssertEqual(DownloadGuide.text(.sheetClosed, code: "es"),
-                       "La ventana de descarga de Apple se cerró antes de descargar español. Revisa la conexión a internet y vuelve a tocar Descarga español en Ajustes, en Tu idioma.")
+                       "Español no se descargó: la ventana de Apple se cerró antes, o la descarga se detuvo. Revisa la conexión a internet y vuelve a tocar Descarga español en Ajustes, en Tu idioma.")
     }
 }

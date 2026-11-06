@@ -56,6 +56,17 @@
         }
       }
     },
+    "%@ didn't download: Apple's window closed first, or the download stopped. Check the internet connection, then tap Download %@ again in Settings, under Your language." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ no se descargó: la ventana de Apple se cerró antes, o la descarga se detuvo. Revisa la conexión a internet y vuelve a tocar Descarga %@ en Ajustes, en Tu idioma."
+          }
+        }
+      }
+    },
     "%@ failed its integrity check." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -525,17 +536,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Apple abrió una ventana para descargar %@, en la mitad de abajo de la pantalla. Toca el botón redondo con una flecha hacia abajo a la derecha, junto a los nombres de los idiomas."
-          }
-        }
-      }
-    },
-    "Apple's download window closed before %@ downloaded. Check the internet connection, then tap Download %@ again in Settings, under Your language." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La ventana de descarga de Apple se cerró antes de descargar %@. Revisa la conexión a internet y vuelve a tocar Descarga %@ en Ajustes, en Tu idioma."
           }
         }
       }

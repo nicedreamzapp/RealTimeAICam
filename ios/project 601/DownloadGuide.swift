@@ -38,15 +38,24 @@ struct DownloadGuide {
     private var reminders = 0
     private var lastLineAt: TimeInterval
     private var lastTickAt: TimeInterval
+    private var wokeAt: TimeInterval?
+    /// After waking from a lock: quiet this long, so VoiceOver can read the unlocked screen.
+    static let quietAfterWake: TimeInterval = 3
 
     /// `start`: when the "Downloading" line was said.
     init(start: TimeInterval) { lastLineAt = start; lastTickAt = start }
 
     /// Called about once a second while the download runs.
     mutating func tick(sheetShowing: Bool, now: TimeInterval) -> Line? {
-        // Back from a lock: never a line on the first tick after waking.
-        if now - lastTickAt > Self.sleptAfter { lastLineAt = now }
+        // Back from a lock: quiet for a few seconds (even if Apple's window came up meanwhile),
+        // then the wait starts over.
+        if now - lastTickAt > Self.sleptAfter { wokeAt = now }
         lastTickAt = now
+        if let wokeAt {
+            guard now - wokeAt >= Self.quietAfterWake else { return nil }
+            self.wokeAt = nil
+            lastLineAt = now
+        }
         if sheetShowing {
             awaySince = nil
             if !sheetUp {
@@ -105,17 +114,19 @@ struct DownloadGuide {
 /// sheet appears as a presented view controller once prepareTranslation asks for it).
 @MainActor
 enum DownloadSheetWatch {
-    /// How many view controllers are stacked over the app's root right now, and the top one's class.
-    static func stack() -> (depth: Int, top: String) {
+    /// The view controllers presented over the app's root right now, and the top one's class.
+    /// Apple's window is one that was not there when the download was tapped (comparing which
+    /// ones, not how many: closing Settings meanwhile must not hide Apple's window).
+    static func stack() -> (presented: Set<ObjectIdentifier>, top: String) {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
         let window = scenes.flatMap(\.windows).first(where: \.isKeyWindow) ?? scenes.first?.windows.first
         var vc = window?.rootViewController
-        var depth = 0
+        var presented = Set<ObjectIdentifier>()
         while let next = vc?.presentedViewController, !next.isBeingDismissed {
-            depth += 1
+            presented.insert(ObjectIdentifier(next))
             vc = next
         }
-        return (depth, vc.map { String(describing: type(of: $0)) } ?? "none")
+        return (presented, vc.map { String(describing: type(of: $0)) } ?? "none")
     }
 }
 
@@ -162,6 +173,7 @@ final class VoiceOverLineQueue {
     }
 
     private func finished(_ said: String?) {
+        // Only one line is ever inside VoiceOver at a time, so its report is for that line.
         guard let inFlight, said == nil || said == inFlight else { return }
         self.inFlight = nil
         postNext()
@@ -175,14 +187,19 @@ final class VoiceOverLineQueue {
             inFlight = next.text
             UIAccessibility.post(notification: .announcement,
                                  argument: SpeechManager.voiceOverLine(next.text, lang: next.lang, queue: true))
-            // If VoiceOver never reports back (turned off, interrupted), move on anyway.
+            // VoiceOver reports each line when it is read. Only if VoiceOver was turned off
+            // meanwhile (no report will come) does the queue move on by itself: never while
+            // VoiceOver may still be holding the line, so two never stack inside VoiceOver.
             watchdog?.cancel()
-            let text = next.text
             watchdog = Task { @MainActor [weak self] in
-                try? await Task.sleep(nanoseconds: 20_000_000_000)
-                guard !Task.isCancelled, self?.inFlight == text else { return }
-                self?.inFlight = nil
-                self?.postNext()
+                while !Task.isCancelled, self?.inFlight != nil {
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    if !UIAccessibility.isVoiceOverRunning {
+                        self?.inFlight = nil
+                        self?.pending.removeAll()
+                        return
+                    }
+                }
             }
             return
         }

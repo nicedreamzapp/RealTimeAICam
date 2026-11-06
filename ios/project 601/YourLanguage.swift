@@ -97,7 +97,7 @@ enum YourLanguageRules {
         L("The %@ download is waiting for your tap: the round button with a down arrow on the right, in the lower half of the screen. If you already tapped it, it is downloading and the window closes by itself when it's done.", nameInSentence(code))
     }
     static func sheetClosedLine(_ code: String) -> String {
-        L("Apple's download window closed before %@ downloaded. Check the internet connection, then tap Download %@ again in Settings, under Your language.", nameInSentence(code), nameInSentence(code))
+        L("%@ didn't download: Apple's window closed first, or the download stopped. Check the internet connection, then tap Download %@ again in Settings, under Your language.", name(code), nameInSentence(code))
     }
     /// Read by the English voice when no voice for `code` is installed, so it stays English
     /// out loud; `noVoiceShown` is the same line for the screen in the app's language.
@@ -243,7 +243,7 @@ final class YourLanguage: ObservableObject {
         downloading = c
         NSLog("YourLanguage: download requested by tap: %@", c)
         say(YourLanguageRules.downloadingLine(c), nil)
-        let baseline = DownloadSheetWatch.stack().depth
+        let baseline = DownloadSheetWatch.stack().presented
         let state = DownloadGuideState(DownloadGuide(start: DownloadGuide.clock()))
         // Watches for Apple's download window and says where its button is (DownloadGuide).
         let progress = Task { @MainActor [weak self] in
@@ -254,9 +254,9 @@ final class YourLanguage: ObservableObject {
                 let now = DownloadSheetWatch.stack()
                 if now.top != lastTop {
                     lastTop = now.top
-                    NSLog("YourLanguage: over the app now: %@ (depth %d, was %d)", now.top, now.depth, baseline)
+                    NSLog("YourLanguage: over the app now: %@ (%d presented, %d at the tap)", now.top, now.presented.count, baseline.count)
                 }
-                if let line = state.guide.tick(sheetShowing: now.depth > baseline, now: DownloadGuide.clock()) {
+                if let line = state.guide.tick(sheetShowing: !now.presented.subtracting(baseline).isEmpty, now: DownloadGuide.clock()) {
                     let stale: (() -> Bool)? = line.isReminder ? { [weak self] in
                         // Window gone, language ready, or the download over: the reminder no longer holds.
                         state.done || self?.downloading != c || (line == .sheetWaiting && !state.guide.sheetUp)

@@ -3,6 +3,8 @@ import CoreVideo
 import SwiftUI
 
 struct ObjectDetectionView: View {
+    /// Redraws in the new language when Your language changes the app's language (L() labels).
+    @ObservedObject private var appLang = AppLangObserver.shared
     @ObservedObject var viewModel: CameraViewModel
     @Binding var mode: AppMode
     @StateObject private var lidar = LiDARManager.shared

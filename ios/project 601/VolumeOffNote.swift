@@ -57,6 +57,8 @@ final class VolumeWatcher: ObservableObject {
 }
 
 struct VolumeOffNote: View {
+    /// Redraws in the new language when Your language changes the app's language (L() labels).
+    @ObservedObject private var appLang = AppLangObserver.shared
     @StateObject private var watcher = VolumeWatcher()
 
     var body: some View {

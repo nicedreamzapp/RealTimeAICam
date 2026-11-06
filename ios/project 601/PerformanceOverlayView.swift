@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct PerformanceOverlayView: View {
+    /// Redraws in the new language when Your language changes the app's language (L() labels).
+    @ObservedObject private var appLang = AppLangObserver.shared
     let fps: Double
     let objectCount: Int
     let isPortrait: Bool

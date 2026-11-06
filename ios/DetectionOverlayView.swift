@@ -2,6 +2,8 @@ import SwiftUI
 import UIKit
 
 struct DetectionOverlayView: View {
+    /// Redraws in the new language when Your language changes the app's language (L() labels).
+    @ObservedObject private var appLang = AppLangObserver.shared
     let detectedObjects: [YOLODetection]
     let isPortrait: Bool
     let orientation: UIDeviceOrientation

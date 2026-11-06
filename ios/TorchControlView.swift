@@ -6,6 +6,8 @@ import SwiftUI
 // making someone pick a percentage before any light appears costs several VoiceOver
 // flicks at the exact moment they cannot see, and nobody wants a dim flashlight.
 struct TorchButton: View {
+    /// Redraws in the new language when Your language changes the app's language (L() labels).
+    @ObservedObject private var appLang = AppLangObserver.shared
     @State private var torchLevel: Float = 0.0
     let initialTorchLevel: Float
     let onLevelChanged: ((Float) -> Void)?
