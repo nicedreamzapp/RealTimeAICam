@@ -1,6 +1,7 @@
 // Live Cam's voice: RT Cam's own voice, not Moonstone's. The person's chosen voice from Settings
 // (SpeechManager.selectedVoiceIdentifier), RT Cam's text clean-up (SpeakableText), Your language
-// (each sentence put into it before it is said, with the best installed voice for that language), and
+// (each sentence of content put into it before it is said, with the best installed voice for that language; the
+// app's own lines come already in the app language, AppLang, and are said in a voice for it), and
 // "Let VoiceOver do the talking" (with that setting off and VoiceOver running, every sentence goes to
 // VoiceOver as an announcement and the app's own voice stays silent, so the two never talk over each other).
 //
@@ -12,22 +13,31 @@ import UIKit
 
 @MainActor
 protocol LiveVoiceOutput: AnyObject {
-    /// Queue one English sentence. It is translated, said in order, and `onStart` fires as it starts.
+    /// Queue one English sentence of content (a model answer, something it saw). It is put into Your language,
+    /// said in order, and `onStart` fires as it starts.
     func say(_ english: String)
+    /// Queue one of the app's own lines, already in the app language (`text`, said with a voice for `lang`, never
+    /// translated). `english` is its English key, which the call's logic compares (acks, check-ins, echoes).
+    func sayLine(_ text: String, lang: String, english: String)
     func stop()
     var isBusy: Bool { get }
     /// Test aid: the queue and its timing run with no sound.
     var muted: Bool { get set }
-    /// (what is said or shown, the English it came from)
-    var onStart: ((String, String) -> Void)? { get set }
+    /// (what is said or shown, the English it came from, the language it is said in)
+    var onStart: ((String, String, String) -> Void)? { get set }
     var onQuiet: (() -> Void)? { get set }
+}
+
+extension LiveVoiceOutput {
+    /// The app's own fixed line, in the app language (Spanish when the app is Spanish).
+    func sayOwn(_ english: String) { sayLine(L(english), lang: AppLang.code, english: english) }
 }
 
 @MainActor
 final class LiveAppleVoice: NSObject, LiveVoiceOutput, AVSpeechSynthesizerDelegate {
     private let synth = AVSpeechSynthesizer()
     var muted = false
-    var onStart: ((String, String) -> Void)?
+    var onStart: ((String, String, String) -> Void)?
     var onQuiet: (() -> Void)?
 
     /// One queued sentence; `ready` puts it into Your language (instant in English).
@@ -61,7 +71,7 @@ final class LiveAppleVoice: NSObject, LiveVoiceOutput, AVSpeechSynthesizerDelega
     var isBusy: Bool { !queue.isEmpty || playing || synth.isSpeaking || Date() < silentUntil || Date() < announcementUntil }
 
     /// Moonstone 11/2 (Matt): Apple's voice read "Live camera" as "liv". "Live" before a noun or after go/is/went
-    /// is pinned to "lyve"; "I live in Trinidad" is left alone. English only.
+    /// is pinned to "lyve"; "I live in Trinidad" is left alone. English, and Spanish lines that name Live Cam.
     static func pronounced(_ t: String) -> NSAttributedString {
         let a = NSMutableAttributedString(string: t)
         let ns = t as NSString
@@ -87,6 +97,14 @@ final class LiveAppleVoice: NSObject, LiveVoiceOutput, AVSpeechSynthesizerDelega
         playNext()
     }
 
+    func sayLine(_ text: String, lang: String, english: String) {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        let ready = Task { @MainActor () -> (text: String, lang: String) in (t, lang) }
+        queue.append(Item(english: english.isEmpty ? t : english, ready: ready))
+        playNext()
+    }
+
     private func playNext() {
         guard !playing, !queue.isEmpty else { return }
         let item = queue.removeFirst()
@@ -100,12 +118,12 @@ final class LiveAppleVoice: NSObject, LiveVoiceOutput, AVSpeechSynthesizerDelega
     }
 
     private func speak(_ raw: String, lang: String, english: String) {
-        let line = SpeakableText.spoken(raw)
+        let line = SpeakableText.spoken(raw, lang: lang)
         guard !line.isEmpty else { sentenceDone(); return }
         #if DEBUG
         SpeakLog.note("liveCam[\(lang)]", line)
         #endif
-        onStart?(line, english)
+        onStart?(line, english, lang)
         if muted {
             // Same length as speaking it (about 2.6 words a second), no sound.
             silentUntil = Date().addingTimeInterval(0.35 + Double(line.split(separator: " ").count) / 2.6)
@@ -120,7 +138,7 @@ final class LiveAppleVoice: NSObject, LiveVoiceOutput, AVSpeechSynthesizerDelega
             // VoiceOver reads it in the person's own voice and rate. If VoiceOver drops it, it never reports
             // back, so allow about the time it takes to say it.
             announcementUntil = Date().addingTimeInterval(max(2.5, Double(line.count) * 0.08))
-            UIAccessibility.post(notification: .announcement, argument: line)
+            UIAccessibility.post(notification: .announcement, argument: SpeechManager.voiceOverLine(line, lang: lang))
             let gen = generation
             DispatchQueue.main.asyncAfter(deadline: .now() + announcementUntil.timeIntervalSinceNow) { [weak self] in
                 guard let self, gen == self.generation, self.announcementUntil != .distantPast else { return }
@@ -130,8 +148,10 @@ final class LiveAppleVoice: NSObject, LiveVoiceOutput, AVSpeechSynthesizerDelega
             return
         }
         let prepared = YourLanguageVoice.prepare(line, lang: lang, selected: SpeechManager.shared.selectedVoiceIdentifier)
-        let u = lang == YourLanguageRules.english ? AVSpeechUtterance(attributedString: Self.pronounced(prepared.text))
-                                                   : AVSpeechUtterance(string: prepared.text)
+        // Spanish lines say "Live Cam" too (the name stays English), so they get the same "lyve".
+        let u = lang == YourLanguageRules.english || lang == AppLang.spanish
+            ? AVSpeechUtterance(attributedString: Self.pronounced(prepared.text))
+            : AVSpeechUtterance(string: prepared.text)
         u.voice = prepared.voice ?? AVSpeechSynthesisVoice(language: "en-US")
         u.rate = 0.5   // RT Cam's rate everywhere (SpeechManager)
         current = u

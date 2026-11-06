@@ -119,6 +119,22 @@ struct LiveMemory {
 
 // MARK: - Words
 
+/// One line for Live Cam's voice (2026-11-05, Spanish UI). `own`: the app's own words, an English key said in the
+/// app language (AppLang). `content`: what the model said or saw, in English, put into Your language. `withContent`:
+/// an app line (a format key with one %@) carrying a piece of content (Coach's goal, a thing it saw).
+enum LiveLine: Equatable {
+    case own(String)
+    case content(String)
+    case withContent(String, String)
+
+    /// A `withContent` line is translated whole when Your language is the (non-English) app language and its
+    /// translator is ready: "Trabajemos en tu tiro" instead of an English goal inside a Spanish sentence.
+    /// Otherwise it is the app language's line with the piece as it is.
+    static func translatesWhole(appCode: String, yourCode: String) -> Bool {
+        appCode != YourLanguageRules.english && yourCode == appCode
+    }
+}
+
 enum LiveWords {
     /// Says out loud that it is always listening: there is nothing to tap (Matt's first try, 10/31).
     /// 11/2 Matt: "it should just be like hey there how you doing and then wait for cues", not describe the room.
@@ -258,8 +274,12 @@ enum LiveWords {
     }
     /// "Oh, I see a boat now." for one or two new things.
     static func newThingLine(_ things: [String]) -> String {
-        let named = things.prefix(2).map { t in t.hasSuffix("s") || t.hasSuffix("ing") ? t : ("aeiou".contains(t.first ?? "x") ? "an " : "a ") + t }
-        return "Oh, I see " + named.joined(separator: " and ") + " now."
+        "Oh, I see " + newThings(things) + " now."
+    }
+    /// "a boat", "an umbrella and boxes": the English things for newThingLine (and its app-language format).
+    static func newThings(_ things: [String]) -> String {
+        things.prefix(2).map { t in t.hasSuffix("s") || t.hasSuffix("ing") ? t : ("aeiou".contains(t.first ?? "x") ? "an " : "a ") + t }
+            .joined(separator: " and ")
     }
 
     /// The unprompted look: one new line, or exactly NOTHING NEW.
@@ -419,9 +439,10 @@ enum LiveWords {
     static func modeSwitch(_ t: String) -> LiveMode? {
         let s = " " + t + " "
         let asks: [(LiveMode, [String])] = [
-            (.funny, [" funny mode ", " be funny ", " make me laugh ", " comedy mode ", " joke mode "]),
+            // " fun mode ", " trainer mode ", " training mode ": Spanish "modo divertido / modo entrenador" put into English.
+            (.funny, [" funny mode ", " be funny ", " make me laugh ", " comedy mode ", " joke mode ", " fun mode "]),
             (.analyze, [" analyze mode ", " analysis mode ", " analyze this ", " analyze it ", " detail mode ", " be detailed ", " analyzing mode ", " analyze "]),
-            (.coach, [" coach mode ", " coach me ", " coaching mode "]),
+            (.coach, [" coach mode ", " coach me ", " coaching mode ", " trainer mode ", " training mode "]),
             (.normal, [" normal mode ", " back to normal ", " regular mode ", " stop being funny ", " stop coaching ", " default mode "]),
         ]
         for (m, ps) in asks where ps.contains(where: { s.contains($0) }) { return m }
@@ -429,7 +450,8 @@ enum LiveWords {
     }
 
     static let modePhrases = [" funny mode ", " be funny ", " analyze mode ", " analysis mode ", " analyze this ", " analyze it ",
-                              " analyze ", " detail mode ", " be detailed ", " analyzing mode ", " coach mode ", " coaching mode ", " coach me "]
+                              " analyze ", " detail mode ", " be detailed ", " analyzing mode ", " coach mode ", " coaching mode ", " coach me ",
+                              " fun mode ", " trainer mode ", " training mode "]
 
     /// What they said after the mode words, when the mode words open the sentence: "coach me on my jump shot" ->
     /// "on my jump shot", "can you analyze the forces on this shelf" -> "the forces on this shelf". Nil if nothing real follows.

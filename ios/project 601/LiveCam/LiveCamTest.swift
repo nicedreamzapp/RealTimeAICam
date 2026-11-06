@@ -16,6 +16,36 @@ enum LiveCamWords {
     static let cantHear = "I can't hear you right now. Speech recognition on this phone keeps stopping. You can type your question in the box, or go back."
     static let cantHearNote = "Can't hear you: speech recognition keeps stopping. Type a question below, or tap Back."
     static let noOfflineSpeech = "Speech recognition on this phone can't work offline yet, so Live Cam can't hear you here."
+
+    // The app's own lines in LiveCallController (English keys; said in the app language).
+    static let needsCamera = "Live Cam needs the camera. Allow it in Settings, then open Live Cam again."
+    static let modelFailed = "I couldn't start the vision model. Go back and try Live Cam again."
+    static let sayAgain = "Sorry, say that again?"
+    static let lostTrack = "I lost track of that part. Ask me the whole question again?"
+    static let bye = "Okay, bye for now."
+    static let gotIt = "Got it."
+    static let coachGoalSet = "Coach mode on. Let's work on %@. Show me, or ask me anything about it."
+    static let nothingSaidYet = "I haven't said anything yet."
+    static let coachGoalHeard = "Got it, %@. Show me what you're doing, or ask me anything about it."
+    static let flipToSeeYou = "Flip the camera to face you and I'll take a look."
+    static let stillGettingReady = "I'm still getting ready. Ask me again in a second."
+    static let cantSeeInBackground = "I can't see while the phone is locked or another app is open. Open RealTime AI Cam again and ask me."
+    static let cameraPaused = "My camera paused, I'm restarting it. Ask me again in a second."
+    static let newThing = "Oh, I see %@ now."
+    static let notFullySure = "I'm not fully sure on that one."
+    static let takeBack = "Actually, I'm not sure about the %@."
+    static let lostAnswer = "Sorry, I lost that. Ask me again?"
+
+    /// Every line Live Cam says or shows through a constant rather than an L("...") literal (2026-11-05, Spanish UI).
+    /// es-strings.py only finds L("...") literals, so `missing` can't see these and `stale` lists them: keep them in the
+    /// catalog. LiveCamSpanishTests checks each one has its Spanish.
+    static var indirectKeys: [String] {
+        [permissionLine, notAllowed, cantHear, cantHearNote, noOfflineSpeech, LiveWords.firstGreeting,
+         needsCamera, modelFailed, sayAgain, lostTrack, bye, gotIt, coachGoalSet, nothingSaidYet, coachGoalHeard,
+         flipToSeeYou, stillGettingReady, cantSeeInBackground, cameraPaused, newThing, notFullySure, takeBack, lostAnswer]
+            + LiveWords.checkIns + LiveWords.acks
+            + LiveMode.allCases.flatMap { [$0.label, $0.confirm] }
+    }
 }
 
 enum LiveCamTest {
