@@ -70,10 +70,19 @@ enum LiveMoney {
         let t = folded(q)
         let fresh = [" again ", " now ", " recount ", " re count ", " otra vez ", " de nuevo ", " ahora "].contains { t.contains($0) }
         if isAboutAReceipt(t) { return .notMoney }
-        if let last, last.sure, !fresh, askedDenomination(q) != nil { return .fromLastCount }
-        if isMoneyQuestion(q) { return .countAgain }
-        if last != nil, isFollowUp(q) || isTotalFollowUp(q) || askedDenomination(q) != nil { return .countAgain }
+        // From memory only for a money question that names a denomination ("how many twenties", "cuántos de
+        // veinte"), never for one that merely contains a number word ("which ones are ripe", "a menos de 2 metros").
+        if let last, last.sure, !fresh, isDenominationQuestion(q) { return .fromLastCount }
+        if isMoneyQuestion(q) || isDenominationQuestion(q) { return .countAgain }
+        if last != nil, isFollowUp(q) || isTotalFollowUp(q) { return .countAgain }
         return .notMoney
+    }
+
+    /// A money question naming a denomination: the denomination plus a money word, or plus "how many" / "cuántos".
+    static func isDenominationQuestion(_ q: String) -> Bool {
+        guard askedDenomination(q) != nil else { return false }
+        let t = folded(q)
+        return isMoneyQuestion(q) || [" how many ", " cuantos ", " cuantas "].contains { t.contains($0) }
     }
 
     /// A short follow-up to a money answer that just happened: "count it", "add it up", "what's the total",
@@ -81,10 +90,10 @@ enum LiveMoney {
     /// plain "how many" (that could be about anything).
     static func isFollowUp(_ q: String) -> Bool {
         let t = folded(q)
-        return [" count it ", " count them ", " count again ", " total ", " add it ", " add them ", " sum ", " are you sure ",
-                " ones ", " fives ", " tens ", " twenties ", " fifties ", " hundreds ", " twos ", " each bill ",
-                " every bill ", " which bills ", " what bills ",
-                " cuentalos ", " cuentalo ", " cuenta otra vez ", " suma ", " sumalos ", " cuantos de "].contains { t.contains($0) }
+        // No bare "ones" / "tens": "which ones are ripe" is not about money (11/6 review).
+        return [" count it ", " count them ", " count again ", " add it ", " add them ", " are you sure ",
+                " each bill ", " every bill ", " which bills ", " what bills ",
+                " cuentalos ", " cuentalo ", " cuenta otra vez ", " sumalos "].contains { t.contains($0) }
     }
 
     /// "How many twenties" -> 20. nil when the question names no denomination.
@@ -207,9 +216,13 @@ enum LiveMoney {
         let t = text.lowercased()
         let digits = t.split { !$0.isNumber }.compactMap { Int($0) }
         if let v = digits.first, denominations.contains(v) { return v }
-        for (w, v) in [("hundred", 100), ("fifty", 50), ("twenty", 20), ("ten", 10), ("five", 5), ("two", 2), ("one", 1)]
-        where t.contains(w) { return v }
-        return nil
+        // Whole words only (11/6 review: "none", "money" and "often" were read as $1 and $10), English and Spanish.
+        let tokens = Set(t.folding(options: .diacriticInsensitive, locale: nil).split { !$0.isLetter }.map(String.init))
+        if !tokens.isDisjoint(with: ["hundred", "cien", "ciento"]) { return 100 }   // "one hundred", "cien dólares"
+        let names: [String: Int] = ["fifty": 50, "twenty": 20, "ten": 10, "five": 5, "two": 2, "one": 1,
+                                    "cincuenta": 50, "veinte": 20, "diez": 10, "cinco": 5, "dos": 2, "uno": 1, "un": 1]
+        let said = Set(tokens.compactMap { names[$0] })
+        return said.count == 1 ? said.first : nil
     }
 
     /// One bill's value from its votes. The model's read stands when nothing printed contradicts it; a printed
@@ -314,8 +327,6 @@ enum LiveMoney {
     }
     private static func dist(_ a: CGPoint, _ b: CGPoint) -> CGFloat { hypot(a.x - b.x, a.y - b.y) }
 
-    /// Looks per money question on the detector path.
-    static let boxedFrames = 3
 
     /// Detector looks put together so the answer holds steady (no number that flips between frames): the count is
     /// the count most looks agree on (ties: the latest); a value is named only as many times as at least two of
@@ -371,8 +382,8 @@ enum LiveMoney {
             onLook?(c, log)
             looks.append(c)
             if c.boxed {
-                // The detector path: always take `boxedFrames` looks and answer with what they agree on.
-                while looks.count < boxedFrames, let more = frame() {
+                // The detector path: up to `maxFrames` looks (at least two), answered with what they agree on.
+                while looks.count < max(2, maxFrames), let more = frame() {
                     let (c2, log2) = look(more, ask: ask)
                     onLook?(c2, log2)
                     looks.append(c2)
@@ -427,6 +438,7 @@ enum LiveMoney {
         let byValue = Dictionary(grouping: c.values, by: { $0 }).map { (value: $0.key, count: $0.value.count) }.sorted { $0.value > $1.value }
         if k > 0 { s += " I can read \(readable(byValue))." }
         if c.sure { return s + " That's $\(c.total)." }
+        if c.doubts.contains(.tooMany) { return tooMany }
         if hedge { return s + " There may be more I can't make out. Fan them out a little so I can see each one." }
         let unread = n - k
         if unread > 0 {
@@ -461,6 +473,7 @@ enum LiveMoney {
             if n == 1 { return "That's one $\(c.total) bill." }
             return "$\(c.total) in \(number(n)) bills: \(breakdownWords(c.breakdown))."
         }
+        if c.doubts.contains(.tooMany) { return tooMany }
         if c.doubts.contains(.none) {
             return "I don't see any bills I can count. Lay them flat on a table, spread out so none touch, hold the phone about a foot and a half above them, and ask me again."
         }
@@ -497,6 +510,7 @@ enum LiveMoney {
 
     /// LiveCamWords.cameraPaused, word for word (the app's existing line; spanish-ui has it in its catalog).
     static let cameraPaused = "My camera paused, I'm restarting it. Ask me again in a second."
+    static let tooMany = "That's a lot of bills; I can count up to 12 at a time. Split them into smaller piles."
 
     // MARK: - Vision (the part that needs the frame)
 
@@ -545,6 +559,19 @@ enum LiveMoney {
     struct Serial: Equatable { var text: String; var at: CGPoint }
 
     /// Every serial number in the frame, read both ways up, with where it is (pixels, y up), each serial once.
+    /// Serials inside the area the given bills cover (their bounding rectangle, a little wider), in frame pixels.
+    static func serialsInFrame(_ image: CGImage, within quads: [Quad]) -> [Serial] {
+        guard !quads.isEmpty else { return [] }
+        let W = CGFloat(image.width), H = CGFloat(image.height)
+        let xs = quads.flatMap { $0.corners.map(\.x) }, ys = quads.flatMap { $0.corners.map(\.y) }   // y up
+        let pad = min(W, H) * 0.02
+        let x0 = max(0, xs.min()! - pad), x1 = min(W, xs.max()! + pad), y0 = max(0, ys.min()! - pad), y1 = min(H, ys.max()! + pad)
+        // CGImage crops in y-down pixels.
+        let rect = CGRect(x: x0, y: H - y1, width: x1 - x0, height: y1 - y0).integral
+        guard rect.width > 8, rect.height > 8, let crop = image.cropping(to: rect) else { return [] }
+        return serialsInFrame(crop).map { Serial(text: $0.text, at: CGPoint(x: $0.at.x + rect.minX, y: $0.at.y + (H - rect.maxY))) }
+    }
+
     static func serialsInFrame(_ image: CGImage) -> [Serial] {
         let W = CGFloat(image.width), H = CGFloat(image.height)
         var out: [Serial] = []
@@ -872,7 +899,11 @@ enum LiveMoney {
         return (agreed(views), said.joined(separator: " "))
     }
 
-    static func isYes(_ a: String?) -> Bool { (a ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased().hasPrefix("yes") }
+    /// "Yes" or "sí" as the answer's first word ("yesterday" is not a yes).
+    static func isYes(_ a: String?) -> Bool {
+        let first = (a ?? "").lowercased().folding(options: .diacriticInsensitive, locale: nil).split { !$0.isLetter }.first.map(String.init)
+        return first == "yes" || first == "si"
+    }
     static let countQuestion = "How many paper money bills can you see in this picture, including ones that are partly hidden? Answer with one number."
     static let moneyQuestion = "Is there US paper money in this picture? Answer yes or no."
 
@@ -907,7 +938,9 @@ enum LiveMoney {
         var anyPile = false
         // Serial numbers anywhere in the frame (both ways up): one serial is one bill, so the same bill is never
         // counted twice and two $1s side by side still count as two.
-        let frameSerials = serialsInFrame(image)
+        // Detector path: serials are read only inside the detected bills' area (11/6 review: the whole frame both
+        // ways up cost seconds a look).
+        let frameSerials = boxed.map { serialsInFrame(image, within: $0.map(\.quad)) } ?? serialsInFrame(image)
         func read(_ crop: CGImage) -> (Int?, [String: Any]) {
             let (lines, upright) = printedTextAndWayUp(crop)
             let (word, numeral) = ocrVotes(lines)
@@ -1121,14 +1154,15 @@ enum MoneyLang: String {
 /// counted bill is read). Kept beside the English so both change together.
 enum MoneyWordsES {
     static let cameraPaused = "Mi cámara se detuvo, la estoy reiniciando. Pregúntame otra vez en un segundo."
+    static let tooMany = "Son muchos billetes; puedo contar hasta 12 a la vez. Sepáralos en montones más pequeños."
     static func number(_ n: Int) -> String {
         let w = ["cero", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez", "once", "doce"]
         return n < w.count ? w[n] : "\(n)"
     }
     /// "uno de $100, uno de $20 y cuatro de $1", largest first.
-    static func readable(_ values: [Int]) -> String {
+    static func readable(_ values: [Int], atLeast: Bool = false) -> String {
         let b = Dictionary(grouping: values, by: { $0 }).map { ($0.key, $0.value.count) }.sorted { $0.0 > $1.0 }
-        let parts = b.map { v, n in "\(number(n)) de $\(v)" }
+        let parts = b.map { v, n in (atLeast ? "al menos " : "") + "\(number(n)) de $\(v)" }
         guard parts.count > 1 else { return parts.first ?? "" }
         return parts.dropLast().joined(separator: ", ") + " y " + parts.last!
     }
@@ -1141,6 +1175,7 @@ enum MoneyWordsES {
         var s = hedge ? "Al menos \(bills(n))." : "\(bills(n))."
         if k > 0 { s += " Puedo leer \(readable(c.values))." }
         if c.sure { return s + " Son $\(c.total) en total." }
+        if c.doubts.contains(.tooMany) { return tooMany }
         if hedge { return s + " Puede que haya más que no distingo. Ábrelos un poco en abanico para que vea cada uno." }
         let unread = n - k
         if unread > 0 {
@@ -1158,12 +1193,13 @@ enum MoneyWordsES {
             if c.values.count == 1 { return "Es un billete de $\(c.total)." }
             return "$\(c.total) en \(number(c.values.count)) billetes: \(readable(c.values))."
         }
+        if c.doubts.contains(.tooMany) { return tooMany }
         if c.doubts.contains(.none) {
             return "No veo billetes que pueda contar. Ponlos planos en una mesa, separados para que no se toquen, sostén el teléfono a medio metro y pregúntame otra vez."
         }
         let read = c.values + c.pileValues.filter { !c.values.contains($0) }
         if c.doubts.contains(.overlapping) {
-            let seen = read.isEmpty ? "Todavía no distingo ninguno." : "Distingo \(readable(read))."
+            let seen = read.isEmpty ? "Todavía no distingo ninguno." : "Distingo \(readable(read, atLeast: !c.pileValues.isEmpty))."
             let floor = c.atLeast >= 2 ? " Hay al menos \(number(c.atLeast)) billetes." : ""
             return "Algunos billetes se tapan, así que no puedo contarlos ni darte un total.\(floor) \(seen) Sepáralos en la mesa para que no se tapen y pregúntame otra vez."
         }

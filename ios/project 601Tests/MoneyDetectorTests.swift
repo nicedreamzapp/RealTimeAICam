@@ -196,3 +196,51 @@ struct MoneyReviewFixTests {
         #expect(!MoneyDetector.validShape([1, 300, 6]) && !MoneyDetector.validShape([1, 20, 2100]))
     }
 }
+
+/// Review round 2 (11/6): whole words, follow-ups that aren't about money, Spanish floors, too many bills.
+struct MoneyReviewRound2Tests {
+    static let sure = MoneyReviewFixTests.sure
+
+    @Test func theModelsWordsAreWholeWords() {
+        for (said, v) in [("None", nil), ("Money", nil), ("often", nil), ("ninguno", nil), ("nothing on it", nil),
+                          ("One", 1), ("It's a twenty", 20), ("one hundred", 100), ("Cien dólares", 100), ("veinte", 20),
+                          ("uno", 1), ("5", 5), ("one or five", nil)] as [(String, Int?)] {
+            #expect(LiveMoney.modelVote(said) == v, "\(said)")
+        }
+        #expect(LiveMoney.isYes("Yes.") && LiveMoney.isYes("Sí") && !LiveMoney.isYes("Yesterday") && !LiveMoney.isYes("no"))
+    }
+
+    @Test func onlyAMoneyQuestionWithADenominationAnswersFromMemory() {
+        #expect(LiveMoney.route("which ones are ripe", last: Self.sure) == .notMoney)
+        #expect(LiveMoney.route("a menos de 2 metros", last: Self.sure) == .notMoney)
+        #expect(LiveMoney.route("are the tens of ants gone", last: Self.sure) == .notMoney)
+        #expect(LiveMoney.route("how many twenties", last: Self.sure) == .fromLastCount)
+        #expect(LiveMoney.route("¿cuántos de veinte?", last: Self.sure) == .fromLastCount)
+        #expect(LiveMoney.route("how many $20 bills", last: Self.sure) == .fromLastCount)
+        #expect(LiveMoney.route("how many twenties", last: nil) == .countAgain)
+    }
+
+    @Test func spanishOverlapIsAFloor() {
+        var c = LiveMoney.count(MoneyDetectorDecodeTests.bills([100, nil]), pile: [20, 100])
+        c.atLeast = 3
+        let s = LiveMoney.sentence(c, lang: .es)
+        #expect(s.contains("al menos"))
+        #expect(s.contains("Hay al menos tres billetes"))
+    }
+
+    @Test func tooManyBillsHasItsOwnLine() {
+        let c = LiveMoney.count(MoneyDetectorDecodeTests.bills(Array(repeating: 1, count: 13)), boxed: true)
+        #expect(c.doubts.contains(.tooMany))
+        #expect(LiveMoney.sentence(c) == "That's a lot of bills; I can count up to 12 at a time. Split them into smaller piles.")
+        #expect(LiveMoney.sentence(c, lang: .es) == MoneyWordsES.tooMany)
+        let old = LiveMoney.count(MoneyDetectorDecodeTests.bills(Array(repeating: 1, count: 13)))
+        #expect(LiveMoney.sentence(old) == LiveMoney.tooMany)
+    }
+
+    @Test func theDetectorPathHonorsMaxFrames() {
+        // No camera frames to give: still never more looks than asked for, and never "no bills".
+        var asked = 0
+        let c = LiveMoney.countBurst(maxFrames: 2, frame: { asked += 1; return nil }, ask: nil)
+        #expect(asked == 1 && c.doubts.contains(.noCamera))
+    }
+}

@@ -524,6 +524,7 @@ final class LiveCallController: ObservableObject {
             let line = moneyLang == .en ? english : LiveMoney.followUp(q, last: last, lang: moneyLang)
             log(["event": "money_follow_up", "question": q, "answer": english])
             memory.note(question: q, answer: english)
+            current?.cancel(); current = nil   // a count still running is not said over this answer (11/6 review)
             turn += 1
             answerDone = true
             phase = .speaking
