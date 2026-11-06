@@ -307,8 +307,8 @@ enum LiveGoal {
         let t = " " + LiveWords.normalize(q) + " "
         // ("Can you help me put this shelf together?" still is: a request, not a what/which/who/where question.)
         if [" what ", " which ", " who ", " where ", " whats "].contains(where: { t.contains($0) }) { return nil }
-        let w = LiveWords.normalize(q).split(separator: " ").map(String.init)
-        guard let lead = leads.first(where: { w.count > $0.count && Array(w.prefix($0.count)) == $0 }) else { return nil }
+        guard let lead = lead(of: q) else { return nil }
+        let w = words(q)
         var rest = Array(w.dropFirst(lead.count))
         if ["i", "m", "im", "am", "re"].contains(lead.last!) || lead == ["im"] {
             // "I'm changing a tire": a doing word right after; "I'm tired" isn't a task.
@@ -327,6 +327,29 @@ enum LiveGoal {
         let t = " " + LiveWords.normalize(q) + " "
         return [" new thing ", " new task ", " something else ", " different thing ", " now i need to ", " now i want to ",
                 " now help me ", " instead ", " switch to ", " next i want to "].contains { t.contains($0) }
+    }
+
+    /// The words with a leading "now", "next", "so", "okay" dropped ("Now I need to fix the faucet", Matt 11/6).
+    static func words(_ q: String) -> [String] {
+        var w = LiveWords.normalize(q).split(separator: " ").map(String.init)
+        while let f = w.first, ["now", "next", "so", "okay", "ok", "alright", "well", "and", "um", "uh", "then"].contains(f), w.count > 1 { w.removeFirst() }
+        return w
+    }
+    static func lead(of q: String) -> [String]? {
+        let w = words(q)
+        return leads.first(where: { w.count > $0.count && Array(w.prefix($0.count)) == $0 })
+    }
+    /// A goal asked for in so many words ("I need to...", "help me...", "how do I..."), not "I'm putting the spare on"
+    /// (a step of the goal they are on). Mid-goal, this switches to the new goal (Matt 11/6).
+    static func asksForTask(_ q: String) -> Bool {
+        guard detect(q) != nil, let l = lead(of: q) else { return false }
+        return !["i", "m", "im", "am", "re"].contains(l.last!) && l != ["im"]
+    }
+
+    /// A lone "next" or "ok" heard while it is talking or within a second after it stops is the tail of its own voice
+    /// ("Say next when you're ready"), never a step (Matt 11/6).
+    static func isEchoTail(_ fresh: [String], speaking: Bool, sinceItSpoke: TimeInterval) -> Bool {
+        fresh.count == 1 && ["next", "ok", "okay"].contains(fresh[0]) && (speaking || sinceItSpoke < 1.0)
     }
 
     /// "Done", "never mind", "new thing": the goal is over.

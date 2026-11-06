@@ -647,3 +647,29 @@ struct LiveStepsReview1Tests {
         #expect(LiveProactive.difference(a, b) >= LiveThings.movedTooFar)
     }
 }
+
+/// Goal follow-ups (Matt 11/6).
+struct LiveGoalFollowUpTests {
+    @Test func aNewTaskMidGoalIsANewGoal() {
+        #expect(LiveGoal.detect("Now I need to fix the faucet") == "fix the faucet")
+        #expect(LiveGoal.asksForTask("Now I need to fix the faucet"))
+        #expect(LiveGoal.asksForTask("okay help me hang this picture"))
+        #expect(!LiveGoal.asksForTask("I'm putting the spare on"))   // a step of the tire
+        #expect(LiveGoal.detect("I'm changing a tire") == "changing a tire")
+    }
+
+    @Test func okRightAfterReadyAdvances() {
+        var g = LiveGoal.State(task: "changing a tire")
+        g.askedReady = true
+        #expect(g.askedRecently())
+        #expect(LiveGoal.wantsNext("ok", askedReady: g.askedRecently()))
+        #expect(LiveWords.isEcho("ok"))   // why the controller lets it through only inside the window
+    }
+
+    @Test func aLoneEchoedNextIsIgnored() {
+        #expect(LiveGoal.isEchoTail(["next"], speaking: true, sinceItSpoke: 5))
+        #expect(LiveGoal.isEchoTail(["next"], speaking: false, sinceItSpoke: 0.4))
+        #expect(!LiveGoal.isEchoTail(["next"], speaking: false, sinceItSpoke: 2))
+        #expect(!LiveGoal.isEchoTail(["what", "next"], speaking: false, sinceItSpoke: 0.4))
+    }
+}
