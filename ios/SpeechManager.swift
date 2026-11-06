@@ -351,8 +351,11 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     /// A VoiceOver announcement tagged with its language, so VoiceOver reads Spanish in Spanish.
-    static func voiceOverLine(_ text: String, lang: String) -> NSAttributedString {
-        NSAttributedString(string: text, attributes: [.accessibilitySpeechLanguage: lang])
+    /// `queue`: VoiceOver reads it after what it is reading now instead of dropping it.
+    static func voiceOverLine(_ text: String, lang: String, queue: Bool = false) -> NSAttributedString {
+        var attributes: [NSAttributedString.Key: Any] = [.accessibilitySpeechLanguage: lang]
+        if queue { attributes[.accessibilitySpeechQueueAnnouncement] = true }
+        return NSAttributedString(string: text, attributes: attributes)
     }
 
     /// The voices the picker offers: the app language's (Spanish voices when the app is in Spanish).

@@ -87,7 +87,8 @@ enum YourLanguageRules {
     }
     /// Apple's download window (seen on an iPhone 12, 2026-11-05): a "Translate" sheet over the
     /// lower half of the screen, "Required Downloads", one line per language, each with a round
-    /// download button at its right end (VoiceOver: "Arrow Down Circle"). One tap downloads them
+    /// down-arrow button at its right end (its VoiceOver name is Apple's and follows the phone's
+    /// language, so the lines describe it instead of naming it). One tap downloads them
     /// all; the window stays open while it downloads and closes by itself when done.
     static func sheetOpenedLine(_ code: String) -> String {
         L("Apple opened a window to download %@, in the lower half of the screen. Tap the round button with a down arrow on the right, next to the language names.", nameInSentence(code))
@@ -234,14 +235,15 @@ final class YourLanguage: ObservableObject {
 
     /// The person tapped the download row. The ONLY place Your language downloads.
     /// `say` gets the spoken progress lines.
-    func download(say: @escaping (String) -> Void) {
+    /// `say(line, once)`: once is false for the repeated reminders.
+    func download(say: @escaping (String, Bool) -> Void) {
         let c = code
         guard c != YourLanguageRules.english, !isReady(c), downloading == nil else { return }
         downloading = c
         NSLog("YourLanguage: download requested by tap: %@", c)
-        say(YourLanguageRules.downloadingLine(c))
+        say(YourLanguageRules.downloadingLine(c), true)
         let baseline = DownloadSheetWatch.stack().depth
-        let state = DownloadGuideState(DownloadGuide(start: ProcessInfo.processInfo.systemUptime))
+        let state = DownloadGuideState(DownloadGuide(start: DownloadGuide.clock()))
         // Watches for Apple's download window and says where its button is (DownloadGuide).
         let progress = Task { @MainActor [weak self] in
             var lastTop = ""
@@ -253,8 +255,8 @@ final class YourLanguage: ObservableObject {
                     lastTop = now.top
                     NSLog("YourLanguage: over the app now: %@ (depth %d, was %d)", now.top, now.depth, baseline)
                 }
-                if let line = state.guide.tick(sheetShowing: now.depth > baseline, now: ProcessInfo.processInfo.systemUptime) {
-                    say(DownloadGuide.text(line, code: c))
+                if let line = state.guide.tick(sheetShowing: now.depth > baseline, now: DownloadGuide.clock()) {
+                    say(DownloadGuide.text(line, code: c), line == .sheetOpened)
                 }
             }
         }
@@ -266,7 +268,7 @@ final class YourLanguage: ObservableObject {
             if ok { readyCodes.insert(c) }
             publish()
             NSLog("YourLanguage: download %@ ok=%d", c, ok ? 1 : 0)
-            say(DownloadGuide.text(state.guide.finished(ok: ok), code: c))
+            say(DownloadGuide.text(state.guide.finished(ok: ok), code: c), true)
         }
     }
 

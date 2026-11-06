@@ -9,18 +9,17 @@ struct YourLanguageCard: View {
     @ObservedObject private var yourLanguage = YourLanguage.shared
     @ObservedObject private var appLang = AppLangObserver.shared
 
-    private func say(_ line: String) {
+    /// `queue`: with VoiceOver on, wait for VoiceOver instead of being dropped (lines said
+    /// once); repeated reminders are not queued, so they never pile up and play late.
+    private func say(_ line: String, queue: Bool = true) {
         #if DEBUG
         SpeakLog.note("yourLanguage", line)
         #endif
-        // VoiceOver on: one announcement, so it doesn't talk over VoiceOver reading Apple's
-        // download window (the same rule as UICue). Otherwise the app's voice.
+        // VoiceOver on: an announcement, so the app's voice doesn't talk over VoiceOver
+        // reading Apple's download window. Otherwise the app's voice.
         if UIAccessibility.isVoiceOverRunning {
-            // Queued, so VoiceOver finishes what it is reading instead of dropping the line.
             UIAccessibility.post(notification: .announcement,
-                                 argument: NSAttributedString(string: line, attributes: [
-                                     .accessibilitySpeechLanguage: AppLang.code,
-                                     .accessibilitySpeechQueueAnnouncement: true]))
+                                 argument: SpeechManager.voiceOverLine(line, lang: AppLang.code, queue: queue))
         } else {
             SpeechManager.shared.speak(line)
         }
@@ -76,7 +75,7 @@ struct YourLanguageCard: View {
             if code != YourLanguageRules.english, !yourLanguage.isReady(code) {
                 let busy = yourLanguage.downloading == code
                 Button {
-                    yourLanguage.download(say: say)
+                    yourLanguage.download(say: { say($0, queue: $1) })
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: "arrow.down.circle.fill")

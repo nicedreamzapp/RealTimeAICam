@@ -46,6 +46,17 @@ final class DownloadGuideTests: XCTestCase {
         XCTAssertEqual(DownloadGuide(start: 0).finished(ok: false), .failed)
     }
 
+    /// Up for minutes, then gone: no progress line on the very tick it closes.
+    func testLongOpenWindowClosingIsQuietForFifteenSeconds() {
+        var g = DownloadGuide(start: 0)
+        _ = g.tick(sheetShowing: true, now: 1)
+        for t in stride(from: 2.0, through: 150, by: 1) { _ = g.tick(sheetShowing: true, now: t) }
+        // Last reminder at 106; closed at 151 (45 s later).
+        XCTAssertNil(g.tick(sheetShowing: false, now: 151))
+        XCTAssertNil(g.tick(sheetShowing: false, now: 165))
+        XCTAssertEqual(g.tick(sheetShowing: false, now: 166), .stillDownloading)
+    }
+
     func testLinesInEnglishAndSpanish() {
         UserDefaults.standard.set("en", forKey: AppLang.forcedKey)
         XCTAssertTrue(DownloadGuide.text(.sheetOpened, code: "es").contains("lower half of the screen"))
@@ -57,6 +68,6 @@ final class DownloadGuideTests: XCTestCase {
                        "Apple abrió una ventana para descargar español, en la mitad de abajo de la pantalla. Toca el botón redondo con una flecha hacia abajo a la derecha, junto a los nombres de los idiomas.")
         XCTAssertTrue(DownloadGuide.text(.sheetWaiting, code: "es").hasPrefix("La descarga de español espera tu toque"))
         XCTAssertEqual(DownloadGuide.text(.sheetClosed, code: "es"),
-                       "La ventana de descarga de Apple se cerró antes de descargar español. Revisa la conexión a internet y vuelve a tocar Descargar español en Ajustes, en Tu idioma.")
+                       "La ventana de descarga de Apple se cerró antes de descargar español. Revisa la conexión a internet y vuelve a tocar Descarga español en Ajustes, en Tu idioma.")
     }
 }

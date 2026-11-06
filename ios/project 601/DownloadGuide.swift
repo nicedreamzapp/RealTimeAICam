@@ -18,7 +18,11 @@ struct DownloadGuide {
     /// With no window (already allowed, or a background download): the old 15 s line.
     static let stillGap: TimeInterval = 15
 
+    /// Seconds that keep counting while the phone sleeps (a lock mid-download).
+    static func clock() -> TimeInterval { Double(clock_gettime_nsec_np(CLOCK_MONOTONIC)) / 1e9 }
+
     private(set) var sheetSeen = false
+    private var sheetUp = false
     private var reminders = 0
     private var lastLineAt: TimeInterval
 
@@ -28,6 +32,7 @@ struct DownloadGuide {
     /// Called about once a second while the download runs.
     mutating func tick(sheetShowing: Bool, now: TimeInterval) -> Line? {
         if sheetShowing {
+            sheetUp = true
             if !sheetSeen {
                 sheetSeen = true
                 lastLineAt = now
@@ -37,6 +42,13 @@ struct DownloadGuide {
             reminders += 1
             lastLineAt = now
             return .sheetWaiting
+        }
+        // The window just went (tapped and finished, or closed): a fresh 15 s before any
+        // progress line, so "still downloading" never lands on the moment it closes.
+        if sheetUp {
+            sheetUp = false
+            lastLineAt = now
+            return nil
         }
         // No window (or it has gone and Apple keeps downloading in the background): the
         // plain progress line, 15 s after the last thing said.

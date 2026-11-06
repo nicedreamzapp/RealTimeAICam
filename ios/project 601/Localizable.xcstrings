@@ -535,7 +535,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La ventana de descarga de Apple se cerró antes de descargar %@. Revisa la conexión a internet y vuelve a tocar Descargar %@ en Ajustes, en Tu idioma."
+            "value" : "La ventana de descarga de Apple se cerró antes de descargar %@. Revisa la conexión a internet y vuelve a tocar Descarga %@ en Ajustes, en Tu idioma."
           }
         }
       }
