@@ -11,9 +11,9 @@ private func langName(_ english: String, _ code: String) -> String {
     guard TestLanguage.isSpanish, let local = Locale(identifier: "es").localizedString(forIdentifier: code) else { return english }
     return local.prefix(1).uppercased() + local.dropFirst()
 }
-/// "French → English" menu item in the run's language (Spanish pill form: "Francés → Ing").
+/// "French → English" menu item in the run's language ("Francés → Inglés").
 private func fromItem(_ english: String, _ code: String) -> String {
-    TestLanguage.isSpanish ? T("%@ → Eng", langName(english, code)) : "\(english) → English"
+    TestLanguage.isSpanish ? "\(langName(english, code)) → \(langName("English", "en"))" : "\(english) → English"
 }
 /// What VoiceOver hears for the pill after picking `english` to English.
 private func translatedValue(_ english: String, _ code: String) -> String {
@@ -27,7 +27,9 @@ final class ReadLanguageSwitchUITests: XCTestCase {
         let app = XCUIApplication()
         // No -readerLanguageMode here: a launch argument would override what
         // the app remembers for the whole run.
-        app.launchArguments += ["-hasShownInstructions", "YES"]
+        // Your language English: on a Spanish phone it would start as Spanish, and this test is
+        // about translating into English.
+        app.launchArguments += ["-hasShownInstructions", "YES", "-userLanguage", "en"]
         app.launch()
         let read = app.buttons[T("Read")].firstMatch
         XCTAssertTrue(read.waitForExistence(timeout: 20), "no Read on home")

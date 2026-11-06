@@ -50,7 +50,13 @@ final class HelpMeAimVoiceUITests: XCTestCase {
     }
 
     private func camera(_ name: String) -> XCUIElement {
-        app.descendants(matching: .any)[T("Camera, looking for %@", T(name))].firstMatch
+        guard TestLanguage.isSpanish else {
+            return app.descendants(matching: .any)["Camera, looking for \(name)"].firstMatch
+        }
+        // A Spanish app names the thing in the person's own words (or the translator's), so
+        // only the start of the label is fixed.
+        let start = T("Camera, looking for %@", "").trimmingCharacters(in: .whitespaces)
+        return app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", start)).firstMatch
     }
 
     private var listening: XCUIElement { app.buttons[T("Listening… tap to stop")].firstMatch }
