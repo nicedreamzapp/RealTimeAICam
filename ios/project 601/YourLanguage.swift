@@ -483,6 +483,9 @@ final class YourLanguageTranslator: ObservableObject {
                 NSLog("YourLanguage: translate %@>%@ failed %@", from, to, "\(error)")
                 job.done(nil)
             }
+            // A single line for another pair (a spoken Spanish question) asked while the name
+            // list runs: hand over now instead of after the whole list (review 2026-11-05).
+            if job.batch, let next = jobs.first, !next.batch, next.from != from || next.to != to { break }
         }
         serving = false
         servingPair = nil
