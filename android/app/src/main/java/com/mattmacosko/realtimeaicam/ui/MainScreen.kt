@@ -3,6 +3,7 @@ package com.mattmacosko.realtimeaicam.ui
 import androidx.compose.ui.res.stringResource
 import com.mattmacosko.realtimeaicam.R
 import androidx.activity.compose.BackHandler
+import com.mattmacosko.realtimeaicam.findActivity
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -83,11 +84,7 @@ fun MainScreen(
     // Detection is the one screen that rearranges for sideways holding on
     // iOS, so it alone rotates freely.
     // LocalContext may be AppLang's language wrapper around the activity: unwrap it.
-    val activity = remember(context) {
-        var c: android.content.Context? = context
-        while (c is android.content.ContextWrapper && c !is android.app.Activity) c = c.baseContext
-        c as? android.app.Activity
-    }
+    val activity = remember(context) { context.findActivity() }
     DisposableEffect(mode) {
         activity?.requestedOrientation =
             if (mode == AppMode.ObjectDetection) {

@@ -177,8 +177,10 @@ private fun ModelsChooser(onDone: () -> Unit) {
         // A dialog is its own window and resets LocalContext to the phone's language: put the
         // app's language back, or a Spanish app shows this sheet in English (Cricket, 11/05).
         val dialogContext = androidx.compose.ui.platform.LocalContext.current
+        val appLang = com.mattmacosko.realtimeaicam.AppLang.code()
+        val localized = remember(dialogContext, appLang) { com.mattmacosko.realtimeaicam.AppLang.localized(dialogContext) }
         androidx.compose.runtime.CompositionLocalProvider(
-            androidx.compose.ui.platform.LocalContext provides com.mattmacosko.realtimeaicam.AppLang.localized(dialogContext),
+            androidx.compose.ui.platform.LocalContext provides localized,
         ) {
         Column(Modifier.fillMaxSize().background(Color.Black)) {
             Row(

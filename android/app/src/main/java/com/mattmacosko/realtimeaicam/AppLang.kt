@@ -102,6 +102,13 @@ object AppLang {
     fun reset() = synchronized(cache) { cache.clear() }
 }
 
+/** The activity under any wrappers (AppLang's language wrapper hides it from a plain cast). */
+fun Context.findActivity(): android.app.Activity? {
+    var c: Context? = this
+    while (c is ContextWrapper && c !is android.app.Activity) c = c.baseContext
+    return c as? android.app.Activity
+}
+
 /**
  * JVM unit tests have no Android resources: strings come straight from res/values*.xml in the
  * source tree, looked up by the R field's name. Never used in the app (init runs first).
