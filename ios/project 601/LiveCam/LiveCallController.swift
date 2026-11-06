@@ -59,7 +59,15 @@ final class LiveCallController: ObservableObject {
     private var coachGoal: String?
     private var awaitingCoachGoal = false
 
-    @Published private(set) var phase: Phase = .starting { didSet { if phase != oldValue { log(["event": "phase", "phase": "\(phase)"]) } } }
+    @Published private(set) var phase: Phase = .starting {
+        didSet {
+            guard phase != oldValue else { return }
+            log(["event": "phase", "phase": "\(phase)"])
+            phaseChanged(from: oldValue)
+        }
+    }
+    /// When the phase last changed (the harness measures end of speech -> "looking").
+    private(set) var phaseAt = Date()
     /// One or two lines over the camera: what it is saying now, or what it last saw.
     @Published private(set) var caption = ""
     /// The language the caption is in (VoiceOver reads it with a voice for it).
@@ -336,6 +344,39 @@ final class LiveCallController: ObservableObject {
     }
 
     // MARK: Turn taking
+
+    /// Matt 11/6: "some sort of indicator showing that it's thinking or analyzing, or when it'll let you talk next, it's
+    /// all kind of guessing right now". The orb shows it (LiveOrb); the moment it is the person's turn there is also a
+    /// soft short tick and a light tap, and VoiceOver hears one word. Never on noise: only a phase change gets here.
+    private let turnTick = TurnCue()
+    /// It said something since the person's last turn: only then is going back to listening a new "your turn" (a cough
+    /// or murmur that was ignored never ticks).
+    private var talkedSinceTurn = false
+    private func phaseChanged(from old: Phase) {
+        phaseAt = Date()
+        switch phase {
+        case .speaking:
+            talkedSinceTurn = true
+        case .listening where [.speaking, .thinking, .loading].contains(old):
+            guard talkedSinceTurn else { return }
+            talkedSinceTurn = false
+            guard running, !micMuted, !hearingStopped else { return }
+            turnTick.play(silent: voice.muted)
+            log(["event": "turn_cue", "from": "\(old)"])
+            announce(L("Your turn"))
+        case .thinking:
+            announce(L("Looking"))
+        default: break
+        }
+    }
+
+    /// One short VoiceOver word for the state change (the orb's label says the same).
+    private func announce(_ text: String) {
+        guard UIAccessibility.isVoiceOverRunning else { return }
+        UIAccessibility.post(notification: .announcement,
+                             argument: NSAttributedString(string: text, attributes: [.accessibilitySpeechLanguage: AppLang.code,
+                                                                                     .accessibilitySpeechQueueAnnouncement: true]))
+    }
 
     private func wentQuiet() {
         guard running, answerDone, phase == .speaking || phase == .thinking else { return }
@@ -888,6 +929,8 @@ final class LiveCallController: ObservableObject {
             #if DEBUG
             if let fake = LiveCamTest.fakeAnswer, question != nil {
                 // Simulator stand-in for the model (RTCAM_FAKE_LIVE_ANSWER), streamed like the real thing.
+                // RTCAM_FAKE_LIVE_DELAY: seconds it "thinks" first, so the looking state can be seen and timed.
+                if LiveCamTest.fakeDelay > 0 { try? await Task.sleep(nanoseconds: UInt64(LiveCamTest.fakeDelay * 1e9)) }
                 answer = LiveVisionEngine.Answer(text: fake, firstTokenMs: 0, encodeMs: 0, totalMs: 0, tokens: 0)
                 _ = onText(fake)
             }
@@ -1092,6 +1135,26 @@ final class LiveCallController: ObservableObject {
                 }
             }
         }
+    }
+}
+
+/// The "your turn" tick: a soft 50 ms blip made on the phone (nothing bundled), at a low volume through the audio
+/// session Live Cam already has (no volume or route change), plus a light haptic. Silent in the Simulator and when
+/// the voice is muted.
+@MainActor
+final class TurnCue {
+    static let tone = AimTones.wav([1320], noteSeconds: 0.05, volume: 0.25)
+    private var player: AVAudioPlayer?
+    private let haptic = UIImpactFeedbackGenerator(style: .light)
+    func play(silent: Bool) {
+        haptic.impactOccurred(intensity: 0.7)
+        #if targetEnvironment(simulator)
+        let silent = true
+        #endif
+        guard !silent else { return }
+        player = try? AVAudioPlayer(data: Self.tone)
+        player?.volume = 0.5
+        player?.play()
     }
 }
 

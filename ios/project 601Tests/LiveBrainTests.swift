@@ -304,6 +304,23 @@ struct LiveFlashlightTests {
     }
 }
 
+/// Matt 11/6: three orb looks nobody can confuse, and the turn tick is a short soft tone made on the phone.
+struct LiveTurnSignalTests {
+    @Test func eachPhaseHasItsOwnLook() {
+        #expect(LiveOrb.look(.listening, muted: false) == .yourTurn)
+        #expect(LiveOrb.look(.listening, muted: true) == .muted)
+        #expect(LiveOrb.look(.thinking, muted: false) == .looking)
+        #expect(LiveOrb.look(.speaking, muted: false) == .talking)
+        #expect(LiveOrb.look(.loading, muted: false) == .waiting)
+        #expect(LiveOrb.turnColor != LiveOrb.lookColor)
+    }
+
+    @MainActor @Test func theTickIsShortAndSoft() {
+        // 44-byte header + 16-bit mono at 44.1 kHz: 50 ms is about 4.4 KB, never a bundled file.
+        #expect(TurnCue.tone.count > 44 && TurnCue.tone.count < 6000)
+    }
+}
+
 /// The 11/6 review's five fixes.
 struct LiveReviewRound1Tests {
     @Test func answersToQuestionsAreNeverBlockedAsSaidBefore() {

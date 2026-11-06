@@ -172,6 +172,33 @@ final class LiveCamUITests: XCTestCase {
         app.terminate()
     }
 
+    private func orb(_ app: XCUIApplication, _ look: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: "liveCamOrb-" + look).firstMatch
+    }
+
+    /// Matt 11/6: a clear turn signal. The orb is "your turn" when it waits, "looking" while it thinks, "talking"
+    /// while it answers, then "your turn" again; the same with Words on screen off.
+    @MainActor
+    func testTurnSignal() throws {
+        continueAfterFailure = false
+        let app = launch(env: ["RTCAM_FAKE_LIVE_ANSWER": "I see a blue double door with an exit sign above it.",
+                               "RTCAM_FAKE_LIVE_DELAY": "3"])
+        openLiveCam(app)
+        XCTAssertTrue(orb(app, "yourTurn").waitForExistence(timeout: 30), "never became your turn after the greeting")
+        keep(app, "livecam-turn-yours")
+        let words = app.descendants(matching: .any).matching(identifier: "liveCamWordsToggle").firstMatch
+        if words.exists, (words.value as? String) == T("On") { words.tap() }   // Words on screen off: shape alone
+        ask(app, "What is in front of me?")
+        XCTAssertTrue(orb(app, "looking").waitForExistence(timeout: 5), "no looking state while it thinks")
+        keep(app, "livecam-turn-looking")
+        XCTAssertTrue(orb(app, "talking").waitForExistence(timeout: 30), "no talking state")
+        keep(app, "livecam-turn-talking")
+        XCTAssertTrue(orb(app, "yourTurn").waitForExistence(timeout: 60), "not your turn after the answer")
+        if words.exists, (words.value as? String) == T("Off") { words.tap() }
+        goBack(app)
+        app.terminate()
+    }
+
     /// 11/04 review: speech recognition that keeps failing stops retrying, says so, and shows a note and a typing
     /// box. Both must be on screen and clear of the controls on every size.
     @MainActor

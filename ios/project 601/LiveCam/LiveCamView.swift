@@ -252,6 +252,7 @@ struct LiveCamView: View {
                 .accessibilityHint(call.phase == .speaking || call.phase == .thinking ? L("Double tap to stop it talking and ask something else") : "")
                 .accessibilityAddTraits(.updatesFrequently)
                 .accessibilityAction { call.interrupt() }
+                .accessibilityIdentifier("liveCamOrb-" + orbState)   // identifiers are never spoken
             Text(statusLine).font(.footnote.weight(.medium)).foregroundStyle(.white.opacity(0.8))
                 .opacity(call.showCaption ? 1 : 0)
                 .accessibilityHidden(true)
@@ -311,7 +312,7 @@ struct LiveCamView: View {
 
     private var statusLine: String {
         switch call.phase {
-        case .listening: call.micMuted ? L("Microphone muted") : (call.typedOnly || call.hearingStopped ? L("Type a question") : L("Listening · just talk"))
+        case .listening: call.micMuted ? L("Microphone muted") : (call.typedOnly || call.hearingStopped ? L("Type a question") : L("Your turn"))
         case .thinking: L("Looking")
         case .speaking: L("Speaking")
         case .downloading, .loading, .starting: L("Getting ready")
@@ -320,9 +321,12 @@ struct LiveCamView: View {
         }
     }
 
+    /// For the UI tests: which of the three looks the orb has (in the identifier only; the label says it in words).
+    private var orbState: String { "\(LiveOrb.look(call.phase, muted: call.micMuted))" }
+
     private var orbLabel: String {
         switch call.phase {
-        case .listening: call.micMuted ? L("Microphone muted") : (call.hearingStopped ? L("Not listening. Type a question.") : L("Always listening. Just talk."))
+        case .listening: call.micMuted ? L("Microphone muted") : (call.hearingStopped ? L("Not listening. Type a question.") : L("Your turn. Just talk."))
         case .thinking: L("Looking")
         case .speaking: L("Speaking")
         case .downloading, .loading, .starting: L("Getting ready")
@@ -332,41 +336,76 @@ struct LiveCamView: View {
     }
 }
 
-/// The soft animated orb (Moonstone): breathes while listening (with your voice), swirls while thinking,
-/// pulses while speaking.
+/// The orb (Matt 11/6: "some sort of indicator showing that it's thinking or analyzing, or when it'll let you talk
+/// next"). Three states nobody can confuse, by shape, motion and color, with no words needed (Words on screen off):
+///   your turn: an open green ring that grows and thickens with your voice, a dot in the middle
+///   looking:   two yellow arcs spinning like a camera focusing
+///   talking:   a solid white disc with sound bars moving
+/// Muted is a gray dashed ring; getting ready a dim breathing disc.
 struct LiveOrb: View {
     let phase: LiveCallController.Phase
     let level: Float
     let muted: Bool
     var still = false
 
-    var body: some View {
-        // Never frozen (a stopped orb reads as a glitch): 30 fps, and a gentle 12 fps while the model works.
-        TimelineView(.animation(minimumInterval: still || phase == .thinking ? 1.0 / 12 : 1.0 / 30)) { tl in
-            let t = tl.date.timeIntervalSinceReferenceDate
-            let voice = max(0, min(1, Double(level + 50) / 40))
-            let scale: Double = switch phase {
-            case .listening: muted ? 0.75 : 0.8 + 0.5 * voice + 0.02 * sin(t * 2)
-            case .thinking: 0.9 + 0.05 * sin(t * 6)
-            case .speaking: 0.95 + 0.08 * abs(sin(t * 5))
-            default: 0.85 + 0.03 * sin(t)
-            }
-            ZStack {
-                Circle().fill(RadialGradient(colors: colors.map { $0.opacity(0.9) } + [.clear], center: .center, startRadius: 4, endRadius: 64))
-                    .blur(radius: 10)
-                Circle().fill(AngularGradient(colors: colors + [colors[0]], center: .center, angle: .degrees(t * (phase == .thinking ? 180 : 40))))
-                    .frame(width: 70, height: 70).blur(radius: 6).opacity(0.85)
-            }
-            .scaleEffect(scale)
+    enum Look: Equatable { case yourTurn, looking, talking, muted, waiting }
+    static func look(_ phase: LiveCallController.Phase, muted: Bool) -> Look {
+        switch phase {
+        case .listening: muted ? .muted : .yourTurn
+        case .thinking: .looking
+        case .speaking: .talking
+        default: .waiting
         }
     }
+    static let turnColor = Color(red: 0.3, green: 0.9, blue: 0.5)
+    static let lookColor = Color(red: 1, green: 0.82, blue: 0.2)
 
-    private var colors: [Color] {
-        switch phase {
-        case .listening: muted ? [.gray, .white.opacity(0.4)] : [Color(red: 0.4, green: 0.7, blue: 1), .white, Color(red: 0.2, green: 0.4, blue: 1)]
-        case .thinking: [.purple, Color(red: 0.4, green: 0.6, blue: 1), .white]
-        case .speaking: [.white, Color(red: 0.5, green: 0.8, blue: 1), Color(red: 0.6, green: 0.5, blue: 1)]
-        default: [.white.opacity(0.6), .gray]
+    var body: some View {
+        // Never frozen (a stopped orb reads as a glitch): 30 fps, and a gentle 12 fps while the model works.
+        TimelineView(.animation(minimumInterval: still ? 1.0 / 12 : 1.0 / 30)) { tl in
+            let t = tl.date.timeIntervalSinceReferenceDate
+            let voice = max(0, min(1, Double(level + 50) / 40))
+            GeometryReader { g in
+                let d = min(g.size.width, g.size.height)
+                ZStack {
+                    switch Self.look(phase, muted: muted) {
+                    case .yourTurn:
+                        Circle().fill(.black.opacity(0.3)).frame(width: d * 0.9, height: d * 0.9)
+                        Circle().stroke(Self.turnColor, lineWidth: d * (0.04 + 0.08 * voice))
+                            .frame(width: d * (0.62 + 0.3 * voice), height: d * (0.62 + 0.3 * voice))
+                            .shadow(color: Self.turnColor.opacity(0.6), radius: 6 + 10 * voice)
+                        Circle().fill(Self.turnColor).frame(width: d * 0.12, height: d * 0.12)
+                            .scaleEffect(1 + 0.08 * sin(t * 2.4))
+                    case .looking:
+                        Circle().fill(.black.opacity(0.3)).frame(width: d * 0.9, height: d * 0.9)
+                        Circle().stroke(.white.opacity(0.18), lineWidth: d * 0.05).frame(width: d * 0.7, height: d * 0.7)
+                        ForEach(0 ..< 2, id: \.self) { i in
+                            Circle().trim(from: 0, to: 0.22)
+                                .stroke(Self.lookColor, style: StrokeStyle(lineWidth: d * 0.06, lineCap: .round))
+                                .frame(width: d * 0.7, height: d * 0.7)
+                                .rotationEffect(.degrees(t * 320 + Double(i) * 180))
+                        }
+                    case .talking:
+                        Circle().fill(.white).frame(width: d * 0.74, height: d * 0.74)
+                            .shadow(color: .white.opacity(0.5), radius: 10)
+                        HStack(spacing: d * 0.045) {
+                            ForEach(0 ..< 5, id: \.self) { i in
+                                Capsule().fill(Color(red: 0.15, green: 0.35, blue: 0.9))
+                                    .frame(width: d * 0.06, height: d * (0.1 + 0.26 * abs(sin(t * 5.5 + Double(i) * 0.9))))
+                            }
+                        }
+                    case .muted:
+                        Circle().stroke(.gray, style: StrokeStyle(lineWidth: d * 0.04, dash: [d * 0.06, d * 0.05]))
+                            .frame(width: d * 0.62, height: d * 0.62)
+                        Image(systemName: "mic.slash.fill").font(.system(size: d * 0.22, weight: .semibold)).foregroundStyle(.gray)
+                    case .waiting:
+                        Circle().fill(.white.opacity(0.25)).frame(width: d * 0.5, height: d * 0.5)
+                            .scaleEffect(0.9 + 0.08 * sin(t * 1.5))
+                    }
+                }
+                .frame(width: g.size.width, height: g.size.height)
+                .animation(.easeOut(duration: 0.2), value: Self.look(phase, muted: muted))
+            }
         }
     }
 }

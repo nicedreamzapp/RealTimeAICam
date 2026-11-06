@@ -441,13 +441,13 @@
         }
       }
     },
-    "Always listening. Just talk." : {
+    "Your turn. Just talk." : {
       "extractionState" : "manual",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Siempre escuchando. Solo habla."
+            "value" : "Te toca. Solo habla."
           }
         }
       }
@@ -2498,13 +2498,13 @@
         }
       }
     },
-    "Listening · just talk" : {
+    "Your turn" : {
       "extractionState" : "manual",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Escuchando · solo habla"
+            "value" : "Te toca"
           }
         }
       }
