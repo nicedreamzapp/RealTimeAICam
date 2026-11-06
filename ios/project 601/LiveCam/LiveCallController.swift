@@ -232,6 +232,7 @@ final class LiveCallController: ObservableObject {
             self.listener.listen()
         }
         listener.onLevel = { [weak self] l in self?.micLevel = l }
+        listener.onSoundsDone = { [weak self] done, voice, word in self?.soundsDone(done, afterVoice: voice, afterWord: word) }
         listener.onPartial = { [weak self] t in self?.log(["event": "partial", "text": t]); self?.startPrefill() }
         startTask = Task { await runStart(level) }
     }
@@ -377,6 +378,22 @@ final class LiveCallController: ObservableObject {
         }
     }
 
+    /// "Looking" shown before the question is formally over (no dead air), or taken back if they kept talking.
+    private var lookingEarly = false
+    private func soundsDone(_ done: Bool, afterVoice: TimeInterval, afterWord: TimeInterval) {
+        guard running else { return }
+        if done, phase == .listening, !micMuted {
+            lookingEarly = true
+            phase = .thinking
+            log(["event": "looking_shown", "after_last_voice": (afterVoice * 1000).rounded() / 1000,
+                 "after_last_word": (afterWord * 1000).rounded() / 1000])
+        } else if !done, lookingEarly, phase == .thinking {
+            lookingEarly = false
+            phase = .listening   // nothing was said, so no tick
+            log(["event": "looking_taken_back"])
+        }
+    }
+
     /// One short VoiceOver word for the state change (the orb's label says the same).
     private func announce(_ text: String) {
         guard UIAccessibility.isVoiceOverRunning else { return }
@@ -398,6 +415,7 @@ final class LiveCallController: ObservableObject {
 
     private func listen() {
         guard running else { return }
+        lookingEarly = false
         prefillArmed = true
         listener.watchForBargeIn(false)
         phase = .listening
@@ -408,6 +426,7 @@ final class LiveCallController: ObservableObject {
     private func micMutedChanged() {
         log(["event": "mic", "muted": micMuted])
         listener.muted = micMuted
+        if micMuted, lookingEarly, phase == .thinking { lookingEarly = false; phase = .listening }
         if micMuted { listener.stopListening() }
         else if phase == .listening, !hearingStopped { listener.listen() }
         else if phase == .speaking || phase == .thinking, !hearingStopped { listener.watchForBargeIn(true) }
@@ -824,6 +843,8 @@ final class LiveCallController: ObservableObject {
         turn += 1
         let my = turn
         answerDone = false
+        lookingEarly = false
+        if !unprompted, let e = questionEndedAt { log(["event": "look_started", "after_end_of_speech": (Date().timeIntervalSince(e) * 1000).rounded() / 1000]) }
         let box = LiveStreamBox()
         current = box
         if !unprompted {

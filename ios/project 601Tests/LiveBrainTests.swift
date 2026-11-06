@@ -539,3 +539,17 @@ struct LiveThingFinderTests {
         #endif
     }
 }
+
+/// Matt 11/6 "it stalls": within about half a second of the voice stopping, the orb already shows "looking".
+struct LiveNoDeadAirTests {
+    @Test func lookingShowsWithinHalfASecondOfTheVoiceStopping() {
+        // The listener checks every 40 ms, so the worst case is the threshold plus one check.
+        #expect(LiveTiming.showLookingAfter + 0.04 <= 0.5)
+        #expect(LiveTiming.soundsDone(wordsQuiet: 0.4, micQuiet: 0.4))
+        #expect(!LiveTiming.soundsDone(wordsQuiet: 0.4, micQuiet: 0.2))   // still talking
+        #expect(!LiveTiming.soundsDone(wordsQuiet: 0.1, micQuiet: 0.6))   // words still coming in
+        #expect(LiveTiming.soundsDone(wordsQuiet: 0.8, micQuiet: 0.0))    // a noisy room: the words stopped
+        // It shows before the question is formally over, never after.
+        #expect(LiveTiming.showLookingAfter < LiveTiming.audioQuietComplete)
+    }
+}

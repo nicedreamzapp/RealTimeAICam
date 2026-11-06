@@ -22,6 +22,10 @@ final class LiveListener {
     private(set) var bargeOnly = false
     /// The mic is muted by the person: nothing is transcribed while it talks either.
     var muted = false
+    /// Matt 11/6, no dead air: the voice went quiet after real words (true), or they started again (false). The orb
+    /// shows "looking" right away, before the full end-of-question wait is over.
+    var onSoundsDone: ((Bool, _ afterVoice: TimeInterval, _ afterWord: TimeInterval) -> Void)?
+    private var soundsDoneSent = false
     var onPartial: ((String) -> Void)?
     var onLevel: ((Float) -> Void)?
     /// The recognizer kept failing the moment it started: listening has stopped for this visit.
@@ -157,6 +161,7 @@ final class LiveListener {
         transcript = ""
         listenStarted = Date(); lastChange = Date(); lastLoudAt = Date()
         echoOf = []
+        soundsDoneSent = false
         isListening = true
         tap.startFeeding(req, replay: replay)
         finishing = false
@@ -198,6 +203,13 @@ final class LiveListener {
                     }
                     if now.timeIntervalSince(self.listenStarted) > LiveTiming.idleRestart { self.stopListening(); self.start(replay: false, barge: true); return }
                     continue
+                }
+                if !self.finishing, !self.transcript.isEmpty {
+                    let done = LiveTiming.soundsDone(wordsQuiet: wordsQuiet, micQuiet: micQuiet)
+                    if done != self.soundsDoneSent {
+                        self.soundsDoneSent = done
+                        self.onSoundsDone?(done, micQuiet, wordsQuiet)
+                    }
                 }
                 if !self.finishing, LiveTiming.questionEnded(heard: !self.transcript.isEmpty, wordsQuiet: wordsQuiet, micQuiet: micQuiet, text: self.transcript) {
                     self.endReason = wordsQuiet >= LiveTiming.endOfSpeech ? "words stopped" : "mic quiet"

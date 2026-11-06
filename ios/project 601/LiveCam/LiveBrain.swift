@@ -774,6 +774,13 @@ enum LiveTiming {
     /// without waiting the full second for the recognizer (Fable 10/31: ~0.5 s of the ~2 s wait).
     static let audioQuiet: TimeInterval = 0.85   // 11/1 phone test: 0.6 split "Hello, how are you doing" at the comma
     static let wordsSettled: TimeInterval = 0.35
+    /// Matt 11/6 "it stalls": the orb turns to "looking" this soon after the voice stops (words heard and settled),
+    /// before the full end-of-question wait (audioQuietComplete / audioQuiet / endOfSpeech) is over. If they keep
+    /// talking it turns back, silently.
+    static let showLookingAfter: TimeInterval = 0.4
+    static func soundsDone(wordsQuiet: TimeInterval, micQuiet: TimeInterval) -> Bool {
+        (micQuiet >= showLookingAfter && wordsQuiet >= wordsSettled) || wordsQuiet >= showLookingAfter + wordsSettled
+    }
     /// While it talks: words that went quiet this long without being a question to it are forgotten (side talk).
     static let bargeForget: TimeInterval = 1.5
     static func questionEnded(heard: Bool, quiet: TimeInterval) -> Bool { heard && quiet >= endOfSpeech }
