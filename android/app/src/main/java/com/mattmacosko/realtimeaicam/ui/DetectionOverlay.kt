@@ -63,10 +63,12 @@ fun DetectionOverlay(
         .distinct()
         .sorted()
     fun summaryOf(n: List<String>) =
-        if (n.isEmpty()) "Detected objects. Nothing detected yet" else "Detected objects. " + n.joinToString(", ")
+        if (n.isEmpty()) com.mattmacosko.realtimeaicam.AppLang.str(com.mattmacosko.realtimeaicam.R.string.e_overlay_none)
+        else com.mattmacosko.realtimeaicam.AppLang.str(com.mattmacosko.realtimeaicam.R.string.e_overlay_list, n.joinToString(", "))
     // Settles for three seconds before the stop changes, so a name that
     // flickers in and out does not make TalkBack re-read it.
-    var spokenSummary by remember { mutableStateOf(summaryOf(names)) }
+    val appLang = com.mattmacosko.realtimeaicam.AppLang.code()
+    var spokenSummary by remember(appLang) { mutableStateOf(summaryOf(names)) }
     LaunchedEffect(names) {
         kotlinx.coroutines.delay(3000)
         spokenSummary = summaryOf(names)

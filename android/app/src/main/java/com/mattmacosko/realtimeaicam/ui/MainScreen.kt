@@ -1,5 +1,7 @@
 package com.mattmacosko.realtimeaicam.ui
 
+import androidx.compose.ui.res.stringResource
+import com.mattmacosko.realtimeaicam.R
 import androidx.activity.compose.BackHandler
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
@@ -145,7 +147,7 @@ fun MainScreen(
                 val voiceModel = rememberVoicePickerModel(context)
                 HomeScreen(
                     versionLabel = versionLabel,
-                    voiceLabel = voiceModel.selected?.display ?: "System Voice",
+                    voiceLabel = voiceModel.selected?.display ?: stringResource(R.string.e_voice_system),
                     voiceEmoji = voiceModel.selected?.emoji ?: "🧑",
                     // Read + Translate are one button; it opens the way it was left.
                     onRead = {
@@ -164,7 +166,7 @@ fun MainScreen(
                     onLiveCam = {
                         // Said once: by TalkBack when it is on, else by the app's voice (it was
                         // heard twice, 2026-11-04). Also shown on screen below.
-                        homeCue(LIVE_CAM_COMING_SOON)
+                        homeCue(com.mattmacosko.realtimeaicam.camera.UiCue.LIVE_CAM_COMING_SOON)
                         liveCamTaps++
                     },
                     onSettings = { showHomeSettings = true },
@@ -184,7 +186,7 @@ fun MainScreen(
                         .padding(bottom = 96.dp, start = 24.dp, end = 24.dp),
                 ) {
                     Text(
-                        LIVE_CAM_COMING_SOON,
+                        stringResource(R.string.e_cue_live_cam_soon),
                         color = Color.White,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -247,7 +249,6 @@ fun MainScreen(
     }
 }
 
-private const val LIVE_CAM_COMING_SOON = com.mattmacosko.realtimeaicam.camera.UiCue.LIVE_CAM_COMING_SOON
 /** The home screen's first control, where TalkBack lands after the guide closes. */
 const val HOME_FIRST_CONTROL_TAG = "homeSettings"
 private const val LIVE_CAM_NOTE_MS = 3_000L
@@ -280,11 +281,11 @@ fun BackPill(onBack: () -> Unit) {
     ) {
         Icon(
             Icons.Default.ArrowBackIosNew,
-            contentDescription = "Back",
+            contentDescription = stringResource(R.string.e_back),
             tint = Color.White,
             modifier = Modifier.size(16.dp),
         )
-        Text("Back", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        Text(stringResource(R.string.e_back), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
     }
 }
 
@@ -312,7 +313,7 @@ private fun OcrPlaceholder(modeLabel: String, onBack: () -> Unit) {
             )
         }
         Text(
-            "Live OCR coming in the next build",
+            stringResource(R.string.e_live_ocr_soon),
             color = Color.White.copy(alpha = 0.6f),
             fontSize = 14.sp,
             modifier = Modifier.align(Alignment.Center),
@@ -372,7 +373,7 @@ fun DetectionScreen(pipeline: DetectionPipeline, onBack: () -> Unit) {
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = "Model not loaded",
+                        text = stringResource(R.string.e_model_not_loaded),
                         color = IosColors.Red,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
@@ -400,7 +401,7 @@ fun PermissionRequest(onRequestPermission: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = "RealTime AI Cam needs the camera to detect objects.",
+            text = stringResource(R.string.e_camera_needed),
             color = Color.White,
             fontSize = 16.sp,
             textAlign = TextAlign.Center,
@@ -409,7 +410,7 @@ fun PermissionRequest(onRequestPermission: () -> Unit) {
             onClick = onRequestPermission,
             modifier = Modifier.padding(top = 20.dp),
         ) {
-            Text("Grant camera access")
+            Text(stringResource(R.string.e_grant_camera))
         }
     }
 }

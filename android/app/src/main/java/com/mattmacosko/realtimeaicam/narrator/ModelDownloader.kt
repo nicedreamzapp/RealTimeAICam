@@ -1,5 +1,7 @@
 package com.mattmacosko.realtimeaicam.narrator
 
+import com.mattmacosko.realtimeaicam.AppLang
+import com.mattmacosko.realtimeaicam.R
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
@@ -58,16 +60,25 @@ object ModelDownloader {
         if (!ownVoice && am.isEnabled) {
             @Suppress("DEPRECATION")
             val e = AccessibilityEvent.obtain(AccessibilityEvent.TYPE_ANNOUNCEMENT).apply {
-                this.text.add(text); packageName = app.packageName; className = javaClass.name
+                // Carries the app's language, so TalkBack reads a Spanish line in a Spanish voice.
+                this.text.add(com.mattmacosko.realtimeaicam.ui.A11yAnnounce.inAppLanguage(text)); packageName = app.packageName; className = javaClass.name
             }
             am.sendAccessibilityEvent(e)
             return
         }
+        // The line is in the app's language: say it in a voice for that language.
+        val lang = AppLang.code()
         val existing = tts
-        if (existing != null) { existing.speak(text, TextToSpeech.QUEUE_ADD, null, "model"); return }
+        if (existing != null) {
+            com.mattmacosko.realtimeaicam.ui.VoicePrefs.applyFor(app, existing, lang)
+            existing.speak(text, TextToSpeech.QUEUE_ADD, null, "model"); return
+        }
         var made: TextToSpeech? = null
         made = TextToSpeech(app) { status ->
-            if (status == TextToSpeech.SUCCESS) made?.speak(text, TextToSpeech.QUEUE_ADD, null, "model")
+            if (status == TextToSpeech.SUCCESS) made?.let {
+                com.mattmacosko.realtimeaicam.ui.VoicePrefs.applyFor(app, it, lang)
+                it.speak(text, TextToSpeech.QUEUE_ADD, null, "model")
+            }
         }
         tts = made
     }
@@ -150,7 +161,7 @@ object ModelDownloader {
         val level = queue.removeFirst()
         current = level
         set(level, State.Downloading(0f))
-        announce(context, "Getting the ${level.title} model for this phone, ${level.sizeText()}. What's this? keeps working while it downloads.")
+        announce(context, AppLang.str(R.string.e_dl_getting, level.title, level.sizeText()))
         job = scope.launch {
             val outcome = try { fetch(context, level); null } catch (t: Throwable) { t }
             synchronized(this@ModelDownloader) {
@@ -158,13 +169,13 @@ object ModelDownloader {
                     when {
                         outcome == null -> {
                             set(level, State.Ready)
-                            announce(context, "The ${level.title} model is ready. What's this? will use it from now on.")
+                            announce(context, AppLang.str(R.string.e_dl_ready, level.title))
                         }
                         outcome is kotlinx.coroutines.CancellationException -> {}
                         else -> {
                             Log.e(TAG, "download of ${level.key} failed", outcome)
                             set(level, State.Failed(outcome.message ?: outcome.javaClass.simpleName))
-                            announce(context, "The ${level.title} model download stopped. You can try again in Settings, under Models. What's this? still works.")
+                            announce(context, AppLang.str(R.string.e_dl_stopped, level.title))
                         }
                     }
                     current = null

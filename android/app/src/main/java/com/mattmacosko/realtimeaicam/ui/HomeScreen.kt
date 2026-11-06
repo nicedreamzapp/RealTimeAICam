@@ -1,5 +1,6 @@
 package com.mattmacosko.realtimeaicam.ui
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -132,15 +133,15 @@ fun HomeScreen(
                     ModeButton(
                         IosColors.Blue, scale, screenWidth,
                         onClick = { if (debouncer.tryFire()) onRead() },
-                        label = "Read",
-                        clickLabel = "Read text out loud. Pick another language at the top to translate it into English",
+                        label = stringResource(R.string.e_home_read),
+                        clickLabel = stringResource(R.string.e_home_read_action),
                     ) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text("📖", fontSize = (32 * scale).sp)
-                            OutlinedText("Read", (20 * scale).sp)
+                            OutlinedText(stringResource(R.string.e_home_read), (20 * scale).sp)
                             Text("🌍", fontSize = (26 * scale).sp)
                         }
                     }
@@ -149,15 +150,15 @@ fun HomeScreen(
                     ModeButton(
                         IosColors.Orange, scale, screenWidth,
                         onClick = { if (debouncer.tryFire()) onObjectDetection() },
-                        label = "Object Detection",
-                        clickLabel = "Identify objects around you and hear them announced",
+                        label = stringResource(R.string.e_home_object_detection),
+                        clickLabel = stringResource(R.string.e_home_od_action),
                     ) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text("🐶", fontSize = (32 * scale).sp)
-                            OutlinedText("Object Detection", (20 * scale).sp)
+                            OutlinedText(stringResource(R.string.e_home_object_detection), (20 * scale).sp)
                         }
                     }
                 }
@@ -165,15 +166,15 @@ fun HomeScreen(
                     ModeButton(
                         IosColors.Purple, scale, screenWidth,
                         onClick = { if (debouncer.tryFire()) onWhatsThis() },
-                        label = "What's this?",
-                        clickLabel = "Point the camera at a page, a bill, a package, or a room to hear what it is",
+                        label = stringResource(R.string.e_home_whats_this),
+                        clickLabel = stringResource(R.string.e_home_wt_action),
                     ) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text("\uD83D\uDCC4", fontSize = (32 * scale).sp)
-                            OutlinedText("What's this?", (20 * scale).sp)
+                            OutlinedText(stringResource(R.string.e_home_whats_this), (20 * scale).sp)
                         }
                     }
                 }
@@ -184,15 +185,15 @@ fun HomeScreen(
                     ModeButton(
                         HomeTeal, scale, screenWidth,
                         onClick = { if (debouncer.tryFire()) onHelpMeAim() },
-                        label = "Help Me Aim",
-                        clickLabel = "Tell the camera what you want a picture of. It talks you into the shot, then takes the photo",
+                        label = stringResource(R.string.e_home_help_me_aim),
+                        clickLabel = stringResource(R.string.e_home_aim_action),
                     ) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text("\uD83C\uDFAF", fontSize = (32 * scale).sp)
-                            OutlinedText("Help Me Aim", (20 * scale).sp)
+                            OutlinedText(stringResource(R.string.e_home_help_me_aim), (20 * scale).sp)
                         }
                     }
                 }
@@ -201,8 +202,8 @@ fun HomeScreen(
                     ModeButton(
                         HomePink, scale, screenWidth,
                         onClick = { if (debouncer.tryFire()) onLiveCam() },
-                        label = "Live Cam, experimental",
-                        clickLabel = "Talk with the camera. Ask out loud about what's in front of you and hear the answer",
+                        label = stringResource(R.string.e_home_live_cam_label),
+                        clickLabel = stringResource(R.string.e_home_live_action),
                     ) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -213,7 +214,7 @@ fun HomeScreen(
                             // Experimental (Matt, 2026-11-04): a small tag inside the button, so the
                             // button keeps the same height as the other four.
                             Text(
-                                "Experimental",
+                                stringResource(R.string.e_experimental),
                                 fontSize = (11 * scale).coerceAtLeast(9f).sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color.White,
@@ -468,6 +469,7 @@ fun ShadedEmoji(emoji: String, sizeSp: Float) {
 @Composable
 private fun SettingsPill(onClick: () -> Unit) {
     val accent = Color.Black
+    val settingsLabel = stringResource(R.string.e_home_settings_label)
     Box(
         Modifier
             .shadow(6.dp, CapsuleShape, spotColor = Color.Black.copy(alpha = 0.38f))
@@ -483,11 +485,11 @@ private fun SettingsPill(onClick: () -> Unit) {
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 role = Role.Button,
-                onClickLabel = "Open models, voice and other settings",
+                onClickLabel = stringResource(R.string.e_home_settings_action),
                 onClick = onClick,
             )
             .clearAndSetSemantics {
-                contentDescription = "Settings"
+                contentDescription = settingsLabel
                 // TalkBack lands here when the guide closes (MainScreen).
                 testTag = HOME_FIRST_CONTROL_TAG
             },
@@ -505,7 +507,7 @@ private fun SettingsPill(onClick: () -> Unit) {
             modifier = Modifier.padding(vertical = 12.dp, horizontal = 14.dp),
         ) {
             Text("⚙️", fontSize = 14.sp)
-            OutlinedText("SETTINGS", 14.sp)
+            OutlinedText(stringResource(R.string.e_home_settings_word), 14.sp)
         }
     }
 }
@@ -514,6 +516,7 @@ private fun SettingsPill(onClick: () -> Unit) {
 @Composable
 private fun InfoGuideButton(onClick: () -> Unit) {
     val accent = Color.Black
+    val infoLabel = stringResource(R.string.e_home_info_label)
     Box(
         Modifier
             .shadow(6.dp, CapsuleShape, spotColor = Color.Black.copy(alpha = 0.38f))
@@ -529,10 +532,10 @@ private fun InfoGuideButton(onClick: () -> Unit) {
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 role = Role.Button,
-                onClickLabel = "Open the instructions and audio tutorial",
+                onClickLabel = stringResource(R.string.e_home_info_action),
                 onClick = onClick,
             )
-            .clearAndSetSemantics { contentDescription = "Info and guide" },
+            .clearAndSetSemantics { contentDescription = infoLabel },
         contentAlignment = Alignment.Center,
     ) {
         Box(
@@ -546,9 +549,9 @@ private fun InfoGuideButton(onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(vertical = 12.dp, horizontal = 18.dp),
         ) {
-            OutlinedText("INFO", 14.sp)
+            OutlinedText(stringResource(R.string.e_home_info_word), 14.sp)
             Text("💡", fontSize = 14.sp)
-            OutlinedText("GUIDE", 14.sp)
+            OutlinedText(stringResource(R.string.e_home_guide_word), 14.sp)
         }
     }
 }
@@ -561,6 +564,7 @@ private fun VoicePickerPill(
     scale: Float,
     onClick: () -> Unit,
 ) {
+    val voiceLabel = stringResource(R.string.e_home_voice_label, label)
     Row(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -572,11 +576,11 @@ private fun VoicePickerPill(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 role = Role.Button,
-                onClickLabel = "Choose a different voice",
+                onClickLabel = stringResource(R.string.e_home_voice_action),
                 onClick = onClick,
             )
             .padding(horizontal = 12.dp, vertical = 6.dp)
-            .clearAndSetSemantics { contentDescription = "Voice, $label" },
+            .clearAndSetSemantics { contentDescription = voiceLabel },
     ) {
         Text(emoji, fontSize = (28 * scale).sp)
         Text(

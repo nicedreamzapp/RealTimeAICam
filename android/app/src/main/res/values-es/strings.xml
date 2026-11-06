@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- app_name stays "RealTime AI Cam" (values/strings.xml). -->
+    <string name="readers_title">Lectores de texto</string>
+</resources>

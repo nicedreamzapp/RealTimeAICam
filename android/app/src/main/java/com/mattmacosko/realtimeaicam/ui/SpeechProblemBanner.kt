@@ -1,5 +1,7 @@
 package com.mattmacosko.realtimeaicam.ui
 
+import androidx.compose.ui.res.stringResource
+import com.mattmacosko.realtimeaicam.R
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -62,14 +64,13 @@ private fun SpeechProblemCard(announcer: SpeechAnnouncer, problem: SpeechProblem
     val current = problem ?: return
     val context = LocalContext.current
     val message = when (current) {
-        SpeechProblem.VOLUME_OFF -> com.mattmacosko.realtimeaicam.camera.SpeechChecks.VOLUME_OFF_LINE
-        SpeechProblem.NO_ENGINE -> "No speech engine is working on this phone, so the app can't talk. " +
-            "Open speech settings and pick or install one, like Speech Services by Google."
-        SpeechProblem.NO_VOICE -> "The speech engine has no voice installed, so the app can't talk. " +
-            "Open speech settings to download a voice."
-        SpeechProblem.NO_LANGUAGE_VOICE -> com.mattmacosko.realtimeaicam.translation.YourLanguageRules.noVoiceLine(
-            missingLang ?: "en",
-        ) + " Until then it speaks English."
+        SpeechProblem.VOLUME_OFF -> stringResource(R.string.e_volume_off_line)
+        SpeechProblem.NO_ENGINE -> stringResource(R.string.e_banner_no_engine)
+        SpeechProblem.NO_VOICE -> stringResource(R.string.e_banner_no_voice)
+        SpeechProblem.NO_LANGUAGE_VOICE -> stringResource(
+            R.string.e_banner_no_language_voice,
+            com.mattmacosko.realtimeaicam.translation.YourLanguageRules.noVoiceShown(missingLang ?: "en"),
+        )
     }
     Column(
         modifier
@@ -88,7 +89,7 @@ private fun SpeechProblemCard(announcer: SpeechAnnouncer, problem: SpeechProblem
             Button(
                 onClick = { openSpeechSettings(context) },
                 colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
-            ) { Text("Open speech settings", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
+            ) { Text(stringResource(R.string.e_banner_open_speech_settings), fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
         }
     }
 }

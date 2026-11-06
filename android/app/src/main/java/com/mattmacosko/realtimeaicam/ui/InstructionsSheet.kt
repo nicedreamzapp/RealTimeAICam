@@ -1,5 +1,8 @@
 package com.mattmacosko.realtimeaicam.ui
 
+import androidx.compose.ui.res.stringResource
+import com.mattmacosko.realtimeaicam.AppLang
+import com.mattmacosko.realtimeaicam.R
 import androidx.compose.animation.ExitTransition
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -54,21 +57,28 @@ import androidx.compose.ui.unit.sp
 
 // Rewritten for the new home (iOS parity, 2026-11-04): the same order as the home screen,
 // Read and Translate merged, Settings on home, Help Me Aim, Live Cam.
-/** One short paragraph, same words in the INFO GUIDE and the spoken tutorial (and on iOS). */
-const val YOUR_LANGUAGE_GUIDE = "Your language: in Settings, pick the language you want to hear. The first time, tap Download once; after that it works offline. Read, Object Detection, Help Me Aim and What's this? then speak in your language. Buttons stay in English for now."
+/** One short paragraph, same words in the INFO GUIDE and the spoken tutorial (and on iOS), in the app's language. */
+fun yourLanguageGuide(): String = com.mattmacosko.realtimeaicam.translation.YourLanguageRules.guide()
 
-private val TUTORIAL_TEXT = listOf(
-    "Welcome to the RealTime A I Camera.",
-    "The home screen has two buttons at the top, Settings and Info and guide, then five tools, then the voice button. Swipe through them, or touch the screen to explore.",
-    "Read. Point at printed text and hear it out loud. The Language button at the top picks English, or one of ${com.mattmacosko.realtimeaicam.translation.ReaderLanguages.all.size} languages to translate into English. Russian, Ukrainian, Chinese, Japanese, Korean, Thai and Arabic need their own reader, downloaded once the first time you pick them, then offline. Tap it to step to the next one. The small button next to Speak switches between Auto read, which is on to start and reads new text by itself, Mute, and Tap to read.",
-    "Object Detection names the things around you as you move the phone.",
-    "What's this? takes one careful look. Mail and pages get the point of them, like who sent it and what's due. A room gets a description. Afterwards, hold to ask a follow up question.",
-    "Help Me Aim takes a good photo for you. Choose Face, Picture or Page, or Something Else and say what you want. It tells you which way to move, counts down, and saves the photo with a description. For things it doesn't know by sight, like a wallet, it looks closely and tells you where it is. Double tap anywhere to take the picture yourself.",
-    "Live Cam is experimental and coming soon. It lets you talk with the camera. Ask out loud about what's in front of you and hear the answer.",
-    "In Settings, Models, the app already picked the best A I for your phone. You can choose Most accurate or Fastest there.",
-    YOUR_LANGUAGE_GUIDE,
-    "Everything runs on your phone and works offline. No accounts and no tracking.",
+/** The spoken tutorial, in the app's language (2026-11-05: Spanish text in a Spanish voice). */
+private fun tutorialText(): String = listOf(
+    AppLang.str(R.string.e_tut_welcome),
+    AppLang.str(R.string.e_tut_home),
+    AppLang.str(R.string.e_tut_read, com.mattmacosko.realtimeaicam.translation.ReaderLanguages.all.size),
+    AppLang.str(R.string.e_tut_object_detection),
+    AppLang.str(R.string.e_tut_whats_this),
+    AppLang.str(R.string.e_tut_help_me_aim),
+    AppLang.str(R.string.e_tut_live_cam),
+    AppLang.str(R.string.e_tut_models),
+    yourLanguageGuide(),
+    AppLang.str(R.string.e_tut_private),
 ).joinToString(" ")
+
+/** Say the tutorial in a voice for the app's language (the picked voice when it speaks it). */
+private fun speakTutorial(context: android.content.Context, tts: TextToSpeech) {
+    VoicePrefs.applyFor(context, tts, AppLang.code())
+    tts.speak(tutorialText(), TextToSpeech.QUEUE_FLUSH, null, "tutorial")
+}
 
 const val INSTRUCTIONS_TITLE_TAG = "instructionsTitle"
 /** The sheet slides up in 300 ms; focus moves once it is in place. */
@@ -92,8 +102,7 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
                         t!!.setLanguage(java.util.Locale.US)
                     }
                 } catch (_: Throwable) {}
-                try { VoicePrefs.apply(context, t!!) } catch (_: Throwable) {}
-                if (speaking) t!!.speak(TUTORIAL_TEXT, TextToSpeech.QUEUE_FLUSH, null, "tutorial")
+                if (speaking) speakTutorial(context, t!!)
             } else {
                 speaking = false
             }
@@ -129,6 +138,13 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
         if (A11yFocus.awaitWindowFocus(view)) A11yFocus.moveToSoon(view, INSTRUCTIONS_TITLE_TAG)
     }
 
+    val doneWord = stringResource(R.string.e_done)
+    val welcome = stringResource(R.string.e_guide_welcome)
+    val stopAction = stringResource(R.string.e_guide_stop_action)
+    val playAction = stringResource(R.string.e_guide_play_action)
+    val stopLabel = stringResource(R.string.e_guide_stop_label)
+    val playLabel = stringResource(R.string.e_guide_play_label)
+
     BackHandler(enabled = visible) {
         stopAudio()
         onDismiss()
@@ -159,7 +175,7 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
             )
             Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
                 Text(
-                    "Done",
+                    stringResource(R.string.e_done),
                     fontSize = 17.sp,
                     color = IosColors.Blue,
                     modifier = Modifier
@@ -168,16 +184,16 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
                             role = Role.Button,
-                            onClickLabel = "Close the instructions",
+                            onClickLabel = stringResource(R.string.e_guide_close_action),
                         ) {
                             stopAudio()
                             onDismiss()
                         }
                         .padding(4.dp)
-                        .semantics { contentDescription = "Done" },
+                        .semantics { contentDescription = doneWord },
                 )
                 Text(
-                    "Instructions",
+                    stringResource(R.string.e_guide_title),
                     fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White,
@@ -199,8 +215,8 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
                 Text(
-                    "👋 Welcome to RealTime AI Camera!",
-                    modifier = Modifier.semantics { contentDescription = "Welcome to RealTime AI Camera!"; heading() },
+                    "👋 $welcome",
+                    modifier = Modifier.semantics { contentDescription = welcome; heading() },
                     fontSize = 34.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
@@ -221,26 +237,18 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
                         .clickable(
                             enabled = ttsReady,
                             role = Role.Button,
-                            onClickLabel = if (speaking) {
-                                "Stop the spoken instructions"
-                            } else {
-                                "Speak a full guide to the app"
-                            },
+                            onClickLabel = if (speaking) stopAction else playAction,
                         ) {
                             if (speaking) {
                                 stopAudio()
                             } else {
                                 speaking = true
-                                tts.speak(TUTORIAL_TEXT, TextToSpeech.QUEUE_FLUSH, null, "tutorial")
+                                speakTutorial(context, tts)
                             }
                         }
                         .padding(16.dp)
                         .clearAndSetSemantics {
-                            contentDescription = if (speaking) {
-                                "Stop audio tutorial"
-                            } else {
-                                "Play full audio tutorial"
-                            }
+                            contentDescription = if (speaking) stopLabel else playLabel
                         },
                 ) {
                     Spacer(Modifier.weight(1f))
@@ -251,7 +259,7 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
                         modifier = Modifier.size(20.dp),
                     )
                     Text(
-                        if (speaking) "⏹ Stop Audio" else "🎧 Play Full Audio Tutorial",
+                        if (speaking) "⏹ " + stringResource(R.string.e_guide_stop_button) else "🎧 " + stringResource(R.string.e_guide_play_button),
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color.White,
@@ -260,78 +268,37 @@ fun InstructionsSheet(visible: Boolean, onDismiss: () -> Unit) {
                 }
 
                 Text(
-                    "Your camera, out loud. Everything runs on your phone.",
+                    stringResource(R.string.e_guide_tagline),
                     fontSize = 20.sp,
                     color = Color.White,
                 )
 
                 // The five tools, in the same order as the home screen.
                 val languageCount = com.mattmacosko.realtimeaicam.translation.ReaderLanguages.all.size
-                ModeBlock(
-                    "📖 Read",
-                    "Point at printed text and hear it read out loud. The Language pill at the top picks English or one of " +
-                        "$languageCount languages, like Spanish, French, Russian, Chinese or Arabic, and translates it into English. " +
-                        "Each language downloads once, then works offline. Russian, Ukrainian, Chinese, Japanese, Korean, Thai " +
-                        "and Arabic also download their reader the first time you pick them; tap the card to get it. Until " +
-                        "its pack is on the phone, Spanish still translates " +
-                        "with the built-in dictionary. Auto read is on to start: new text is spoken by itself, once. " +
-                        "The small button next to Speak switches between Auto read, Mute and Tap to read. Copy keeps the text in your history.",
-                )
-                ModeBlock(
-                    "🐶 Object Detection",
-                    "Names the things around you as you move the phone, nonstop, fast and offline.",
-                )
-                ModeBlock(
-                    "📄 What's this?",
-                    "One careful look. Point at a page, a bill, a package or a room and press the button. Mail and pages get " +
-                        "the point of them: who sent it, what it is, what's due. A room or a thing gets a description. " +
-                        "Afterwards, hold to ask a follow-up question about the same photo.",
-                )
-                ModeBlock(
-                    "🎯 Help Me Aim",
-                    "Takes a good photo for you. Choose Face, Picture or Page, or Something Else and say or type what you want, " +
-                        "like keys, a mug or your dog. The app tells you which way to move, counts down and takes the picture, " +
-                        "then saves it to your gallery with a description written into it. It knows hundreds of everyday things; " +
-                        "for anything else, like a wallet, it looks closely with the describing AI and tells you where it is. " +
-                        "Double tap anywhere to take the picture yourself.",
-                )
-                ModeBlock(
-                    "💬 Live Cam (experimental)",
-                    "Experimental, coming soon. Talk with the camera. Ask out loud about what's in front of you and hear the answer, then keep asking.",
-                )
-                ModeBlock(
-                    "⚙️ Settings",
-                    "The Settings button at the top of the home screen. Models: the app picks the best describing AI for your " +
-                        "phone by itself and downloads it once, on Wi-Fi. Mail, money and medicine always get the most accurate " +
-                        "one your phone can run. In Settings, then Models, you can choose Most accurate or Fastest, or pick one " +
-                        "yourself. Settings also has the countdown before photos, the app's own voice or TalkBack, and your copy " +
-                        "history. The voice button at the bottom of the home screen changes the voice.",
-                )
-                ModeBlock(
-                    "🌍 Your language",
-                    YOUR_LANGUAGE_GUIDE,
-                )
+                ModeBlock("📖 " + stringResource(R.string.e_home_read), stringResource(R.string.e_guide_read, languageCount))
+                ModeBlock("🐶 " + stringResource(R.string.e_home_object_detection), stringResource(R.string.e_guide_object_detection))
+                ModeBlock("📄 " + stringResource(R.string.e_home_whats_this), stringResource(R.string.e_guide_whats_this))
+                ModeBlock("🎯 " + stringResource(R.string.e_home_help_me_aim), stringResource(R.string.e_guide_help_me_aim))
+                ModeBlock("💬 " + stringResource(R.string.e_guide_live_cam_title), stringResource(R.string.e_guide_live_cam))
+                ModeBlock("⚙️ " + stringResource(R.string.e_home_settings_label), stringResource(R.string.e_guide_settings))
+                ModeBlock("🌍 " + stringResource(R.string.e_yl_title), stringResource(R.string.e_yl_guide))
 
-                SectionHeader("🎛️ Camera controls")
-                BodyLine("🔄 Switch camera, front or back")
-                BodyLine("🌐 Lens toggle, wide or ultra-wide (Object Detection, when the phone has one)")
-                BodyLine("🔦 Flashlight, one tap on, one tap off")
-                BodyLine("🤏 Pinch to zoom")
+                SectionHeader("🎛️ " + stringResource(R.string.e_guide_controls))
+                BodyLine("🔄 " + stringResource(R.string.e_guide_switch_camera))
+                BodyLine("🌐 " + stringResource(R.string.e_guide_lens))
+                BodyLine("🔦 " + stringResource(R.string.e_guide_flashlight))
+                BodyLine("🤏 " + stringResource(R.string.e_guide_pinch))
 
-                SectionHeader("🔒 Private by design")
-                BodyLine("Everything runs on your phone and works offline, even in Airplane Mode. The bigger AI models and translation languages download once, then stay on your phone.", secondary = true)
-                BodyLine("No accounts, no tracking, no location access. Nothing you point the camera at is uploaded.", secondary = true)
+                SectionHeader("🔒 " + stringResource(R.string.e_guide_private_title))
+                BodyLine(stringResource(R.string.e_guide_private_offline), secondary = true)
+                BodyLine(stringResource(R.string.e_guide_private_no_accounts), secondary = true)
 
-                SectionHeader("🙏 Credits")
-                BodyLine(
-                    "What's this? runs LFM3-Omni-2B by Liquid AI, on this phone, under the LFM Open License v1.0. " +
-                        "Nice Dreamz converted it to GGUF in three sizes (Sharp Q8_0, Clear Q3_K_M, Balanced IQ2_XS); the weights are otherwise unchanged.",
-                    secondary = true,
-                )
-                BodyLine("Quick: Vision Narrator 0.8B by Nice Dreamz, fine-tuned from Qwen3.5-0.8B by Alibaba Cloud (Apache-2.0)", secondary = true)
-                LicenseText("Read the LFM Open License v1.0", "licenses/LFM-Open-License-v1.0.txt")
-                BodyLine("On-device engine: llama.cpp by ggml-org (MIT)", secondary = true)
-                BodyLine("Object Detection: YOLOv8 by Ultralytics (AGPL-3.0), trained on Open Images V7 by Google (CC BY 4.0)", secondary = true)
+                SectionHeader("🙏 " + stringResource(R.string.e_guide_credits))
+                BodyLine(stringResource(R.string.e_guide_credit_lfm), secondary = true)
+                BodyLine(stringResource(R.string.e_guide_credit_quick), secondary = true)
+                LicenseText(stringResource(R.string.e_guide_read_license), "licenses/LFM-Open-License-v1.0.txt")
+                BodyLine(stringResource(R.string.e_guide_credit_llama), secondary = true)
+                BodyLine(stringResource(R.string.e_guide_credit_yolo), secondary = true)
 
                 Spacer(Modifier.height(24.dp))
             }
@@ -372,7 +339,7 @@ private fun LicenseText(label: String, asset: String) {
         Text(
             (if (open) "▾ " else "▸ ") + label,
             modifier = Modifier
-                .clickable(role = Role.Button, onClickLabel = if (open) "Hide the license" else "Show the license") { open = !open }
+                .clickable(role = Role.Button, onClickLabel = if (open) stringResource(R.string.e_guide_hide_license) else stringResource(R.string.e_guide_show_license)) { open = !open }
                 .semantics { contentDescription = label },
             fontSize = 15.sp,
             color = Color(0xFF64B5F6),

@@ -171,7 +171,7 @@ class DetectionPipeline(
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Model load failed", e)
-                _uiState.update { it.copy(modelError = e.message ?: "Model load failed") }
+                _uiState.update { it.copy(modelError = e.message ?: com.mattmacosko.realtimeaicam.AppLang.str(com.mattmacosko.realtimeaicam.R.string.e_model_not_loaded)) }
             }
         }
     }
