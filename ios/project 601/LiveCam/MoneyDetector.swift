@@ -17,6 +17,8 @@ enum MoneyDetector {
         /// The detector is sure of this bill as one bill: confident (>= sureConf) and no neighbouring box was folded
         /// into it by the strip rule. Any unsure bill makes the count "at least".
         var sure = true
+        /// Kept where another bill's mirror image would lie: never named, never a total (LiveMoney.resolveMirrors).
+        var mirror = false
     }
     static let sureConf: Float = 0.5
 
@@ -240,7 +242,8 @@ enum MoneyDetector {
     /// said about a frame that may hold money.
     /// A box lying where `found[partner]`'s mirror image would (a glossy table): `clear` when its pixels are a
     /// fainter flipped copy.
-    struct Mirror { var bill: Found; var partner: Int; var clear: Bool }
+    /// `real`: the pixel check says it is clearly a real bill (it matches the partner as it is or turned).
+    struct Mirror { var bill: Found; var partner: Int; var clear: Bool; var real = false }
     struct Detection { var found: [Found]; var maybeMoney: Bool; var mirrors: [Mirror] = [] }
 
     /// Debug trace (MONEY_TRACE=1 on the Mac replay, or a test's own sink).
@@ -323,11 +326,18 @@ enum MoneyDetector {
             let looksLikeMoney = probs["none", default: 1] < 0.5 && (lk.1 >= 0.5)
             if traceOn { trace(String(format: "MONEY_TRACE bill conf=%.2f none=%.2f top=%@ %.2f", d.conf, probs["none", default: -1], "\(lk.0 ?? 0)", lk.1)) }
             let f = Found(quad: q, conf: d.conf, value: val, look: lk, numerals: votes, sure: d.conf >= sureConf && !merged && looksLikeMoney)
-            // Where a kept bill's mirror image would lie (CC0 xh_18: a $1 on a glossy table). It is set aside, and
-            // LiveMoney keeps it as a bill only when it reads a different value or its own serial number.
+            // Where a kept bill's mirror image would lie (CC0 xh_18: a $1 on a glossy table). The pair's real bill is
+            // the one the pixel check says is real (the reflection is the fainter, flipped copy); the score only
+            // breaks a tie. The other box is set aside for LiveMoney.resolveMirrors.
             if let k = kept.firstIndex(where: { mirrorGeometry($0, d) }) {
                 if traceOn { trace("MONEY_TRACE refl? \(reflectionTrace(kept[k], d, src, H))") }
-                mirrors.append(Mirror(bill: f, partner: k, clear: mirrorVerdict(kept[k], d, in: src, H) == .mirror))
+                let verdict = mirrorVerdict(kept[k], d, in: src, H), clear = verdict == .mirror
+                if clear, let ga = grey(src, kept[k].box, H), let gb = grey(src, d.box, H), newIsReal(keptSpread: spread(ga), newSpread: spread(gb)) {
+                    mirrors.append(Mirror(bill: found[k], partner: k, clear: true))
+                    kept[k] = d; found[k] = f
+                } else {
+                    mirrors.append(Mirror(bill: f, partner: k, clear: clear, real: verdict == .real))
+                }
                 continue
             }
             kept.append(d)
@@ -352,6 +362,13 @@ enum MoneyDetector {
     /// matches `a`'s crop flipped (a mirror) clearly better than turned (a real bill upside down).
     static func isReflection(of a: Det, _ b: Det, in src: CIImage, _ H: CGFloat) -> Bool {
         mirrorGeometry(a, b) && mirrorVerdict(a, b, in: src, H) == .mirror
+    }
+
+    /// Pure: of a clear mirror pair, the real bill is the one with more contrast (a reflection is fainter).
+    static func newIsReal(keptSpread: Float, newSpread: Float) -> Bool { newSpread > keptSpread }
+    static func spread(_ x: [Float]) -> Float {
+        let m = x.reduce(0, +) / Float(max(x.count, 1))
+        return (x.map { ($0 - m) * ($0 - m) }.reduce(0, +) / Float(max(x.count, 1))).squareRoot()
     }
 
     enum MirrorVerdict { case mirror, real, unsure }

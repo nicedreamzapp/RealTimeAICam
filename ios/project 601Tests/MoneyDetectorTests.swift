@@ -376,14 +376,6 @@ struct MoneyMirrorGeometryTests {
 
 /// Re-review fixes (11/6): reflections raise a floor, pixels can keep a real bill.
 @Suite(.serialized) struct MoneyReReviewTests {
-    @Test func aDroppedReflectionMakesTheCountAFloor() {
-        var c = LiveMoney.count(MoneyDetectorDecodeTests.bills([1]), boxed: true)
-        #expect(c.sure && c.total == 1)
-        LiveMoney.floorIfReflectionDropped(&c, true)
-        #expect(!c.sure)
-        #expect(LiveMoney.sentence(c).hasPrefix("At least 1 bill.") && !LiveMoney.sentence(c).contains("That's"))
-    }
-
     @Test func thePixelsCanKeepARealBillEdgeToEdge() {
         let w = 48, h = 20
         let a: [Float] = (0 ..< w * h).map { i in Float((i % w) * 3 + (i / w) * 11 + ((i * 7919) % 13) * 5) }
@@ -398,45 +390,44 @@ struct MoneyMirrorGeometryTests {
 
 }
 
-/// Mirror-position boxes (re-review 11/6): a bill only with a different value or its own serial.
+/// Mirror-position boxes, the one simple rule (final review 11/6): a clear mirror is never added back; any other
+/// box there is added back unsure and unnamed ("At least N", no total).
 struct MoneyMirrorResolveTests {
     static func found(_ x: CGFloat, _ y: CGFloat, _ v: Int?) -> MoneyDetector.Found {
         MoneyDetector.Found(quad: LiveMoneyGroupingTests.bill(x, y, scale: 2), conf: 0.95, value: v, look: (v, 0.95), numerals: [:], sure: true)
     }
-    static func bills(_ f: [MoneyDetector.Found]) -> [LiveMoney.Bill] { f.map { LiveMoney.Bill(quad: $0.quad, value: $0.value, cutOff: false, sure: $0.sure) } }
-
-    @Test func aReflectedOneDollarIsOneDollar() {
-        let top = Self.found(400, 400, 1), mirror = Self.found(400, 260, 1)
-        let r = LiveMoney.resolveMirrors([top], [MoneyDetector.Mirror(bill: mirror, partner: 0, clear: true)],
-                                         serials: [LiveMoney.Serial(text: "L89823401J", at: CGPoint(x: 400, y: 420))])
-        #expect(r.found.count == 1 && !r.ambiguous)
-        var c = LiveMoney.count(Self.bills(r.found), boxed: true)
-        LiveMoney.floorIfReflectionDropped(&c, r.ambiguous)
-        #expect(LiveMoney.sentence(c) == "1 bill. I can read a $1. That's $1.")
-        // The reflection read as a turned bill but with no serial or value of its own: still a reflection.
-        let r2 = LiveMoney.resolveMirrors([top], [MoneyDetector.Mirror(bill: Self.found(400, 260, nil), partner: 0, clear: true)], serials: [])
-        #expect(r2.found.count == 1)
+    /// What Live Cam says for these boxes, with the floor worked out as `look` does (bills it is sure of).
+    static func say(_ f: [MoneyDetector.Found]) -> String {
+        let bills = f.map { LiveMoney.Bill(quad: $0.quad, value: $0.mirror ? nil : $0.value, cutOff: false, sure: $0.sure, mirror: $0.mirror) }
+        var c = LiveMoney.count(bills, boxed: true)
+        c.atLeast = max(bills.filter(\.sure).count, bills.filter { $0.value != nil }.count)
+        return LiveMoney.sentence(c)
     }
 
-    @Test func twoTwentiesEdgeToEdgeAreForty() {
+    @Test func aReflectedOneMisreadAsTenIsNotEleven() {
+        let real = Self.found(400, 400, 1), reflection = Self.found(400, 260, 10)
+        let s = Self.say(LiveMoney.resolveMirrors([real], [MoneyDetector.Mirror(bill: reflection, partner: 0, clear: true)]))
+        #expect(s == "1 bill. I can read a $1. That's $1.")
+        #expect(!s.contains("$11"))
+    }
+
+    @Test func aGlareFreeReflectionOutscoringTheRealBillIsNotTwoDollars() {
+        // The reflection was found first (higher score), but the real bill has more contrast: the real one is kept.
+        #expect(MoneyDetector.newIsReal(keptSpread: 18, newSpread: 41))
+        #expect(!MoneyDetector.newIsReal(keptSpread: 41, newSpread: 18))
+        let real = Self.found(400, 400, 1), reflection = Self.found(400, 260, 1)
+        let s = Self.say(LiveMoney.resolveMirrors([real], [MoneyDetector.Mirror(bill: reflection, partner: 0, clear: true)]))
+        #expect(s == "1 bill. I can read a $1. That's $1." && !s.contains("$2"))
+    }
+
+    @Test func twoTwentiesEdgeToEdgeAreAtLeastTwoNeverOne() {
         let a = Self.found(400, 400, 20), b = Self.found(400, 260, 20)
-        let serials = [LiveMoney.Serial(text: "PE36534546K", at: CGPoint(x: 400, y: 410)), LiveMoney.Serial(text: "MG04022515A", at: CGPoint(x: 400, y: 250))]
-        let r = LiveMoney.resolveMirrors([a], [MoneyDetector.Mirror(bill: b, partner: 0, clear: false)], serials: serials)
-        #expect(r.found.count == 2 && !r.ambiguous)
-        let c = LiveMoney.count(Self.bills(r.found), boxed: true)
-        #expect(c.sure && c.total == 40)
-    }
-
-    @Test func aDifferentValueIsARealBill() {
-        let r = LiveMoney.resolveMirrors([Self.found(400, 400, 20)], [MoneyDetector.Mirror(bill: Self.found(400, 260, 5), partner: 0, clear: false)], serials: [])
-        #expect(r.found.count == 2)
-    }
-
-    @Test func anAmbiguousOneLeftOutMakesAFloor() {
-        let r = LiveMoney.resolveMirrors([Self.found(400, 400, 1)], [MoneyDetector.Mirror(bill: Self.found(400, 260, 1), partner: 0, clear: false)], serials: [])
-        #expect(r.found.count == 1 && r.ambiguous)
-        var c = LiveMoney.count(Self.bills(r.found), boxed: true)
-        LiveMoney.floorIfReflectionDropped(&c, r.ambiguous)
-        #expect(LiveMoney.sentence(c).hasPrefix("At least 1 bill.") && !LiveMoney.sentence(c).contains("That's"))
+        let s = Self.say(LiveMoney.resolveMirrors([a], [MoneyDetector.Mirror(bill: b, partner: 0, clear: false, real: true)]))
+        #expect(s.hasPrefix("At least 2 bills.") || s.contains("That's $40."), "\(s)")
+        // A box there the pixels can't call either way: never named, never a total, and not in the floor.
+        let u = Self.say(LiveMoney.resolveMirrors([Self.found(400, 400, 1)], [MoneyDetector.Mirror(bill: Self.found(400, 260, 1), partner: 0, clear: false)]))
+        #expect(u.hasPrefix("At least 1 bill.") && !u.contains("That's"))
+        #expect(!s.hasPrefix("At least 1 bill"))
+        #expect(!s.contains("That's $20"))
     }
 }
