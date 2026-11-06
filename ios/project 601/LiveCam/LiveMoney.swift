@@ -179,11 +179,11 @@ enum LiveMoney {
 
     // MARK: - The count (pure)
 
-    struct Bill: Equatable { var quad: Quad; var value: Int?; var cutOff: Bool }
+    struct Bill: Equatable { var quad: Quad; var value: Int?; var cutOff: Bool; var sure = true }
 
     /// Why there is no total: bills overlap, one is cut off at the edge, one couldn't be read, the frames
     /// disagreed, no bills at all, too many to trust, or a bill was seen that wasn't picked out.
-    enum Doubt: String, Equatable { case overlapping, cutOff, unreadable, frames, none, tooMany, moreThanFound }
+    enum Doubt: String, Equatable { case overlapping, cutOff, unreadable, frames, none, tooMany, moreThanFound, countUnsure }
 
     struct Count: Equatable {
         var bills: [Bill]
@@ -196,6 +196,9 @@ enum LiveMoney {
         var atLeast = 0
         /// The frame the bills were found in (pixels), so bills can be matched between frames.
         var size = CGSize.zero
+        /// Bills found by the on-device detector (MoneyDetector): overlapping boxes are fan strips it already told
+        /// apart, so overlap is no reason to doubt the count.
+        var boxed = false
         var sure: Bool { doubts.isEmpty && !bills.isEmpty }
         var values: [Int] { bills.compactMap(\.value) }
         var total: Int { values.reduce(0, +) }
@@ -215,7 +218,7 @@ enum LiveMoney {
     /// Bills overlapping one another by more than this share of the smaller one: a fan or a pile, not spread out.
     static let overlapLimit = 0.12
 
-    static func count(_ bills: [Bill], moreSeen: Bool = false, pile: [Int]? = nil) -> Count {
+    static func count(_ bills: [Bill], moreSeen: Bool = false, pile: [Int]? = nil, boxed: Bool = false) -> Count {
         var doubts: [Doubt] = []
         if bills.isEmpty && pile == nil { doubts.append(.none) }
         if pile != nil { doubts.append(.overlapping) }
@@ -225,12 +228,17 @@ enum LiveMoney {
             let (a, b) = q[i].area < q[j].area ? (q[i], q[j]) : (q[j], q[i])
             if a.covered(by: b) > overlapLimit { overlap = true }
         } }
-        if overlap && pile == nil { doubts.append(.overlapping) }
+        if overlap && pile == nil && !boxed { doubts.append(.overlapping) }
         if bills.contains(where: \.cutOff) { doubts.append(.cutOff) }
         if bills.contains(where: { $0.value == nil }) { doubts.append(.unreadable) }
         if bills.count > 12 { doubts.append(.tooMany) }
         if moreSeen { doubts.append(.moreThanFound) }
-        return Count(bills: bills, doubts: doubts, pileValues: Array(Set(pile ?? [])).sorted(by: >))
+        // Detector path: a bill it isn't sure is one bill (low confidence, or a neighbouring box folded into it)
+        // makes the count a floor, never a number.
+        if boxed && bills.contains(where: { !$0.sure }) { doubts.append(.countUnsure) }
+        var c = Count(bills: bills, doubts: doubts, pileValues: Array(Set(pile ?? [])).sorted(by: >))
+        c.boxed = boxed
+        return c
     }
 
     /// The same bills in a few frames, put together bill by bill: a bill read in one frame and not in another is
@@ -254,11 +262,56 @@ enum LiveMoney {
         }
         var bills = first.bills
         for i in bills.indices { bills[i].value = Set(reads[i]).count == 1 ? reads[i].first : nil }
-        var out = count(bills)
+        var out = count(bills, boxed: first.boxed)
         out.size = first.size
         return out
     }
     private static func dist(_ a: CGPoint, _ b: CGPoint) -> CGFloat { hypot(a.x - b.x, a.y - b.y) }
+
+    /// Looks per money question on the detector path.
+    static let boxedFrames = 3
+
+    /// Detector looks put together so the answer holds steady (no number that flips between frames): the count is
+    /// the count most looks agree on (ties: the latest); a value is named only as many times as at least two of
+    /// those looks read it; the total needs every counted bill named that way and nothing cut off or missed.
+    static func steady(_ looks: [Count]) -> Count {
+        guard let lastLook = looks.last else { return Count(bills: [], doubts: [.none]) }
+        var tally: [Int: Int] = [:]
+        for c in looks { tally[c.bills.count, default: 0] += 1 }
+        let top = tally.values.max() ?? 0
+        let n = looks.reversed().first { tally[$0.bills.count] == top }!.bills.count
+        let agree = looks.filter { $0.bills.count == n }
+        // Each value: the second-highest number of times any agreeing look read it (read in two looks or more).
+        var named: [Int: Int] = [:]
+        if agree.count >= 2 {
+            for v in Set(agree.flatMap(\.values)) {
+                let k = agree.map { $0.values.filter { $0 == v }.count }.sorted(by: >)
+                if k[1] > 0 { named[v] = k[1] }
+            }
+        }
+        if named.values.reduce(0, +) > n { named = [:] }   // looks that disagree that much name nothing
+        let base = agree.last ?? lastLook
+        var left = named
+        var bills = base.bills.map { b -> Bill in
+            var b = b
+            if let v = b.value, let k = left[v], k > 0 { left[v] = k - 1 } else { b.value = nil }
+            return b
+        }
+        for i in bills.indices where bills[i].value == nil {
+            guard let v = left.first(where: { $0.value > 0 })?.key else { break }
+            bills[i].value = v; left[v]! -= 1
+        }
+        let missed = agree.contains { $0.doubts.contains(.moreThanFound) }
+        var c = count(bills, moreSeen: missed, boxed: true)
+        // The floor: the fewest bills any look was sure of (and never fewer than the bills named).
+        c.atLeast = max(looks.map(\.atLeast).min() ?? 0, c.values.count)
+        if Set(looks.map(\.bills.count)).count > 1 || looks.contains(where: { $0.doubts.contains(.countUnsure) }) {
+            if !c.doubts.contains(.countUnsure) { c.doubts.append(.countUnsure) }
+        }
+        if agree.count < 2 && !c.doubts.contains(.none) { c.doubts.append(.frames) }
+        c.size = base.size
+        return c
+    }
 
     /// The burst the app takes for one money question. A total is only spoken when two frames a moment apart
     /// agree on it (11/4 replay, Balanced: one frame missed the $5 and said "$124" with nothing to doubt it; the
@@ -271,6 +324,15 @@ enum LiveMoney {
             let (c, log) = look(img, ask: ask)
             onLook?(c, log)
             looks.append(c)
+            if c.boxed {
+                // The detector path: always take `boxedFrames` looks and answer with what they agree on.
+                while looks.count < boxedFrames, let more = frame() {
+                    let (c2, log2) = look(more, ask: ask)
+                    onLook?(c2, log2)
+                    looks.append(c2)
+                }
+                return steady(looks)
+            }
             if !Set(c.doubts).isSubset(of: [.unreadable]) { return c }
             if looks.count > 1, let f = fuse(looks), f.sure { return f }
         }
@@ -307,6 +369,27 @@ enum LiveMoney {
         return parts.dropLast().joined(separator: ", ") + " and " + parts.last!
     }
 
+    /// The detector path's answer: always the count, every bill it could name, the total only when every counted
+    /// bill is named. "7 bills. I can read a $100, a $20 and four $1s. That's $129."
+    static func countedSentence(_ c: Count) -> String {
+        let k = c.values.count
+        let hedge = c.doubts.contains(.countUnsure)
+        let n = hedge ? max(c.atLeast, k) : c.bills.count
+        var s = hedge ? "At least \(n) bill\(n == 1 ? "" : "s")." : n == 1 ? "1 bill." : "\(n) bills."
+        let byValue = Dictionary(grouping: c.values, by: { $0 }).map { (value: $0.key, count: $0.value.count) }.sorted { $0.value > $1.value }
+        if k > 0 { s += " I can read \(readable(byValue))." }
+        if c.sure { return s + " That's $\(c.total)." }
+        if hedge { return s + " There may be more I can't make out. Fan them out a little so I can see each one." }
+        let unread = n - k
+        if unread > 0 {
+            return s + (unread == 1 ? " One I can't read. Fan them out a little so I can see it."
+                : " \(number(unread).capitalized) I can't read. Fan them out a little so I can see them.")
+        }
+        if c.doubts.contains(.cutOff) { return s + " One is cut off at the edge, so there may be more. Move the phone back a little so every bill is in view." }
+        if c.doubts.contains(.moreThanFound) { return s + " I can see part of another bill I couldn't pick out. Fan them out a little so I can see it." }
+        return s + " Hold the phone steady over them and ask me again."
+    }
+
     static func number(_ n: Int) -> String {
         let w = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"]
         return n < w.count ? w[n] : "\(n)"
@@ -322,6 +405,7 @@ enum LiveMoney {
     /// The whole answer. Sure: the total and the breakdown. Not sure: what it could read, never as a total, never
     /// a guess for a bill it couldn't read, and how to fix the shot.
     static func sentence(_ c: Count) -> String {
+        if c.boxed && !c.doubts.contains(.none) { return countedSentence(c) }
         if c.sure {
             let n = c.values.count
             if n == 1 { return "That's one $\(c.total) bill." }
@@ -742,12 +826,16 @@ enum LiveMoney {
 
     /// One frame counted. `ask` is the model (nil: printed text only).
     static func look(_ image: CGImage, ask: Ask?) -> (count: Count, log: [[String: Any]]) {
-        let blobs = paperBlobs(in: image)
+        // The on-device detector, when its models are in the app: it boxes every bill (fan strips and edge slivers
+        // too), and its boxes are the count. The patch and rectangle search below is then skipped, and the reader
+        // reads only inside the boxes. Without the models, the search runs as before.
+        let boxed = MoneyDetector.detect(image)
+        let blobs = boxed == nil ? paperBlobs(in: image) : []
         var single = blobs.filter(\.billLike)
         // Bills Vision finds by their straight edges that no pale patch already covers (a bill on a pale table,
         // or one the patch search cut in two).
         let area = CGFloat(image.width * image.height)
-        for q in bills(from: rectangles(in: image), frameArea: area)
+        for q in boxed == nil ? bills(from: rectangles(in: image), frameArea: area) : []
         where !single.contains(where: { q.covered(by: $0.quad) > 0.4 || $0.quad.covered(by: q) > 0.4 }) {
             let edge = q.touchesEdge(width: CGFloat(image.width), height: CGFloat(image.height), margin: CGFloat(min(image.width, image.height)) * 0.01)
             single.append(Blob(quad: q, pixels: Int(q.area * pow(360 / CGFloat(max(image.width, image.height)), 2)), fill: 1, billLike: true, atEdge: edge))
@@ -773,6 +861,28 @@ enum LiveMoney {
             let m = ask.map { modelRead(crop, ask: $0) }
             let value = decide(word: word, numeral: numeral, model: m?.value)
             return (value, ["word": word ?? 0, "numeral": numeral ?? 0, "model": m?.said ?? "", "value": value ?? 0])
+        }
+        let margin = CGFloat(min(image.width, image.height)) * 0.01
+        if let boxed { log.append(["detected": boxed.count]) }
+        for f in boxed ?? [] {
+            // A detected bill's value: the detector's own (its corner numerals and the crop classifier's look of
+            // the bill must agree). The reader reads the same box and can only take a value away: if it reads a
+            // different value, the bill is unread. It never names a bill on its own (11/5 replay: it read a fifth
+            // $1 in a fan with four). Unknown is better than wrong.
+            let cut = f.quad.touchesEdge(width: CGFloat(image.width), height: CGFloat(image.height), margin: margin)
+            var value = f.value
+            var entry: [String: Any] = ["x": Int(f.quad.center.x), "y": Int(f.quad.center.y), "boxed": true, "cut": cut,
+                                        "detector": f.value ?? 0, "look": f.look.value ?? 0, "look_p": Double(f.look.p)]
+            if let crop = straightened(image, f.quad), printDetail(crop) >= minPrintDetail {
+                let (r, e) = read(crop)
+                entry["reader"] = e["value"] ?? 0; entry["word"] = e["word"] ?? 0; entry["numeral"] = e["numeral"] ?? 0
+                entry["model"] = e["model"] ?? ""
+                if let r, let v = value, v != r { value = nil; entry["disagree"] = true }
+            }
+            entry["value"] = value ?? 0
+            entry["sure"] = f.sure
+            out.append(Bill(quad: f.quad, value: value, cutOff: cut, sure: f.sure))
+            log.append(entry)
         }
         for b in single {
             guard let crop = straightened(image, b.quad) else { continue }
@@ -873,9 +983,20 @@ enum LiveMoney {
         // Read bills first, so when two finds are one bill (a smooth patch and the rectangle around the same
         // bill), the one that was read is kept.
         for b in out.sorted(by: { ($0.value != nil ? 0 : 1) < ($1.value != nil ? 0 : 1) }) {
-            if kept.contains(where: { b.quad.covered(by: $0.quad) > 0.5 || $0.quad.covered(by: b.quad) > 0.5 }) { continue }
-            let mine = Set(frameSerials.filter { b.quad.contains($0.at) }.map(\.text))
-            if !mine.isEmpty, !mine.isDisjoint(with: used) { continue }
+            // (Detected bills already went through the detector's own overlap check: fan strips overlap.)
+            if boxed == nil, kept.contains(where: { b.quad.covered(by: $0.quad) > 0.5 || $0.quad.covered(by: b.quad) > 0.5 }) { continue }
+            // Detected boxes overlap (a fan strip's box runs under the bill on top), so each serial belongs only to
+            // the smallest box it falls in; otherwise the top bill's serial would make the strip under it "the same
+            // bill" and drop it.
+            let mine = Set(frameSerials.filter { s in
+                guard b.quad.contains(s.at) else { return false }
+                guard boxed != nil else { return true }
+                return !out.contains { $0.quad != b.quad && $0.quad.contains(s.at) && $0.quad.area < b.quad.area }
+            }.map(\.text))
+            // (A bill's two printed serials can land in two detected boxes, a strip and the bill over it: on the
+            // detector path a shared serial drops a box only when it is also the same place.)
+            if !mine.isEmpty, !mine.isDisjoint(with: used),
+               boxed == nil || kept.contains(where: { b.quad.covered(by: $0.quad) > 0.5 && $0.quad.covered(by: b.quad) > 0.5 }) { continue }
             used.formUnion(mine)
             kept.append(b)
         }
@@ -883,7 +1004,7 @@ enum LiveMoney {
         // said "10 bills" for seven), so it is never spoken; it can only stop a total. If it sees more bills than
         // were found, one was missed (11/4 replay: a fan where only the top $100 was found, "That's one $100 bill").
         var modelCount: Int?
-        if let ask, !kept.isEmpty, !anyPile {
+        if let ask, !kept.isEmpty, !anyPile, boxed == nil {
             let a = ask(image, countQuestion)
             modelCount = number(in: a) ?? wordNumber(a)
             log.append(["model_count": a.map(clean) ?? ""])
@@ -891,10 +1012,11 @@ enum LiveMoney {
         // A smooth patch the model calls money, away from every bill read: glare on a bill that wasn't found.
         let unseen = smoothMoney.contains { q in !kept.contains { q.covered(by: $0.quad) > 0.2 || $0.quad.covered(by: q) > 0.2 } }
         let missed = !stray.isEmpty || unseen || (modelCount.map { $0 > kept.count } ?? false)
-        var c = count(kept, moreSeen: missed, pile: anyPile ? pileValues : nil)
+        var c = count(kept, moreSeen: missed, pile: anyPile ? pileValues : nil, boxed: boxed != nil)
         // When bills overlap, the fewest there can be: every one found whole, every distinct serial, every distinct
         // value. Each is a floor on its own, so the largest of them is too (adding them could count a bill twice).
         c.atLeast = max(kept.filter { $0.value != nil }.count, Set(frameSerials.map(\.text)).count, Set(c.values + c.pileValues).count)
+        if boxed != nil { c.atLeast = max(kept.filter(\.sure).count, kept.filter { $0.value != nil }.count) }
         c.size = CGSize(width: image.width, height: image.height)
         return (c, log)
     }

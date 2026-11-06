@@ -7,6 +7,6 @@ FW="${LLAMA_XCFRAMEWORK:-$HERE/../../Frameworks/llama.xcframework}/macos-arm64_x
 [ -d "$FW" ] || FW="$HOME/rtcam-repo/ios/Frameworks/llama.xcframework/macos-arm64_x86_64"
 OUT="${1:-/tmp/money-replay}"
 swiftc -O -F "$FW" -framework llama -Xlinker -rpath -Xlinker "$FW" \
-  "$APP/LiveCam/LiveMoney.swift" "$APP/LiveCam/LiveBrain.swift" "$APP/LiveCam/LiveVisionEngine.swift" \
+  "$APP/LiveCam/LiveMoney.swift" "$APP/LiveCam/MoneyDetector.swift" "$APP/LiveCam/LiveBrain.swift" "$APP/LiveCam/LiveVisionEngine.swift" \
   "$HERE/Stubs.swift" "$HERE/main.swift" -o "$OUT"
 echo "built $OUT"

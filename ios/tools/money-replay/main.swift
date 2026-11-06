@@ -55,6 +55,8 @@ func honest(_ c: LiveMoney.Count) -> Bool {
     if readRight(c) != c.values.count { return false }
     if !Set(c.pileValues).isSubset(of: Set(truth)) { return false }
     if c.doubts.contains(.overlapping) { return c.atLeast <= truth.count }
+    // "At least N bills" (detector path, count not sure): honest when the floor holds.
+    if c.doubts.contains(.countUnsure) { return max(c.atLeast, c.values.count) <= truth.count }
     if c.doubts.contains(.none) { return true }
     let hedged = !Set(c.doubts).isDisjoint(with: [.cutOff, .moreThanFound, .frames])
     return hedged ? c.bills.count <= truth.count : c.bills.count == truth.count
