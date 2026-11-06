@@ -1,6 +1,9 @@
 import CoreGraphics
 import CoreImage
 import CoreML
+#if canImport(CryptoKit)
+import CryptoKit
+#endif
 import Foundation
 
 /// The on-device money detector (v3): a YOLO OBB model finds and boxes every bill (whole bills, fan strips, edge
@@ -65,6 +68,7 @@ enum MoneyDetector {
     static func searchFolders() -> [URL] {
         var dirs: [URL] = []
         if let d = ProcessInfo.processInfo.environment["MONEY_MODELS"] { dirs.append(URL(fileURLWithPath: d)) }
+        if let own = MoneyPack.installedFolder { dirs.append(own) }
         if let support = try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false) {
             let packs = support.appendingPathComponent("VisionModels", isDirectory: true)
             for p in ((try? FileManager.default.contentsOfDirectory(at: packs, includingPropertiesForKeys: nil)) ?? []).sorted(by: { $0.path < $1.path }) {
@@ -357,5 +361,78 @@ enum MoneyDetector {
         m.ci.render(img, to: buf, bounds: CGRect(x: 0, y: 0, width: CVPixelBufferGetWidth(buf), height: CVPixelBufferGetHeight(buf)),
                     colorSpace: CGColorSpaceCreateDeviceRGB())
         return buf
+    }
+}
+
+
+/// The money models' own small download (8.4 MB), published beside the vision model packs at
+/// https://ineedhemp.com/models/rtcam/money/money-v3/ with its own `money-manifest.json` (name, size, sha256 per
+/// file). The vision packs and their manifests are untouched, so apps that don't know about money never see it.
+/// It is fetched only after a tap (a vision model download the user started; review.md: downloads only after a tap).
+enum MoneyPack {
+    static let base = URL(string: "https://ineedhemp.com/models/rtcam/money/money-v3/")!
+    static let manifestName = "money-manifest.json"
+    struct Manifest: Codable { struct File: Codable { let name: String; let size: Int64; let sha256: String }; let version: String; let files: [File] }
+    enum PackError: Error { case badManifest, badFile(String), http(Int, String) }
+
+    static var root: URL? {
+        try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+            .appendingPathComponent("MoneyModels", isDirectory: true)
+    }
+    /// The installed folder, when its manifest says every file is there at its size.
+    static var installedFolder: URL? {
+        guard let dir = root?.appendingPathComponent(MoneyDetector.modelVersion, isDirectory: true) else { return nil }
+        return isComplete(dir) ? dir : nil
+    }
+    static func isComplete(_ dir: URL) -> Bool {
+        guard let d = try? Data(contentsOf: dir.appendingPathComponent(manifestName)),
+              let m = try? JSONDecoder().decode(Manifest.self, from: d), m.version == MoneyDetector.modelVersion else { return false }
+        return m.files.allSatisfy { f in
+            (try? FileManager.default.attributesOfItem(atPath: dir.appendingPathComponent(f.name).path)[.size] as? Int64) == f.size
+        }
+    }
+
+    /// Downloads every file into a staging folder, checks each one's size and SHA-256, then moves the folder into
+    /// place in one step. Nothing is half-installed: a bad file throws and the staging folder is removed.
+    @discardableResult
+    static func install(from base: URL = base, into rootDir: URL? = root, session: URLSession = .shared) async throws -> URL {
+        guard let rootDir else { throw PackError.badManifest }
+        let fm = FileManager.default
+        let final = rootDir.appendingPathComponent(MoneyDetector.modelVersion, isDirectory: true)
+        if isComplete(final) { return final }
+        let staging = rootDir.appendingPathComponent(MoneyDetector.modelVersion + ".partial", isDirectory: true)
+        try? fm.removeItem(at: staging)
+        try fm.createDirectory(at: staging, withIntermediateDirectories: true)
+        do {
+            let (md, mr) = try await session.data(from: base.appendingPathComponent(manifestName))
+            if let h = mr as? HTTPURLResponse, !(200 ..< 300).contains(h.statusCode) { throw PackError.http(h.statusCode, manifestName) }
+            guard let m = try? JSONDecoder().decode(Manifest.self, from: md), m.version == MoneyDetector.modelVersion, !m.files.isEmpty
+            else { throw PackError.badManifest }
+            for f in m.files {
+                guard !f.name.contains(".."), !f.name.hasPrefix("/") else { throw PackError.badFile(f.name) }
+                let (d, r) = try await session.data(from: base.appendingPathComponent(f.name))
+                if let h = r as? HTTPURLResponse, !(200 ..< 300).contains(h.statusCode) { throw PackError.http(h.statusCode, f.name) }
+                guard Int64(d.count) == f.size, sha256Hex(d) == f.sha256 else { throw PackError.badFile(f.name) }
+                let dst = staging.appendingPathComponent(f.name)
+                try fm.createDirectory(at: dst.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try d.write(to: dst, options: .atomic)
+            }
+            try md.write(to: staging.appendingPathComponent(manifestName), options: .atomic)
+            try? fm.removeItem(at: final)
+            try fm.moveItem(at: staging, to: final)
+        } catch {
+            try? fm.removeItem(at: staging)
+            throw error
+        }
+        MoneyDetector.reload()
+        return final
+    }
+
+    static func sha256Hex(_ d: Data) -> String {
+        #if canImport(CryptoKit)
+        return SHA256.hash(data: d).map { String(format: "%02x", $0) }.joined()
+        #else
+        return ""
+        #endif
     }
 }

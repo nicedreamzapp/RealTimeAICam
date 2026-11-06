@@ -280,3 +280,31 @@ struct MoneyReviewRound2Tests {
         #expect(LiveMoney.askedDenomination("¿cuántos de veinte?") == 20)
     }
 }
+
+/// The published money pack (https://ineedhemp.com/models/rtcam/money/money-v3/), downloaded for real: every file
+/// checked against its size and SHA-256, the version stamp checked, and both models loaded by the real loader.
+struct MoneyPackLiveTests {
+    @Test func thePublishedPackDownloadsAndLoads() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("money-live-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let dir = try await MoneyPack.install(into: root)
+        #expect(MoneyPack.isComplete(dir))
+        #expect(MoneyDetector.load(from: [dir]) != nil)
+        // A wrong stamp is refused even with good models beside it.
+        let stamp = dir.appendingPathComponent(MoneyDetector.stampName)
+        let good = try Data(contentsOf: stamp)
+        try Data(#"{"version": "money-v0"}"#.utf8).write(to: stamp)
+        #expect(MoneyDetector.load(from: [dir]) == nil)
+        try good.write(to: stamp)
+        #expect(MoneyDetector.load(from: [dir]) != nil)
+    }
+
+    @Test func aBadPackURLInstallsNothing() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("money-bad-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        await #expect(throws: (any Error).self) { try await MoneyPack.install(from: URL(string: "https://ineedhemp.com/models/rtcam/money/nope/")!, into: root) }
+        #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("money-v3").path))
+    }
+}
