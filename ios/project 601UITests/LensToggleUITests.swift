@@ -22,7 +22,7 @@ final class LensToggleUITests: XCTestCase {
 
     private func lensText(_ app: XCUIApplication) -> XCUIElement {
         app.staticTexts.containing(
-            NSPredicate(format: "label CONTAINS[c] %@", T("🌐 Lens toggle, wide or ultra-wide (Object Detection)"))
+            NSPredicate(format: "label CONTAINS[c] 'ultra'")
         ).firstMatch
     }
 

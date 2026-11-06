@@ -17,7 +17,7 @@ final class VisionBuilderTourUITests: XCTestCase {
             let a = XCTAttachment(screenshot: app.screenshot()); a.name = name; a.lifetime = .keepAlways; add(a)
         }
         shot("00-launch")
-        let notNow = app.buttons[T("Not now")].firstMatch
+        let notNow = app.buttons["Not now"].firstMatch
         if notNow.exists { notNow.tap(); sleep(2) }
         let tabs = app.tabBars.buttons
         for n in tabs.allElementsBoundByIndex.map({ $0.label }) {
@@ -26,7 +26,7 @@ final class VisionBuilderTourUITests: XCTestCase {
             shot("tab-\(n)")
         }
         tabs["My Things"].tap(); sleep(2)
-        let card = app.staticTexts[T("Theo")].firstMatch
+        let card = app.staticTexts["Theo"].firstMatch
         if card.waitForExistence(timeout: 5) { card.tap(); sleep(3); shot("folder-Theo") }
     }
 }

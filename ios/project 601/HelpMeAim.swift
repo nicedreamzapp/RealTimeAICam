@@ -1537,22 +1537,22 @@ enum AimNames {
 
     /// "key" (English) / the Spanish name, else the bare English word.
     static func bare(_ word: String, lang: String = AppLang.code) -> String {
-        inLine(word, article: word, lang: lang)
+        inLine(word, article: word, lang: lang, bareNoun: true)
     }
 
     /// `english` is how the English line says it (with or without an article).
-    static func inLine(_ word: String, article english: String, lang: String = AppLang.code) -> String {
+    static func inLine(_ word: String, article english: String, lang: String = AppLang.code, bareNoun: Bool = false) -> String {
         guard lang == AppLang.spanish else { return english }
         guard let name = spanishName(word) else { return word }
         // A line written for the bare noun ("No puedo buscar %@") drops the Spanish article.
-        return english == word ? withoutArticle(name) : name
+        return bareNoun ? withoutArticle(name) : name
     }
 
     /// "una laptop" -> "laptop", "mis llaves" -> "llaves"; a one-word name stays.
     static func withoutArticle(_ name: String) -> String {
         let articles: Set<String> = ["un", "una", "unos", "unas", "el", "la", "los", "las", "mi", "mis", "tu", "tus"]
         let parts = name.split(separator: " ", maxSplits: 1).map(String.init)
-        guard parts.count == 2, articles.contains(parts[0]) else { return name }
+        guard parts.count == 2, articles.contains(parts[0].lowercased()) else { return name }
         return parts[1]
     }
 

@@ -27,8 +27,8 @@ final class SettingsMessagesUITests: XCTestCase {
         sleep(5) // the accessibility server needs a moment after a fresh launch
         tapCell("General")
         tapCell("iPhone Storage")
-        let row = settings.buttons[T("ApplicationRow-com.apple.MobileSMS")]
-        let sort = settings.buttons[T("ApplicationListSortingMenu")]
+        let row = settings.buttons["ApplicationRow-com.apple.MobileSMS"]
+        let sort = settings.buttons["ApplicationListSortingMenu"]
         _ = sort.waitForExistence(timeout: 60) // iOS measures every app first
         for _ in 0..<40 where !(row.exists && row.isHittable) { settings.swipeUp() }
         XCTAssertTrue(row.exists, "no Messages row")
@@ -70,7 +70,7 @@ final class SettingsMessagesUITests: XCTestCase {
         var deleted = 0
         var stuck = 0
         while stuck < 3 {
-            let edit = settings.buttons[T("Edit")].firstMatch
+            let edit = settings.buttons["Edit"].firstMatch
             if edit.waitForExistence(timeout: 4) { edit.tap(); sleep(1) }
             // Coordinate taps hit whatever app is in front. If Matt picked the phone
             // up and opened something else, stop dead (Brave, 2026-09-16).
@@ -80,10 +80,10 @@ final class SettingsMessagesUITests: XCTestCase {
                 return deleted
             }
             let circles = visibleRows()
-            if circles.isEmpty { stuck += 1; settings.buttons[T("Cancel")].firstMatch.tap(); sleep(1); continue }
+            if circles.isEmpty { stuck += 1; settings.buttons["Cancel"].firstMatch.tap(); sleep(1); continue }
             // One tap per row: a drag down the checkmark column looked right but selected nothing.
             for c in circles { tap(c) }
-            settings.navigationBars.buttons[T("Delete")].firstMatch.tap()
+            settings.navigationBars.buttons["Delete"].firstMatch.tap()
             sleep(1)
             sleep(2) // iOS deletes without asking
             deleted += circles.count
