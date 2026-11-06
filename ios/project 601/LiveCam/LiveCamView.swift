@@ -31,6 +31,8 @@ struct LiveCamView: View {
     @State private var zoomStart: CGFloat?
     @State private var zoomLabel: CGFloat = 1
     @State private var typed = ""
+    @State private var flash = 0.0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GeometryReader { geo in
@@ -44,6 +46,14 @@ struct LiveCamView: View {
                 } else {
                     LiveCamPreview(session: call.camera.session).ignoresSafeArea().accessibilityHidden(true)
                 }
+                // Matt 11/6, a live camera: the frame it just took holds still for a moment, with a shutter flash.
+                if let f = call.frozen {
+                    Image(decorative: f, scale: 1).resizable().scaledToFill()
+                        .frame(width: geo.size.width, height: geo.size.height).clipped().ignoresSafeArea()
+                        .accessibilityHidden(true)
+                }
+                Color.white.opacity(flash).ignoresSafeArea().allowsHitTesting(false).accessibilityHidden(true)
+                thingBox
                 if call.showCaption, abs(zoomLabel - 1) > 0.05 {
                     VStack {
                         Text(String(format: zoomLabel < 10 ? "%.1f×" : "%.0f×", zoomLabel))
@@ -103,6 +113,41 @@ struct LiveCamView: View {
             }
         }
         .onDisappear { call.end() }
+        .onChange(of: call.shutterCount) {
+            flash = reduceMotion ? 0.2 : 0.45
+            withAnimation(.easeOut(duration: 0.35)) { flash = 0 }
+        }
+    }
+
+    // MARK: The box around the thing it named
+
+    /// A Camera-app-style yellow box on the thing the answer named, for a few seconds. Hidden from VoiceOver (the
+    /// answer says it); its name shows only with Words on screen on.
+    private var thingBox: some View {
+        GeometryReader { g in
+            if let b = call.thingBox {
+                let r = LiveThings.viewRect(b.box, frame: b.frame, view: g.size)
+                ZStack(alignment: .topLeading) {
+                    RoundedRectangle(cornerRadius: 10).stroke(LiveOrb.lookColor, lineWidth: 3)
+                        .shadow(color: .black.opacity(0.5), radius: 3)
+                        .frame(width: r.width, height: r.height)
+                        .offset(x: r.minX, y: r.minY)
+                    if call.showCaption {
+                        Text(b.name).font(.footnote.weight(.bold)).foregroundStyle(.black)
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(LiveOrb.lookColor, in: Capsule())
+                            // Kept on screen when the thing runs off the edge (the box itself may).
+                            .offset(x: min(max(12, r.minX + 6), g.size.width - 140), y: max(54, r.minY - 24))
+                    }
+                }
+                .id(b.id)
+                .transition(.opacity)
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .animation(.easeInOut(duration: 0.25), value: call.thingBox)
     }
 
     // MARK: Top: mode and flip

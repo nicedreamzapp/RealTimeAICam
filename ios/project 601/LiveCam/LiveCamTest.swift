@@ -6,6 +6,7 @@
 //   -liveCamCantHear  acts as if speech recognition kept failing (the "can't hear you" note and typing box)
 //   RTCAM_FAKE_LIVE_ANSWER (environment) stands in for the model's answer, for a Simulator that can't run it
 //   RTCAM_FAKE_LIVE_DELAY (environment) seconds the stand-in "thinks" before answering
+//   RTCAM_FAKE_THING_BOX (environment) "x,y,w,h": the box when the Simulator's detector finds nothing
 // Debug builds also write a timing log (Documents/live-cam/log.jsonl, a new file each visit). Release builds
 // write nothing anywhere: no log, no recording.
 import Foundation
@@ -68,6 +69,11 @@ enum LiveCamTest {
     /// Acts as if speech recognition kept failing, right after the greeting (layout of the "can't hear you" note).
     static var forceCantHear: Bool { args.contains("-liveCamCantHear") }
     static var fakeAnswer: String? { ProcessInfo.processInfo.environment["RTCAM_FAKE_LIVE_ANSWER"] }
+    static var fakeThingBox: CGRect? {
+        guard let v = ProcessInfo.processInfo.environment["RTCAM_FAKE_THING_BOX"]?.split(separator: ",").compactMap({ Double($0) }),
+              v.count == 4 else { return nil }
+        return CGRect(x: v[0], y: v[1], width: v[2], height: v[3])
+    }
     static var fakeDelay: Double { Double(ProcessInfo.processInfo.environment["RTCAM_FAKE_LIVE_DELAY"] ?? "") ?? 0 }
     #else
     static let active = false

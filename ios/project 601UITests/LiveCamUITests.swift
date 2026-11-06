@@ -201,6 +201,25 @@ final class LiveCamUITests: XCTestCase {
         app.terminate()
     }
 
+    /// Matt 11/6, a live camera: the frame freezes with a shutter flash when it looks, and the thing the answer
+    /// names gets a box for a few seconds (the hallway photo has doors; the box itself is hidden from VoiceOver, so
+    /// this keeps a screenshot and the log says what was found).
+    @MainActor
+    func testShutterFreezeAndBox() throws {
+        continueAfterFailure = false
+        let app = launch(env: ["RTCAM_FAKE_LIVE_ANSWER": "I see a blue double door with an exit sign above it.",
+                               "RTCAM_FAKE_LIVE_DELAY": "1", "RTCAM_FAKE_THING_BOX": "0.27,0.33,0.36,0.42"])
+        openLiveCam(app)
+        ask(app, "What is in front of me?")
+        let answered = NSPredicate { _, _ in self.captionText(app).contains("blue double door") }
+        expectation(for: answered, evaluatedWith: NSObject())
+        waitForExpectations(timeout: 60)
+        sleep(3)   // the detector runs after the answer (about 1.5 s in the Simulator)
+        keep(app, "livecam-box")
+        goBack(app)
+        app.terminate()
+    }
+
     /// 11/04 review: speech recognition that keeps failing stops retrying, says so, and shows a note and a typing
     /// box. Both must be on screen and clear of the controls on every size.
     @MainActor

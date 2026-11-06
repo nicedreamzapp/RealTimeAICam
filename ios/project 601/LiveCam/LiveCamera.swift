@@ -245,3 +245,30 @@ final class LiveCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
         return px
     }
 }
+
+/// Finds the thing an answer named in the frame it was answered from, with the YOLOE detector the app already has
+/// (Help Me Aim's, bundled: nothing downloaded). Loaded the first time it is needed, let go when Live Cam closes.
+final class LiveThingFinder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var finder: AimObjectFinder?
+    private var index: [String: [Int32]] = [:]
+    private var tried = false
+
+    /// The first of `words` that the detector finds in `frame`: its box (normalized, top-left origin) and the word.
+    func find(_ words: [String], in frame: CGImage) -> (box: CGRect, name: String, score: Float)? {
+        lock.lock(); defer { lock.unlock() }
+        if !tried {
+            tried = true
+            finder = AimObjectFinder()
+            index = AimVocabulary.index(AimObjectFinder.loadClassNames())
+        }
+        guard let finder else { return nil }
+        let image = CIImage(cgImage: frame)
+        for w in words {
+            guard let m = AimVocabulary.match(w, index: index), !m.classIDs.isEmpty,
+                  let hit = finder.find(in: image, classIDs: Set(m.classIDs)) else { continue }
+            return (hit.box, w, hit.score)
+        }
+        return nil
+    }
+}

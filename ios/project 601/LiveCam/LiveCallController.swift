@@ -131,6 +131,15 @@ final class LiveCallController: ObservableObject {
 
     /// The last question heard (in the person's words), shown above the answer.
     @Published private(set) var heardText = ""
+    /// Matt 11/6, a live camera: the frame it just took, held on screen ~0.4 s with a shutter flash (shutterCount).
+    @Published private(set) var frozen: CGImage?
+    @Published private(set) var shutterCount = 0
+    /// The thing its answer named, boxed for a few seconds (hidden from VoiceOver; the answer already says it).
+    struct ThingBox: Equatable { let box: CGRect; let frame: CGSize; let name: String; let id: Int }
+    @Published private(set) var thingBox: ThingBox?
+    private var thingFinder: LiveThingFinder? = LiveThingFinder()
+    static let freezeSeconds = 0.4
+    static let boxSeconds = 4.0
     /// Speech recognition kept failing the moment it started: the mic is off for this visit and a typing box shows.
     @Published private(set) var hearingStopped = false
 
@@ -183,6 +192,7 @@ final class LiveCallController: ObservableObject {
         moneyMemory.forget()   // a new call never answers from an old count
         Task.detached(priority: .utility) { MoneyDetector.warmUp() }   // both money models loaded off the main thread
         camera.onTorch = { [weak self] lit in DispatchQueue.main.async { MainActor.assumeIsolated { self?.torchChanged(lit) } } }
+        if thingFinder == nil { thingFinder = LiveThingFinder() }
         UIApplication.shared.isIdleTimerDisabled = true
         // The app goes to the background: the light goes off (iOS stops the camera there anyway).
         backgroundWatch = NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil,
@@ -278,6 +288,8 @@ final class LiveCallController: ObservableObject {
         // The model is let go (What's this? loads its own copy when it is next used).
         preload?.cancel(); preload = nil
         engine = nil
+        thingFinder = nil   // the detector is let go too
+        frozen = nil; thingBox = nil
         UIApplication.shared.isIdleTimerDisabled = false
     }
 
@@ -867,6 +879,10 @@ final class LiveCallController: ObservableObject {
                 try? await Task.sleep(nanoseconds: 300_000_000)
                 grabbed = camera.current()
             }
+            if let frame = grabbed, withPhoto, !unprompted, question != nil {
+                // The moment the frame is taken: the shutter (the model never waits on it).
+                DispatchQueue.main.async { MainActor.assumeIsolated { self?.shutter(frame, turn: my) } }
+            }
             guard let frame = grabbed else {
                 await MainActor.run {
                     self?.modelBusy = false
@@ -1046,7 +1062,46 @@ final class LiveCallController: ObservableObject {
                 self.watch.described(thumb)
                 self.answerDone = true
                 if withPhoto && !said.isEmpty { self.describedOnce = true }
+                if withPhoto, !general, !said.isEmpty { self.boxThing(named: said, in: frame) }
                 if !self.voice.isBusy { self.wentQuiet() }
+            }
+        }
+    }
+
+    private func shutter(_ frame: CGImage, turn my: Int) {
+        guard running, turn == my else { return }
+        frozen = frame
+        shutterCount += 1
+        log(["event": "shutter"])
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(Self.freezeSeconds * 1e9))
+            if let self, self.frozen === frame { self.frozen = nil }
+        }
+    }
+
+    /// Draws a box around the thing the answer named, when the detector finds it in the frame it answered from.
+    private func boxThing(named said: String, in frame: CGImage) {
+        let words = LiveThings.candidates(said)
+        guard !words.isEmpty, let finder = thingFinder else { return }
+        Task.detached(priority: .utility) { [weak self] in
+            var hit = finder.find(words, in: frame)
+            #if DEBUG
+            // RTCAM_FAKE_THING_BOX="x,y,w,h" (0...1): the Simulator's YOLOE finds nothing, so the harness can still
+            // see and screenshot the box.
+            if hit == nil, let f = LiveCamTest.fakeThingBox, let w = words.first { hit = (f, w, 1) }
+            #endif
+            await MainActor.run {
+                guard let self, self.running else { return }
+                self.log(["event": "thing_box", "words": words.joined(separator: ", "), "found": hit?.name ?? "",
+                          "score": ((hit?.score ?? 0) * 100).rounded() / 100])
+                guard let hit else { return }
+                let b = ThingBox(box: hit.box, frame: CGSize(width: frame.width, height: frame.height), name: hit.name,
+                                 id: (self.thingBox?.id ?? 0) + 1)
+                self.thingBox = b
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(nanoseconds: UInt64(Self.boxSeconds * 1e9))
+                    if self?.thingBox == b { self?.thingBox = nil }
+                }
             }
         }
     }
