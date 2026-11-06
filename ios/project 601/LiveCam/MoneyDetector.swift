@@ -45,34 +45,63 @@ enum MoneyDetector {
     }
 
     /// The models are NOT in the app download (review.md: no change may add MB to the app download; models come
-    /// only with a download the user tapped). They are looked for in a `money` folder inside a vision model pack the
-    /// user already downloaded (Application Support/VisionModels/<level>/money/), or, for money-replay on the Mac,
-    /// in the folder named by MONEY_MODELS. Each is MoneyOBB-v3 / MoneyDenom-v3 as .mlmodelc or .mlpackage. Without
-    /// them Live Cam counts money the old way.
-    static let models: Models? = {
+    /// only with a download the user tapped). They are a `money` folder inside a vision model pack the user already
+    /// downloaded (Application Support/VisionModels/<level>/money/), or, for money-replay on the Mac, the folder named
+    /// by MONEY_MODELS. The folder holds MoneyOBB-v3.mlmodelc and MoneyDenom-v3.mlmodelc, compiled before shipping
+    /// (never compiled on the phone), and `money-models.json` with `"version": "money-v3"`. A folder that doesn't
+    /// check out (missing, a wrong stamp, an output of the wrong shape) loads nothing, and Live Cam counts the old way.
+    static let modelVersion = "money-v3"
+    static let stampName = "money-models.json"
+    private static var cached: Models??
+    private static let cacheLock = NSLock()
+    static var models: Models? {
+        cacheLock.lock(); defer { cacheLock.unlock() }
+        if let c = cached { return c }
+        let m = load(from: searchFolders()); cached = .some(m); return m
+    }
+    /// Called when a vision model pack finishes installing or is deleted: look again on the next money question.
+    static func reload() { cacheLock.lock(); cached = nil; cacheLock.unlock() }
+
+    static func searchFolders() -> [URL] {
         var dirs: [URL] = []
         if let d = ProcessInfo.processInfo.environment["MONEY_MODELS"] { dirs.append(URL(fileURLWithPath: d)) }
         if let support = try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false) {
             let packs = support.appendingPathComponent("VisionModels", isDirectory: true)
-            for p in (try? FileManager.default.contentsOfDirectory(at: packs, includingPropertiesForKeys: nil)) ?? [] {
+            for p in ((try? FileManager.default.contentsOfDirectory(at: packs, includingPropertiesForKeys: nil)) ?? []).sorted(by: { $0.path < $1.path }) {
                 dirs.append(p.appendingPathComponent("money", isDirectory: true))
             }
         }
-        func url(_ name: String) -> URL? {
-            for dir in dirs {
-                let c = dir.appendingPathComponent(name + ".mlmodelc")
-                if FileManager.default.fileExists(atPath: c.path) { return c }
-                let p = dir.appendingPathComponent(name + ".mlpackage")
-                if FileManager.default.fileExists(atPath: p.path), let u = try? MLModel.compileModel(at: p) { return u }
-            }
-            return nil
-        }
+        return dirs
+    }
+
+    /// The first folder whose stamp, both compiled models and both outputs check out.
+    static func load(from dirs: [URL]) -> Models? {
+        let fm = FileManager.default
         let cfg = MLModelConfiguration(); cfg.computeUnits = .cpuAndNeuralEngine
-        guard let d = url("MoneyOBB-v3"), let c = url("MoneyDenom-v3"),
-              let det = try? MLModel(contentsOf: d, configuration: cfg), let cls = try? MLModel(contentsOf: c, configuration: cfg)
-        else { return nil }
-        return Models(det: det, cls: cls)
-    }()
+        for dir in dirs {
+            guard let data = try? Data(contentsOf: dir.appendingPathComponent(stampName)),
+                  let stamp = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  stamp["version"] as? String == modelVersion else { continue }
+            let d = dir.appendingPathComponent("MoneyOBB-v3.mlmodelc"), c = dir.appendingPathComponent("MoneyDenom-v3.mlmodelc")
+            guard fm.fileExists(atPath: d.path), fm.fileExists(atPath: c.path),
+                  let det = try? MLModel(contentsOf: d, configuration: cfg), let cls = try? MLModel(contentsOf: c, configuration: cfg),
+                  validDetector(det.modelDescription), validClassifier(cls.modelDescription) else { continue }
+            return Models(det: det, cls: cls)
+        }
+        return nil
+    }
+    /// The detector answers one [1, 300, 7] (end-to-end) or [1, 20, 8400] (standard head) array.
+    static func validShape(_ shape: [Int]) -> Bool { shape == [1, 300, 7] || shape == [1, 20, 8400] }
+    static func validDetector(_ d: MLModelDescription) -> Bool {
+        guard d.inputDescriptionsByName.values.contains(where: { $0.type == .image }),
+              let o = d.outputDescriptionsByName.values.first(where: { $0.type == .multiArray }),
+              let shape = o.multiArrayConstraint?.shape.map(\.intValue) else { return false }
+        return validShape(shape)
+    }
+    static func validClassifier(_ d: MLModelDescription) -> Bool {
+        d.inputDescriptionsByName.values.contains { $0.type == .image }
+            && d.outputDescriptionsByName.values.contains { $0.type == .dictionary || ($0.type == .multiArray && ($0.multiArrayConstraint?.shape.last?.intValue ?? 0) == lookNames.count) }
+    }
 
     // MARK: - Geometry (pure, image pixels y down)
 
@@ -207,12 +236,12 @@ enum MoneyDetector {
         guard let buf = letterbox(image, side: Int(side), scale: scale, padX: padX, padY: padY),
               let fp = try? MLDictionaryFeatureProvider(dictionary: [m.detInput: MLFeatureValue(pixelBuffer: buf)]),
               let out = try? m.det.prediction(from: fp),
-              let name = out.featureNames.first, let a = out.featureValue(for: name)?.multiArrayValue, a.shape.count == 3
-        else { return [] }
-        // Two export layouts: the end-to-end head [1, 300, 7] (cx, cy, w, h, conf, class, angle per row; no NMS
-        // needed), or the standard head [1, 20, 8400] (cx, cy, w, h, 15 class scores, angle per column).
+              let name = out.featureNames.first, let a = out.featureValue(for: name)?.multiArrayValue,
+              validShape(a.shape.map(\.intValue))
+        else { return nil }   // a failed look is no answer, never "no bills": the old way counts this frame instead
+        // Two export layouts: the end-to-end head [1, 300, 7] (cx, cy, w, h, conf, class, angle per row), or the
+        // standard head [1, 20, 8400] (cx, cy, w, h, 15 class scores, angle per column).
         let endToEnd = a.shape[2].intValue == 7
-        guard endToEnd || a.shape[1].intValue == 20 else { return [] }
         let n = endToEnd ? a.shape[1].intValue : a.shape[2].intValue
         let rs = endToEnd ? a.strides[2].intValue : a.strides[1].intValue, cs = endToEnd ? a.strides[1].intValue : a.strides[2].intValue
         func v(_ row: Int, _ i: Int) -> Float {

@@ -134,6 +134,7 @@ final class LiveCallController: ObservableObject {
     func start() {
         guard !running else { return }
         running = true
+        moneyMemory.forget()   // a new call never answers from an old count
         UIApplication.shared.isIdleTimerDisabled = true
         watch.enabled = proactiveOn
         LiveCamTest.beginSession()
@@ -513,21 +514,24 @@ final class LiveCallController: ObservableObject {
             }
         }
         // 11/4 Matt's money videos: "$600", "$7 total", "$36" for $129. Money is counted in code (LiveMoney), never
-        // guessed by the model, and a follow-up ("how many ones?") is answered from the last count.
-        // "Again" or "now" always counts afresh.
-        let fresh = [" again ", " now ", " recount ", " re count "].contains { (" " + LiveWords.normalize(q) + " ").contains($0) }
-        if let last = moneyMemory.recent(), !fresh, LiveMoney.askedDenomination(q) != nil || moneyFollowUpWindow(q) {
-            let line = LiveMoney.followUp(q, last: last)
+        // guessed by the model. Only "how many twenties" after a SURE count is answered from that count; a total,
+        // "how much is that" or "are you sure" always looks again (the pile may have changed), and any other
+        // question forgets the count (11/6 review).
+        switch LiveMoney.route(q, last: moneyMemory.recent()) {
+        case .fromLastCount:
+            guard let last = moneyMemory.recent() else { break }
+            let line = LiveMoney.followUp(q, last: last, lang: moneyLang)
             log(["event": "money_follow_up", "question": q, "answer": line])
             memory.note(question: q, answer: line)
             speakAll(line)
             lastUsedPhoto = true
             return
-        }
-        if LiveMoney.isMoneyQuestion(q) || (moneyMemory.recent() != nil && LiveMoney.isFollowUp(q)) {   // "count it" after a count
+        case .countAgain:
             lastUsedPhoto = true
             countMoney(q)
             return
+        case .notMoney:
+            moneyMemory.forget()
         }
         // 11/1 Matt: "it should always be taking in the photo". Every question goes with the live frame; a
         // general one keeps the chat voice and only uses the photo if it helps.
@@ -557,12 +561,11 @@ final class LiveCallController: ObservableObject {
 
     private var moneyMemory = MoneyMemory()
 
-    /// "Count it" / "what's the total" right after a count, without a money word.
-    private func moneyFollowUpWindow(_ q: String) -> Bool {
-        let t = " " + LiveWords.normalize(q) + " "
-        return [" are you sure ", " what s the total ", " whats the total ", " what is the total ", " how much is that ",
-                " how much total ", " add it up ", " add them up "].contains { t.contains($0) }
-    }
+    /// The language money answers are written in. This branch speaks every answer through `voice.say`, which
+    /// puts English into Your language, so it stays English here. MERGE NOTE (spanish-ui): use
+    /// `MoneyLang.from(AppLang.code)` and say the line as the app's own words in that language
+    /// (`voice.sayLine(line, lang: AppLang.code, english: englishLine)`), with "Let me count." through `sayOwn`.
+    private var moneyLang: MoneyLang { .en }
 
     /// Counts the bills in view: the full camera frame (1280 x 720, not the 512 px look), each bill found and read
     /// on its own, the total added in code. One frame, a second only if a bill couldn't be read.
@@ -573,7 +576,9 @@ final class LiveCallController: ObservableObject {
             return
         }
         current?.cancel()
-        current = nil
+        // Tracked like any answer, so "stop", the orb or a new question cancels it (11/6 review).
+        let box = LiveStreamBox()
+        current = box
         turn += 1
         let my = turn
         answerDone = false
@@ -589,11 +594,13 @@ final class LiveCallController: ObservableObject {
         Task.detached(priority: .userInitiated) { [weak self] in
             var first = true
             let count = LiveMoney.countBurst(maxFrames: 2, frame: { () -> CGImage? in
+                guard box.isAlive else { return nil }   // cancelled: no more looks
                 if !first { Thread.sleep(forTimeInterval: 0.3) }   // a moment apart, so the next frame isn't the same one
                 first = false
                 return camera.current()
             }, ask: { img, question in
-                engine.respond(system: LiveMoney.modelSystem, question: question, image: img,
+                guard box.isAlive else { return nil }
+                return engine.respond(system: LiveMoney.modelSystem, question: question, image: img,
                                longSide: LiveMoney.modelLongSide, maxTokens: 4)?.text
             }, onLook: { c, log in
                 let doubts = c.doubts.map(\.rawValue)
@@ -602,14 +609,16 @@ final class LiveCallController: ObservableObject {
                                "doubts": doubts, "detail": log.map { $0.mapValues { "\($0)" } }])
                 }
             })
-            let line = LiveMoney.sentence(count)
             await MainActor.run {
                 guard let self else { return }
-                self.modelBusy = false
-                guard self.running, self.turn == my else { return }
+                // A newer answer owns modelBusy: only this run's own end (or nothing newer running) clears it.
+                if self.current === box || self.current == nil { self.modelBusy = false }
+                if self.current === box { self.current = nil }
+                guard box.isAlive, self.running, self.turn == my else { return }
+                let line = LiveMoney.sentence(count, lang: self.moneyLang)
                 self.log(["event": "money_answer", "question": q, "answer": line, "sure": count.sure, "total": count.total,
                           "seconds": Date().timeIntervalSince(asked)])
-                self.moneyMemory.note(count)
+                if !count.doubts.contains(.noCamera) { self.moneyMemory.note(count) }
                 self.memory.note(question: q, answer: line)
                 self.sayPart(line, turn: my)
                 self.answerDone = true

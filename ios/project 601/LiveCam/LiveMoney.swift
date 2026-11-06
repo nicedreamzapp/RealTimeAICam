@@ -23,40 +23,82 @@ enum LiveMoney {
     /// "How much money is this", "count the bills", "what's the total", "how many twenties". Allows for what the
     /// speech recognizer writes ("how much is that dollars", "how many 20s", "20 dollar bills").
     static func isMoneyQuestion(_ q: String) -> Bool {
-        let t = " " + LiveWords.normalize(q) + " "
+        let t = folded(q)
+        // A restaurant check, a receipt, a phone bill: "how much is this bill" there is about the paper, not cash.
+        if isAboutAReceipt(t) { return false }
         let money = [" money ", " cash ", " bill ", " bills ", " dollar ", " dollars ", " buck ", " bucks ", " coin ", " coins ",
-                     " currency ", " usd ", " 20s ", " 100s ", " twenties ", " fifties ", " hundreds "]
+                     " currency ", " usd ", " 20s ", " 100s ", " twenties ", " fifties ", " hundreds ",
+                     // Spanish (11/6, Spanish UI)
+                     " dinero ", " efectivo ", " billete ", " billetes ", " dolar ", " dolares ", " plata ", " moneda ", " monedas "]
         let asking = [" how much ", " how many ", " count ", " total ", " add ", " sum ", " worth ", " what bill ", " which bill ",
                       " what kind of bill ", " is this a ", " is that a ", " what is this ", " what s this ", " whats this ",
                       " what is that ", " what s that ", " whats that ", " what do you see ", " what are these ", " what are those ",
-                      " what bills ", " which bills ", " is it a "]
+                      " what bills ", " which bills ", " is it a ",
+                      " cuanto ", " cuanta ", " cuantos ", " cuantas ", " cuenta ", " cuentas ", " contar ", " cuentame ", " suma ",
+                      " sumar ", " vale ", " valen ", " que billete ", " cual billete ", " que es esto ", " que es eso ", " que billetes "]
         if money.contains(where: { t.contains($0) }) && asking.contains(where: { t.contains($0) }) { return true }
         // "How many ones / fives / tens": the plain plurals mean bills only after "how many".
         if t.contains(" how many "), [" ones ", " fives ", " tens ", " 1s ", " 5s ", " 10s ", " 50s ", " singles "].contains(where: { t.contains($0) }) { return true }
         return false
     }
 
+    /// The question in lower case with accents folded and spaces round it ("¿Cuánto dinero?" -> " cuanto dinero ").
+    static func folded(_ q: String) -> String {
+        " " + LiveWords.normalize(q.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)) + " "
+    }
+
+    /// A check, a receipt or a bill to pay, in English or Spanish.
+    static func isAboutAReceipt(_ t: String) -> Bool {
+        [" receipt ", " the check ", " this check ", " a check ", " check please ", " cheque ", " invoice ", " tab ", " menu ", " restaurant ", " tip ", " owe ", " pay ",
+         " phone bill ", " electric bill ", " water bill ", " utility ", " statement ", " due ",
+         " recibo ", " ticket ", " factura ", " la cuenta ", " propina ", " restaurante ", " debo ", " pagar "].contains { t.contains($0) }
+    }
+
+    /// "What's the total", "how much is that", "are you sure" right after a count: always a fresh look.
+    static func isTotalFollowUp(_ q: String) -> Bool {
+        let t = folded(q)
+        return [" are you sure ", " what s the total ", " whats the total ", " what is the total ", " how much is that ",
+                " how much total ", " add it up ", " add them up ",
+                " cuanto es ", " cuanto hay ", " cuanto suma ", " estas seguro ", " estas segura ", " el total ", " cual es el total "].contains { t.contains($0) }
+    }
+
+    /// What a money-ish question gets (11/6 review): a denomination follow-up ("how many twenties") is answered
+    /// from the last count only when that count was SURE; everything else about money looks again; a question
+    /// that isn't about money goes the normal way (and the last count is forgotten by the caller).
+    enum Route: Equatable { case fromLastCount, countAgain, notMoney }
+    static func route(_ q: String, last: Count?) -> Route {
+        let t = folded(q)
+        let fresh = [" again ", " now ", " recount ", " re count ", " otra vez ", " de nuevo ", " ahora "].contains { t.contains($0) }
+        if isAboutAReceipt(t) { return .notMoney }
+        if let last, last.sure, !fresh, askedDenomination(q) != nil { return .fromLastCount }
+        if isMoneyQuestion(q) { return .countAgain }
+        if last != nil, isFollowUp(q) || isTotalFollowUp(q) || askedDenomination(q) != nil { return .countAgain }
+        return .notMoney
+    }
+
     /// A short follow-up to a money answer that just happened: "count it", "add it up", "what's the total",
     /// "how many ones", "are you sure". Only used within `MoneyMemory.maxAge` of the last count, and never for a
     /// plain "how many" (that could be about anything).
     static func isFollowUp(_ q: String) -> Bool {
-        let t = " " + LiveWords.normalize(q) + " "
+        let t = folded(q)
         return [" count it ", " count them ", " count again ", " total ", " add it ", " add them ", " sum ", " are you sure ",
                 " ones ", " fives ", " tens ", " twenties ", " fifties ", " hundreds ", " twos ", " each bill ",
-                " every bill ", " which bills ", " what bills "].contains { t.contains($0) }
+                " every bill ", " which bills ", " what bills ",
+                " cuentalos ", " cuentalo ", " cuenta otra vez ", " suma ", " sumalos ", " cuantos de "].contains { t.contains($0) }
     }
 
     /// "How many twenties" -> 20. nil when the question names no denomination.
     static func askedDenomination(_ q: String) -> Int? {
-        let t = " " + LiveWords.normalize(q) + " "
+        let t = folded(q)
+        // "How many $20 bills": the recognizer's "$20" is "20" once normalized, so "20 bill" counts too.
         let names: [(Int, [String])] = [
-            (100, [" hundreds ", " 100s ", " hundred dollar ", " 100 dollar ", " hundred bill"]),
-            (50, [" fifties ", " 50s ", " fifty dollar ", " 50 dollar "]),
-            (20, [" twenties ", " 20s ", " twenty dollar ", " 20 dollar "]),
-            (10, [" tens ", " 10s ", " ten dollar ", " 10 dollar "]),
-            (5, [" fives ", " 5s ", " five dollar ", " 5 dollar "]),
-            (2, [" twos ", " 2s ", " two dollar ", " 2 dollar "]),
-            (1, [" ones ", " 1s ", " one dollar ", " 1 dollar ", " singles "]),
+            (100, [" hundreds ", " 100s ", " hundred dollar ", " 100 dollar ", " hundred bill", " 100 bill", " de cien ", " de 100 "]),
+            (50, [" fifties ", " 50s ", " fifty dollar ", " 50 dollar ", " fifty bill", " 50 bill", " de cincuenta ", " de 50 "]),
+            (20, [" twenties ", " 20s ", " twenty dollar ", " 20 dollar ", " twenty bill", " 20 bill", " de veinte ", " de 20 "]),
+            (10, [" tens ", " 10s ", " ten dollar ", " 10 dollar ", " ten bill", " 10 bill", " de diez ", " de 10 "]),
+            (5, [" fives ", " 5s ", " five dollar ", " 5 dollar ", " five bill", " 5 bill", " de cinco ", " de 5 "]),
+            (2, [" twos ", " 2s ", " two dollar ", " 2 dollar ", " two bill", " 2 bill", " de dos ", " de 2 "]),
+            (1, [" ones ", " 1s ", " one dollar ", " 1 dollar ", " singles ", " one bill", " 1 bill", " de uno ", " de un dolar ", " de 1 "]),
         ]
         return names.first { $0.1.contains { t.contains($0) } }?.0
     }
@@ -151,7 +193,11 @@ enum LiveMoney {
         let tokens = text.split(separator: " ").map(String.init)
         var n: [Int: Int] = [:]
         for t in tokens { if let v = Int(t), denominations.contains(v) { n[v, default: 0] += 1 } }
-        let numeral = n.filter { $0.value >= 2 }.max { $0.value < $1.value || ($0.value == $1.value && $0.key < $1.key) }?.key
+        // A tie is no reading: a $1's district numbers (2, 5, 10) can each show twice, and the larger never wins.
+        let twice = n.filter { $0.value >= 2 }
+        let most = twice.values.max() ?? 0
+        let top = twice.filter { $0.value == most }
+        let numeral = top.count == 1 ? top.first?.key : nil
         return (words.count == 1 ? words.first : nil, numeral)
     }
 
@@ -183,7 +229,7 @@ enum LiveMoney {
 
     /// Why there is no total: bills overlap, one is cut off at the edge, one couldn't be read, the frames
     /// disagreed, no bills at all, too many to trust, or a bill was seen that wasn't picked out.
-    enum Doubt: String, Equatable { case overlapping, cutOff, unreadable, frames, none, tooMany, moreThanFound, countUnsure }
+    enum Doubt: String, Equatable { case overlapping, cutOff, unreadable, frames, none, tooMany, moreThanFound, countUnsure, noCamera }
 
     struct Count: Equatable {
         var bills: [Bill]
@@ -275,7 +321,7 @@ enum LiveMoney {
     /// the count most looks agree on (ties: the latest); a value is named only as many times as at least two of
     /// those looks read it; the total needs every counted bill named that way and nothing cut off or missed.
     static func steady(_ looks: [Count]) -> Count {
-        guard let lastLook = looks.last else { return Count(bills: [], doubts: [.none]) }
+        guard let lastLook = looks.last else { return Count(bills: [], doubts: [.noCamera]) }
         var tally: [Int: Int] = [:]
         for c in looks { tally[c.bills.count, default: 0] += 1 }
         let top = tally.values.max() ?? 0
@@ -336,7 +382,8 @@ enum LiveMoney {
             if !Set(c.doubts).isSubset(of: [.unreadable]) { return c }
             if looks.count > 1, let f = fuse(looks), f.sure { return f }
         }
-        guard let last = looks.last else { return Count(bills: [], doubts: [.none]) }
+        // No frame at all: the camera paused, which is not the same as "no bills".
+        guard let last = looks.last else { return Count(bills: [], doubts: [.noCamera]) }
         if looks.count > 1, let f = fuse(looks) { return f }
         // Only one look, or looks that didn't line up: never a total from a single frame.
         if last.sure { var c = last; c.doubts = [.frames]; return c }
@@ -371,7 +418,8 @@ enum LiveMoney {
 
     /// The detector path's answer: always the count, every bill it could name, the total only when every counted
     /// bill is named. "7 bills. I can read a $100, a $20 and four $1s. That's $129."
-    static func countedSentence(_ c: Count) -> String {
+    static func countedSentence(_ c: Count, lang: MoneyLang = .en) -> String {
+        if lang == .es { return MoneyWordsES.counted(c) }
         let k = c.values.count
         let hedge = c.doubts.contains(.countUnsure)
         let n = hedge ? max(c.atLeast, k) : c.bills.count
@@ -404,7 +452,9 @@ enum LiveMoney {
 
     /// The whole answer. Sure: the total and the breakdown. Not sure: what it could read, never as a total, never
     /// a guess for a bill it couldn't read, and how to fix the shot.
-    static func sentence(_ c: Count) -> String {
+    static func sentence(_ c: Count, lang: MoneyLang = .en) -> String {
+        if c.doubts.contains(.noCamera) { return lang == .es ? MoneyWordsES.cameraPaused : cameraPaused }
+        if lang == .es { return MoneyWordsES.sentence(c) }
         if c.boxed && !c.doubts.contains(.none) { return countedSentence(c) }
         if c.sure {
             let n = c.values.count
@@ -435,7 +485,8 @@ enum LiveMoney {
     }
 
     /// "How many twenties?" right after a count: answered from the count, never a new guess.
-    static func followUp(_ q: String, last c: Count) -> String {
+    static func followUp(_ q: String, last c: Count, lang: MoneyLang = .en) -> String {
+        if lang == .es { return MoneyWordsES.followUp(q, last: c) }
         if let v = askedDenomination(q) {
             let n = c.values.filter { $0 == v }.count
             let lead = n == 0 ? "No $\(v)s" : n == 1 ? "One $\(v)" : "\(number(n).capitalized) $\(v)s"
@@ -443,6 +494,9 @@ enum LiveMoney {
         }
         return sentence(c)
     }
+
+    /// LiveCamWords.cameraPaused, word for word (the app's existing line; spanish-ui has it in its catalog).
+    static let cameraPaused = "My camera paused, I'm restarting it. Ask me again in a second."
 
     // MARK: - Vision (the part that needs the frame)
 
@@ -873,7 +927,8 @@ enum LiveMoney {
             var value = f.value
             var entry: [String: Any] = ["x": Int(f.quad.center.x), "y": Int(f.quad.center.y), "boxed": true, "cut": cut,
                                         "detector": f.value ?? 0, "look": f.look.value ?? 0, "look_p": Double(f.look.p)]
-            if let crop = straightened(image, f.quad), printDetail(crop) >= minPrintDetail {
+            // Only a value can be taken away, so a box the detector left unread skips the reader (seconds on an iPhone 12).
+            if value != nil, let crop = straightened(image, f.quad), printDetail(crop) >= minPrintDetail {
                 let (r, e) = read(crop)
                 entry["reader"] = e["value"] ?? 0; entry["word"] = e["word"] ?? 0; entry["numeral"] = e["numeral"] ?? 0
                 entry["model"] = e["model"] ?? ""
@@ -1052,4 +1107,80 @@ struct MoneyMemory {
     mutating func note(_ c: LiveMoney.Count, at t: Date = Date()) { last = c; at = t }
     func recent(at t: Date = Date()) -> LiveMoney.Count? { t.timeIntervalSince(at) <= Self.maxAge ? last : nil }
     mutating func forget() { last = nil }
+}
+
+
+/// The language a money answer is said in. On spanish-ui the caller passes the app language (AppLang.code); the
+/// English lines stay the keys, so the catalog there can take them over (see MoneyWordsES).
+enum MoneyLang: String {
+    case en, es
+    static func from(_ code: String) -> MoneyLang { code.lowercased().hasPrefix("es") ? .es : .en }
+}
+
+/// Every money line in Spanish, built the same way as the English ones (numbers, plurals, the total only when every
+/// counted bill is read). Kept beside the English so both change together.
+enum MoneyWordsES {
+    static let cameraPaused = "Mi cámara se detuvo, la estoy reiniciando. Pregúntame otra vez en un segundo."
+    static func number(_ n: Int) -> String {
+        let w = ["cero", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez", "once", "doce"]
+        return n < w.count ? w[n] : "\(n)"
+    }
+    /// "uno de $100, uno de $20 y cuatro de $1", largest first.
+    static func readable(_ values: [Int]) -> String {
+        let b = Dictionary(grouping: values, by: { $0 }).map { ($0.key, $0.value.count) }.sorted { $0.0 > $1.0 }
+        let parts = b.map { v, n in "\(number(n)) de $\(v)" }
+        guard parts.count > 1 else { return parts.first ?? "" }
+        return parts.dropLast().joined(separator: ", ") + " y " + parts.last!
+    }
+    static func bills(_ n: Int) -> String { n == 1 ? "1 billete" : "\(n) billetes" }
+
+    static func counted(_ c: LiveMoney.Count) -> String {
+        let k = c.values.count
+        let hedge = c.doubts.contains(.countUnsure)
+        let n = hedge ? max(c.atLeast, k) : c.bills.count
+        var s = hedge ? "Al menos \(bills(n))." : "\(bills(n))."
+        if k > 0 { s += " Puedo leer \(readable(c.values))." }
+        if c.sure { return s + " Son $\(c.total) en total." }
+        if hedge { return s + " Puede que haya más que no distingo. Ábrelos un poco en abanico para que vea cada uno." }
+        let unread = n - k
+        if unread > 0 {
+            return s + (unread == 1 ? " Uno no lo puedo leer. Ábrelos un poco en abanico para que lo vea."
+                : " \(number(unread).capitalized) no los puedo leer. Ábrelos un poco en abanico para que los vea.")
+        }
+        if c.doubts.contains(.cutOff) { return s + " Uno está cortado en el borde, así que puede haber más. Aleja un poco el teléfono para que se vean todos." }
+        if c.doubts.contains(.moreThanFound) { return s + " Veo parte de otro billete que no pude distinguir. Ábrelos un poco en abanico para que lo vea." }
+        return s + " Mantén el teléfono quieto sobre ellos y pregúntame otra vez."
+    }
+
+    static func sentence(_ c: LiveMoney.Count) -> String {
+        if c.boxed && !c.doubts.contains(.none) { return counted(c) }
+        if c.sure {
+            if c.values.count == 1 { return "Es un billete de $\(c.total)." }
+            return "$\(c.total) en \(number(c.values.count)) billetes: \(readable(c.values))."
+        }
+        if c.doubts.contains(.none) {
+            return "No veo billetes que pueda contar. Ponlos planos en una mesa, separados para que no se toquen, sostén el teléfono a medio metro y pregúntame otra vez."
+        }
+        let read = c.values + c.pileValues.filter { !c.values.contains($0) }
+        if c.doubts.contains(.overlapping) {
+            let seen = read.isEmpty ? "Todavía no distingo ninguno." : "Distingo \(readable(read))."
+            let floor = c.atLeast >= 2 ? " Hay al menos \(number(c.atLeast)) billetes." : ""
+            return "Algunos billetes se tapan, así que no puedo contarlos ni darte un total.\(floor) \(seen) Sepáralos en la mesa para que no se tapen y pregúntame otra vez."
+        }
+        let n = c.bills.count, k = c.values.count
+        let counted = n == 1 ? "Veo un billete" : "Veo \(number(n)) billetes"
+        let part = k == 0 ? "\(counted), pero todavía no \(n == 1 ? "lo" : "los") puedo leer."
+            : k == n ? "\(counted): \(readable(c.values))." : "\(counted) y puedo leer \(number(k)): \(readable(c.values))."
+        if c.doubts.contains(.cutOff) { return part + " Uno está cortado en el borde, así que puede haber más. Aleja un poco el teléfono para que se vean todos y pregúntame otra vez." }
+        if c.doubts.contains(.unreadable) { return part + " Extiéndelos y acerca un poco el teléfono para que pueda leer los demás, y pregúntame otra vez." }
+        if c.doubts.contains(.moreThanFound) { return part + " Pero veo parte de otro billete que no pude distinguir, así que todavía no te doy un total. Sepáralos un poco más y pregúntame otra vez." }
+        return part + " Pero mis vistas no coincidieron, así que todavía no te doy un total. Mantén el teléfono quieto sobre los billetes y pregúntame otra vez."
+    }
+
+    static func followUp(_ q: String, last c: LiveMoney.Count) -> String {
+        guard let v = LiveMoney.askedDenomination(q) else { return sentence(c) }
+        let n = c.values.filter { $0 == v }.count
+        let lead = n == 0 ? "Ninguno de $\(v)" : n == 1 ? "Uno de $\(v)" : "\(number(n).capitalized) de $\(v)"
+        return c.sure ? "\(lead), de \(number(c.values.count)) billetes que suman $\(c.total)." : "\(lead) que pude leer, pero no estoy seguro de haberlos visto todos."
+    }
 }

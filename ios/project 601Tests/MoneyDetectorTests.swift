@@ -119,3 +119,80 @@ struct MoneyDetectorDecodeTests {
         #expect(!LiveMoney.sentence(s).contains("That's"))
     }
 }
+
+/// The 11/6 review fixes: what follow-ups may answer from memory, receipts, ties, Spanish, a paused camera, and a
+/// missing or broken model pack.
+struct MoneyReviewFixTests {
+    static func bills(_ v: [Int?]) -> [LiveMoney.Bill] { MoneyDetectorDecodeTests.bills(v) }
+    static let sure = LiveMoney.count(bills([100, 20, 5, 1, 1, 1, 1]), boxed: true)
+    static let unsure = LiveMoney.count(bills([100, nil, 5, 1, 1, 1, 1]), boxed: true)
+
+    @Test func onlyADenominationAfterASureCountComesFromMemory() {
+        #expect(Self.sure.sure && !Self.unsure.sure)
+        #expect(LiveMoney.route("how many twenties", last: Self.sure) == .fromLastCount)
+        #expect(LiveMoney.route("how many twenties", last: Self.unsure) == .countAgain)
+        #expect(LiveMoney.route("how many twenties now", last: Self.sure) == .countAgain)
+        for q in ["what's the total", "how much is that", "are you sure", "count them"] {
+            #expect(LiveMoney.route(q, last: Self.sure) == .countAgain, "\(q)")
+        }
+        #expect(LiveMoney.route("what color is the cup", last: Self.sure) == .notMoney)
+        #expect(LiveMoney.route("are you sure", last: nil) == .notMoney)
+    }
+
+    @Test func aRestaurantCheckIsNotCash() {
+        #expect(!LiveMoney.isMoneyQuestion("how much is this bill at the restaurant"))
+        #expect(!LiveMoney.isMoneyQuestion("how much is the check"))
+        #expect(!LiveMoney.isMoneyQuestion("what's the tip on this bill"))
+        #expect(LiveMoney.route("how much do I owe on this bill", last: Self.sure) == .notMoney)
+        #expect(!LiveMoney.isMoneyQuestion("¿Cuánto es la cuenta del restaurante?"))
+        #expect(LiveMoney.isMoneyQuestion("how much money is this"))
+    }
+
+    @Test func aNumeralTieIsNoReading() {
+        #expect(LiveMoney.ocrVotes(["2 5 2 5"]).numeral == nil)
+        #expect(LiveMoney.ocrVotes(["10 2 10 2 1"]).numeral == nil)
+        #expect(LiveMoney.ocrVotes(["20 20 5"]).numeral == 20)
+    }
+
+    @Test func dollarSignDenominations() {
+        #expect(LiveMoney.askedDenomination("how many $20 bills") == 20)
+        #expect(LiveMoney.askedDenomination("how many $100 bills are there") == 100)
+        #expect(LiveMoney.askedDenomination("¿Cuántos billetes de veinte hay?") == 20)
+    }
+
+    @Test func spanishQuestionsAndAnswers() {
+        #expect(LiveMoney.isMoneyQuestion("¿Cuánto dinero hay?"))
+        #expect(LiveMoney.isMoneyQuestion("cuántos billetes ves"))
+        #expect(LiveMoney.sentence(Self.sure, lang: .es) == "7 billetes. Puedo leer uno de $100, uno de $20, uno de $5 y cuatro de $1. Son $129 en total.")
+        #expect(LiveMoney.sentence(Self.unsure, lang: .es) == "7 billetes. Puedo leer uno de $100, uno de $5 y cuatro de $1. Uno no lo puedo leer. Ábrelos un poco en abanico para que lo vea.")
+        #expect(LiveMoney.followUp("¿cuántos de veinte?", last: Self.sure, lang: .es) == "Uno de $20, de siete billetes que suman $129.")
+        #expect(MoneyLang.from("es-MX") == .es && MoneyLang.from("en") == .en)
+    }
+
+    @Test func aPausedCameraIsNotNoBills() {
+        let c = LiveMoney.countBurst(frame: { nil }, ask: nil)
+        #expect(c.doubts.contains(.noCamera))
+        #expect(LiveMoney.sentence(c) == LiveMoney.cameraPaused)
+        #expect(!LiveMoney.sentence(c).contains("don't see any bills"))
+    }
+
+    @Test func aMissingOrBrokenModelPackLoadsNothing() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("money-pack-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: root) }
+        #expect(MoneyDetector.load(from: [root.appendingPathComponent("missing")]) == nil)
+        // A stamped folder whose "models" are junk.
+        let bad = root.appendingPathComponent("bad")
+        for n in ["MoneyOBB-v3.mlmodelc", "MoneyDenom-v3.mlmodelc"] {
+            try fm.createDirectory(at: bad.appendingPathComponent(n), withIntermediateDirectories: true)
+            try Data("not a model".utf8).write(to: bad.appendingPathComponent(n).appendingPathComponent("model.mil"))
+        }
+        try Data(#"{"version": "money-v3"}"#.utf8).write(to: bad.appendingPathComponent(MoneyDetector.stampName))
+        #expect(MoneyDetector.load(from: [bad]) == nil)
+        // The wrong stamp: never loaded even before the models are opened.
+        try Data(#"{"version": "money-v2"}"#.utf8).write(to: bad.appendingPathComponent(MoneyDetector.stampName))
+        #expect(MoneyDetector.load(from: [bad]) == nil)
+        #expect(MoneyDetector.validShape([1, 300, 7]) && MoneyDetector.validShape([1, 20, 8400]))
+        #expect(!MoneyDetector.validShape([1, 300, 6]) && !MoneyDetector.validShape([1, 20, 2100]))
+    }
+}
