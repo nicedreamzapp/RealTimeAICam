@@ -126,7 +126,7 @@ struct TranslationActionsPopup: View {
 
             // Glass popup
             VStack(spacing: 20) {
-                Text("Translation Ready")
+                Text(L("Translation Ready"))
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(.white)
 
@@ -141,7 +141,7 @@ struct TranslationActionsPopup: View {
                         HStack {
                             Image(systemName: "doc.on.doc.fill")
                                 .font(.system(size: 18))
-                            Text("Copy Translation")
+                            Text(L("Copy Translation"))
                                 .font(.system(size: 17, weight: .medium))
                         }
                         .foregroundColor(.white)
@@ -166,7 +166,7 @@ struct TranslationActionsPopup: View {
                         HStack {
                             Image(systemName: "eye.fill")
                                 .font(.system(size: 18))
-                            Text("Continue Reading")
+                            Text(L("Continue Reading"))
                                 .font(.system(size: 17, weight: .medium))
                         }
                         .foregroundColor(.white)
@@ -191,7 +191,7 @@ struct TranslationActionsPopup: View {
                         HStack {
                             Image(systemName: "arrow.clockwise.circle.fill")
                                 .font(.system(size: 18))
-                            Text("New Scan")
+                            Text(L("New Scan"))
                                 .font(.system(size: 17, weight: .medium))
                         }
                         .foregroundColor(.white)
@@ -273,6 +273,11 @@ struct LiveOCRView: View {
     @State private var isAsking = false
     @StateObject private var listener = SpeechRecognizer()
     @ObservedObject private var yourLanguage = YourLanguage.shared
+    /// Redraws the screen's own words when the app's language changes.
+    @ObservedObject private var appLang = AppLangObserver.shared
+    /// The language `scannedSummary` is in (the app's for its own lines, the answer's
+    /// otherwise), so Say it again uses a voice for it.
+    @State private var scannedSummaryLang = YourLanguageRules.english
     /// A question typed instead of spoken (Kareen, 2026-09-25).
     @State private var typedQuestion = ""
     @FocusState private var typingQuestion: Bool
@@ -316,7 +321,7 @@ struct LiveOCRView: View {
         // Mail mode is aim-then-capture, so the screen is silent until the shutter
         // is pressed. Say so, otherwise holding a letter up looks like a dead app.
         scannedSummary.isEmpty
-            ? "Point at anything, then press What's this?"
+            ? L("Point at anything, then press What's this?")
             : scannedSummary
     }
 
@@ -353,7 +358,7 @@ struct LiveOCRView: View {
         // Wipe the last page before the new one arrives. Anything left on screen
         // during the scan is from a different piece of paper.
         scannedText = ""
-        scannedSummary = "Working it out…"
+        showStatus("Working it out…")
 
         #if DEBUG
         // Simulator only (no camera, no model there): RTCAM_FAKE_ANSWER is what the
@@ -371,7 +376,8 @@ struct LiveOCRView: View {
         cameraPreviewRef?.capturePhoto { image in
             guard let image else {
                 isScanning = false
-                scannedSummary = "The camera couldn't take the picture. Try again."
+                // Said as well as shown: a blind user can't see the screen.
+                sayApp("The camera couldn't take the picture. Try again.")
                 return
             }
             // Hold this exact frame on screen — it's what the model is looking at.
@@ -392,7 +398,7 @@ struct LiveOCRView: View {
     /// readers who get sent photos and have no way to know what is in them.
     private func describePickedPhoto(_ picked: UIImage) {
         guard let cg = picked.cgImage ?? ciBackedCGImage(picked) else {
-            say("That picture couldn't be opened.")
+            sayApp("That picture couldn't be opened.")
             return
         }
         viewModel.stopSpeaking()
@@ -400,7 +406,7 @@ struct LiveOCRView: View {
         cancelCountdown()
         isScanning = true
         scannedText = ""
-        scannedSummary = "Working it out…"
+        showStatus("Working it out…")
         frozenPhoto = picked
         canSavePhoto = false  // already in the library
         // The live camera has nothing to do with this one, so it stays running
@@ -414,7 +420,8 @@ struct LiveOCRView: View {
     private func readPickedPhoto(_ picked: UIImage) {
         scannedSummary = ""
         guard let cg = picked.cgImage ?? ciBackedCGImage(picked) else {
-            viewModel.speak(text: "That picture couldn't be opened.", voiceIdentifier: selectedVoiceIdentifier) {}
+            viewModel.speak(text: L("That picture couldn't be opened."), voiceIdentifier: selectedVoiceIdentifier,
+                            language: AppLang.code) {}
             return
         }
         viewModel.stopSpeaking()
@@ -423,8 +430,8 @@ struct LiveOCRView: View {
         viewModel.readStill(cg, mode: ocrMode) { found in
             guard found else {
                 isTranslating = false
-                viewModel.speak(text: "I couldn't find any words in that picture.",
-                                voiceIdentifier: selectedVoiceIdentifier) {}
+                viewModel.speak(text: L("I couldn't find any words in that picture."),
+                                voiceIdentifier: selectedVoiceIdentifier, language: AppLang.code) {}
                 return
             }
             let speakResult = {
@@ -475,7 +482,7 @@ struct LiveOCRView: View {
     /// if the model can't answer) it is the OCR path, exactly as before.
     private func analyze(_ image: CGImage, pauseCamera: Bool) {
         if #available(iOS 17.0, *), OnDeviceVisionNarrator.isBundled {
-            scannedSummary = "Working it out…"
+            showStatus("Working it out…")
             // Free the camera pipeline while the model thinks; it comes back
             // the moment the answer is spoken.
             if pauseCamera { cameraPreviewRef?.stopSession() }
@@ -508,7 +515,7 @@ struct LiveOCRView: View {
                 }
                 await MainActor.run {
                     if let said {
-                        say(Self.cutOffPrefix(looksLikePage ? gate.cutOffEdge : nil) + said)
+                        say(said, cutOff: looksLikePage ? gate.cutOffEdge : nil)
                         RatePrompt.noteResult()
                     } else {
                         readWithOCR(image)
@@ -529,7 +536,7 @@ struct LiveOCRView: View {
                 // The pattern-matched version is the floor, not the answer: it
                 // is what gets said if the model can't run or can't help.
                 let fallback = MailSummarizer.summarize(page.text).spoken
-                scannedSummary = "Working it out…"
+                showStatus("Working it out…")
 
                 guard #available(iOS 17.0, *) else {
                     say(fallback)
@@ -555,14 +562,20 @@ struct LiveOCRView: View {
     /// one shot and every bit of talking-you-into-position belongs to Help Me
     /// Aim, so the two modes never speak over each other — the complaint
     /// AppleVis already has about Black Lens.
-    private static func cutOffPrefix(_ edge: String?) -> String {
+    /// English keys; `say` puts them in the answer's language.
+    static func cutOffPrefix(_ edge: String?) -> String {
         switch edge {
-        case "top": "Cut off at the top. "
-        case "bottom": "Cut off at the bottom. "
-        case "left": "Cut off on the left. "
-        case "right": "Cut off on the right. "
+        case "top": "Cut off at the top."
+        case "bottom": "Cut off at the bottom."
+        case "left": "Cut off on the left."
+        case "right": "Cut off on the right."
         default: ""
         }
+    }
+
+    /// The app's cut-off sentence in `lang` (bundled, en or es) ahead of the answer.
+    static func withPrefix(_ prefix: String, _ sentence: String, lang: String) -> String {
+        prefix.isEmpty ? sentence : AppLang.text(prefix, in: lang) + " " + sentence
     }
 
     /// One place where a sentence becomes speech, so the model path and the
@@ -592,16 +605,36 @@ struct LiveOCRView: View {
         }
     }
 
-    private func say(_ sentence: String) {
+    /// Content: the model's answer (or the pattern summary), with the app's own cut-off
+    /// sentence ahead of it when the page runs off the frame.
+    private func say(_ sentence: String, cutOff edge: String? = nil) {
+        let prefix = Self.cutOffPrefix(edge)
         // The model writes English; Your language gets it translated first, shown
         // and said in that language (~1 s, 2026-11-04). English: no change.
         guard YourLanguage.activeCode != YourLanguageRules.english else {
-            sayNow(sentence, language: YourLanguageRules.english)
+            sayNow(Self.withPrefix(prefix, sentence, lang: YourLanguageRules.english), language: YourLanguageRules.english)
             return
         }
         let generation = sayGeneration
         Task {
-            let out = await YourLanguage.intoActive(sentence)
+            // A language the app ships (Spanish): the cut-off sentence is the bundled one, in
+            // whatever language the answer came out in. Any other: translated with the answer.
+            let shipped = AppLang.shipped.contains(YourLanguage.activeCode)
+            let out = await YourLanguage.intoActive(shipped || prefix.isEmpty ? sentence : prefix + " " + sentence)
+            let text = shipped ? Self.withPrefix(prefix, out.text, lang: out.lang) : out.text
+            await MainActor.run {
+                guard generation == sayGeneration else { return }
+                sayNow(text, language: out.lang)
+            }
+        }
+    }
+
+    /// The app's own line on What's this? (not the model's answer): shown and said in the app's
+    /// language, or in Your language when that is another language the translator has (UICue.line).
+    private func sayApp(_ english: String) {
+        let generation = sayGeneration
+        Task {
+            let out = await UICue.line(english)
             await MainActor.run {
                 guard generation == sayGeneration else { return }
                 sayNow(out.text, language: out.lang)
@@ -609,9 +642,28 @@ struct LiveOCRView: View {
         }
     }
 
+    /// English keys looked up when they are said (sayApp, showStatus, the cut-off sentences,
+    /// the countdown), not through L() at the call. Listed through L() here only so
+    /// ios/tools/es-strings.py counts them (missing / stale); never read at run time.
+    static let keysSaidByKey = [
+        L("That picture couldn't be opened."), L("The camera couldn't take the picture. Try again."),
+        L("I didn't catch that. Hold the button and ask again."),
+        L("Sorry, I couldn't work that out. Try asking again."),
+        L("Working it out…"), L("Thinking…"),
+        L("Cut off at the top."), L("Cut off at the bottom."), L("Cut off on the left."), L("Cut off on the right."),
+        L("three"), L("two"), L("one"),
+    ]
+
+    /// A status shown while the app works ("Working it out…"), in the app's language.
+    private func showStatus(_ english: String) {
+        scannedSummary = L(english)
+        scannedSummaryLang = AppLang.code
+    }
+
     private func sayNow(_ sentence: String, language: String) {
         isScanning = false
         scannedSummary = sentence
+        scannedSummaryLang = language
         // Spoken without being asked — the whole point is not having to find a
         // button after pointing the camera.
         viewModel.nextSpeechLanguage = language
@@ -652,7 +704,8 @@ struct LiveOCRView: View {
             let heard = await listener.stopAndTranscribe()
             let q = heard.trimmingCharacters(in: .whitespacesAndNewlines)
             guard frozenPhoto != nil, !q.isEmpty else {
-                await MainActor.run { scannedSummary = "I didn't catch that. Hold the button and ask again." }
+                // Said as well as shown: a blind user can't see the screen.
+                await MainActor.run { sayApp("I didn't catch that. Hold the button and ask again.") }
                 return
             }
             await answer(q)
@@ -672,7 +725,7 @@ struct LiveOCRView: View {
 
     private func answer(_ q: String) async {
         guard let photo = frozenPhoto else { return }
-        await MainActor.run { isAsking = true; scannedSummary = "Thinking…" }
+        await MainActor.run { isAsking = true; showStatus("Thinking…") }
         // Asked in Your language: the model gets it in English.
         let english = await YourLanguage.toEnglish(q)
         #if DEBUG
@@ -691,7 +744,7 @@ struct LiveOCRView: View {
         await MainActor.run {
             isAsking = false
             if answer != nil { RatePrompt.noteResult() }
-            say(answer ?? "Sorry, I couldn't work that out. Try asking again.")
+            if let answer { say(answer) } else { sayApp("Sorry, I couldn't work that out. Try asking again.") }
         }
     }
 
@@ -706,9 +759,9 @@ struct LiveOCRView: View {
         AimCaption.saveToPhotos(toSave) { saved in
             isSavingPhoto = false
             if saved { canSavePhoto = false }
-            let line = saved ? "Saved to your photos with that description."
-                : "I couldn't save it. Allow adding photos in Settings."
-            viewModel.speak(text: line, voiceIdentifier: selectedVoiceIdentifier) { isSpeaking = false }
+            let line = saved ? L("Saved to your photos with that description.")
+                : L("I couldn't save it. Allow adding photos in the phone's settings.")
+            viewModel.speak(text: line, voiceIdentifier: selectedVoiceIdentifier, language: AppLang.code) { isSpeaking = false }
             isSpeaking = true
         }
     }
@@ -716,9 +769,9 @@ struct LiveOCRView: View {
     // Header text that changes based on state
     private var headerText: String {
         switch ocrMode {
-        case .english: "Detected"
-        case .mail: "Summary"
-        case .spanishToEnglish: viewModel.isTranslated ? "Translation" : "\(viewModel.sourceLanguage.name) Text"
+        case .english: L("Detected")
+        case .mail: L("Summary")
+        case .spanishToEnglish: viewModel.isTranslated ? L("Translation") : L("%@ Text", viewModel.sourceLanguage.nameInSentence)
         }
     }
 
@@ -818,7 +871,7 @@ struct LiveOCRView: View {
                                 Image(systemName: "chevron.left")
                                     .font(.system(size: 16, weight: .bold))
                                     .foregroundColor(.white)
-                                Text("Back")
+                                Text(L("Back"))
                                     .font(.system(size: 16, weight: .bold))
                                     .foregroundColor(.white)
                             }
@@ -831,8 +884,8 @@ struct LiveOCRView: View {
                             )
                         }
                         .fixedSize()
-                        .accessibilityLabel("Back")
-                        .accessibilityHint("Returns to the home screen")
+                        .accessibilityLabel(L("Back"))
+                        .accessibilityHint(L("Returns to the home screen"))
 
                         Spacer()
 
@@ -844,10 +897,10 @@ struct LiveOCRView: View {
                             translateFromControl
                         } else {
                         // Mode indicator (right side)
-                        Text(ocrMode == .english ? "English"
-                             : (ocrMode == .mail ? "What's this?"
-                                : (viewModel.sourceLanguage == .spanish ? "Span → Eng"
-                                   : "\(viewModel.sourceLanguage.name) → Eng")))
+                        Text(ocrMode == .mail ? L("What's this?")
+                             : YourLanguageRules.pillLabel(
+                                page: ocrMode == .english ? nil : viewModel.sourceLanguage.code,
+                                target: YourLanguageRules.english))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 12)
@@ -858,11 +911,11 @@ struct LiveOCRView: View {
                                     .opacity(0.85)
                             )
                             .fixedSize()
-                            .accessibilityLabel("Mode")
+                            .accessibilityLabel(L("Mode"))
                             .accessibilityValue(
-                                ocrMode == .english ? "Reading English text"
-                                : (ocrMode == .mail ? "Summarizing what you point at"
-                                   : "Translating \(viewModel.sourceLanguage.name) to English"))
+                                ocrMode == .english ? L("Reading English text")
+                                : (ocrMode == .mail ? L("Summarizing what you point at")
+                                   : L("Translating %@ to English", viewModel.sourceLanguage.nameInSentence)))
                         }
                     }
                     .padding(.horizontal, max(geometry.safeAreaInsets.leading, geometry.safeAreaInsets.trailing) + 20)
@@ -932,9 +985,9 @@ struct LiveOCRView: View {
                         .accessibilityValue(displayText)
                         .accessibilityHint(
                             ocrMode == .mail
-                                ? "Double tap to hear all of it"
+                                ? L("Double tap to hear all of it")
                                 : (ocrMode == .spanishToEnglish && viewModel.isTranslated
-                                    ? "Double tap for copy, continue reading or new scan"
+                                    ? L("Double tap for copy, continue reading or new scan")
                                     : "")
                         )
                         .accessibilityAddTraits(
@@ -957,9 +1010,11 @@ struct LiveOCRView: View {
                                     Image(systemName: isListening ? "waveform"
                                           : (isAsking ? "hourglass" : "mic.fill"))
                                         .font(.system(size: 22, weight: .semibold))
-                                    Text(isListening ? "Listening… let go to ask"
-                                         : (isAsking ? "Thinking…" : "Hold to ask about this"))
+                                    Text(isListening ? L("Listening… let go to ask")
+                                         : (isAsking ? L("Thinking…") : L("Hold to ask about this")))
                                         .font(.system(size: 18, weight: .semibold))
+                                        .multilineTextAlignment(.center)
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
                                 .foregroundStyle(.white)
                                 .frame(maxWidth: .infinity)
@@ -975,21 +1030,21 @@ struct LiveOCRView: View {
                                         .onChanged { _ in startAsk() }
                                         .onEnded { _ in finishAsk() }
                                 )
-                                .accessibilityLabel("Ask about this photo")
-                                .accessibilityHint("Hold, speak your question, then let go to hear the answer")
+                                .accessibilityLabel(L("Ask about this photo"))
+                                .accessibilityHint(L("Hold, speak your question, then let go to hear the answer"))
 
                                 // Or type the question.
                                 HStack(spacing: 8) {
-                                    TextField("Or type a question", text: $typedQuestion)
+                                    TextField(L("Or type a question"), text: $typedQuestion)
                                         .textFieldStyle(.roundedBorder)
                                         .submitLabel(.send)
                                         .focused($typingQuestion)
                                         .onSubmit { askTyped() }
-                                        .accessibilityLabel("Or type a question about this photo")
-                                    Button("Ask") { askTyped() }
+                                        .accessibilityLabel(L("Or type a question about this photo"))
+                                    Button(L("Ask")) { askTyped() }
                                         .buttonStyle(.borderedProminent)
                                         .disabled(isAsking || typedQuestion.trimmingCharacters(in: .whitespaces).isEmpty)
-                                        .accessibilityLabel("Ask")
+                                        .accessibilityLabel(L("Ask"))
                                 }
 
                                 if canSavePhoto, !isAsking {
@@ -997,7 +1052,7 @@ struct LiveOCRView: View {
                                         HStack(spacing: 10) {
                                             Image(systemName: isSavingPhoto ? "hourglass" : "square.and.arrow.down")
                                                 .font(.system(size: 22, weight: .semibold))
-                                            Text("Save Photo")
+                                            Text(L("Save Photo"))
                                                 .font(.system(size: 19, weight: .semibold))
                                         }
                                         .foregroundStyle(.white)
@@ -1010,14 +1065,14 @@ struct LiveOCRView: View {
                                         )
                                     }
                                     .disabled(isSavingPhoto)
-                                    .accessibilityLabel("Save photo with this description")
+                                    .accessibilityLabel(L("Save photo with this description"))
                                 }
 
                                 Button(action: { nextShot() }) {
                                     HStack(spacing: 10) {
                                         Image(systemName: "camera.viewfinder")
                                             .font(.system(size: 22, weight: .semibold))
-                                        Text("Next shot")
+                                        Text(L("Next shot"))
                                             .font(.system(size: 19, weight: .semibold))
                                     }
                                     .foregroundStyle(.white)
@@ -1029,8 +1084,8 @@ struct LiveOCRView: View {
                                             .overlay(Capsule().stroke(Color.white.opacity(0.5), lineWidth: 1.5))
                                     )
                                 }
-                                .accessibilityLabel("Next shot")
-                                .accessibilityHint("Clears this photo and returns to the camera for a new picture")
+                                .accessibilityLabel(L("Next shot"))
+                                .accessibilityHint(L("Clears this photo and returns to the camera for a new picture"))
                             }
                             .padding(.horizontal, 20)
                             .padding(.bottom, 14)
@@ -1042,8 +1097,8 @@ struct LiveOCRView: View {
                                     Image(systemName: isScanning ? "hourglass"
                                             : (countdownRemaining != nil ? "timer" : "viewfinder"))
                                         .font(.system(size: 22, weight: .semibold))
-                                    Text(isScanning ? "Looking…"
-                                            : (countdownRemaining.map { "\($0)…" } ?? "What's this?"))
+                                    Text(isScanning ? L("Looking…")
+                                            : (countdownRemaining.map { "\($0)…" } ?? L("What's this?")))
                                         .font(.system(size: 19, weight: .semibold))
                                 }
                                 .foregroundStyle(.white)
@@ -1064,10 +1119,10 @@ struct LiveOCRView: View {
                             // was doing that on top of the app speaking "three".
                             // The hint carries the cancel affordance instead —
                             // hints are not re-announced on change.
-                            .accessibilityLabel(isScanning ? "Looking" : "What's this?")
+                            .accessibilityLabel(isScanning ? L("Looking…") : L("What's this?"))
                             .accessibilityHint(countdownRemaining != nil
-                                    ? "Double tap to stop the countdown without taking the picture"
-                                    : "Takes a picture and says what it is: a letter, a bill, a label, or whatever is in front of you")
+                                    ? L("Double tap to stop the countdown without taking the picture")
+                                    : L("Takes a picture and says what it is: a letter, a bill, a label, or whatever is in front of you"))
                         }
                     }
 
@@ -1093,8 +1148,8 @@ struct LiveOCRView: View {
                                 )
                                 .contentShape(Circle())
                         }
-                        .accessibilityLabel("Settings")
-                        .accessibilityHint("Opens settings, copy history and tips")
+                        .accessibilityLabel(L("Settings"))
+                        .accessibilityHint(L("Opens settings, copy history and tips"))
 
                         // Torch button: one tap on at full brightness, one tap off.
                         ZStack {
@@ -1115,8 +1170,8 @@ struct LiveOCRView: View {
                                     )
                                     .contentShape(Circle())
                             }
-                            .accessibilityLabel("Flashlight")
-                            .accessibilityValue(viewModel.torchLevel > 0 ? "On" : "Off")
+                            .accessibilityLabel(L("Flashlight"))
+                            .accessibilityValue(viewModel.torchLevel > 0 ? L("On") : L("Off"))
                             .accessibilityAddTraits(.isButton)
                         }
 
@@ -1139,12 +1194,12 @@ struct LiveOCRView: View {
                                 )
                                 .contentShape(Circle())
                         }
-                        .accessibilityLabel(ocrMode == .mail ? "Describe a photo from my library"
-                            : (ocrMode == .spanishToEnglish ? "Translate a photo from my library"
-                               : "Read a photo from my library"))
+                        .accessibilityLabel(ocrMode == .mail ? L("Describe a photo from my library")
+                            : (ocrMode == .spanishToEnglish ? L("Translate a photo from my library")
+                               : L("Read a photo from my library")))
                         .accessibilityHint(ocrMode == .mail
-                            ? "Pick a picture already on this phone and the app says what is in it"
-                            : "Pick a picture already on this phone and the app reads its words out loud")
+                            ? L("Pick a picture already on this phone and the app says what is in it")
+                            : L("Pick a picture already on this phone and the app reads its words out loud"))
 
 
                         // Translate or Copy button
@@ -1221,7 +1276,7 @@ struct LiveOCRView: View {
             guard let item else { return }
             // Say something immediately: choosing a photo then hearing nothing
             // while it loads reads as the app having died.
-            scannedSummary = "Working it out…"
+            showStatus("Working it out…")
             Task {
                 let data = try? await item.loadTransferable(type: Data.self)
                 await MainActor.run {
@@ -1233,7 +1288,7 @@ struct LiveOCRView: View {
                             readPickedPhoto(image)
                         }
                     } else {
-                        say("That picture couldn't be opened.")
+                        sayApp("That picture couldn't be opened.")
                     }
                 }
             }
@@ -1277,9 +1332,11 @@ struct LiveOCRView: View {
         let choices: [TranslateLanguage?] = [nil] + languages
         let current: TranslateLanguage? = (ocrMode == .english || viewModel.sourceLanguage == .english)
             ? nil : viewModel.sourceLanguage
+        // Names in the app's language ("Francés → Español" in a Spanish app).
         let menuName: (TranslateLanguage?) -> String = { page in
-            if target == YourLanguageRules.english { return page.map { "\($0.name) → English" } ?? "English" }
-            let from = page?.name ?? "English"
+            let english = YourLanguageRules.name(YourLanguageRules.english)
+            if target == YourLanguageRules.english { return page.map { "\($0.displayName) → \(english)" } ?? english }
+            let from = page?.displayName ?? english
             let to = YourLanguageRules.name(target)
             return from == to ? to : "\(from) → \(to)"
         }
@@ -1305,9 +1362,9 @@ struct LiveOCRView: View {
             )
             .fixedSize()
         }
-        .accessibilityLabel("Language")
+        .accessibilityLabel(L("Language"))
         .accessibilityValue(YourLanguageRules.pillSpoken(page: current?.code, target: target))
-        .accessibilityHint("Swipe up or down to change, or double tap for the list")
+        .accessibilityHint(L("Swipe up or down to change, or double tap for the list"))
         .accessibilityAdjustableAction { direction in
             let i = choices.firstIndex(of: current) ?? 0
             switch direction {
@@ -1365,9 +1422,11 @@ struct LiveOCRView: View {
                 }
                 .disabled(isTranslating)
                 .opacity(isTranslating ? 0.6 : 1)
-                .accessibilityLabel("Translate")
-                .accessibilityHint("Translates the \(viewModel.sourceLanguage.name) text on screen into \(YourLanguageRules.name(yourLanguage.active))")
-                .accessibilityValue(isTranslating ? "Translating" : "")
+                .accessibilityLabel(L("Translate"))
+                .accessibilityHint(L("Translates the %@ text on screen into %@",
+                                     viewModel.sourceLanguage.nameInSentence,
+                                     YourLanguageRules.nameInSentence(yourLanguage.active)))
+                .accessibilityValue(isTranslating ? L("Translating") : "")
             } else {
                 Button(action: {
                     if buttonDebouncer.canPress("LiveOCRView-7") {
@@ -1414,11 +1473,11 @@ struct LiveOCRView: View {
                         )
                         .contentShape(Circle())
                 }
-                .accessibilityLabel(ocrMode == .mail ? "Copy summary" : "Copy text")
+                .accessibilityLabel(ocrMode == .mail ? L("Copy summary") : L("Copy text"))
                 .accessibilityHint(
                     ocrMode == .mail
-                        ? "Copies the summary and the full page to the clipboard"
-                        : "Copies the text on screen to the clipboard")
+                        ? L("Copies the summary and the full page to the clipboard")
+                        : L("Copies the text on screen to the clipboard"))
             }
         }
     }
@@ -1454,7 +1513,11 @@ struct LiveOCRView: View {
                         isSpeaking = true
                         if !textToSpeak.isEmpty { RatePrompt.noteResult() }
                         if ocrMode != .mail { autoGate.markSpoken(viewModel.recognizedText) }
-                        viewModel.speak(text: textToSpeak, voiceIdentifier: selectedVoiceIdentifier) {
+                        // What's this?: the summary is the answer (its own language) or the
+                        // app's prompt (the app's language). The reader: content as before.
+                        let lang: String? = ocrMode != .mail ? nil
+                            : (scannedSummary.isEmpty ? AppLang.code : scannedSummaryLang)
+                        viewModel.speak(text: textToSpeak, voiceIdentifier: selectedVoiceIdentifier, language: lang) {
                             isSpeaking = false
                         }
                     }
@@ -1478,12 +1541,12 @@ struct LiveOCRView: View {
         }
         .scaleEffect(isSpeaking ? 1.1 : 1.0)
         .animation(.easeInOut(duration: 0.2), value: isSpeaking)
-        .accessibilityLabel(isSpeaking ? "Stop reading"
-            : (ocrMode == .mail ? "Say the summary again" : "Read text aloud"))
-        .accessibilityHint(isSpeaking ? "Stops speaking the text"
-            : (ocrMode == .mail ? "Repeats the summary out loud"
-               : "Speaks the text the camera has found"))
-        .accessibilityValue(isSpeaking ? "Speaking" : "Not speaking")
+        .accessibilityLabel(isSpeaking ? L("Stop reading")
+            : (ocrMode == .mail ? L("Say the summary again") : L("Read text aloud")))
+        .accessibilityHint(isSpeaking ? L("Stops speaking the text")
+            : (ocrMode == .mail ? L("Repeats the summary out loud")
+               : L("Speaks the text the camera has found")))
+        .accessibilityValue(isSpeaking ? L("Speaking") : L("Not speaking"))
     }
 }
 
@@ -1513,9 +1576,9 @@ extension LiveOCRView {
                 .contentShape(Rectangle())
         }
         .accessibilityIdentifier("readModeButton")
-        .accessibilityLabel("Read mode")
+        .accessibilityLabel(L("Read mode"))
         .accessibilityValue(readMode.title)
-        .accessibilityHint("Double tap to switch between Tap to read, Auto read and Mute")
+        .accessibilityHint(L("Double tap to switch between Tap to read, Auto read and Mute"))
     }
 
     private func cycleReadMode() {
@@ -1529,7 +1592,7 @@ extension LiveOCRView {
         autoGate.reset()
         if next == .auto { autoGate.observe(viewModel.recognizedText, at: Date()) }
         isSpeaking = true
-        viewModel.speak(text: next.title, voiceIdentifier: selectedVoiceIdentifier) {
+        viewModel.speak(text: next.title, voiceIdentifier: selectedVoiceIdentifier, language: AppLang.code) {
             isSpeaking = false
             if readMode == .auto { scheduleAutoRead() }
         }
@@ -1667,8 +1730,9 @@ private struct AppleSpanishTranslationModifier: ViewModifier {
                     if status == .supported {
                         // First use of a language: say why Apple's download sheet is
                         // about to appear. After this it is offline for good.
-                        let line = TranslateLanguage.downloadLine(language.name)
-                        UIAccessibility.post(notification: .announcement, argument: line)
+                        let line = TranslateLanguage.downloadLine(language)
+                        UIAccessibility.post(notification: .announcement,
+                                             argument: SpeechManager.voiceOverLine(line, lang: AppLang.code))
                         try await session.prepareTranslation()
                     }
                     let english: String
@@ -1688,8 +1752,8 @@ private struct AppleSpanishTranslationModifier: ViewModifier {
                     if isSpanish, status != .installed { LiveOCRViewModel.spanishDownloadDeclined = true }
                     viewModel.completeAppleTranslation(nil, failure: status == .installed ? nil
                         : (status == .unsupported
-                            ? "Apple's translator can't do \(language.name) on this device."
-                            : "\(language.name) needs a one-time download from Apple. Connect to the internet once, then it works offline."))
+                            ? L("Apple's translator can't do %@ on this device.", language.nameInSentence)
+                            : L("%@ needs a one-time download from Apple. Connect to the internet once, then it works offline.", language.nameInSentence)))
                 }
             }
     }

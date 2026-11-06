@@ -105,9 +105,16 @@ struct TranslateLanguage: Equatable {
     /// All 17 Read languages, whatever this phone supports (Your language's list).
     static var all: [TranslateLanguage] { [spanish] + appleCandidates }
 
-    /// Said (and shown) the first time a language downloads. Same words on Android.
-    static func downloadLine(_ name: String) -> String {
-        "Downloading \(name), one time only. After that it works offline."
+    /// The name shown and said, in the app's language ("Spanish" / "Español"). `name` stays
+    /// English: it is the key other code (and Your language's list) works with.
+    var displayName: String { YourLanguageRules.name(code) }
+    /// The name inside a sentence ("en español"; English keeps "Spanish").
+    var nameInSentence: String { YourLanguageRules.nameInSentence(code) }
+
+    /// Said (and shown) the first time a language downloads, in the app's language.
+    /// Same words on Android.
+    static func downloadLine(_ language: TranslateLanguage) -> String {
+        L("Downloading %@, one time only. After that it works offline.", language.nameInSentence)
     }
 
     static func named(_ code: String) -> TranslateLanguage {
@@ -328,7 +335,7 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
         }
         if sourceLanguage != .spanish {
             pendingAppleCompletion = completion
-            completeAppleTranslation(nil, failure: "\(sourceLanguage.name) needs iOS 18 or later.")
+            completeAppleTranslation(nil, failure: L("%@ needs iOS 18 or later.", sourceLanguage.nameInSentence))
             return
         }
         translateWithEngine(text, completion: completion)
@@ -349,10 +356,11 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
             completion?(true)
         } else if sourceLanguage != .spanish {
             // No rule engine to fall back on for these. Put the reason where the
-            // translation would be, so the speak button says it out loud.
+            // translation would be, so the speak button says it out loud: the app's
+            // own words, so in the app's language and its voice.
             translatedText = failure
-                ?? "Couldn't translate this \(sourceLanguage.name) text. Try again."
-            translatedLanguage = YourLanguageRules.english
+                ?? L("Couldn't translate this %@ text. Try again.", sourceLanguage.nameInSentence)
+            translatedLanguage = AppLang.code
             isTranslated = true
             completion?(true)
         } else if let requested {
@@ -378,7 +386,8 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
 
             guard engine.isReady() else {
                 await MainActor.run {
-                    self?.translatedText = "Translation data couldn't load. Please close and reopen the app."
+                    self?.translatedText = L("Translation data couldn't load. Please close and reopen the app.")
+                    self?.translatedLanguage = AppLang.code
                     self?.isTranslated = true
                     completion(false)
                 }
@@ -459,11 +468,12 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
     }
 
     /// The one way a sentence reaches the person, whichever voice is doing it.
-    private func announceInstead(_ text: String) {
+    /// Tagged with its language, so VoiceOver reads a Spanish line in Spanish.
+    private func announceInstead(_ text: String, lang: String) {
         guard !text.isEmpty else { return }
         // .announcement is the notification VoiceOver reads in the user's OWN
         // voice and rate, which is the whole point of the setting.
-        UIAccessibility.post(notification: .announcement, argument: text)
+        UIAccessibility.post(notification: .announcement, argument: SpeechManager.voiceOverLine(text, lang: lang))
     }
 
     /// Open the audio route and let the duck ramp settle, ideally long before
@@ -502,7 +512,7 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
     // time, and sound focused and controlled, on the speaker and on AirPods.
 
     private let countdownHaptic = UIImpactFeedbackGenerator(style: .medium)
-    private var countdownUtterances: [AVSpeechUtterance] = []
+    private(set) var countdownUtterances: [AVSpeechUtterance] = []
     private var countdownTask: Task<Void, Never>?
     private var onCountdownFinished: (() -> Void)?
 
@@ -513,7 +523,15 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
     /// The number showing on the button, or nil when no count is running.
     @Published var countdownRemaining: Int?
 
-    private static let countdownWords = [(3, "three"), (2, "two"), (1, "one")]
+    private static let countdownNumbers = [3, 2, 1]
+
+    /// The count's words and their language: the app's language ("tres, dos, uno" in a Spanish
+    /// app), said by a voice for it. With no voice installed for that language the count is
+    /// English, so a Spanish word never comes out of an English voice. Pure for tests.
+    static func countdownWords(lang: String, hasVoice: Bool) -> (lang: String, words: [String]) {
+        let use = (lang == YourLanguageRules.english || hasVoice) ? lang : YourLanguageRules.english
+        return (use, ["three", "two", "one"].map { AppLang.text($0, in: use) })
+    }
 
     /// Count down out loud, then call `onFire` on the main actor. Cancelling
     /// before it finishes never fires.
@@ -527,14 +545,17 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
         // is not involved and there is nothing to pace against, so the count is
         // posted as announcements on a timer. VoiceOver decides the voice and
         // the rate; all we own here is the interval and the buzz.
+        let app = AppLang.code
         guard Self.speaksAloud else {
+            // VoiceOver has voices for every language: the words are always the app's.
+            let words = Self.countdownWords(lang: app, hasVoice: true).words
             countdownTask = Task { @MainActor [weak self] in
-                for (number, word) in Self.countdownWords {
+                for (number, word) in zip(Self.countdownNumbers, words) {
                     guard let self, !Task.isCancelled else { return }
                     countdownRemaining = number
                     countdownHaptic.impactOccurred()
                     countdownHaptic.prepare()
-                    announceInstead(word)
+                    announceInstead(word, lang: app)
                     try? await Task.sleep(nanoseconds: 1_000_000_000)
                 }
                 guard let self, !Task.isCancelled else { return }
@@ -548,8 +569,17 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
         }
 
         if speechSynthesizer.isSpeaking { speechSynthesizer.stopSpeaking(at: .immediate) }
-        let voice = AVSpeechSynthesisVoice(identifier: voiceIdentifier)
-        countdownUtterances = Self.countdownWords.map { _, word in
+        // The picked voice when it speaks the app's language, else the best one for it.
+        let picked = AVSpeechSynthesisVoice(identifier: voiceIdentifier)
+        let appVoice = picked.flatMap { YourLanguageVoice.speaks($0, app) ? $0 : nil }
+            ?? YourLanguageVoice.best(for: app)
+        let count = Self.countdownWords(lang: app, hasVoice: appVoice != nil)
+        let voice = count.lang == app ? appVoice
+            : YourLanguageVoice.prepare("", lang: count.lang, selected: voiceIdentifier).voice
+        #if DEBUG
+        SpeakLog.note("countdown[\(count.lang)]", count.words.joined(separator: ", "))
+        #endif
+        countdownUtterances = count.words.map { word in
             let utterance = AVSpeechUtterance(string: word)
             if let voice { utterance.voice = voice }
             utterance.rate = 0.5
@@ -578,23 +608,26 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
         countdownUtterances.firstIndex { $0 === utterance }
     }
 
-    func speak(text rawText: String, voiceIdentifier: String, completion: @escaping () -> Void) {
-        // Numbers, addresses and codes said the way a person would (SpeakableText).
-        // Only the spoken copy changes; the screen and the clipboard keep the text
-        // exactly as it was read.
-        let text = SpeakableText.spoken(rawText)
-        let rated = RatePrompt.takePendingResult()
-        // Which language this is in: the translation's own, a screen's override
-        // (What's this? answers), else English. The voice follows it.
-        let language = nextSpeechLanguage
+    /// Speak `rawText`. `language` is what it is written in; pass `AppLang.code` for the app's
+    /// own lines (already through L()). Left nil it is content: the translation's own language,
+    /// a screen's override (`nextSpeechLanguage`, What's this? answers), else English (the
+    /// camera's English text). The voice follows the language.
+    func speak(text rawText: String, voiceIdentifier: String, language explicit: String? = nil,
+               completion: @escaping () -> Void) {
+        let language = explicit ?? nextSpeechLanguage
             ?? ((isTranslated && rawText == translatedText) ? translatedLanguage : YourLanguageRules.english)
         nextSpeechLanguage = nil
+        // Numbers, addresses and codes said the way a person would (SpeakableText),
+        // in English words only for English text. Only the spoken copy changes; the
+        // screen and the clipboard keep the text exactly as it was read.
+        let text = SpeakableText.spoken(rawText, lang: language)
+        let rated = RatePrompt.takePendingResult()
         guard !text.isEmpty else { completion(); return }
         #if DEBUG
         SpeakLog.note("speak[\(language)]", rawText)
         #endif
         if !Self.speaksAloud {
-            announceInstead(text)
+            announceInstead(text, lang: language)
             if rated { RatePrompt.resultSpoken(viaVoiceOver: true) }
             completion()
             return
@@ -701,7 +734,7 @@ extension LiveOCRViewModel: AVSpeechSynthesizerDelegate {
     func speechSynthesizer(_: AVSpeechSynthesizer, didStart utterance: AVSpeechUtterance) {
         DispatchQueue.main.async {
             guard let i = self.countdownIndex(of: utterance) else { return }
-            self.countdownRemaining = Self.countdownWords[i].0
+            self.countdownRemaining = Self.countdownNumbers[i]
             self.countdownHaptic.impactOccurred()
             self.countdownHaptic.prepare()
         }
