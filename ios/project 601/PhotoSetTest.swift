@@ -25,8 +25,8 @@ enum PhotoSetTest {
     /// right, middle or NO) gets the exact AimAsk question; one JSON line per
     /// photo in ask/results.jsonl with the answer and how it was read.
     static func runAskTest() async {
-        await MainActor.run { UIApplication.shared.isIdleTimerDisabled = true }
-        defer { Task { @MainActor in UIApplication.shared.isIdleTimerDisabled = false } }
+        await MainActor.run { ScreenAwake.hold("askTest") }
+        defer { Task { @MainActor in ScreenAwake.release("askTest") } }
         let fm = FileManager.default
         guard let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
         let dir = docs.appendingPathComponent("photo-test/ask", isDirectory: true)
@@ -82,8 +82,8 @@ enum PhotoSetTest {
     static func run() async {
         // Auto-lock suspends the app mid-run (10/29: stopped after 4 of 20), so the
         // screen stays awake for the whole test and goes back to normal after.
-        await MainActor.run { UIApplication.shared.isIdleTimerDisabled = true }
-        defer { Task { @MainActor in UIApplication.shared.isIdleTimerDisabled = false } }
+        await MainActor.run { ScreenAwake.hold("photoTest") }
+        defer { Task { @MainActor in ScreenAwake.release("photoTest") } }
         let fm = FileManager.default
         guard let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
         let dir = docs.appendingPathComponent("photo-test", isDirectory: true)

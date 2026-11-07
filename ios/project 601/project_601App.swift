@@ -10,6 +10,8 @@ struct project_601App: App {
         // without this touch the singleton never exists and the app has no
         // response to memory pressure at all.
         _ = MemoryManager.shared
+        // Screen stays awake whenever a camera runs (AppleVis user LaBoheme, 2026-11-07).
+        ScreenAwake.install()
         #if DEBUG && targetEnvironment(simulator)
         SimulatorSilence.install()
         #endif

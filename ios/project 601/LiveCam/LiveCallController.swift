@@ -136,7 +136,7 @@ final class LiveCallController: ObservableObject {
         running = true
         moneyMemory.forget()   // a new call never answers from an old count
         Task.detached(priority: .utility) { MoneyDetector.warmUp() }   // both money models loaded off the main thread
-        UIApplication.shared.isIdleTimerDisabled = true
+        ScreenAwake.hold("liveCall")
         watch.enabled = proactiveOn
         LiveCamTest.beginSession()
         openedAt = Date()
@@ -232,7 +232,8 @@ final class LiveCallController: ObservableObject {
         // The model is let go (What's this? loads its own copy when it is next used).
         preload?.cancel(); preload = nil
         engine = nil
-        UIApplication.shared.isIdleTimerDisabled = false
+        // Only this call's hold: a camera still running keeps the screen awake.
+        ScreenAwake.release("liveCall")
     }
 
     /// What's running right now (tests: nothing may be left on after Back).
