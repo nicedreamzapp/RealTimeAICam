@@ -123,7 +123,13 @@ fun HelpMeAimScreen(onBack: () -> Unit) {
     val pipeline = remember { AimPipeline(context, speaker) }
     val listener = remember { AimListener(context) }
     val previewView = remember {
-        PreviewView(context).apply { scaleType = PreviewView.ScaleType.FIT_CENTER }
+        PreviewView(context).apply {
+            scaleType = PreviewView.ScaleType.FIT_CENTER
+            // Screen stays awake while this camera view is on screen (AppleVis user LaBoheme,
+            // 2026-11-07: auto-lock locked the phone mid-task). Android clears it on its own
+            // when the view leaves the screen or the app goes to the background.
+            keepScreenOn = true
+        }
     }
 
     var phase by remember { mutableStateOf(AimPhase.CHOOSING) }

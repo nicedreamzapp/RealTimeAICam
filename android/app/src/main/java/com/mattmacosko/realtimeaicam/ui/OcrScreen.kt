@@ -160,7 +160,13 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit, onSwitchReader: (translati
         }
     }
     val previewView = remember {
-        PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
+        PreviewView(context).apply {
+            scaleType = PreviewView.ScaleType.FILL_CENTER
+            // Screen stays awake while this camera view is on screen (AppleVis user LaBoheme,
+            // 2026-11-07: auto-lock locked the phone mid-task). Android clears it on its own
+            // when the view leaves the screen or the app goes to the background.
+            keepScreenOn = true
+        }
     }
 
     DisposableEffect(lifecycleOwner) {

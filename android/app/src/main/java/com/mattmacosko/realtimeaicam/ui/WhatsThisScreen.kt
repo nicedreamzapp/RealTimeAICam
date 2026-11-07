@@ -174,7 +174,13 @@ fun WhatsThisScreen(
         // I'm taking and what I'm seeing on the screen are totally different."
         // Same fix as iOS CameraPreview.swift. Detection keeps FILL_CENTER on
         // purpose — DetectionOverlay maps its boxes with that assumption.
-        PreviewView(context).apply { scaleType = PreviewView.ScaleType.FIT_CENTER }
+        PreviewView(context).apply {
+            scaleType = PreviewView.ScaleType.FIT_CENTER
+            // Screen stays awake while this camera view is on screen (AppleVis user LaBoheme,
+            // 2026-11-07: auto-lock locked the phone mid-task). Android clears it on its own
+            // when the view leaves the screen or the app goes to the background.
+            keepScreenOn = true
+        }
     }
     val debouncer = rememberDebouncer(500)
 
