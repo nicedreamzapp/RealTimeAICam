@@ -96,8 +96,10 @@ final class AimCameraView: UIView {
     func stop() {
         setTorch(false)
         motion.stopDeviceMotionUpdates()
-        sessionQueue.async { [weak self] in
-            guard let self, session.isRunning else { return }
+        // The session, not self, is captured: backing out during startup must
+        // still stop the camera (else it, and ScreenAwake, stay on).
+        sessionQueue.async { [session] in
+            guard session.isRunning else { return }
             session.stopRunning()
         }
     }

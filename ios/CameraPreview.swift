@@ -383,8 +383,10 @@ class CameraPreviewView: UIView {
 
     func stopSession() {
         print("📷 CameraPreviewView: Stopping camera session")
-        sessionQueue.async { [weak self] in
-            self?.session.stopRunning()
+        // The session, not the view, is captured: if the view goes away before
+        // this runs, the camera must still stop (else it, and ScreenAwake, stay on).
+        sessionQueue.async { [session] in
+            session.stopRunning()
             print("📷 CameraPreviewView: Camera session stopped")
         }
     }

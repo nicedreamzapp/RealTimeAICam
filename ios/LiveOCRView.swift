@@ -485,9 +485,15 @@ struct LiveOCRView: View {
             showStatus("Working it out…")
             // Free the camera pipeline while the model thinks; it comes back
             // the moment the answer is spoken.
+            // The screen stays awake while the model answers, even with the camera
+            // paused (ScreenAwake; AppleVis user LaBoheme, 2026-11-07).
+            ScreenAwake.hold("analyze")
             if pauseCamera { cameraPreviewRef?.stopSession() }
             Task {
-                defer { if pauseCamera { cameraPreviewRef?.resumeSession() } }
+                defer {
+                    ScreenAwake.release("analyze")
+                    if pauseCamera { cameraPreviewRef?.resumeSession() }
+                }
                 // Measure the shot for the log and to route page vs scene. It
                 // never blocks: the model always gets to look and answer.
                 let gate = await Task.detached(priority: .userInitiated) {
