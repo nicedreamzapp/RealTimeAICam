@@ -70,7 +70,7 @@ This is a no-holds-barred app for blind and low-vision people, and it keeps gett
 | 🌎 **Translation** | 🐶 **Detection** | 🏠 **Home Screen** | 📱 **App Info** | 📏 **LiDAR Distance** |
 | --- | --- | --- | --- | --- |
 | <img src="./ios/IMG_2169.png" width="140" style="border-radius: 10px;"> | <img src="./ios/IMG_2208.png" width="140" style="border-radius: 10px;"> | <img src="./ios/HomeSCreen1.png" width="140" style="border-radius: 10px;"> | <img src="./ios/IMG_2224.jpeg" width="140" style="border-radius: 10px;"> | <img src="./ios/IMG_2247.png" width="140" style="border-radius: 10px;"> |
-| *Offline Spanish→English* | *601 object classes* | *Clean, native UI* | *Lightweight install* | *Pro model depth sensing* |
+| *Offline translation* | *601 object classes* | *Clean, native UI* | *Lightweight install* | *Pro model depth sensing* |
 
 </div>
 
@@ -88,9 +88,9 @@ them is this repo.
 - 📱 **The iOS app**: SwiftUI screens ([`ContentView.swift`](ios/project%20601/ContentView.swift), [`HomeView.swift`](ios/HomeView.swift)) and the camera pipeline with thermal throttling ([`CameraViewModel.swift`](ios/CameraViewModel.swift))
 - 🎯 **Detection around upstream YOLOv8**: 601-class decoding and the indoor/outdoor filters ([`YOLOv8Processor.swift`](ios/YOLOv8Processor.swift)), tracking ([`ObjectTracker.swift`](ios/ObjectTracker.swift)), LiDAR distance ([`LiDARManager.swift`](ios/LiDARManager.swift))
 - 🗣️ **The on-device narrator**: LFM3-Omni-2B by Liquid AI through upstream llama.cpp ([`LlamaVisionEngine.swift`](ios/project%20601/LlamaVisionEngine.swift), [`OnDeviceVisionNarrator.swift`](ios/project%20601/OnDeviceVisionNarrator.swift)), a check that says what is wrong with a bad shot before the model runs ([`FrameQualityGate.swift`](ios/project%20601/FrameQualityGate.swift)), and model lookup with a size- and hash-checked install ([`VisionModelStore.swift`](ios/project%20601/VisionModelStore.swift), [`make_manifest.py`](tools/make_manifest.py)). The model is used untrained under the LFM Open License v1.0, converted and quantized by Nice Dreamz; see [CREDITS.md](CREDITS.md) and [NOTICE.md](NOTICE.md)
-- 📖 **Reading**: live OCR on Apple Vision ([`LiveOCRViewModel.swift`](ios/LiveOCRViewModel.swift)), careful single-page reads ([`PageScanner.swift`](ios/project%20601/PageScanner.swift)), mail and bill summaries in plain code with no model ([`MailSummarizer.swift`](ios/project%20601/MailSummarizer.swift)), a second check on dollar amounts ([`MoneyCrossCheck.swift`](ios/project%20601/MoneyCrossCheck.swift)), offline Spanish to English ([`SpanishTranslationEngine.swift`](ios/SpanishTranslationEngine.swift))
-- 📸 **Help Me Aim**: talks a blind photographer into the shot, then takes it ([`HelpMeAim.swift`](ios/project%20601/HelpMeAim.swift)), with unit tests in [`project 601Tests/`](ios/project%20601Tests/)
-- 🤖 **The Android port**: Jetpack Compose UI ([`ui/`](android/app/src/main/java/com/mattmacosko/realtimeaicam/ui/)), the TensorFlow Lite detector ([`YoloDetector.kt`](android/app/src/main/java/com/mattmacosko/realtimeaicam/detection/YoloDetector.kt)), a JNI bridge to upstream llama.cpp that probes the GPU before trusting it ([`narrator_jni.cpp`](android/app/src/main/cpp/narrator_jni.cpp), [`NarratorEngine.kt`](android/app/src/main/java/com/mattmacosko/realtimeaicam/narrator/NarratorEngine.kt)), and the model conversion tooling ([`android/tools/`](android/tools/))
+- 📖 **Reading**: live OCR on Apple Vision ([`LiveOCRViewModel.swift`](ios/LiveOCRViewModel.swift)), careful single-page reads ([`PageScanner.swift`](ios/project%20601/PageScanner.swift)), mail and bill summaries in plain code with no model ([`MailSummarizer.swift`](ios/project%20601/MailSummarizer.swift)), a second check on dollar amounts ([`MoneyCrossCheck.swift`](ios/project%20601/MoneyCrossCheck.swift)), translation into English through Apple's offline language packs, with Spanish idioms checked first and our dictionary ([`SpanishTranslationEngine.swift`](ios/SpanishTranslationEngine.swift)) only as the fallback
+- 📸 **Help Me Aim**: talks a blind photographer into the shot, then takes it, finding what you name with the open-vocabulary YOLOE detector ([`HelpMeAim.swift`](ios/project%20601/HelpMeAim.swift)), with unit tests in [`project 601Tests/`](ios/project%20601Tests/)
+- 🤖 **The Android port**: Jetpack Compose UI ([`ui/`](android/app/src/main/java/com/mattmacosko/realtimeaicam/ui/)), the TensorFlow Lite detector ([`YoloDetector.kt`](android/app/src/main/java/com/mattmacosko/realtimeaicam/detection/YoloDetector.kt)), a JNI bridge to upstream llama.cpp that probes the GPU before trusting it ([`narrator_jni.cpp`](android/app/src/main/cpp/narrator_jni.cpp), [`NarratorEngine.kt`](android/app/src/main/java/com/mattmacosko/realtimeaicam/narrator/NarratorEngine.kt)), Google ML Kit for on-device reading and translation, and the model conversion tooling ([`android/tools/`](android/tools/))
 
 ### 🐔 Where it started
 
@@ -126,8 +126,8 @@ where you are, what's near you and on which side, people, anything moving, hazar
 Point it at mail and it leads with **what the page is and who sent it**, then the number
 that matters, then the deadline, then what happens if it's ignored.
 
-This runs on a **small vision-language model that ships inside the app**: starting with iOS 1.3.6 (in App Store review) and
-Android 1.23 (coming next) that is [LFM3-Omni-2B](https://huggingface.co/LiquidAI/LFM3-Omni-2B) from Liquid AI, run by llama.cpp, instead of calling somebody's server. That's most of why the download is
+This runs on a **small vision-language model that ships inside the app**: since iOS 1.3.6 and
+Android 1.23 that is [LFM3-Omni-2B](https://huggingface.co/LiquidAI/LFM3-Omni-2B) from Liquid AI, run by llama.cpp, instead of calling somebody's server. That's most of why the download is
 large, and it's the whole point. It works in airplane mode, on a plane, in a basement, in a
 country where your data plan doesn't.
 
@@ -195,7 +195,7 @@ order, or just not useful — say so, and it gets fixed.
 ### 📖 **Reads**
 - 📝 **Live English OCR** — printed text, out loud, no shutter press
 - ✉️ **Mail & bill mode** — what it is, who sent it, the amount, the deadline
-- 🌎 **Spanish → English** — offline translation of signs and labels
+- 🌎 **Translation into English** — printed Spanish offline out of the box, 16 more languages after a one-time download (iPhone)
 - 🔊 **Speaks it all aloud** — in its voice or in yours
 
 </td>
@@ -229,8 +229,9 @@ graph TB
 
 | Component | Technology | Purpose |
 |---|---|---|
-| 🗣️ **Narrator** | LFM3-Omni-2B by Liquid AI (GGUF IQ2_XS + Q4_K_M vision projector, 735 MB, bundled) · llama.cpp (iOS 1.3.6 in review, Android 1.23 coming) | Scene and page description |
-| 🤖 **Detector** | YOLOv8 (Ultralytics) | 601-class object detection |
+| 🗣️ **Narrator** | LFM3-Omni-2B by Liquid AI (GGUF IQ2_XS + Q4_K_M vision projector, 735 MB, bundled) · llama.cpp (iOS 1.3.6, Android 1.25; on Android, phones too slow for it use Vision Narrator 0.8B) | Scene and page description |
+| 🤖 **Detector** | YOLOv8 (Ultralytics) · YOLOE for Help Me Aim | 601-class object detection, finding a named object |
+| 📖 **Reading** | Apple Vision + Apple Translation (iOS) · Google ML Kit (Android), all on device | Reading text out loud, translating it |
 | 🏗️ **UI** | SwiftUI (iOS) · Jetpack Compose (Android) | Native interface on both |
 | ⚡ **Acceleration** | CoreML + Metal + Neural Engine · TensorFlow Lite | Hardware-optimized inference |
 | 📊 **Dataset** | Open Images V7 | The 601 classes |
