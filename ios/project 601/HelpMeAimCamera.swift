@@ -26,11 +26,56 @@ final class AimCameraView: UIView {
     private let sessionQueue = DispatchQueue(label: "aim.camera.session")
     private let videoQueue = DispatchQueue(label: "aim.camera.video", qos: .userInitiated)
     private var device: AVCaptureDevice?
-    private var rotation: AVCaptureDevice.RotationCoordinator?
+    /// The coordinator and this camera's upright angle are written on the
+    /// session queue and read on the video queue every frame: one lock.
+    private let turnLock = NSLock()
+    private var _rotation: AVCaptureDevice.RotationCoordinator?
+    private var _uprightAngle: CGFloat = AimHold.portraitAngle
+    private var rotation: AVCaptureDevice.RotationCoordinator? {
+        get { turnLock.lock(); defer { turnLock.unlock() }; return _rotation }
+        set { turnLock.lock(); _rotation = newValue; turnLock.unlock() }
+    }
+    private var uprightAngle: CGFloat {
+        get { turnLock.lock(); defer { turnLock.unlock() }; return _uprightAngle }
+        set { turnLock.lock(); _uprightAngle = newValue; turnLock.unlock() }
+    }
+    /// Each camera's upright angle once worked out, kept for the next time
+    /// that camera opens (a flip made while tilted can't work it out).
+    nonisolated(unsafe) private static var learnedUpright: [AVCaptureDevice.Position: CGFloat] = [:]
+    private static let learnedLock = NSLock()
+    private var framesSinceLearn = 0
     /// This camera's portrait angle; 90 on older iPhones, not on every camera
     /// (the iPhone 18's front one, 2026-11-08). From the coordinator.
-    private var uprightAngle: CGFloat = AimHold.portraitAngle
     private var previewObservation: NSKeyValueObservation?
+
+    private static func learned(_ position: AVCaptureDevice.Position) -> CGFloat? {
+        learnedLock.lock(); defer { learnedLock.unlock() }
+        return learnedUpright[position]
+    }
+
+    private static func remember(_ angle: CGFloat, for position: AVCaptureDevice.Position) {
+        learnedLock.lock(); learnedUpright[position] = angle; learnedLock.unlock()
+    }
+
+    /// Twice a second: if how the phone is held now shows a different upright
+    /// angle for this camera (it was guessed while tilted), correct it.
+    private func relearnUpright() {
+        framesSinceLearn += 1
+        guard framesSinceLearn >= 15 else { return }
+        framesSinceLearn = 0
+        guard let level = rotation?.videoRotationAngleForHorizonLevelCapture,
+              let g = motion.deviceMotion?.gravity,
+              let up = AimHold.upright(levelAngle: level, gravity: (g.x, g.y, g.z), front: position == .front),
+              up != uprightAngle else { return }
+        uprightAngle = up
+        Self.remember(up, for: position)
+        sessionQueue.async { [weak self] in
+            guard let self, let connection = videoOutput.connection(with: .video),
+                  connection.isVideoRotationAngleSupported(up) else { return }
+            connection.videoRotationAngle = up
+        }
+        AimDevLog.note("[camera] relearned upright=\(Int(up))")
+    }
 
     /// The on-screen picture's turn; it follows the screen (portrait or landscape).
     private func applyPreviewAngle(_ angle: CGFloat) {
@@ -131,7 +176,7 @@ final class AimCameraView: UIView {
         session.addInput(input)
         device = camera
         rotation = nil
-        uprightAngle = AimHold.portraitAngle
+        uprightAngle = Self.learned(camera.position) ?? AimHold.portraitAngle
 
         if let _ = try? camera.lockForConfiguration() {
             if camera.isFocusModeSupported(.continuousAutoFocus) { camera.focusMode = .continuousAutoFocus }
@@ -175,7 +220,7 @@ final class AimCameraView: UIView {
             let portraitScreen = window?.windowScene?.effectiveGeometry.interfaceOrientation.isPortrait ?? false
             let up = AimHold.upright(levelAngle: coordinator.videoRotationAngleForHorizonLevelCapture,
                                      gravity: g.map { ($0.x, $0.y, $0.z) }, front: camera.position == .front)
-                ?? (portraitScreen ? preview : AimHold.portraitAngle)
+                ?? (portraitScreen ? preview : Self.learned(camera.position) ?? AimHold.portraitAngle)
             applyPreviewAngle(preview)
             previewObservation = coordinator.observe(\.videoRotationAngleForHorizonLevelPreview, options: [.new]) { [weak self] c, _ in
                 let angle = AimHold.norm(c.videoRotationAngleForHorizonLevelPreview)
@@ -185,6 +230,7 @@ final class AimCameraView: UIView {
                 guard let self, device === camera else { return }
                 rotation = coordinator
                 uprightAngle = up
+                Self.remember(up, for: camera.position)
                 if let connection = videoOutput.connection(with: .video), connection.isVideoRotationAngleSupported(up) {
                     connection.videoRotationAngle = up
                 }
@@ -281,6 +327,7 @@ final class AimCameraView: UIView {
 extension AimCameraView: AVCaptureVideoDataOutputSampleBufferDelegate {
     func captureOutput(_: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from _: AVCaptureConnection) {
         guard let buffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        relearnUpright()
         // Landscape steering is only worked out for the back camera; the
         // front (selfie) camera is treated as held upright.
         var turns = 0

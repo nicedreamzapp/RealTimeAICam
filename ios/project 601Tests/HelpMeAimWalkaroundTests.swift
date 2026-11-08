@@ -81,16 +81,19 @@ struct AimUprightPhotoTests {
     }
 
     @Test func holdAngleStaysPortraitUnlessClearlySideways() {
-        // Flat on a table, whatever the coordinator last guessed.
-        #expect(AimHold.captureAngle(levelAngle: 0, gravity: (0.05, -0.1, -0.99)) == 90)
-        #expect(AimHold.captureAngle(levelAngle: 180, gravity: (0.3, 0.1, 0.95)) == 90)
+        // Flat on a table: the last clear hold (the screen keeps it too).
+        #expect(AimHold.captureAngle(levelAngle: 0, gravity: (0.05, -0.1, -0.99)) == 0)
+        #expect(AimHold.captureAngle(levelAngle: 180, gravity: (0.3, 0.1, 0.95)) == 180)
+        #expect(AimHold.captureAngle(levelAngle: 90, gravity: (0.05, -0.1, -0.99)) == 90)
         // Upright but the coordinator is stale.
         #expect(AimHold.captureAngle(levelAngle: 0, gravity: (0.1, -0.95, -0.2)) == 90)
         // Clearly on its side: the coordinator's landscape angle.
         #expect(AimHold.captureAngle(levelAngle: 0, gravity: (-0.95, 0.05, -0.2)) == 0)
         #expect(AimHold.captureAngle(levelAngle: 180, gravity: (0.95, 0.05, -0.2)) == 180)
-        // Diagonal is not "clearly".
-        #expect(AimHold.captureAngle(levelAngle: 0, gravity: (-0.7, -0.6, -0.2)) == 90)
+        // Diagonal is not "clearly": the coordinator's last clear hold.
+        #expect(AimHold.captureAngle(levelAngle: 90, gravity: (-0.7, -0.6, -0.2)) == 90)
+        // Upside down.
+        #expect(AimHold.captureAngle(levelAngle: 270, gravity: (0.05, 0.95, -0.2)) == 270)
         // Unknown.
         #expect(AimHold.captureAngle(levelAngle: nil, gravity: nil) == 90)
         #expect(AimHold.captureAngle(levelAngle: 0, gravity: nil) == 90)
@@ -100,6 +103,8 @@ struct AimUprightPhotoTests {
     /// front reads 90 with gravity -x and 270 with +x (it is mounted a quarter
     /// turn round). Those are trusted, not thrown back to portrait.
     @Test func landscapeFollowsHowEachCameraIsMounted() {
+        // Mid-turn the coordinator can still be on the old side: gravity wins.
+        #expect(AimHold.captureAngle(levelAngle: 180, gravity: (-0.95, 0.05, -0.2)) == 0)
         #expect(AimHold.captureAngle(levelAngle: 0, gravity: (0.99, 0.04, 0.14), front: true) == 0)
         #expect(AimHold.captureAngle(levelAngle: 90, upright: 0, gravity: (-0.98, -0.04, 0.2), front: true) == 90)
         #expect(AimHold.captureAngle(levelAngle: 270, upright: 0, gravity: (0.98, 0.02, -0.21), front: true) == 270)

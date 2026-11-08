@@ -996,23 +996,30 @@ enum AimHold {
         abs(z) < flatZ && abs(x) > sidewaysX && abs(x) > abs(y) + sidewaysLead
     }
 
-    /// `upright` is this camera's portrait angle (the coordinator's preview
-    /// angle for the portrait-only screen); `levelAngle` the coordinator's
-    /// capture angle; gravity in g, nil if unknown.
+    /// `upright` is this camera's portrait angle; `levelAngle` the
+    /// coordinator's capture angle; gravity in g, nil if unknown.
     static func captureAngle(levelAngle: CGFloat?, upright: CGFloat = portraitAngle,
                              gravity: (x: Double, y: Double, z: Double)?, front: Bool = false) -> CGFloat {
-        guard let g = gravity, isClearlyLandscape(x: g.x, y: g.y, z: g.z) else { return upright }
         let up = norm(upright)
-        // The coordinator agrees it is on its side: its angle fits this camera.
+        guard let g = gravity else { return up }
+        // Clearly on its side: a quarter turn from upright, the way gravity
+        // says (back camera: top of the phone to the left is upright - 90;
+        // the front camera faces the other way). Gravity, not the
+        // coordinator, picks the side, so a lagging coordinator mid-turn
+        // can't save it upside down.
+        if isClearlyLandscape(x: g.x, y: g.y, z: g.z) {
+            return norm((g.x < 0) != front ? up - 90 : up + 90)
+        }
+        // Held clearly upright: portrait, whatever the coordinator last said.
+        if abs(g.z) < flatZ, g.y < 0, abs(g.y) > abs(g.x) + sidewaysLead { return up }
+        // Flat over a page or loosely tilted: the coordinator keeps the last
+        // clear hold, like the screen does, so the photo matches the screen
+        // (review 2026-11-08: sideways first, then flat, saved portrait).
         if let levelAngle {
             let a = norm(levelAngle)
-            if a != up, a != norm(up + 180) { return a }
+            if a == norm(up + 90) || a == norm(up - 90) || a == norm(up + 180) { return a }
         }
-        // It doesn't (no coordinator, or it lags): a quarter turn from upright,
-        // the way gravity says. Back camera: top of the phone to the left is
-        // upright - 90; the front camera faces the other way.
-        let left = g.x < 0
-        return norm(left != front ? up - 90 : up + 90)
+        return up
     }
 
     /// This camera's portrait angle, worked back from the coordinator's
