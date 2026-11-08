@@ -105,6 +105,16 @@ struct AimUprightPhotoTests {
         #expect(AimHold.captureAngle(levelAngle: 270, upright: 0, gravity: (0.98, 0.02, -0.21), front: true) == 270)
     }
 
+    /// The camera's upright angle, worked back from a landscape hold.
+    @Test func uprightFromALandscapeHold() {
+        #expect(AimHold.upright(levelAngle: 0, gravity: (-0.95, 0.05, -0.2), front: false) == 90)      // back
+        #expect(AimHold.upright(levelAngle: 0, gravity: (0.99, 0.04, 0.14), front: true) == 90)        // iPhone 12 front
+        #expect(AimHold.upright(levelAngle: 270, gravity: (0.98, 0.02, -0.21), front: true) == 0)     // iPhone 18 front
+        #expect(AimHold.upright(levelAngle: 90, gravity: (-0.98, -0.04, 0.2), front: true) == 0)      // iPhone 18 front
+        #expect(AimHold.upright(levelAngle: 0, gravity: (0.1, -0.95, -0.2), front: true) == 0)        // held upright
+        #expect(AimHold.upright(levelAngle: 0, gravity: (0.05, -0.1, -0.99), front: false) == nil)    // flat
+    }
+
     /// LaBoheme, AppleVis 2026-11-08: if the coordinator still says portrait
     /// while the phone is clearly on its side, gravity turns it a quarter.
     @Test func landscapeWhenTheCoordinatorLags() {

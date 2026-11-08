@@ -1015,6 +1015,17 @@ enum AimHold {
         return norm(left != front ? up - 90 : up + 90)
     }
 
+    /// This camera's portrait angle, worked back from the coordinator's
+    /// capture angle and gravity (for when the screen is already landscape
+    /// and the preview angle can't say). Nil when the hold is unclear.
+    static func upright(levelAngle: CGFloat, gravity: (x: Double, y: Double, z: Double)?, front: Bool) -> CGFloat? {
+        guard let g = gravity, abs(g.z) < flatZ else { return nil }
+        let a = norm(levelAngle)
+        if g.y < 0, abs(g.y) > abs(g.x) + sidewaysLead { return a }   // held upright
+        guard isClearlyLandscape(x: g.x, y: g.y, z: g.z) else { return nil }
+        return norm((g.x < 0) != front ? a + 90 : a - 90)
+    }
+
     static func norm(_ a: CGFloat) -> CGFloat {
         let r = a.rounded().truncatingRemainder(dividingBy: 360)
         return r < 0 ? r + 360 : r

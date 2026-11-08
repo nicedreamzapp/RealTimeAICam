@@ -30,6 +30,13 @@ final class AimCameraView: UIView {
     /// This camera's portrait angle; 90 on older iPhones, not on every camera
     /// (the iPhone 18's front one, 2026-11-08). From the coordinator.
     private var uprightAngle: CGFloat = AimHold.portraitAngle
+    private var previewObservation: NSKeyValueObservation?
+
+    /// The on-screen picture's turn; it follows the screen (portrait or landscape).
+    private func applyPreviewAngle(_ angle: CGFloat) {
+        guard let connection = cachedPreviewLayer?.connection, connection.isVideoRotationAngleSupported(angle) else { return }
+        connection.videoRotationAngle = angle
+    }
     private var position: AVCaptureDevice.Position = .back
     private var configured = false
     private let motion = CMMotionManager()
@@ -145,7 +152,7 @@ final class AimCameraView: UIView {
         }
 
         if let connection = videoOutput.connection(with: .video) {
-            // 90° = portrait for both cameras. The UI is portrait-only on iPhone.
+            // Upright for now; set to this camera's own upright angle below.
             if connection.isVideoRotationAngleSupported(90) { connection.videoRotationAngle = 90 }
             if connection.isVideoMirroringSupported {
                 connection.automaticallyAdjustsVideoMirroring = false
@@ -153,15 +160,26 @@ final class AimCameraView: UIView {
             }
         }
         // The coordinator (made on the main thread, with the preview layer)
-        // knows how THIS camera is mounted: its preview angle is the upright
-        // one for the portrait-only screen, used for the preview and the
-        // analysed frames (the iPhone 18's front camera showed sideways at 90).
+        // knows how THIS camera is mounted (the iPhone 18's front camera is
+        // upright at 0, not 90). Its preview angle follows the screen, which
+        // turns to landscape here (LaBoheme, 2026-11-08); the analysed frames
+        // stay at the camera's upright angle so the steering math holds.
         DispatchQueue.main.async { [weak self] in
             guard let self, let layer = cachedPreviewLayer else { return }
             let coordinator = AVCaptureDevice.RotationCoordinator(device: camera, previewLayer: layer)
-            let up = AimHold.norm(coordinator.videoRotationAngleForHorizonLevelPreview)
-            if let preview = layer.connection, preview.isVideoRotationAngleSupported(up) {
-                preview.videoRotationAngle = up
+            let preview = AimHold.norm(coordinator.videoRotationAngleForHorizonLevelPreview)
+            let g = motion.deviceMotion?.gravity
+            // Worked out from how the phone is held (no screen involved);
+            // the preview angle only when that is unclear and the screen is
+            // portrait, else the usual 90.
+            let portraitScreen = window?.windowScene?.effectiveGeometry.interfaceOrientation.isPortrait ?? false
+            let up = AimHold.upright(levelAngle: coordinator.videoRotationAngleForHorizonLevelCapture,
+                                     gravity: g.map { ($0.x, $0.y, $0.z) }, front: camera.position == .front)
+                ?? (portraitScreen ? preview : AimHold.portraitAngle)
+            applyPreviewAngle(preview)
+            previewObservation = coordinator.observe(\.videoRotationAngleForHorizonLevelPreview, options: [.new]) { [weak self] c, _ in
+                let angle = AimHold.norm(c.videoRotationAngleForHorizonLevelPreview)
+                DispatchQueue.main.async { self?.applyPreviewAngle(angle) }
             }
             sessionQueue.async { [weak self] in
                 guard let self, device === camera else { return }
@@ -170,7 +188,7 @@ final class AimCameraView: UIView {
                 if let connection = videoOutput.connection(with: .video), connection.isVideoRotationAngleSupported(up) {
                     connection.videoRotationAngle = up
                 }
-                AimDevLog.note("[camera] \(position == .front ? "front" : "back") upright=\(Int(up))")
+                AimDevLog.note("[camera] \(position == .front ? "front" : "back") upright=\(Int(up)) preview=\(Int(preview))")
             }
         }
         // 12 MP, not 48: a burst of five 48 MP frames is slow and huge, and

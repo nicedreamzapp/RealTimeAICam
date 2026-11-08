@@ -2,6 +2,8 @@ import SwiftUI
 
 @main
 struct project_601App: App {
+    /// Portrait everywhere but Help Me Aim's camera (AppOrientation).
+    @UIApplicationDelegateAdaptor(AppOrientation.self) private var orientation
     /// The app's language (AppLang): Spanish or English, follows Your language live.
     @ObservedObject private var appLang = AppLangObserver.shared
 

@@ -1096,7 +1096,18 @@ struct HelpMeAimView: View {
             }
             #endif
         }
-        .onDisappear { controller.shutdown() }
+        .onDisappear {
+            AppOrientation.allowLandscape(false)
+            controller.shutdown()
+        }
+        // The camera and the picture turn with the phone; the choices and
+        // the typing screen stay portrait (LaBoheme, 2026-11-08).
+        .onChange(of: controller.phase, initial: true) { _, phase in
+            switch phase {
+            case .aiming, .capturing, .taken: AppOrientation.allowLandscape(true)
+            case .choosing, .asking: AppOrientation.allowLandscape(false)
+            }
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { controller.resume() } else { controller.pause() }
         }
