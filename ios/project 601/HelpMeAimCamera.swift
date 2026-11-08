@@ -44,6 +44,8 @@ final class AimCameraView: UIView {
     nonisolated(unsafe) private static var learnedUpright: [AVCaptureDevice.Position: CGFloat] = [:]
     private static let learnedLock = NSLock()
     private var framesSinceLearn = 0
+    private var pendingUpright: CGFloat?
+    private var pendingCount = 0
     /// This camera's portrait angle; 90 on older iPhones, not on every camera
     /// (the iPhone 18's front one, 2026-11-08). From the coordinator.
     private var previewObservation: NSKeyValueObservation?
@@ -63,10 +65,20 @@ final class AimCameraView: UIView {
         framesSinceLearn += 1
         guard framesSinceLearn >= 15 else { return }
         framesSinceLearn = 0
-        guard let level = rotation?.videoRotationAngleForHorizonLevelCapture,
+        // Back cameras are all upright at 90; only the front camera differs
+        // (iPhone 18). A turn makes the coordinator lag gravity for a moment,
+        // so a new angle counts only after three matching checks in a row
+        // (1.5 s); one lagging read once relearned the back camera as 0 and
+        // then 270 (iPhone 18, 2026-11-08).
+        guard position == .front,
+              let level = rotation?.videoRotationAngleForHorizonLevelCapture,
               let g = motion.deviceMotion?.gravity,
-              let up = AimHold.upright(levelAngle: level, gravity: (g.x, g.y, g.z), front: position == .front),
-              up != uprightAngle else { return }
+              let up = AimHold.upright(levelAngle: level, gravity: (g.x, g.y, g.z), front: true),
+              up != uprightAngle
+        else { pendingUpright = nil; pendingCount = 0; return }
+        if pendingUpright == up { pendingCount += 1 } else { pendingUpright = up; pendingCount = 1 }
+        guard pendingCount >= 3 else { return }
+        pendingUpright = nil; pendingCount = 0
         uprightAngle = up
         Self.remember(up, for: position)
         sessionQueue.async { [weak self] in
@@ -218,7 +230,8 @@ final class AimCameraView: UIView {
             // the preview angle only when that is unclear and the screen is
             // portrait, else the usual 90.
             let portraitScreen = window?.windowScene?.effectiveGeometry.interfaceOrientation.isPortrait ?? false
-            let up = AimHold.upright(levelAngle: coordinator.videoRotationAngleForHorizonLevelCapture,
+            let up = camera.position == .back ? AimHold.portraitAngle
+                : AimHold.upright(levelAngle: coordinator.videoRotationAngleForHorizonLevelCapture,
                                      gravity: g.map { ($0.x, $0.y, $0.z) }, front: camera.position == .front)
                 ?? (portraitScreen ? preview : Self.learned(camera.position) ?? AimHold.portraitAngle)
             applyPreviewAngle(preview)
