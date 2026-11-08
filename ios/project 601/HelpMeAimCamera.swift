@@ -190,7 +190,17 @@ final class AimCameraView: UIView {
                 connection.automaticallyAdjustsVideoMirroring = false
                 connection.isVideoMirrored = false
             }
-            let angle = holdAngle
+            var angle = holdAngle
+            #if HELP_ME_AIM_SHOT_LOG
+            // DEV experiment (iPhone 18 front camera, 11/8): -aimFrontAngleOffset N turns the front angle by N.
+            let args = ProcessInfo.processInfo.arguments
+            if position == .front, let i = args.firstIndex(of: "-aimFrontAngleOffset"), i + 1 < args.count,
+               let off = Double(args[i + 1]) {
+                angle = CGFloat((Double(angle) + off).truncatingRemainder(dividingBy: 360))
+            }
+            AimDevLog.note("[capture] device=\(device?.deviceType.rawValue ?? "?") "
+                + "format=\(device.map { "\($0.activeFormat.formatDescription.dimensions.width)x\($0.activeFormat.formatDescription.dimensions.height)" } ?? "?")")
+            #endif
             if connection.isVideoRotationAngleSupported(angle) {
                 connection.videoRotationAngle = angle
             }
