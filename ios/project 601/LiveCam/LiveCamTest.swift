@@ -54,6 +54,8 @@ enum LiveCamTest {
     static var active: Bool { args.contains("-liveCamTest") }
     static var mute: Bool { args.contains("-liveCamMute") }
     static var openAtLaunch: Bool { args.contains("-liveCamOpen") }
+    /// -liveCamHitch: log screen refreshes and camera frames that come late (is the picture freezing while it looks?).
+    static var hitch: Bool { args.contains("-liveCamHitch") }
     /// Acts as if speech recognition kept failing, right after the greeting (layout of the "can't hear you" note).
     static var forceCantHear: Bool { args.contains("-liveCamCantHear") }
     static var fakeAnswer: String? { ProcessInfo.processInfo.environment["RTCAM_FAKE_LIVE_ANSWER"] }
@@ -61,6 +63,7 @@ enum LiveCamTest {
     static let active = false
     static let mute = false
     static let openAtLaunch = false
+    static let hitch = false
     static let forceCantHear = false
     #endif
 
@@ -71,7 +74,27 @@ enum LiveCamTest {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("live-cam", isDirectory: true)
     }
 
+    private static var hitchLink: CADisplayLink?
+    private final class HitchTarget: NSObject {
+        var last: CFTimeInterval = 0
+        @objc func tick(_ link: CADisplayLink) {
+            if last > 0 {
+                let ms = (link.timestamp - last) * 1000
+                if ms > 50 { LiveCamTest.log(["event": "ui_gap", "ms": Int(ms)]) }
+            }
+            last = link.timestamp
+        }
+    }
+    private static let hitchTarget = HitchTarget()
+
     static func beginSession() {
+        if hitch, hitchLink == nil {
+            DispatchQueue.main.async {
+                let link = CADisplayLink(target: hitchTarget, selector: #selector(HitchTarget.tick(_:)))
+                link.add(to: .main, forMode: .common)
+                hitchLink = link
+            }
+        }
         lock.lock(); defer { lock.unlock() }
         start = Date()
         try? FileManager.default.removeItem(at: folder.appendingPathComponent("log.jsonl"))

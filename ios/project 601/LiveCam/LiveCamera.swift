@@ -149,7 +149,14 @@ final class LiveCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
 
     func captureOutput(_: AVCaptureOutput, didOutput sb: CMSampleBuffer, from _: AVCaptureConnection) {
         guard let pb = CMSampleBufferGetImageBuffer(sb) else { return }
-        lock.lock(); latest = pb; latestAt = Date(); lock.unlock()
+        lock.lock(); let before = latestAt; latest = pb; latestAt = Date(); lock.unlock()
+        #if DEBUG
+        // -liveCamHitch: camera frames more than 80 ms apart (the picture would stall).
+        if LiveCamTest.hitch, before != .distantPast {
+            let ms = Date().timeIntervalSince(before) * 1000
+            if ms > 80 { LiveCamTest.log(["event": "cam_gap", "ms": Int(ms)]) }
+        }
+        #endif
     }
 
     /// The frame on screen right now, copied on the CPU (no GPU work, so the model and the preview
