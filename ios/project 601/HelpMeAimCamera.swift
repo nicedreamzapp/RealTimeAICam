@@ -62,8 +62,7 @@ final class AimCameraView: UIView {
     /// Portrait unless the phone is clearly on its side (see AimHold).
     private var holdAngle: CGFloat {
         let g = motion.deviceMotion?.gravity
-        return AimHold.captureAngle(levelAngle: rotation?.videoRotationAngleForHorizonLevelCapture,
-                                    gravity: g.map { ($0.x, $0.y, $0.z) })
+        return AimHold.captureAngle(gravity: g.map { ($0.x, $0.y, $0.z) }, front: position == .front)
     }
 
     /// Dev diagnostics.

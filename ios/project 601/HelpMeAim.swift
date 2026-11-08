@@ -975,6 +975,12 @@ enum AimPage {
 /// Which way the still is turned (walkaround 2026-09-16: with the phone flat
 /// over a table the level-shot angle is a guess). The app is portrait-only,
 /// so portrait unless gravity clearly says the phone is on its side.
+///
+/// AppleVis user LaBoheme, 2026-11-08: "When I tried to take a picture
+/// landscape, the picture came out sideways." The side used to come from
+/// the rotation coordinator, which follows the system's orientation and
+/// stays on portrait while Portrait Orientation Lock is on (common with
+/// VoiceOver). Gravity alone now decides, so landscape works with the lock on.
 enum AimHold {
     static let portraitAngle: CGFloat = 90
     /// |z| above this: lying flat (face up or down).
@@ -987,14 +993,13 @@ enum AimHold {
         abs(z) < flatZ && abs(x) > sidewaysX && abs(x) > abs(y) + sidewaysLead
     }
 
-    /// `levelAngle` from the rotation coordinator; gravity in g, nil if unknown.
-    static func captureAngle(levelAngle: CGFloat?, gravity: (x: Double, y: Double, z: Double)?) -> CGFloat {
-        guard let levelAngle, let g = gravity, isClearlyLandscape(x: g.x, y: g.y, z: g.z) else {
-            return portraitAngle
-        }
-        let a = levelAngle.truncatingRemainder(dividingBy: 360)
-        // Only a landscape answer is trusted here.
-        return abs(a) < 1 || abs(a - 180) < 1 ? a : portraitAngle
+    /// The capture angle for how the phone is held; gravity in g, nil if
+    /// unknown. Back camera: 0 with the top of the phone to the left
+    /// (gravity -x), 180 with it to the right. The front sensor sits the
+    /// other way round, so its two are swapped.
+    static func captureAngle(gravity: (x: Double, y: Double, z: Double)?, front: Bool = false) -> CGFloat {
+        guard let g = gravity, isClearlyLandscape(x: g.x, y: g.y, z: g.z) else { return portraitAngle }
+        return (g.x < 0) != front ? 0 : 180
     }
 }
 
