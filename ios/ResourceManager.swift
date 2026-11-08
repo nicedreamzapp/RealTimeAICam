@@ -39,8 +39,11 @@ final class ResourceManager: ObservableObject {
 
     @Published private(set) var currentMode: AppMode = .home
     @Published private(set) var isTransitioning: Bool = false
-    @Published private(set) var memoryUsage: Double = 0.0
-    @Published private(set) var backgroundProcessCount: Int = 0
+    // Not @Published: no screen shows them, and publishing every 2 s redrew the whole app
+    // (ContentView observes this object), freezing Live Cam's picture ~300 ms every 2 s on an
+    // iPhone 12 so each look read as "snapping a picture" (Matt 11/8, measured with -liveCamHitch).
+    private(set) var memoryUsage: Double = 0.0
+    private(set) var backgroundProcessCount: Int = 0
 
     // MARK: - Engine References (All start as NIL)
 
