@@ -1073,6 +1073,8 @@ struct HelpMeAimView: View {
     @StateObject private var controller = HelpMeAimController()
     @Environment(\.scenePhase) private var scenePhase
     @AccessibilityFocusState private var cameraFocused: Bool
+    /// Changes when the screen turns (portrait <-> landscape on iPhone).
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var typed = ""
     @FocusState private var typing: Bool
     @ObservedObject private var appLang = AppLangObserver.shared
@@ -1286,6 +1288,12 @@ struct HelpMeAimView: View {
         }
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { cameraFocused = true }
+        }
+        // The screen turning mid-aim must leave VoiceOver on the camera, so a
+        // double tap still takes the picture and never lands on Back (review
+        // 2026-11-08).
+        .onChange(of: verticalSizeClass) { _, _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { cameraFocused = true }
         }
     }
 
