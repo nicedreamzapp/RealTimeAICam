@@ -182,15 +182,20 @@ final class AimCameraView: UIView {
                 DispatchQueue.main.async { completion([]) }
                 return
             }
-            let angle = holdAngle
-            if connection.isVideoRotationAngleSupported(angle) {
-                connection.videoRotationAngle = angle
-            }
-            // Saved un-mirrored, like the Camera app's default.
+            // Saved un-mirrored, like the Camera app's default. Mirroring is
+            // set BEFORE the angle: on the front camera, changing it after
+            // undid the landscape angle and the photo came out sideways
+            // (iPhone 18, 2026-11-08: holdAngle 180, saved as portrait).
             if connection.isVideoMirroringSupported {
                 connection.automaticallyAdjustsVideoMirroring = false
                 connection.isVideoMirrored = false
             }
+            let angle = holdAngle
+            if connection.isVideoRotationAngleSupported(angle) {
+                connection.videoRotationAngle = angle
+            }
+            AimDevLog.note("[capture] want=\(Int(angle)) supported=\(connection.isVideoRotationAngleSupported(angle)) "
+                + "got=\(Int(connection.videoRotationAngle)) mirrored=\(connection.isVideoMirrored)")
             let group = DispatchGroup()
             let lock = NSLock()
             var results = [Data?](repeating: nil, count: count)
