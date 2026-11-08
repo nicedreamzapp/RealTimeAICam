@@ -977,11 +977,14 @@ enum AimPage {
 /// so portrait unless gravity clearly says the phone is on its side.
 ///
 /// AppleVis user LaBoheme, 2026-11-08: "When I tried to take a picture
-/// landscape, the picture came out sideways." The side used to come from
-/// the rotation coordinator, which follows the system's orientation and
-/// stays on portrait while Portrait Orientation Lock is on (common with
-/// VoiceOver). Gravity alone now decides, so landscape works with the lock on.
+/// landscape, the picture came out sideways." The old rule only believed the
+/// rotation coordinator when it said 0 or 180, but cameras are not all
+/// mounted the same: the iPhone 18's front camera reads 90/270 in landscape
+/// (the iPhone 12's reads 0/180), so its landscape shots were thrown back to
+/// portrait. Now gravity says WHETHER the phone is on its side, and the
+/// coordinator, which knows how each camera is mounted, says which angle.
 enum AimHold {
+    /// The usual upright angle (both cameras on older iPhones).
     static let portraitAngle: CGFloat = 90
     /// |z| above this: lying flat (face up or down).
     static let flatZ: Double = 0.75
@@ -993,13 +996,28 @@ enum AimHold {
         abs(z) < flatZ && abs(x) > sidewaysX && abs(x) > abs(y) + sidewaysLead
     }
 
-    /// The capture angle for how the phone is held; gravity in g, nil if
-    /// unknown. Back camera: 0 with the top of the phone to the left
-    /// (gravity -x), 180 with it to the right. The front sensor sits the
-    /// other way round, so its two are swapped.
-    static func captureAngle(gravity: (x: Double, y: Double, z: Double)?, front: Bool = false) -> CGFloat {
-        guard let g = gravity, isClearlyLandscape(x: g.x, y: g.y, z: g.z) else { return portraitAngle }
-        return (g.x < 0) != front ? 0 : 180
+    /// `upright` is this camera's portrait angle (the coordinator's preview
+    /// angle for the portrait-only screen); `levelAngle` the coordinator's
+    /// capture angle; gravity in g, nil if unknown.
+    static func captureAngle(levelAngle: CGFloat?, upright: CGFloat = portraitAngle,
+                             gravity: (x: Double, y: Double, z: Double)?, front: Bool = false) -> CGFloat {
+        guard let g = gravity, isClearlyLandscape(x: g.x, y: g.y, z: g.z) else { return upright }
+        let up = norm(upright)
+        // The coordinator agrees it is on its side: its angle fits this camera.
+        if let levelAngle {
+            let a = norm(levelAngle)
+            if a != up, a != norm(up + 180) { return a }
+        }
+        // It doesn't (no coordinator, or it lags): a quarter turn from upright,
+        // the way gravity says. Back camera: top of the phone to the left is
+        // upright - 90; the front camera faces the other way.
+        let left = g.x < 0
+        return norm(left != front ? up - 90 : up + 90)
+    }
+
+    static func norm(_ a: CGFloat) -> CGFloat {
+        let r = a.rounded().truncatingRemainder(dividingBy: 360)
+        return r < 0 ? r + 360 : r
     }
 }
 

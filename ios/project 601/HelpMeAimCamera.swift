@@ -27,6 +27,9 @@ final class AimCameraView: UIView {
     private let videoQueue = DispatchQueue(label: "aim.camera.video", qos: .userInitiated)
     private var device: AVCaptureDevice?
     private var rotation: AVCaptureDevice.RotationCoordinator?
+    /// This camera's portrait angle; 90 on older iPhones, not on every camera
+    /// (the iPhone 18's front one, 2026-11-08). From the coordinator.
+    private var uprightAngle: CGFloat = AimHold.portraitAngle
     private var position: AVCaptureDevice.Position = .back
     private var configured = false
     private let motion = CMMotionManager()
@@ -62,7 +65,8 @@ final class AimCameraView: UIView {
     /// Portrait unless the phone is clearly on its side (see AimHold).
     private var holdAngle: CGFloat {
         let g = motion.deviceMotion?.gravity
-        return AimHold.captureAngle(gravity: g.map { ($0.x, $0.y, $0.z) }, front: position == .front)
+        return AimHold.captureAngle(levelAngle: rotation?.videoRotationAngleForHorizonLevelCapture, upright: uprightAngle,
+                                    gravity: g.map { ($0.x, $0.y, $0.z) }, front: position == .front)
     }
 
     /// Dev diagnostics.
@@ -119,7 +123,8 @@ final class AimCameraView: UIView {
         else { return }
         session.addInput(input)
         device = camera
-        rotation = AVCaptureDevice.RotationCoordinator(device: camera, previewLayer: nil)
+        rotation = nil
+        uprightAngle = AimHold.portraitAngle
 
         if let _ = try? camera.lockForConfiguration() {
             if camera.isFocusModeSupported(.continuousAutoFocus) { camera.focusMode = .continuousAutoFocus }
@@ -147,9 +152,25 @@ final class AimCameraView: UIView {
                 connection.isVideoMirrored = position == .front
             }
         }
+        // The coordinator (made on the main thread, with the preview layer)
+        // knows how THIS camera is mounted: its preview angle is the upright
+        // one for the portrait-only screen, used for the preview and the
+        // analysed frames (the iPhone 18's front camera showed sideways at 90).
         DispatchQueue.main.async { [weak self] in
-            if let preview = self?.cachedPreviewLayer?.connection, preview.isVideoRotationAngleSupported(90) {
-                preview.videoRotationAngle = 90
+            guard let self, let layer = cachedPreviewLayer else { return }
+            let coordinator = AVCaptureDevice.RotationCoordinator(device: camera, previewLayer: layer)
+            let up = AimHold.norm(coordinator.videoRotationAngleForHorizonLevelPreview)
+            if let preview = layer.connection, preview.isVideoRotationAngleSupported(up) {
+                preview.videoRotationAngle = up
+            }
+            sessionQueue.async { [weak self] in
+                guard let self, device === camera else { return }
+                rotation = coordinator
+                uprightAngle = up
+                if let connection = videoOutput.connection(with: .video), connection.isVideoRotationAngleSupported(up) {
+                    connection.videoRotationAngle = up
+                }
+                AimDevLog.note("[camera] \(position == .front ? "front" : "back") upright=\(Int(up))")
             }
         }
         // 12 MP, not 48: a burst of five 48 MP frames is slow and huge, and
@@ -190,17 +211,8 @@ final class AimCameraView: UIView {
                 connection.automaticallyAdjustsVideoMirroring = false
                 connection.isVideoMirrored = false
             }
-            var angle = holdAngle
-            #if HELP_ME_AIM_SHOT_LOG
-            // DEV experiment (iPhone 18 front camera, 11/8): -aimFrontAngleOffset N turns the front angle by N.
-            let args = ProcessInfo.processInfo.arguments
-            if position == .front, let i = args.firstIndex(of: "-aimFrontAngleOffset"), i + 1 < args.count,
-               let off = Double(args[i + 1]) {
-                angle = CGFloat((Double(angle) + off).truncatingRemainder(dividingBy: 360))
-            }
-            AimDevLog.note("[capture] device=\(device?.deviceType.rawValue ?? "?") "
-                + "format=\(device.map { "\($0.activeFormat.formatDescription.dimensions.width)x\($0.activeFormat.formatDescription.dimensions.height)" } ?? "?")")
-            #endif
+            let angle = holdAngle
+            AimDevLog.note("[capture] device=\(device?.deviceType.rawValue ?? "?")")
             if connection.isVideoRotationAngleSupported(angle) {
                 connection.videoRotationAngle = angle
             }
@@ -255,7 +267,7 @@ extension AimCameraView: AVCaptureVideoDataOutputSampleBufferDelegate {
         // front (selfie) camera is treated as held upright.
         var turns = 0
         if position == .back {
-            turns = AimSteering.quarterTurns(levelAngle: holdAngle)
+            turns = AimSteering.quarterTurns(levelAngle: holdAngle - uprightAngle + AimHold.portraitAngle)
         }
         onFrame?(buffer, turns)
     }
