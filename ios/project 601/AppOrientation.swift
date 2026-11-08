@@ -20,7 +20,9 @@ final class AppOrientation: NSObject, UIApplicationDelegate {
         phoneMask = mask
         for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
             scene.keyWindow?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
-            if !on { scene.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait)) { _ in } }
+            // Ask now: iOS otherwise waits for the next tilt, so a phone
+            // already on its side stayed portrait (iPhone 18, 2026-11-08).
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { _ in }
         }
     }
 }
