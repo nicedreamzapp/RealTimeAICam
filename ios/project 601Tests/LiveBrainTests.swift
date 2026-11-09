@@ -490,55 +490,6 @@ struct LiveMoneyRulesTests {
     }
 }
 
-/// Matt 11/6, a live camera: the thing an answer names gets a box, placed where the preview shows it.
-struct LiveThingBoxTests {
-    @Test func theThingsAnAnswerNamesInOrder() {
-        let c = LiveThings.candidates("I see a red coffee mug next to a laptop.")
-        #expect(c.first == "mug")
-        #expect(c.contains("laptop"))
-        #expect(!c.contains("red") && !c.contains("next"))
-        #expect(LiveThings.candidates("A man in a blue shirt is smiling.").allSatisfy { !["man", "shirt", "blue"].contains($0) })
-        #expect(LiveThings.candidates("Yes.").isEmpty)
-        #expect(LiveThings.candidates("I see a blue double door with an exit sign above it.").first == "door")
-        #expect(!LiveThings.candidates("The floor and the wall are white.").contains("floor"))
-        #expect(LiveThings.candidates("one two three four five six seven eight nine ten eleven twelve").count <= 4)
-    }
-
-    @Test func theBoxLandsWhereTheAspectFilledPreviewShowsIt() {
-        // A 720x1280 portrait frame filling a 390x844 phone: scaled by 844/1280, cropped left and right.
-        let frame = CGSize(width: 720, height: 1280), view = CGSize(width: 390, height: 844)
-        let whole = LiveThings.viewRect(CGRect(x: 0, y: 0, width: 1, height: 1), frame: frame, view: view)
-        #expect(abs(whole.height - 844) < 0.5)
-        #expect(abs(whole.midX - 195) < 0.5)
-        let mid = LiveThings.viewRect(CGRect(x: 0.4, y: 0.4, width: 0.2, height: 0.2), frame: frame, view: view)
-        #expect(abs(mid.midX - 195) < 0.5 && abs(mid.midY - 422) < 0.5)
-        // The unfolded Duo (951x669): wider than tall, the top and bottom are cropped instead.
-        let duo = LiveThings.viewRect(CGRect(x: 0, y: 0, width: 1, height: 1), frame: frame, view: CGSize(width: 951, height: 669))
-        #expect(abs(duo.width - 951) < 0.5 && duo.height > 669)
-        #expect(LiveThings.viewRect(.zero, frame: .zero, view: view) == .zero)
-    }
-
-    @MainActor @Test func theBoxStaysAFewSeconds() {
-        #expect(LiveCallController.boxSeconds >= 2 && LiveCallController.boxSeconds <= 6)
-    }
-}
-
-/// The detector behind the box loads and runs on the hallway photo without a hitch. In the Simulator YOLOE returns no
-/// boxes at all (CoreML there gives nothing above the floor), so a door is only required on a real phone.
-struct LiveThingFinderTests {
-    @Test func theHallwayPhotoRunsThroughTheDetector() throws {
-        let url = try #require(Bundle.main.url(forResource: "SpeedCheckPhoto", withExtension: "jpg"))
-        let img = try #require(UIImage(contentsOfFile: url.path)?.cgImage)
-        #expect(AimObjectFinder() != nil)
-        let hit = LiveThingFinder().find(["door", "sign", "exit"], in: img)
-        #if !targetEnvironment(simulator)
-        #expect(hit != nil)
-        #else
-        _ = hit
-        #endif
-    }
-}
-
 /// Matt 11/6 "it stalls": within about half a second of the voice stopping, the orb already shows "looking".
 struct LiveNoDeadAirTests {
     @Test func lookingShowsWithinHalfASecondOfTheVoiceStopping() {
@@ -638,12 +589,6 @@ struct LiveStepsReview1Tests {
         #expect(LiveCamera.oneX(hasUltraWide: false, firstSwitchOver: 2) == 1)   // wide + tele: 1x is the wide lens
         #expect(LiveCamera.oneX(hasUltraWide: true, firstSwitchOver: 2) == 2)    // ultra wide + wide: 1x is the wide
         #expect(LiveCamera.oneX(hasUltraWide: true, firstSwitchOver: nil) == 1)
-    }
-
-    @Test func aMovedViewGetsNoBox() {
-        let a = [UInt8](repeating: 40, count: 256), b = [UInt8](repeating: 120, count: 256)
-        #expect(LiveProactive.difference(a, a) < LiveThings.movedTooFar)
-        #expect(LiveProactive.difference(a, b) >= LiveThings.movedTooFar)
     }
 }
 

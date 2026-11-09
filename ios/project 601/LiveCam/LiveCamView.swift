@@ -44,7 +44,6 @@ struct LiveCamView: View {
                 }
                 // No snapshot, ever (Matt 10/31, 11/8, 11/9: "it's gotta be invisible", "not in any mode"):
                 // the preview never freezes or flashes when a frame goes to the model.
-                thingBox
                 LinearGradient(colors: [.black.opacity(0.45), .clear, .clear, .black.opacity(0.8)], startPoint: .top, endPoint: .bottom)
                     .ignoresSafeArea().accessibilityHidden(true)
                 VStack(spacing: wide ? 10 : 16) {
@@ -107,37 +106,6 @@ struct LiveCamView: View {
         }
         .ignoresSafeArea()
         .accessibilityHidden(true)
-    }
-
-    // MARK: The box around the thing it named
-
-    /// A Camera-app-style yellow box on the thing the answer named, for a few seconds. Hidden from VoiceOver (the
-    /// answer says it); its name shows only with Words on screen on.
-    private var thingBox: some View {
-        GeometryReader { g in
-            if let b = call.thingBox {
-                let r = LiveThings.viewRect(b.box, frame: b.frame, view: g.size)
-                ZStack(alignment: .topLeading) {
-                    RoundedRectangle(cornerRadius: 10).stroke(LiveOrb.lookColor, lineWidth: 3)
-                        .shadow(color: .black.opacity(0.5), radius: 3)
-                        .frame(width: r.width, height: r.height)
-                        .offset(x: r.minX, y: r.minY)
-                    if call.showCaption {
-                        Text(b.name).font(.footnote.weight(.bold)).foregroundStyle(.black)
-                            .padding(.horizontal, 8).padding(.vertical, 3)
-                            .background(LiveOrb.lookColor, in: Capsule())
-                            // Kept on screen when the thing runs off the edge (the box itself may).
-                            .offset(x: min(max(12, r.minX + 6), g.size.width - 140), y: max(54, r.minY - 24))
-                    }
-                }
-                .id(b.id)
-                .transition(.opacity)
-            }
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-        .animation(.easeInOut(duration: 0.25), value: call.thingBox)
     }
 
     // MARK: Top: mode and flip

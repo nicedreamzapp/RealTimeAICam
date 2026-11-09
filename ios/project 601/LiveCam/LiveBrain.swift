@@ -221,49 +221,6 @@ struct LiveRotation {
     }
 }
 
-// MARK: - The thing it named, boxed on screen (Matt 11/6: "it's a live camera")
-
-enum LiveThings {
-    /// Colors, sizes and other words YOLOE also has as classes but that are never "the thing".
-    static let notThings: Set<String> = ["red", "blue", "green", "yellow", "white", "black", "gray", "grey", "brown", "orange",
-        "pink", "purple", "silver", "gold", "dark", "light", "bright", "big", "small", "large", "little", "tall", "short", "long",
-        "wooden", "metal", "plastic", "glass", "open", "closed", "left", "right", "ahead", "near", "far", "top", "bottom", "side",
-        "middle", "center", "next", "behind", "above", "below", "under", "over", "front", "back", "double", "single", "old", "new",
-        "yes", "not", "sure", "can", "tell", "looks", "look", "see", "seems", "maybe", "probably", "about", "around", "here"]
-    /// The view moved this much (mean thumbnail difference, 0...255) since the answered frame: no box (review 11/6).
-    static let movedTooFar: Double = 12
-    /// Never boxed: the room itself. (A door or a window can be: the hallway test answered "a blue double door".)
-    static let notBoxable: Set<String> = ["floor", "wall", "walls", "ceiling", "room", "space", "background", "air", "ground",
-                                          "sky", "light", "lights", "lighting", "corner"]
-    /// The words of an answer that may be a thing in view, in the order said, at most four ("I see a red coffee mug
-    /// next to a laptop" -> mug, coffee, laptop). People, the phone itself and always-there things are left out.
-    static func candidates(_ answer: String) -> [String] {
-        let words = LiveWords.normalize(answer).split(separator: " ").map(String.init)
-        var out: [String] = []
-        for w in words where w.count > 2 && !LiveWords.stopWords.contains(w) && !notThings.contains(w)
-            && !LiveWords.personWords.contains(w) && !LiveWords.selfWords.contains(w) && !notBoxable.contains(w)
-            && !out.contains(w) {
-            out.append(w)
-        }
-        // The thing is usually the last word of its phrase ("coffee mug"): later words of a pair go first.
-        var ordered: [String] = []
-        for (i, w) in out.enumerated() {
-            if i + 1 < out.count, let a = words.firstIndex(of: w), let b = words.firstIndex(of: out[i + 1]), b == a + 1 { continue }
-            ordered.append(w)
-        }
-        return Array((ordered + out.filter { !ordered.contains($0) }).prefix(4))
-    }
-
-    /// A box (normalized, top-left origin, in the camera frame) on a view that shows that frame aspect-filled.
-    static func viewRect(_ box: CGRect, frame: CGSize, view: CGSize) -> CGRect {
-        guard frame.width > 0, frame.height > 0 else { return .zero }
-        let s = max(view.width / frame.width, view.height / frame.height)
-        let dx = (view.width - frame.width * s) / 2, dy = (view.height - frame.height * s) / 2
-        return CGRect(x: box.minX * frame.width * s + dx, y: box.minY * frame.height * s + dy,
-                      width: box.width * frame.width * s, height: box.height * frame.height * s)
-    }
-}
-
 // MARK: - A goal for the visit (Matt 11/6: "I need to make it the most useful it can be")
 
 /// "I'm changing a tire", "help me fix my sink": Live Cam remembers what they're doing for the visit, gives the next

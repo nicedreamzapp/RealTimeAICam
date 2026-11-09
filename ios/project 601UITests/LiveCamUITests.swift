@@ -216,23 +216,54 @@ final class LiveCamUITests: XCTestCase {
         app.terminate()
     }
 
-    /// Matt 11/6, a live camera: the frame freezes with a shutter flash when it looks, and the thing the answer
-    /// names gets a box for a few seconds (the hallway photo has doors; the box itself is hidden from VoiceOver, so
-    /// this keeps a screenshot and the log says what was found).
+    /// No snapshot, ever (Matt 10/31, 11/8, 11/9: "it's gotta be invisible"): while it looks and after it answers,
+    /// the screen never flashes white and no yellow box is drawn over the view. The frozen-frame view, the flash and
+    /// the box are gone from the code; this fails if any of them comes back.
     @MainActor
-    func testShutterFreezeAndBox() throws {
+    func testNoSnapshotFlashOrBox() throws {
         continueAfterFailure = false
         let app = launch(env: ["RTCAM_FAKE_LIVE_ANSWER": "I see a blue double door with an exit sign above it.",
-                               "RTCAM_FAKE_LIVE_DELAY": "1", "RTCAM_FAKE_THING_BOX": "0.27,0.33,0.36,0.42"])
+                               "RTCAM_FAKE_LIVE_DELAY": "1"])
         openLiveCam(app)
+        let before = Self.measure(app.screenshot().image)
         ask(app, "What is in front of me?")
+        var brightest = before.brightness
+        let until = Date().addingTimeInterval(3)
+        while Date() < until {   // a flash or freeze would land in the first second of the look
+            brightest = max(brightest, Self.measure(app.screenshot().image).brightness)
+        }
         let answered = NSPredicate { _, _ in self.captionText(app).contains("blue double door") }
         expectation(for: answered, evaluatedWith: NSObject())
         waitForExpectations(timeout: 60)
-        sleep(3)   // the detector runs after the answer (about 1.5 s in the Simulator)
-        keep(app, "livecam-box")
+        sleep(2)   // where a box would have shown
+        let after = Self.measure(app.screenshot().image)
+        keep(app, "livecam-no-snapshot")
+        XCTAssertLessThan(brightest - before.brightness, 20, "the screen flashed when it looked")
+        XCTAssertLessThan(after.yellow - before.yellow, 300, "a yellow box appeared over the view")
         goBack(app)
         app.terminate()
+    }
+
+    /// Mean brightness (0-255) and the count of the look color's yellow pixels in the middle of the screen, where a
+    /// flash or a box would show (top bar, orb and buttons left out: they may turn yellow on their own).
+    private static func measure(_ image: UIImage) -> (brightness: Double, yellow: Int) {
+        guard let cg = image.cgImage else { return (0, 0) }
+        let w = 90, h = 195
+        var px = [UInt8](repeating: 0, count: w * h * 4)
+        guard let ctx = CGContext(data: &px, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return (0, 0) }
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        var sum = 0.0, yellow = 0, n = 0
+        for y in Int(Double(h) * 0.15) ..< Int(Double(h) * 0.6) {   // rows from the top: CGContext flips, symmetric band
+            for x in 0 ..< w {
+                let i = (y * w + x) * 4
+                let r = Int(px[i]), g = Int(px[i + 1]), b = Int(px[i + 2])
+                sum += Double(r + g + b) / 3; n += 1
+                if r > 220, g > 170, g < 235, b < 110 { yellow += 1 }
+            }
+        }
+        return (n == 0 ? 0 : sum / Double(n), yellow * 100)   // scaled back to roughly screen pixels
     }
 
     /// Matt 11/6, a live camera: the shutter asks about the view right now (loud places), zoom pills, caption bubble.

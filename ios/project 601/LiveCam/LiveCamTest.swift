@@ -75,11 +75,6 @@ enum LiveCamTest {
     /// Acts as if speech recognition kept failing, right after the greeting (layout of the "can't hear you" note).
     static var forceCantHear: Bool { args.contains("-liveCamCantHear") }
     static var fakeAnswer: String? { ProcessInfo.processInfo.environment["RTCAM_FAKE_LIVE_ANSWER"] }
-    static var fakeThingBox: CGRect? {
-        guard let v = ProcessInfo.processInfo.environment["RTCAM_FAKE_THING_BOX"]?.split(separator: ",").compactMap({ Double($0) }),
-              v.count == 4 else { return nil }
-        return CGRect(x: v[0], y: v[1], width: v[2], height: v[3])
-    }
     static var fakeDelay: Double { Double(ProcessInfo.processInfo.environment["RTCAM_FAKE_LIVE_DELAY"] ?? "") ?? 0 }
     #else
     static let active = false
