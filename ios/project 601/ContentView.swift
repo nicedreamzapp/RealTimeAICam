@@ -254,7 +254,6 @@ struct ContentView: View {
         guard let shared = sharedInbox.pending else { return }
         sharedInbox.pending = nil
         // Live Cam ends its call when its cover goes away.
-        let wasLiveCam = showLiveCam
         showLiveCam = false
         if mode != .home {
             performReset()
@@ -263,8 +262,9 @@ struct ContentView: View {
         }
         viewModel.stopSession()
         SpeechManager.shared.resetSpeechState()
-        // Live Cam's cover finishes going away before the next one comes up.
-        DispatchQueue.main.asyncAfter(deadline: .now() + (wasLiveCam ? 0.7 : 0)) {
+        // Live Cam's cover, or the guide sheet HomeView closes for this, finishes going
+        // away before the next one comes up.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
             sharedImage = shared
         }
     }

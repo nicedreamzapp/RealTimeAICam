@@ -21,6 +21,14 @@ struct project_601App: App {
         // `-rtcamFreshRatePrompt`: the rating prompt as on a new install.
         if ProcessInfo.processInfo.arguments.contains("-rtcamFreshRatePrompt") { RatePrompt.resetForTests() }
         #endif
+        #if DEBUG
+        // `-rtcamOpenURL <url>`: the Share Extension's hand-over without the system's
+        // "Open in" prompt, so the Simulator can test it unattended.
+        let args = ProcessInfo.processInfo.arguments
+        if let i = args.firstIndex(of: "-rtcamOpenURL"), i + 1 < args.count, let url = URL(string: args[i + 1]) {
+            DispatchQueue.main.async { SharedImageInbox.shared.handle(url) }
+        }
+        #endif
         // Rating prompt: never during the first launch.
         RatePrompt.noteLaunch()
         #if DEBUG

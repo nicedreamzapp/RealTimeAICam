@@ -170,6 +170,11 @@ struct HomeView: View {
                     }
                 }
         }
+        // A picture shared from another app opens over home; a sheet still up would block it.
+        .onReceive(SharedImageInbox.shared.$pending) { shared in
+            guard shared != nil, showInstructions else { return }
+            showInstructions = false
+        }
         .onChange(of: modelDownloader.progress) { _, value in
             announceDownloadProgress(value)
         }
