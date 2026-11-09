@@ -108,7 +108,8 @@ final class LiveCamUITests: XCTestCase {
         }
         var frames: [(String, CGRect)] = []
         for n in names {
-            let b = app.buttons[n].firstMatch
+            // Quiet is a toggle (.isToggle), which XCUITest reports as a switch, not a button.
+            let b = app.buttons[n].exists ? app.buttons[n].firstMatch : app.switches[n].firstMatch
             XCTAssertTrue(b.exists, "\(n) missing")
             XCTAssertGreaterThanOrEqual(min(b.frame.width, b.frame.height), 44, "\(n) under 44 pt: \(b.frame)")
             XCTAssertTrue(screen.contains(b.frame), "\(n) off screen: \(b.frame) in \(screen)")
@@ -196,7 +197,8 @@ final class LiveCamUITests: XCTestCase {
         XCTAssertGreaterThanOrEqual(min(light.frame.width, light.frame.height), 44)
         XCTAssertTrue(app.windows.firstMatch.frame.contains(light.frame), "flashlight off screen: \(light.frame)")
         for n in ["Back", "Quiet"].map({ T($0) }) {
-            XCTAssertFalse(light.frame.intersects(app.buttons[n].firstMatch.frame), "flashlight overlaps \(n)")
+            let other = app.buttons[n].exists ? app.buttons[n].firstMatch : app.switches[n].firstMatch   // Quiet is a toggle
+            XCTAssertFalse(light.frame.intersects(other.frame), "flashlight overlaps \(n)")
         }
         XCTAssertEqual(light.value as? String, T("Off"))
         light.tap()
