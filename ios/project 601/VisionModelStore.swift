@@ -171,6 +171,16 @@ final class VisionModelDownloader: NSObject, ObservableObject {
 
     private override init() { super.init() }
 
+    #if DEBUG
+    /// Screenshots only (`-rtcamFakeDownloading <level>`): the Models screen as if that level were
+    /// 42 percent down. Nothing is fetched.
+    func debugPretendDownloading(_ level: ModelLevel) {
+        states[level] = .downloading
+        current = level
+        progress = 0.42
+    }
+    #endif
+
     func state(_ level: ModelLevel) -> State {
         if let s = states[level] { return s }
         return VisionModelStore.isInstalled(level) ? .ready : .idle

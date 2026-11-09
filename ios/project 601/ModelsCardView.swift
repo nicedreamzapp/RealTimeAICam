@@ -85,38 +85,87 @@ enum ModelsText {
         return L("Using %@ for mail, money and medicine, %@ for everything else.", page.name, scene.name)
     }
 
-    /// Everything about one model in one sentence, after its name.
+    /// What the model is like, after its status: what it is for, how fast, how accurate.
     @MainActor
-    static func row(_ level: ModelLevel) -> String {
+    static func details(_ level: ModelLevel) -> String {
         var parts = [level.blurb]
-        let downloader = VisionModelDownloader.shared
-        let state = downloader.state(level)
-        if !level.fitsThisPhone {
-            parts.append(L("Too big for this phone's memory."))
-        } else if case .downloading = state {
-            let pct = downloader.current == level ? Int(downloader.progress * 100) : 0
-            parts.append(L("Downloading, %ld percent.", pct))
-        } else if state == .queued {
-            parts.append(L("Waiting to download."))
-        } else if state == .verifying {
-            parts.append(L("Checking the download."))
-        } else if level.isBundled {
-            // the blurb already says it is built in
-        } else if VisionModelStore.isInstalled(level) {
-            parts.append(L("On this phone."))
-        } else {
-            parts.append(L("Not downloaded, %@. Tap to download it.", level.sizeDescription))
+        if case .failed = VisionModelDownloader.shared.state(level) {
+            parts.append(L("The last download stopped. Pick it to try again."))
         }
-        if case .failed = state { parts.append(L("The last download stopped. Pick it to try again.")) }
         if level.fitsThisPhone, let s = ModelPicker.estimate(level, kind: .scene) {
             parts.append(L("Answers in %@.", ModelPicker.spoken(s)))
         }
         parts.append(L("Accuracy %ld out of 100.", level.score))
         return parts.joined(separator: " ")
     }
+
+    /// Where a model stands on this phone, in the words on its tag.
+    enum Status: Equatable {
+        case builtIn, onPhone, downloading(Int), queued, verifying, notDownloaded, tooBig
+
+        @MainActor
+        static func of(_ level: ModelLevel) -> Status {
+            let downloader = VisionModelDownloader.shared
+            switch downloader.state(level) {
+            case .downloading: return .downloading(downloader.current == level ? Int(downloader.progress * 100) : 0)
+            case .queued: return .queued
+            case .verifying: return .verifying
+            default: break
+            }
+            if level.isBundled { return .builtIn }
+            if VisionModelStore.isInstalled(level) { return .onPhone }
+            return level.fitsThisPhone ? .notDownloaded : .tooBig
+        }
+
+        var isHere: Bool { self == .builtIn || self == .onPhone }
+        var isBusy: Bool {
+            switch self {
+            case .downloading, .queued, .verifying: true
+            default: false
+            }
+        }
+
+        /// The tag on screen.
+        func tag(_ level: ModelLevel) -> String {
+            switch self {
+            case .builtIn: L("Built in")
+            case .onPhone: L("On this phone")
+            case let .downloading(p): L("Downloading · %ld%%", p)
+            case .queued: L("Waiting to download")
+            case .verifying: L("Checking the download")
+            case .notDownloaded: L("Not downloaded · %@", level.sizeDescription)
+            case .tooBig: L("Too big for this phone")
+            }
+        }
+
+        /// The same, as VoiceOver says it after the name.
+        func spoken(_ level: ModelLevel) -> String {
+            switch self {
+            case .builtIn: L("built in, on this phone")
+            case .onPhone: L("on this phone")
+            case let .downloading(p): L("downloading, %ld percent", p)
+            case .queued: L("waiting to download")
+            case .verifying: L("checking the download")
+            case .notDownloaded: L("not downloaded")
+            case .tooBig: L("too big for this phone's memory")
+            }
+        }
+    }
+
+    /// "On this phone: Balanced (built in), Sharp", or the built-in one alone.
+    @MainActor
+    static func onPhoneSummary() -> String {
+        let here = ModelPicker.installed
+        if here.allSatisfy(\.isBundled) {
+            return L("Only the built-in %@ model is on this phone.", (here.first ?? .balanced).name)
+        }
+        let names = here.map { $0.isBundled ? L("%@ (built in)", $0.name) : $0.name }
+        return L("On this phone: %@", names.joined(separator: ", "))
+    }
 }
 
-/// The chooser: big rows, one sentence each, nothing nested.
+/// The chooser: one list of models, each saying in plain words whether it is on this
+/// phone, whether it is the one answering now, and the one thing you can do with it.
 struct ModelsChooserView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var downloader = VisionModelDownloader.shared
@@ -132,13 +181,19 @@ struct ModelsChooserView: View {
 
     var body: some View {
         let redraw = [choice, priority, "\(balancedSeconds)"]
+        let downloaded = ModelPicker.installed.filter { !$0.isBundled }
         NavigationStack {
+          ScrollViewReader { proxy in
             List {
                 Section {
-                    Text(L("You don't need to change anything. Automatic picks the best model this phone can run, and What's this? keeps working while it downloads."))
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(ModelsText.onPhoneSummary()).font(.headline)
+                        Text(L("You don't need to change anything. Automatic picks the best model this phone can run, and What's this? keeps working while it downloads."))
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                    .accessibilityElement(children: .combine)
                 }
-
-                onThisPhone
 
                 Section(L("What matters more to you?")) {
                     ForEach(ModelPriority.allCases) { p in
@@ -150,22 +205,27 @@ struct ModelsChooserView: View {
                     }
                 }
 
-                Section(L("Which model")) {
-                    bigRow(title: L("Automatic (recommended)"),
-                           detail: ModelsText.summary(checking: setup.checkingSpeed, downloading: nil,
-                                                      progress: 0, redraw: redraw),
-                           selected: choice == "auto") {
-                        choice = "auto"
-                        confirm(L("Automatic selected.") + " " + ModelsText.summary(checking: false, downloading: nil, progress: 0))
-                        askAboutAutomatic()
-                    }
+                Section {
+                    automaticRow(redraw: redraw)
                     ForEach(ModelLevel.allCases) { level in
                         modelRow(level)
-                        stopRow(level)
                     }
+                } header: {
+                    Text(L("Which model")).id("whichModel")
+                } footer: {
+                    Text(downloaded.isEmpty ? L("Swipe left on a downloaded model to delete it.")
+                         : L("Downloaded models use %@. Swipe left on one to delete it.", ModelsText.totalSize(downloaded)))
                 }
-
             }
+            #if DEBUG
+            // Screenshots only: `-rtcamModelsList` scrolls straight to the model list.
+            .onAppear {
+                if ProcessInfo.processInfo.arguments.contains("-rtcamModelsList") {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { proxy.scrollTo("whichModel", anchor: .top) }
+                }
+            }
+            #endif
+          }
             .navigationTitle(L("Models"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -206,47 +266,141 @@ struct ModelsChooserView: View {
         Binding(get: { item.wrappedValue != nil }, set: { if !$0 { item.wrappedValue = nil } })
     }
 
-    /// Every model file the phone holds right now, with its size and a Delete button.
-    @ViewBuilder private var onThisPhone: some View {
-        let installed = ModelLevel.allCases.filter { VisionModelStore.isInstalled($0) }
-        let downloaded = installed.filter { !$0.isBundled }
-        Section {
-            ForEach(installed) { level in
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(level.name).font(.headline)
-                        Text(level.isBundled ? L("%@. Built into the app, can't be deleted.", level.sizeDescription)
-                             : level.sizeDescription)
-                            .font(.subheadline).foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 0)
-                    if !level.isBundled {
-                        Button(L("Delete"), role: .destructive) { askDelete = level }
-                            .buttonStyle(.bordered)
-                            .tint(.red)
-                            .accessibilityLabel(L("Delete %@ to free %@", level.name, level.sizeDescription))
-                    }
-                }
-                .frame(minHeight: 64)
-                .accessibilityElement(children: level.isBundled ? .combine : .contain)
-            }
-        } header: {
-            Text(L("On this phone"))
-        } footer: {
-            Text(downloaded.isEmpty ? L("Only the built-in model is on this phone.")
-                 : L("Downloaded models use %@.", ModelsText.totalSize(downloaded)))
+    // MARK: Rows
+
+    /// A small rounded tag: "On this phone", "Using now"...
+    private func tag(_ text: String, color: Color, filled: Bool) -> some View {
+        Text(text)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(filled ? Color.black : color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(filled ? color : color.opacity(0.18)))
+            .overlay(Capsule().stroke(color.opacity(filled ? 0 : 0.6), lineWidth: 1))
+            .fixedSize()
+    }
+
+    private func color(_ status: ModelsText.Status) -> Color {
+        switch status {
+        case .builtIn, .onPhone: .green
+        case .downloading, .queued, .verifying: .blue
+        case .notDownloaded: .gray
+        case .tooBig: .orange
         }
     }
 
-    /// A visible Stop button under a level that is downloading or waiting its turn.
-    @ViewBuilder private func stopRow(_ level: ModelLevel) -> some View {
-        let state = downloader.state(level)
-        if !level.isBundled, state == .queued || state == .downloading || state == .verifying {
-            Button(role: .destructive) { stop(level) } label: {
-                Label(L("Stop downloading %@", level.name), systemImage: "stop.circle.fill")
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+    /// The one button on the right of a row, as a plain action.
+    private enum RowAction { case use, download, stop }
+
+    private func action(for level: ModelLevel, status: ModelsText.Status, inUse: Bool) -> RowAction? {
+        if status.isBusy { return .stop }
+        if status == .notDownloaded { return notStarted(level) ? .download : nil }
+        if status.isHere { return inUse ? nil : .use }
+        return nil
+    }
+
+    private func title(_ a: RowAction) -> String {
+        switch a {
+        case .use: L("Use this")
+        case .download: L("Download")
+        case .stop: L("Stop")
+        }
+    }
+
+    private func run(_ a: RowAction, _ level: ModelLevel) {
+        switch a {
+        case .use: use(level)
+        case .download: askDownload = level       // nothing downloads until they say yes
+        case .stop: stop(level)
+        }
+    }
+
+    @ViewBuilder private func actionButton(_ a: RowAction?, perform: @escaping () -> Void) -> some View {
+        if let a {
+            if a == .stop {
+                Button(role: .destructive, action: perform) { Text(title(a)) }
+                    .buttonStyle(.bordered).tint(.red)
+            } else if a == .download {
+                Button(action: perform) { Label(title(a), systemImage: "arrow.down.circle") }
+                    .buttonStyle(.borderedProminent).tint(.teal)
+            } else {
+                Button(action: perform) { Text(title(a)) }
+                    .buttonStyle(.bordered).tint(.teal)
             }
-            .tint(.red)
+        }
+    }
+
+    private func automaticRow(redraw: [String]) -> some View {
+        let selected = choice == "auto"
+        let detail = ModelsText.summary(checking: setup.checkingSpeed, downloading: nil, progress: 0, redraw: redraw)
+        let pick = {
+            choice = "auto"
+            confirm(L("Automatic selected.") + " " + ModelsText.summary(checking: false, downloading: nil, progress: 0))
+            askAboutAutomatic()
+        }
+        return HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text(L("Automatic (recommended)")).font(.headline)
+                    if selected { tag(L("Using now"), color: .teal, filled: true) }
+                }
+                Text(detail).font(.subheadline).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+            actionButton(selected ? nil : .use, perform: pick)
+        }
+        .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([L("Automatic, recommended"), selected ? L("using now") : L("Use this")].joined(separator: ", "))
+        .accessibilityHint(detail)
+        .accessibilityAddTraits(selected ? [.isSelected] : [.isButton])
+        .accessibilityAction { if !selected { pick() } }
+    }
+
+    private func modelRow(_ level: ModelLevel) -> some View {
+        let status = ModelsText.Status.of(level)
+        let inUse = status.isHere && ModelPicker.inUse.contains(level)
+        let act = action(for: level, status: status, inUse: inUse)
+        let deletable = !level.isBundled && status == .onPhone
+        var spoken = [level.name, status.spoken(level)]
+        if inUse { spoken.append(L("using now")) }
+        spoken.append(level.sizeDescription)
+        if let act { spoken.append(title(act)) }
+        return HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text(level.name).font(.headline)
+                    if inUse { tag(L("Using now"), color: .teal, filled: true) }
+                }
+                tag(status.tag(level), color: color(status), filled: false)
+                Text(ModelsText.details(level)).font(.subheadline).foregroundStyle(.secondary)
+                Text(level.technicalLine).font(.caption).foregroundStyle(.secondary)
+                if case .downloading = status, downloader.current == level {
+                    ProgressView(value: downloader.progress).tint(.teal)
+                }
+            }
+            Spacer(minLength: 0)
+            actionButton(act) { run(act!, level) }
+        }
+        .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+        .opacity(status == .tooBig ? 0.55 : 1)
+        // One VoiceOver stop: "Sharp, on this phone, using now, 2 GB". Double-tap does the
+        // row's one action; Delete and Stop are in the actions rotor too.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(spoken.joined(separator: ", "))
+        .accessibilityHint(ModelsText.details(level) + " " + level.technicalLine)
+        .accessibilityAddTraits(act == nil ? [] : [.isButton])
+        .accessibilityAction { if let act { run(act, level) } }
+        // Delete is the swipe-left action and a VoiceOver action, never an extra stop.
+        .swipeActions {
+            if deletable {
+                Button(L("Delete"), role: .destructive) { askDelete = level }
+            }
+        }
+        .accessibilityActions {
+            if deletable {
+                Button(L("Delete %@ to free %@", level.name, level.sizeDescription)) { askDelete = level }
+            }
         }
     }
 
@@ -272,66 +426,15 @@ struct ModelsChooserView: View {
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 
-    private func modelRow(_ level: ModelLevel) -> some View {
-        let selected = choice == level.rawValue
-        let state = downloader.state(level)
-        let downloading: Bool = { if case .downloading = state { return true }; return false }()
-        let sentence = ModelsText.row(level)
-        return Button { pick(level) } label: {
-            HStack(spacing: 12) {
-                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .font(.title2)
-                    .foregroundStyle(selected ? .teal : .secondary)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(level.name).font(.headline)
-                    Text(sentence).font(.subheadline).foregroundStyle(.secondary)
-                    Text(level.technicalLine).font(.caption).foregroundStyle(.secondary)
-                    if downloading, downloader.current == level {
-                        ProgressView(value: downloader.progress).tint(.teal)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-            .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
-            .contentShape(Rectangle())
-            .opacity(level.fitsThisPhone ? 1 : 0.5)
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(level.name + ". " + sentence + " " + level.technicalLine)
-        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
-        .accessibilityHint(level.fitsThisPhone && !selected ? L("Double-tap to use %@.", level.name) : "")
-        // Delete is the swipe-left action and a VoiceOver action (swipe up or
-        // down to hear it), so it is never an extra stop on every row.
-        .swipeActions {
-            if !level.isBundled, VisionModelStore.isInstalled(level) {
-                Button(L("Delete"), role: .destructive) { askDelete = level }
-            }
-        }
-        .accessibilityActions {
-            if !level.isBundled, VisionModelStore.isInstalled(level) {
-                Button(L("Delete %@ to free %@", level.name, level.sizeDescription)) { askDelete = level }
-            }
-            if !level.isBundled, downloading || state == .queued {
-                Button(L("Stop downloading %@", level.name)) { stop(level) }
-            }
-        }
-    }
+    // MARK: Actions
 
-    private func pick(_ level: ModelLevel) {
+    private func use(_ level: ModelLevel) {
         guard level.fitsThisPhone else {
             confirm(L("%@ is too big for this phone's memory.", level.name))
             return
         }
-        if VisionModelStore.isInstalled(level) {
-            choice = level.rawValue
-            confirm(L("%@ selected. What's this? uses it from now on.", level.name))
-        } else if notStarted(level) {
-            askDownload = level       // nothing downloads until they say yes
-        } else {
-            choice = level.rawValue   // already on its way
-            confirm(L("%@ selected.", level.name))
-        }
+        choice = level.rawValue
+        confirm(L("%@ selected. What's this? uses it from now on.", level.name))
     }
 
     private func startConfirmed(_ level: ModelLevel) {
@@ -346,9 +449,18 @@ struct ModelsChooserView: View {
         confirm(L("Stopped. %@ won't download unless you choose it.", level.name))
     }
 
+    /// Deleting the model in use moves to the best one left (ModelSetup.delete goes back to
+    /// automatic) and says which.
     private func delete(_ level: ModelLevel) {
+        let wasInUse = ModelPicker.inUse.contains(level)
         setup.delete(level)
-        confirm(L("%@ deleted. %@ freed.", level.name, level.sizeDescription))
+        choice = ModelPicker.manualLevel?.rawValue ?? "auto"
+        if wasInUse {
+            confirm(L("%@ deleted. %@ freed. Now using %@.", level.name, level.sizeDescription,
+                      ModelPicker.level(for: .scene).name))
+        } else {
+            confirm(L("%@ deleted. %@ freed.", level.name, level.sizeDescription))
+        }
     }
 
     /// Not on the phone and not on its way (never started, stopped, or failed).

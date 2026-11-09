@@ -815,17 +815,6 @@
         }
       }
     },
-    "Checking the download." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Revisando la descarga."
-          }
-        }
-      }
-    },
     "Choose your preferred voice for speech feedback" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1420,17 +1409,6 @@
         }
       }
     },
-    "Double-tap to use %@." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Toca dos veces para usar %@."
-          }
-        }
-      }
-    },
     "Download %@ once, then it works offline" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1493,17 +1471,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Descargando el modelo %@… %ld%%"
-          }
-        }
-      }
-    },
-    "Downloading, %ld percent." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Descargando, %ld por ciento."
           }
         }
       }
@@ -3158,17 +3125,6 @@
         }
       }
     },
-    "On this phone." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "En este teléfono."
-          }
-        }
-      }
-    },
     "On-device engine: llama.cpp by ggml-org (MIT)" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4720,17 +4676,6 @@
         }
       }
     },
-    "Too big for this phone's memory." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Demasiado grande para la memoria de este teléfono."
-          }
-        }
-      }
-    },
     "Translate" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5068,17 +5013,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "El volumen está apagado. Súbelo para escuchar la app."
-          }
-        }
-      }
-    },
-    "Waiting to download." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Esperando para descargar."
           }
         }
       }
@@ -5670,42 +5604,12 @@
         }
       }
     },
-    "%@. Built into the app, can't be deleted." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@. Incluido en la app, no se puede eliminar."
-          }
-        }
-      }
-    },
     "On this phone" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "En este teléfono"
-          }
-        }
-      }
-    },
-    "Only the built-in model is on this phone." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Solo el modelo incluido está en este teléfono."
-          }
-        }
-      }
-    },
-    "Downloaded models use %@." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Los modelos descargados ocupan %@."
           }
         }
       }
@@ -5726,16 +5630,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Detener descarga"
-          }
-        }
-      }
-    },
-    "Not downloaded, %@. Tap to download it." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sin descargar, %@. Toca para descargarlo."
           }
         }
       }
@@ -5834,6 +5728,292 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ir a la pantalla de inicio"
+          }
+        }
+      }
+    },
+    "Using %@, the model on this phone." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uso %@, el modelo que hay en este teléfono."
+          }
+        }
+      }
+    },
+    "Built in" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Incluido"
+          }
+        }
+      }
+    },
+    "Downloading · %ld%%" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descargando · %ld %%"
+          }
+        }
+      }
+    },
+    "Waiting to download" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esperando para descargar"
+          }
+        }
+      }
+    },
+    "Checking the download" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comprobando la descarga"
+          }
+        }
+      }
+    },
+    "Not downloaded · %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin descargar · %@"
+          }
+        }
+      }
+    },
+    "Too big for this phone" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demasiado grande para este teléfono"
+          }
+        }
+      }
+    },
+    "built in, on this phone" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "incluido, en este teléfono"
+          }
+        }
+      }
+    },
+    "on this phone" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "en este teléfono"
+          }
+        }
+      }
+    },
+    "downloading, %ld percent" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "descargando, %ld por ciento"
+          }
+        }
+      }
+    },
+    "waiting to download" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "esperando para descargar"
+          }
+        }
+      }
+    },
+    "checking the download" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "comprobando la descarga"
+          }
+        }
+      }
+    },
+    "not downloaded" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sin descargar"
+          }
+        }
+      }
+    },
+    "too big for this phone's memory" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "demasiado grande para la memoria de este teléfono"
+          }
+        }
+      }
+    },
+    "Only the built-in %@ model is on this phone." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En este teléfono solo está el modelo %@ incluido."
+          }
+        }
+      }
+    },
+    "%@ (built in)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (incluido)"
+          }
+        }
+      }
+    },
+    "On this phone: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En este teléfono: %@"
+          }
+        }
+      }
+    },
+    "Swipe left on a downloaded model to delete it." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desliza a la izquierda sobre un modelo descargado para eliminarlo."
+          }
+        }
+      }
+    },
+    "Downloaded models use %@. Swipe left on one to delete it." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los modelos descargados ocupan %@. Desliza a la izquierda sobre uno para eliminarlo."
+          }
+        }
+      }
+    },
+    "Use this" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usar este"
+          }
+        }
+      }
+    },
+    "Stop" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detener"
+          }
+        }
+      }
+    },
+    "Using now" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En uso"
+          }
+        }
+      }
+    },
+    "Automatic, recommended" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automático, recomendado"
+          }
+        }
+      }
+    },
+    "using now" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "en uso"
+          }
+        }
+      }
+    },
+    "%@ deleted. %@ freed. Now using %@." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ eliminado. Se liberaron %@. Ahora se usa %@."
+          }
+        }
+      }
+    },
+    "The picture model isn't on this phone. Open Settings, then Models, to download one." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El modelo de imágenes no está en este teléfono. Abre Ajustes y luego Modelos para descargar uno."
           }
         }
       }

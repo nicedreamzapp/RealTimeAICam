@@ -22,6 +22,7 @@ struct project_601App: App {
         if ProcessInfo.processInfo.arguments.contains("-rtcamFreshRatePrompt") { RatePrompt.resetForTests() }
         #endif
         #if DEBUG
+        DispatchQueue.main.async { _ = Self.pretendDownloadingIfAsked() }
         // `-rtcamOpenURL <url>`: the Share Extension's hand-over without the system's
         // "Open in" prompt, so the Simulator can test it unattended.
         let args = ProcessInfo.processInfo.arguments
@@ -46,6 +47,18 @@ struct project_601App: App {
         }
         #endif
     }
+
+    #if DEBUG
+    /// `-rtcamFakeDownloading <level>` with `-rtcamShowModels`: a download shown in progress.
+    @MainActor
+    private static func pretendDownloadingIfAsked() -> Bool {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-rtcamFakeDownloading"), i + 1 < args.count,
+              let level = ModelLevel(rawValue: args[i + 1]) else { return false }
+        VisionModelDownloader.shared.debugPretendDownloading(level)
+        return true
+    }
+    #endif
 
     @ViewBuilder
     private var rootView: some View {
