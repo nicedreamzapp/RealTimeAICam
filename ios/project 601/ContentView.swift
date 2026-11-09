@@ -268,12 +268,9 @@ struct ContentView: View {
         SpeechManager.shared.resetSpeechState()
     }
 
+    /// Home says where you landed (HomeView): Settings, the guide, or the home screen.
     private func closeSharedImage() {
         sharedInbox.close()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-            UIAccessibility.post(notification: .screenChanged,
-                                 argument: SpeechManager.voiceOverLine(L("Home screen"), lang: AppLang.code))
-        }
     }
 
     private func switchToHome() {

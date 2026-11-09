@@ -8,6 +8,7 @@ struct HomeView: View {
     @State private var showInstructions = false
     /// A picture shared from another app: the guide steps aside while it is up.
     @ObservedObject private var sharedInbox = SharedImageInbox.shared
+    @State private var sharedWasUp = false
     /// Settings, Models included, right from home; it used to be only inside
     /// the reader screens (Matt, 2026-11-03).
     @State private var showSettings = false
@@ -175,6 +176,18 @@ struct HomeView: View {
                         }
                     }
                 }
+        }
+        // Back from a shared picture: say where VoiceOver landed. The guide coming back
+        // announces itself, so nothing is said over it.
+        .onChange(of: sharedInbox.isBusy) { _, busy in
+            guard !busy, sharedWasUp else { sharedWasUp = busy; return }
+            sharedWasUp = false
+            guard !showInstructions else { return }
+            let name = showSettings ? L("Settings") : L("Home screen")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                UIAccessibility.post(notification: .screenChanged,
+                                     argument: SpeechManager.voiceOverLine(name, lang: AppLang.code))
+            }
         }
         .onChange(of: modelDownloader.progress) { _, value in
             announceDownloadProgress(value)
