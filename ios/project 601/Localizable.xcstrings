@@ -6205,17 +6205,6 @@
         }
       }
     },
-    "Quiet on" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Silencio activado"
-          }
-        }
-      }
-    },
     "Quiet" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6256,6 +6245,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Alguien apareció a la vista."
+          }
+        }
+      }
+    },
+    "The flashlight works with the back camera." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La linterna funciona con la cámara trasera."
           }
         }
       }

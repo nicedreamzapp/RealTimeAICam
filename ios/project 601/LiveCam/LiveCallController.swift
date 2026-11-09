@@ -115,7 +115,9 @@ final class LiveCallController: ObservableObject {
     }
 
     /// Words on screen. RT Cam shows them by default (low vision reads them big); VoiceOver reads them either way.
-    @Published var showCaption = UserDefaults.standard.object(forKey: "liveCamShowCaption") as? Bool ?? true {
+    /// Off by default (Matt 11/09: "the text that is showing up on the screen shouldn't show up on the screen until you
+    /// hit quiet", "Screen should be clear of text"); Settings > Live Cam can turn words on with the voice.
+    @Published var showCaption = UserDefaults.standard.object(forKey: "liveCamShowCaption") as? Bool ?? false {
         didSet { UserDefaults.standard.set(showCaption, forKey: "liveCamShowCaption") }
     }
     /// The words show when Words on screen is on, and always while Quiet is on (they are its only output).
@@ -135,8 +137,16 @@ final class LiveCallController: ObservableObject {
         return LiveCamera.torchAvailable
     }
     /// Turning it on from the selfie camera flips to the back camera first (the selfie side has no light).
+    /// The selfie camera is on: no flashlight button (Matt 11/09: "The flashlight shouldn't appear for the front camera").
+    @Published private(set) var onFront = false
+
     func setFlashlight(_ on: Bool, spoken: Bool = false) {
         guard running, torchAvailable else { return }
+        if camera.isFront {
+            // The light is on the back: say so, never flip on its own (Matt 11/09).
+            if spoken { speakAll(own: LiveCamWords.lightIsOnTheBack) }
+            return
+        }
         log(["event": "flashlight", "on": on, "spoken": spoken])
         // The camera flips to the back side itself if needed and reports the real state (torchChanged).
         pendingTorch = (on, spoken)
@@ -219,6 +229,8 @@ final class LiveCallController: ObservableObject {
         moneyMemory.forget()   // a new call never answers from an old count
         Task.detached(priority: .utility) { MoneyDetector.warmUp() }   // both money models loaded off the main thread
         detector = LiveDetector()
+        onFront = camera.isFront
+        camera.onFlip = { [weak self] front in DispatchQueue.main.async { MainActor.assumeIsolated { self?.onFront = front } } }
         camera.onTorch = { [weak self] lit in DispatchQueue.main.async { MainActor.assumeIsolated { self?.torchChanged(lit) } } }
         ScreenAwake.hold("liveCall")
         // The app goes to the background: the light goes off (iOS stops the camera there anyway).

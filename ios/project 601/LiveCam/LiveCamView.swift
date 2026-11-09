@@ -116,23 +116,19 @@ struct LiveCamView: View {
         HStack(spacing: 12) {
             // Matt 11/1 (Moonstone): a real dropdown. Tap the pill, the modes show, tap one, it stays until changed.
             Button { withAnimation(.easeOut(duration: 0.15)) { showModes.toggle() } } label: {
-                HStack(spacing: 6) {
-                    Text(L("Mode: %@", L(call.mode.label)))
-                    Image(systemName: showModes ? "chevron.up" : "chevron.down").font(.caption.weight(.bold))
-                }
-                .font(.body.weight(.semibold))
-                .padding(.horizontal, 18)
-                .frame(minHeight: 56)
-                .background(.black.opacity(0.45), in: Capsule())
-                .overlay(Capsule().stroke(.white.opacity(0.35), lineWidth: 1))
+                // An icon, no words on the screen (Matt 11/09); VoiceOver says the mode.
+                Image(systemName: "slider.horizontal.3").font(.title3.weight(.semibold))
+                    .frame(width: 48, height: 48)
+                    .background(.black.opacity(0.45), in: Circle())
+                    .overlay(Circle().stroke(.white.opacity(0.35), lineWidth: 1))
             }
             .accessibilityLabel(L("Mode: %@", L(call.mode.label)))
             .accessibilityHint(L("Shows the modes and settings. You can also say funny mode, analyze mode, coach mode or normal mode."))
             Spacer(minLength: 0)
             // Words on screen are always on here; the switch lives in Settings > Live Cam (Matt 11/09 layout).
             Button { call.flip(); zoomLabel = 1 } label: {   // a flip starts at 1x again (review 11/6)
-                Image(systemName: "arrow.triangle.2.circlepath.camera").font(.title2.weight(.semibold))
-                    .frame(width: 60, height: 60).background(.black.opacity(0.45), in: Circle())
+                Image(systemName: "arrow.triangle.2.circlepath.camera").font(.title3.weight(.semibold))
+                    .frame(width: 48, height: 48).background(.black.opacity(0.45), in: Circle())
                     .overlay(Circle().stroke(.white.opacity(0.35), lineWidth: 1))
             }
             .accessibilityLabel(L("Flip camera"))
@@ -295,29 +291,29 @@ struct LiveCamView: View {
                 .accessibilityAddTraits(.updatesFrequently)
                 .accessibilityAction { call.interrupt() }
                 .accessibilityIdentifier("liveCamOrb-" + orbState)   // identifiers are never spoken
-            Text(statusLine).font(.footnote.weight(.medium)).foregroundStyle(.white.opacity(0.8))
-                .opacity(call.wordsShown ? 1 : 0)
-                .accessibilityHidden(true)
+            // No status text on screen (Matt 11/09: "Screen should be clear of text"); the ring's VoiceOver label says it.
         }
     }
 
     // MARK: Bottom: mute and the one way out
 
-    /// The round buttons' size and spacing for a row of `count` at this width: 76 pt where it fits, smaller (never
-    /// under 58) on a narrow screen, so the row always fits (review 11/6: it overflowed at 320 pt).
+    /// The round buttons' size and spacing for a row of `count` at this width: about the Camera app's controls,
+    /// 60 pt where it fits, smaller on a narrow screen, never under 44 (Matt 11/09: "the buttons are too big").
     static func bottomRow(width: CGFloat, count: Int) -> (size: CGFloat, spacing: CGFloat) {
         let n = CGFloat(count), avail = min(width, 640) - 32
-        let d = max(58, min(76, (avail - (n - 1) * 12) / n - 8))
-        let spacing = max(6, min(40, (avail - n * (d + 8)) / max(1, n - 1)))
+        let d = max(44, min(60, width * 0.16))
+        let spacing = max(16, min(56, (avail - n * d) / max(1, n - 1)))
         return (d, spacing)
     }
 
     private func bottomBar(width: CGFloat) -> some View {
-        let (d, spacing) = Self.bottomRow(width: width, count: call.torchAvailable ? 3 : 2)
+        // The flashlight is only for the back camera (Matt 11/09); without it Quiet and Back center themselves.
+        let showLight = call.torchAvailable && !call.onFront
+        let (d, spacing) = Self.bottomRow(width: width, count: showLight ? 3 : 2)
         return HStack(spacing: spacing) {
             // Matt 11/6: "Live cam needs to have a flashlight... preferably at the bottom". One tap on, one tap off;
             // on the selfie camera it flips to the back camera first. Its word stays even with Words on screen off.
-            if call.torchAvailable {
+            if showLight {
                 Button { call.setFlashlight(!call.torchOn) } label: {
                     VStack(spacing: 6) {
                         Image(systemName: call.torchOn ? "flashlight.on.fill" : "flashlight.off.fill").font(.system(size: d * 0.37, weight: .semibold))
@@ -325,8 +321,6 @@ struct LiveCamView: View {
                             .background(call.torchOn ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.black.opacity(0.45)), in: Circle())
                             .overlay(Circle().stroke(.white.opacity(0.35), lineWidth: 1))
                             .foregroundStyle(call.torchOn ? .black : .white)
-                        Text(L("Flashlight")).font(.footnote.weight(.semibold)).foregroundStyle(.white)
-                            .lineLimit(1).minimumScaleFactor(0.6)
                     }
                     .frame(width: d + 8)
                 }
@@ -344,8 +338,6 @@ struct LiveCamView: View {
                         .background(Color.white, in: Circle())
                         .overlay(Circle().stroke(call.quiet ? LiveOrb.lookColor : .white.opacity(0.35), lineWidth: call.quiet ? 4 : 1))
                         .foregroundStyle(.black)
-                    Text(call.quiet ? L("Quiet on") : L("Quiet")).font(.footnote.weight(.semibold)).foregroundStyle(.white)
-                        .lineLimit(1).minimumScaleFactor(0.6).frame(width: d + 8)
                 }
             }
             .accessibilityLabel(L("Quiet"))
@@ -359,8 +351,6 @@ struct LiveCamView: View {
                 VStack(spacing: 6) {
                     Image(systemName: "xmark").font(.system(size: d * 0.37, weight: .bold))
                         .frame(width: d, height: d).background(Color.red, in: Circle()).foregroundStyle(.white)
-                    Text(L("Back")).font(.footnote.weight(.semibold)).foregroundStyle(.white)
-                        .lineLimit(1).minimumScaleFactor(0.6).frame(width: d + 8)
                 }
             }
             .accessibilityLabel(L("Back"))

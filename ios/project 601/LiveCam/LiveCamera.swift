@@ -165,6 +165,9 @@ final class LiveCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
         }
     }
 
+    /// The camera turned (true: the selfie side). Called on the camera queue.
+    var onFlip: ((Bool) -> Void)?
+
     func flip() {
         guard stillFrame == nil else { return }
         queue.async { [self] in flipNow() }
@@ -175,6 +178,7 @@ final class LiveCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
         if position == .back { lock.lock(); torchWanted = false; lock.unlock(); applyTorch() }   // no light on the selfie side
         position = position == .back ? .front : .back
         lock.lock(); front = position == .front; lock.unlock()
+        onFlip?(position == .front)
         UserDefaults.standard.set(position == .front, forKey: "liveCamFrontCamera")
         configure()
     }
