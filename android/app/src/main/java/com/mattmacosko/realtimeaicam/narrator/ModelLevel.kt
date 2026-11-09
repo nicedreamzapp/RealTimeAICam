@@ -63,9 +63,12 @@ enum class ModelLevel(
     /** Folder on our server. */
     val remoteBase: String get() = "https://ineedhemp.com/models/rtcam/$key/"
 
-    fun sizeText(): String =
-        if (bytes >= 1_000_000_000L) String.format(AppLang.locale(), "%.2f GB", bytes / 1e9)
-        else String.format(AppLang.locale(), "%.0f MB", bytes / 1e6)
+    fun sizeText(): String = sizeText(bytes)
+
+    /** Bytes this level takes on the phone right now: its files, or the bundled pack. */
+    fun bytesOnPhone(context: Context): Long =
+        if (isBundled) bytes
+        else folder(context).listFiles()?.sumOf { it.length() } ?: 0L
 
     fun fitsThisPhone(context: Context): Boolean {
         val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
@@ -87,6 +90,9 @@ enum class ModelLevel(
 
     companion object {
         fun fromKey(key: String?): ModelLevel? = entries.firstOrNull { it.key == key }
+        fun sizeText(bytes: Long): String =
+            if (bytes >= 1_000_000_000L) String.format(AppLang.locale(), "%.2f GB", bytes / 1e9)
+            else String.format(AppLang.locale(), "%.0f MB", bytes / 1e6)
     }
 }
 
@@ -121,6 +127,10 @@ object ModelPicker {
     const val CHOICE = "choice"              // "auto" or a level key
     const val PRIORITY = "priority"
     const val BALANCED_SECONDS = "balanced_seconds"
+    /** Levels the person deleted or stopped: automatic mode never fetches them again. */
+    const val REMOVED = "removed"
+    /** A level the person asked to download: it becomes the choice once it is installed. */
+    const val PENDING = "pending"
 
     /** A page is read at 1024 px, a scene at 768 px. */
     const val PAGE_COST = 1.4
@@ -130,6 +140,17 @@ object ModelPicker {
     fun manualLevel(context: Context): ModelLevel? = ModelLevel.fromKey(prefs(context).getString(CHOICE, "auto"))
     fun setManualLevel(context: Context, level: ModelLevel?) =
         prefs(context).edit().putString(CHOICE, level?.key ?: "auto").apply()
+
+    fun removed(context: Context): Set<ModelLevel> =
+        prefs(context).getStringSet(REMOVED, emptySet()).orEmpty().mapNotNull { ModelLevel.fromKey(it) }.toSet()
+    fun markRemoved(context: Context, level: ModelLevel) =
+        prefs(context).edit().putStringSet(REMOVED, removed(context).map { it.key }.toSet() + level.key).apply()
+    fun clearRemoved(context: Context, level: ModelLevel) =
+        prefs(context).edit().putStringSet(REMOVED, removed(context).map { it.key }.toSet() - level.key).apply()
+
+    fun pendingLevel(context: Context): ModelLevel? = ModelLevel.fromKey(prefs(context).getString(PENDING, null))
+    fun setPending(context: Context, level: ModelLevel?) =
+        prefs(context).edit().putString(PENDING, level?.key).apply()
 
     fun priority(context: Context): ModelPriority =
         ModelPriority.entries.firstOrNull { it.name == prefs(context).getString(PRIORITY, null) } ?: ModelPriority.ACCURACY
@@ -167,21 +188,26 @@ object ModelPicker {
         return c.firstOrNull { (estimate(context, it, kind) ?: Double.MAX_VALUE) <= budget } ?: c.last()
     }
 
-    /** What automatic mode wants downloaded. */
+    /** What automatic mode wants downloaded, never a level the person deleted or stopped. */
     fun wanted(context: Context): Set<ModelLevel> =
         if (balancedSeconds(context) == null || manualLevel(context) != null) emptySet()
-        else setOf(ideal(context, PhotoKind.PAGE), ideal(context, PhotoKind.SCENE))
+        else setOf(ideal(context, PhotoKind.PAGE), ideal(context, PhotoKind.SCENE)) - removed(context)
 
-    /** The level to run right now, from what is actually on the phone. */
-    fun level(context: Context, kind: PhotoKind): ModelLevel {
+    /** The best level already on the phone for this kind of photo (the built-in one when nothing else fits). */
+    fun bestInstalled(context: Context, kind: PhotoKind): ModelLevel {
         val installed = ModelLevel.entries.filter { it.isInstalled(context) }
-        manualLevel(context)?.let { return if (it in installed) it else ModelLevel.BALANCED }
         val ideal = ideal(context, kind)
         if (ideal in installed) return ideal
         val budget = priority(context).budget(kind)
         val ready = candidates(context).filter { it in installed }
         return ready.firstOrNull { (estimate(context, it, kind) ?: Double.MAX_VALUE) <= budget }
             ?: ready.lastOrNull() ?: ModelLevel.BALANCED
+    }
+
+    /** The level to run right now, from what is actually on the phone. */
+    fun level(context: Context, kind: PhotoKind): ModelLevel {
+        manualLevel(context)?.let { return if (it.isInstalled(context)) it else bestInstalled(context, kind) }
+        return bestInstalled(context, kind)
     }
 
     fun spoken(seconds: Double?): String = when {

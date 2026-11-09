@@ -15,6 +15,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -106,6 +107,10 @@ object ModelDownloader {
 
     private fun set(level: ModelLevel, s: State) { _states.value = _states.value + (level to s) }
 
+    /** Progress from a running download; dropped once that download was stopped, so a Stop sticks on screen. */
+    @Synchronized
+    private fun setFromDownload(level: ModelLevel, s: State) { if (current == level) set(level, s) }
+
     @Synchronized
     fun start(context: Context, level: ModelLevel) {
         if (level.isBundled) return
@@ -128,6 +133,26 @@ object ModelDownloader {
         level.folder(context).deleteRecursively()
         set(level, State.Idle)
         next(context.applicationContext)
+    }
+
+    /**
+     * The person deleted a level or stopped its download: the files go, and the
+     * level is remembered so automatic mode never fetches it again on its own.
+     * Picking it and tapping Download again is the only way back.
+     */
+    fun remove(context: Context, level: ModelLevel) {
+        if (level.isBundled) return
+        delete(context, level)
+        ModelPicker.markRemoved(context, level)
+        if (ModelPicker.pendingLevel(context) == level) ModelPicker.setPending(context, null)
+    }
+
+    /** The person tapped Download on a level: it is wanted again and becomes the choice once installed. */
+    fun requestByUser(context: Context, level: ModelLevel) {
+        if (level.isBundled) return
+        ModelPicker.clearRemoved(context, level)
+        ModelPicker.setPending(context, level)
+        start(context, level)
     }
 
     /** Picks up levels whose download was cut off by the app closing. */
@@ -169,6 +194,11 @@ object ModelDownloader {
                     when {
                         outcome == null -> {
                             set(level, State.Ready)
+                            // A level the person asked for becomes the choice only now that it is here.
+                            if (ModelPicker.pendingLevel(context) == level) {
+                                ModelPicker.setManualLevel(context, level)
+                                ModelPicker.setPending(context, null)
+                            }
                             announce(context, AppLang.str(R.string.e_dl_ready, level.title))
                         }
                         outcome is kotlinx.coroutines.CancellationException -> {}
@@ -197,11 +227,11 @@ object ModelDownloader {
             val dst = File(staging, f.name)
             if (dst.length() > f.size) dst.delete()
             if (dst.length() < f.size) download(URL(level.remoteBase + f.name), dst, f.size) { got ->
-                set(level, State.Downloading(((before + got).toDouble() / total).toFloat()))
+                setFromDownload(level, State.Downloading(((before + got).toDouble() / total).toFloat()))
             }
             before += f.size
         }
-        set(level, State.Verifying)
+        setFromDownload(level, State.Verifying)
         for (f in manifest.files) {
             val file = File(staging, f.name)
             if (file.length() != f.size) throw IOException("${f.name} came down the wrong size.")
@@ -210,6 +240,8 @@ object ModelDownloader {
                 throw IOException("${f.name} failed its integrity check.")
             }
         }
+        // Stopped while checking: never move a stopped level into place.
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
         val final = level.folder(context)
         final.deleteRecursively()
         if (!staging.renameTo(final)) throw IOException("could not move ${level.key} into place")
