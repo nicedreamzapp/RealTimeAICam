@@ -485,7 +485,7 @@ struct LiveOCRView: View {
             showStatus("Working it out…")
             // The model picked by hand isn't on the phone yet: said once, ahead of the answer,
             // as one line (spoken on its own it was cut off by the answer).
-            let notice = ModelPicker.fallbackNoticeLevel().map(ModelPicker.fallbackLineEnglish)
+            let standIn = ModelPicker.fallbackStandIn()
             // Free the camera pipeline while the model thinks; it comes back
             // the moment the answer is spoken.
             // The screen stays awake while the model answers, even with the camera
@@ -524,7 +524,7 @@ struct LiveOCRView: View {
                 }
                 await MainActor.run {
                     if let said {
-                        say(notice.map { $0 + " " + said } ?? said, cutOff: looksLikePage ? gate.cutOffEdge : nil)
+                        say(said, cutOff: looksLikePage ? gate.cutOffEdge : nil, standIn: standIn)
                         RatePrompt.noteResult()
                     } else {
                         readWithOCR(image)
@@ -616,12 +616,16 @@ struct LiveOCRView: View {
 
     /// Content: the model's answer (or the pattern summary), with the app's own cut-off
     /// sentence ahead of it when the page runs off the frame.
-    private func say(_ sentence: String, cutOff edge: String? = nil) {
+    /// `standIn`: the model answering while a hand pick downloads; its line goes ahead of the
+    /// answer as one spoken line, with the model's name in the answer's language.
+    private func say(_ sentence: String, cutOff edge: String? = nil, standIn: ModelLevel? = nil) {
         let prefix = Self.cutOffPrefix(edge)
+        if standIn != nil { ModelPicker.markFallbackSaid() }
         // The model writes English; Your language gets it translated first, shown
         // and said in that language (~1 s, 2026-11-04). English: no change.
         guard YourLanguage.activeCode != YourLanguageRules.english else {
-            sayNow(Self.withPrefix(prefix, sentence, lang: YourLanguageRules.english), language: YourLanguageRules.english)
+            let line = standIn.map { ModelPicker.fallbackLine($0, lang: YourLanguageRules.english) + " " + sentence } ?? sentence
+            sayNow(Self.withPrefix(prefix, line, lang: YourLanguageRules.english), language: YourLanguageRules.english)
             return
         }
         let generation = sayGeneration
@@ -629,8 +633,13 @@ struct LiveOCRView: View {
             // A language the app ships (Spanish): the cut-off sentence is the bundled one, in
             // whatever language the answer came out in. Any other: translated with the answer.
             let shipped = AppLang.shipped.contains(YourLanguage.activeCode)
-            let out = await YourLanguage.intoActive(shipped || prefix.isEmpty ? sentence : prefix + " " + sentence)
-            let text = shipped ? Self.withPrefix(prefix, out.text, lang: out.lang) : out.text
+            // Spanish: the bundled stand-in line with the Spanish model name, never machine-translated.
+            // Any other language: translated together with the answer.
+            let englishNotice = standIn.map { ModelPicker.fallbackLine($0, lang: YourLanguageRules.english) + " " } ?? ""
+            let out = await YourLanguage.intoActive(shipped ? sentence
+                : (prefix.isEmpty ? "" : prefix + " ") + englishNotice + sentence)
+            let body = shipped ? (standIn.map { ModelPicker.fallbackLine($0, lang: out.lang) + " " } ?? "") + out.text : out.text
+            let text = shipped ? Self.withPrefix(prefix, body, lang: out.lang) : body
             await MainActor.run {
                 guard generation == sayGeneration else { return }
                 sayNow(text, language: out.lang)

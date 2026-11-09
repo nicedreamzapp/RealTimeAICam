@@ -236,6 +236,8 @@ struct ModelsChooserView: View {
             }
         }
         .preferredColorScheme(.dark)
+        // A new pick gets its own "Using Balanced until it's ready" line.
+        .onChange(of: choice) { _, _ in ModelPicker.pickChanged() }
         .alert(L("Download %@?", askDownload?.name ?? ""), isPresented: isAsking($askDownload), presenting: askDownload) { level in
             Button(L("Download")) { startConfirmed(level) }
             Button(L("Cancel"), role: .cancel) {}

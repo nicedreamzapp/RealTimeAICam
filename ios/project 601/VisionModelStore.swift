@@ -232,15 +232,14 @@ final class VisionModelDownloader: NSObject, ObservableObject {
 
     /// Picks up any level whose download was cut off by the app being closed.
     func resumeInterrupted() {
-        let removed = ModelPicker.removed
+        let approved = ModelPicker.approved.subtracting(ModelPicker.removed)
         for level in ModelLevel.allCases where !level.isBundled && !VisionModelStore.isInstalled(level) {
-            let staging = VisionModelStore.stagingURL(level)
-            guard FileManager.default.fileExists(atPath: staging.path) else { continue }
-            // Stopped just before the app closed: finish throwing it away instead.
-            if removed.contains(level) {
-                try? FileManager.default.removeItem(at: staging)
-            } else {
+            if approved.contains(level) {
+                // Said yes to and not finished (half-downloaded, or still waiting its turn).
                 start(level)
+            } else {
+                // Never said yes to, or stopped just before the app closed: throw it away.
+                try? FileManager.default.removeItem(at: VisionModelStore.stagingURL(level))
             }
         }
     }
@@ -422,6 +421,8 @@ final class VisionModelDownloader: NSObject, ObservableObject {
         states[level] = .failed(message)
         // A hand pick that won't arrive goes back to automatic (the line below says why).
         if ModelPicker.manualLevel == level { ModelPicker.manualLevel = nil }
+        // A failed download doesn't retry by itself; it needs a new yes.
+        ModelPicker.unapprove(level)
         SpeechManager.shared.speak(L("The %@ model download stopped. You can try again in Settings, under Models. What's this? still works.", level.name))
         if current == level { finishCurrent() }
     }

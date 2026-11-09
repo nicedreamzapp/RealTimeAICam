@@ -293,8 +293,13 @@ final class LiveCallController: ObservableObject {
         // The one line allowed on open: the model meant for this visit isn't the one answering
         // (a hand pick still downloading, said once per pick; or the pick wouldn't load and
         // Balanced stepped in). It names the one that answers. Then it listens (wentQuiet).
-        let standIn: ModelLevel? = fellBack ? .balanced : ModelPicker.fallbackNoticeLevel()
+        // Only for a hand pick, once per pick; Automatic's own load failure stays silent (logged).
+        if fellBack { log(["event": "fell_back_to_balanced", "hand_pick": ModelPicker.manualLevel != nil]) }
+        let standIn: ModelLevel? = fellBack
+            ? (ModelPicker.manualLevel != nil && !ModelPicker.fallbackSaidForPick ? .balanced : nil)
+            : ModelPicker.fallbackStandIn()
         if let standIn {
+            ModelPicker.markFallbackSaid()
             let notice = ModelPicker.fallbackLine(standIn)
             phase = .speaking
             listener.watchForBargeIn(true)

@@ -22,8 +22,11 @@ final class ModelSetup: ObservableObject {
         guard !started else { return }
         started = true
         VisionModelStore.removeLegacyDownload()
+        // Before the approved list existed (11/09), a hand pick was the yes.
+        if let manual = ModelPicker.manualLevel, !ModelPicker.removed.contains(manual) { ModelPicker.approve(manual) }
+        // Only models the person said yes to resume; anything else half-downloaded is thrown away.
         VisionModelDownloader.shared.resumeInterrupted()
-        // A hand pick that is neither here nor on its way goes back to automatic.
+        // Then a hand pick that is neither here nor on its way goes back to automatic.
         ModelPicker.dropStalePick()
         guard #available(iOS 17.0, *), VisionModelStore.isInstalled else { return }
         if ModelPicker.balancedSeconds == nil {
@@ -65,6 +68,7 @@ final class ModelSetup: ObservableObject {
     /// automatic mode from starting it again.
     func stop(_ level: ModelLevel) {
         ModelPicker.markRemoved(level)
+        ModelPicker.unapprove(level)
         if ModelPicker.manualLevel == level { ModelPicker.manualLevel = nil }
         VisionModelDownloader.shared.cancel(level)
     }
@@ -72,6 +76,7 @@ final class ModelSetup: ObservableObject {
     /// The person deleted a downloaded level: same promise as ``stop(_:)``.
     func delete(_ level: ModelLevel) {
         ModelPicker.markRemoved(level)
+        ModelPicker.unapprove(level)
         if ModelPicker.manualLevel == level { ModelPicker.manualLevel = nil }
         VisionModelDownloader.shared.delete(level)
     }
@@ -79,6 +84,7 @@ final class ModelSetup: ObservableObject {
     /// A confirmed tap on a level: it may download again, starting now.
     func download(_ level: ModelLevel) {
         ModelPicker.clearRemoved(level)
+        ModelPicker.approve(level)
         VisionModelDownloader.shared.start(level)
     }
 }

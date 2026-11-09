@@ -171,7 +171,28 @@ enum ModelPicker {
     /// nil means automatic.
     static var manualLevel: ModelLevel? {
         get { defaults.string(forKey: chosenKey).flatMap(ModelLevel.init(rawValue:)) }
-        set { defaults.set(newValue?.rawValue ?? "auto", forKey: chosenKey) }
+        set {
+            defaults.set(newValue?.rawValue ?? "auto", forKey: chosenKey)
+            pickChanged()
+        }
+    }
+
+    /// A new pick gets its own stand-in line (the chooser writes the key directly, so it calls this too).
+    static func pickChanged() { defaults.removeObject(forKey: fallbackSaidKey) }
+
+    /// Models the person said yes to downloading. Only these ever download or resume.
+    static let approvedKey = "modelLevelsApproved"
+
+    static var approved: Set<ModelLevel> {
+        Set((defaults.stringArray(forKey: approvedKey) ?? []).compactMap(ModelLevel.init(rawValue:)))
+    }
+
+    static func approve(_ level: ModelLevel) {
+        defaults.set(approved.union([level]).map(\.rawValue).sorted(), forKey: approvedKey)
+    }
+
+    static func unapprove(_ level: ModelLevel) {
+        defaults.set(approved.subtracting([level]).map(\.rawValue).sorted(), forKey: approvedKey)
     }
 
     static var priority: ModelPriority {
@@ -273,23 +294,39 @@ enum ModelPicker {
     /// The hand pick the stand-in line was last said for: said once per pick, not per launch.
     static let fallbackSaidKey = "modelFallbackSaidFor"
 
-    /// The model picked by hand isn't on the phone yet: the level answering instead, once per
-    /// pick (nil otherwise). Callers say "Using Balanced, the model on this phone."
-    @MainActor
-    static func fallbackNoticeLevel() -> ModelLevel? {
-        guard let manual = manualLevel, !VisionModelStore.isInstalled(manual),
-              defaults.string(forKey: fallbackSaidKey) != manual.rawValue else { return nil }
-        defaults.set(manual.rawValue, forKey: fallbackSaidKey)
+    /// The model picked by hand isn't on the phone yet and the line hasn't been said for this
+    /// pick: the level answering instead. Callers mark it said only once it is spoken.
+    static func fallbackStandIn() -> ModelLevel? {
+        guard let manual = manualLevel, !VisionModelStore.isInstalled(manual), !fallbackSaidForPick else { return nil }
         return level(for: .scene)
     }
 
-    /// The stand-in line in the app's language (Live Cam's own words).
-    static func fallbackLine(_ level: ModelLevel) -> String { L("Using %@, the model on this phone.", level.name) }
-
-    /// The same in English, put ahead of a model answer that is translated as a whole.
-    static func fallbackLineEnglish(_ level: ModelLevel) -> String {
-        "Using \(level.rawValue.capitalized), the model on this phone."
+    /// The stand-in line was already said for the current hand pick.
+    static var fallbackSaidForPick: Bool {
+        guard let manual = manualLevel else { return true }
+        return defaults.string(forKey: fallbackSaidKey) == manual.rawValue
     }
+
+    static func markFallbackSaid() {
+        if let manual = manualLevel { defaults.set(manual.rawValue, forKey: fallbackSaidKey) }
+    }
+
+    /// "Using Balanced, the model on this phone." in `lang` (en or es, the languages the app
+    /// ships), with the model's name in that language too.
+    static func fallbackLine(_ level: ModelLevel, lang: String = AppLang.code) -> String {
+        let english = level.rawValue.capitalized
+        var name = english
+        if lang != AppLang.english {
+            let key = level == .clear ? "Clear [model level]" : english
+            let local = AppLang.text(key, in: lang)
+            name = local == key ? english : local
+        }
+        return String(format: AppLang.text("Using %@, the model on this phone.", in: lang),
+                      locale: Locale(identifier: lang), name)
+    }
+
+    /// Keys said through AppLang.text, listed through L() only so es-strings.py counts them.
+    static let keysSaidByKey = [L("Using %@, the model on this phone.")]
 
     /// A hand pick that is neither on the phone nor on its way (a failed download, a phone
     /// restored from a backup) goes back to automatic.

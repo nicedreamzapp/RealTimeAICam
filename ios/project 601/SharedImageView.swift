@@ -285,7 +285,7 @@ struct SharedImageView: View {
     private func describe() {
         isDescribing = true
         // The model picked by hand isn't on the phone yet: said once, ahead of the description.
-        let notice = Self.pictureModelOnPhone ? ModelPicker.fallbackNoticeLevel().map(ModelPicker.fallbackLineEnglish) : nil
+        let standIn = Self.pictureModelOnPhone ? ModelPicker.fallbackStandIn() : nil
         let gen = generation
         let photo = image
         Task {
@@ -294,7 +294,7 @@ struct SharedImageView: View {
                 guard gen == generation else { return }
                 if let said {
                     RatePrompt.noteResult()
-                    sayContent(notice.map { $0 + " " + said } ?? said) { text, lang in
+                    sayContent(said, standIn: standIn) { text, lang in
                         description = text
                         descriptionLang = lang
                         isDescribing = false
@@ -420,19 +420,28 @@ struct SharedImageView: View {
     // MARK: - Speech
 
     /// The model's English, shown and said in Your language (English: as is).
-    private func sayContent(_ english: String, then show: @escaping (String, String) -> Void) {
+    /// `standIn`: the model answering while a hand pick downloads. Its line goes ahead as one
+    /// spoken line, with the model's name in the answer's language (Spanish from the app's own
+    /// strings, other languages translated with the answer), and counts as said once spoken.
+    private func sayContent(_ english: String, standIn: ModelLevel? = nil,
+                            then show: @escaping (String, String) -> Void) {
         let gen = generation
+        let englishNotice = standIn.map { ModelPicker.fallbackLine($0, lang: YourLanguageRules.english) + " " } ?? ""
         guard YourLanguage.activeCode != YourLanguageRules.english else {
-            show(english, YourLanguageRules.english)
-            speak(english, lang: YourLanguageRules.english)
+            if standIn != nil { ModelPicker.markFallbackSaid() }
+            show(englishNotice + english, YourLanguageRules.english)
+            speak(englishNotice + english, lang: YourLanguageRules.english)
             return
         }
         Task {
-            let out = await YourLanguage.intoActive(english)
+            let shipped = AppLang.shipped.contains(YourLanguage.activeCode)
+            let out = await YourLanguage.intoActive(shipped ? english : englishNotice + english)
+            let text = shipped ? (standIn.map { ModelPicker.fallbackLine($0, lang: out.lang) + " " } ?? "") + out.text : out.text
             await MainActor.run {
                 guard gen == generation else { return }
-                show(out.text, out.lang)
-                speak(out.text, lang: out.lang)
+                if standIn != nil { ModelPicker.markFallbackSaid() }
+                show(text, out.lang)
+                speak(text, lang: out.lang)
             }
         }
     }
