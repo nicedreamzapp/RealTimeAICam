@@ -55,7 +55,7 @@ struct LiveCamView: View {
                             .font(.callout.weight(.semibold)).foregroundStyle(.white).multilineTextAlignment(.center)
                             .padding(.horizontal, 12).padding(.vertical, 8)
                             .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
-                            .opacity(call.showCaption ? 1 : 0.001)
+                            .opacity(call.wordsShown ? 1 : 0.001)
                             .accessibilityIdentifier("liveCamCantHear")
                     }
                     // Typing only when it can't listen (no mic or speech permission, recognition stopped, mic off in
@@ -195,9 +195,9 @@ struct LiveCamView: View {
 
     private func words(wide: Bool) -> some View {
         // Matt 11/6: captions like FaceTime's Live Captions, a rounded see-through bubble with the words left-aligned.
-        let bubble = call.showCaption && (!call.caption.isEmpty || !call.heardText.isEmpty)
+        let bubble = call.wordsShown && (!call.caption.isEmpty || !call.heardText.isEmpty)
         return VStack(alignment: .leading, spacing: 6) {
-            if call.showCaption, !call.heardText.isEmpty {
+            if call.wordsShown, !call.heardText.isEmpty {
                 Text(L("You: %@", call.heardText))
                     .font(.system(size: wide ? 15 : 17, weight: .medium))
                     .foregroundStyle(.white.opacity(0.7)).multilineTextAlignment(.leading).lineLimit(2).minimumScaleFactor(0.7)
@@ -210,7 +210,7 @@ struct LiveCamView: View {
                     .font(.system(size: wide ? 20 : 22, weight: .semibold))
                     .foregroundStyle(.white).multilineTextAlignment(.leading).lineLimit(wide ? 3 : 4).minimumScaleFactor(0.6)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .opacity(call.showCaption ? 1 : 0.001)   // hidden words stay readable by VoiceOver
+                    .opacity(call.wordsShown ? 1 : 0.001)   // hidden words stay readable by VoiceOver
                     .accessibilityLabel(call.caption)
                     .accessibilityValue(call.caption)
                     .accessibilityAddTraits(.updatesFrequently)
@@ -296,7 +296,7 @@ struct LiveCamView: View {
                 .accessibilityAction { call.interrupt() }
                 .accessibilityIdentifier("liveCamOrb-" + orbState)   // identifiers are never spoken
             Text(statusLine).font(.footnote.weight(.medium)).foregroundStyle(.white.opacity(0.8))
-                .opacity(call.showCaption ? 1 : 0)
+                .opacity(call.wordsShown ? 1 : 0)
                 .accessibilityHidden(true)
         }
     }

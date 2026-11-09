@@ -89,7 +89,12 @@ final class LiveCallController: ObservableObject {
         didSet {
             UserDefaults.standard.set(quiet, forKey: Self.quietKey)
             applyQuiet()
-            if quiet { voice.stop() }   // cut what it is saying right now
+            if quiet {
+                voice.stop()   // cut what it is saying right now
+                // Its last line was cut: no "done talking" comes back, so it goes back to listening itself
+                // (review 11/09: otherwise the turn and the watch stayed stuck on "speaking").
+                if running, phase == .speaking, answerDone { listen() }
+            }
             log(["event": "quiet", "on": quiet])
         }
     }
@@ -113,6 +118,8 @@ final class LiveCallController: ObservableObject {
     @Published var showCaption = UserDefaults.standard.object(forKey: "liveCamShowCaption") as? Bool ?? true {
         didSet { UserDefaults.standard.set(showCaption, forKey: "liveCamShowCaption") }
     }
+    /// The words show when Words on screen is on, and always while Quiet is on (they are its only output).
+    var wordsShown: Bool { showCaption || quiet }
     /// Speak up: check-ins after a long quiet and a line about a thing it has never named.
     /// Off unless turned on (Matt 11/06: "i dont want it to keep asking if it can help constantly"): no "What are
     /// you up to?" check-ins and no new-thing lines. A goal's own "Ready for the next step?" still comes.
@@ -446,7 +453,8 @@ final class LiveCallController: ObservableObject {
 
     /// One short VoiceOver word for the state change (the orb's label says the same).
     private func announce(_ text: String) {
-        guard UIAccessibility.isVoiceOverRunning else { return }
+        // Quiet means quiet: no "Your turn" / "Looking" from VoiceOver either.
+        guard UIAccessibility.isVoiceOverRunning, !quiet else { return }
         UIAccessibility.post(notification: .announcement,
                              argument: NSAttributedString(string: text, attributes: [.accessibilitySpeechLanguage: AppLang.code,
                                                                                      .accessibilitySpeechQueueAnnouncement: true]))
