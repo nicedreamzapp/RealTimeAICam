@@ -1142,8 +1142,38 @@ struct LiveNovelty {
     /// Any other unprompted line counts toward the gap too.
     mutating func spoke(at t: Date) { lastLine = t }
 
+    /// Every label seen in this room so far (turning around in the same room is not a new room).
+    private(set) var roomLabels: Set<String> = []
+    private(set) var newRoomStreak = 0
+    static let newRoomChecks = 3
+
+    /// A big change across the frame with mostly labels never seen in this room, held for a few checks in a row.
+    mutating func looksLikeNewRoom(_ labels: [String], bigChange: Bool) -> Bool {
+        let here = Set(labels.map { LiveWords.normalize($0) }.filter { !$0.isEmpty })
+        defer { roomLabels.formUnion(here) }
+        guard baselined, bigChange, here.count >= 3,
+              Double(here.subtracting(roomLabels).count) >= Double(here.count) * 0.7 else { newRoomStreak = 0; return false }
+        newRoomStreak += 1
+        return newRoomStreak >= Self.newRoomChecks
+    }
+
+    /// People are never described or named (Matt 11/09: "the same person"), but someone arriving is news: the most
+    /// people seen at once in this room, and a rise above it held for two checks in a row.
+    private(set) var mostPeople = 0
+    private(set) var peopleStreak = 0
+    mutating func someoneArrived(_ count: Int) -> Bool {
+        guard baselined, !paused else { if !baselined { mostPeople = max(mostPeople, count) }; peopleStreak = 0; return false }
+        guard count > mostPeople else { peopleStreak = 0; return false }
+        peopleStreak += 1
+        guard peopleStreak >= Self.stableChecks else { return false }
+        mostPeople = count; peopleStreak = 0
+        return true
+    }
+
     /// A new room: start over (the next check is the new baseline).
-    mutating func reset() { known = []; baselined = false; streak = [:] }
+    mutating func reset() {
+        known = []; baselined = false; streak = [:]; roomLabels = []; newRoomStreak = 0; mostPeople = 0; peopleStreak = 0
+    }
 }
 
 struct LiveProactive {

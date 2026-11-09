@@ -6248,6 +6248,17 @@
           }
         }
       }
+    },
+    "Someone came into view." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alguien apareció a la vista."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

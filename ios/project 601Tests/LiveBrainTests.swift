@@ -675,19 +675,19 @@ struct LiveNoveltyTests {
     @Test func whatWasThereAtTheStartIsNeverNew() {
         var n = LiveNovelty()
         let m = memory([])
-        #expect(n.observe(["chair", "table"]) { !m.newThings([$0]).isEmpty }.isEmpty)   // the baseline
-        #expect(n.observe(["chair", "table"]) { !m.newThings([$0]).isEmpty }.isEmpty)
-        #expect(n.observe(["chair", "table"]) { !m.newThings([$0]).isEmpty }.isEmpty)
+        do { let r1 = n.observe(["chair", "table"]) { !m.newThings([$0]).isEmpty }.isEmpty; #expect(r1) }   // the baseline
+        do { let r2 = n.observe(["chair", "table"]) { !m.newThings([$0]).isEmpty }.isEmpty; #expect(r2) }
+        do { let r3 = n.observe(["chair", "table"]) { !m.newThings([$0]).isEmpty }.isEmpty; #expect(r3) }
     }
 
     @Test func aNewThingNeedsTwoChecksInARow() {
         var n = LiveNovelty()
         let m = memory([])
         _ = n.observe(["table"]) { !m.newThings([$0]).isEmpty }
-        #expect(n.observe(["table", "dog"]) { !m.newThings([$0]).isEmpty }.isEmpty)       // one check: maybe a blur
-        #expect(n.observe(["table"]) { !m.newThings([$0]).isEmpty }.isEmpty)              // gone: starts over
-        #expect(n.observe(["table", "dog"]) { !m.newThings([$0]).isEmpty }.isEmpty)
-        #expect(n.observe(["table", "dog"]) { !m.newThings([$0]).isEmpty } == ["dog"])    // two in a row
+        do { let r4 = n.observe(["table", "dog"]) { !m.newThings([$0]).isEmpty }.isEmpty; #expect(r4) }       // one check: maybe a blur
+        do { let r5 = n.observe(["table"]) { !m.newThings([$0]).isEmpty }.isEmpty; #expect(r5) }              // gone: starts over
+        do { let r6 = n.observe(["table", "dog"]) { !m.newThings([$0]).isEmpty }.isEmpty; #expect(r6) }
+        do { let r7 = n.observe(["table", "dog"]) { !m.newThings([$0]).isEmpty } == ["dog"]; #expect(r7) }    // two in a row
     }
 
     @Test func aNewThingIsAnnouncedOnce() {
@@ -695,9 +695,9 @@ struct LiveNoveltyTests {
         var m = memory([])
         _ = n.observe([]) { !m.newThings([$0]).isEmpty }
         _ = n.observe(["dog"]) { !m.newThings([$0]).isEmpty }
-        #expect(n.observe(["dog"]) { !m.newThings([$0]).isEmpty } == ["dog"])
+        do { let r8 = n.observe(["dog"]) { !m.newThings([$0]).isEmpty } == ["dog"]; #expect(r8) }
         n.announced("dog", at: Date()); m.noteThings(["dog"])
-        for _ in 0 ..< 4 { #expect(n.observe(["dog"]) { !m.newThings([$0]).isEmpty }.isEmpty) }
+        for _ in 0 ..< 4 { let r9 = n.observe(["dog"]) { !m.newThings([$0]).isEmpty }.isEmpty; #expect(r9) }
     }
 
     @Test func aQuestionPausesTheWatch() {
@@ -705,12 +705,12 @@ struct LiveNoveltyTests {
         let m = memory([])
         _ = n.observe([]) { !m.newThings([$0]).isEmpty }
         n.paused = true
-        #expect(n.observe(["car"]) { !m.newThings([$0]).isEmpty }.isEmpty)
-        #expect(n.observe(["car"]) { !m.newThings([$0]).isEmpty }.isEmpty)
+        do { let r10 = n.observe(["car"]) { !m.newThings([$0]).isEmpty }.isEmpty; #expect(r10) }
+        do { let r11 = n.observe(["car"]) { !m.newThings([$0]).isEmpty }.isEmpty; #expect(r11) }
         #expect(!n.canSpeak(at: Date()))
         n.paused = false
-        #expect(n.observe(["car"]) { !m.newThings([$0]).isEmpty }.isEmpty)   // the count starts after the answer
-        #expect(n.observe(["car"]) { !m.newThings([$0]).isEmpty } == ["car"])
+        do { let r12 = n.observe(["car"]) { !m.newThings([$0]).isEmpty }.isEmpty; #expect(r12) }   // the count starts after the answer
+        do { let r13 = n.observe(["car"]) { !m.newThings([$0]).isEmpty } == ["car"]; #expect(r13) }
     }
 
     @Test func linesKeepAGap() {
@@ -738,7 +738,7 @@ struct LiveNoveltyTests {
         _ = n.observe(["table"]) { !m.newThings([$0]).isEmpty }
         m.forgetThings(); n.reset()
         #expect(!m.newThings(["table"]).isEmpty)
-        #expect(n.observe(["tree", "street"]) { !m.newThings([$0]).isEmpty }.isEmpty)   // the new baseline
+        do { let r14 = n.observe(["tree", "street"]) { !m.newThings([$0]).isEmpty }.isEmpty; #expect(r14) }   // the new baseline
     }
 
     @Test func theOpeningReadIsNeverAGreetingOrAQuestion() {
@@ -749,5 +749,36 @@ struct LiveNoveltyTests {
         #expect(!LiveWords.isOpeningReadable("It's experimental, so double-check anything important."))
         #expect(LiveWords.wantsEverything("describe everything again"))
         #expect(!LiveWords.wantsEverything("what do you see"))
+    }
+}
+
+/// Review 11/09: someone arriving is said once, the same person staying is not; turning around in one room is not
+/// a new room.
+struct LiveNoveltyPeopleAndRoomTests {
+    @Test func someoneArrivingIsSaidOnceAfterTwoChecks() {
+        var n = LiveNovelty()
+        do { let r15 = !n.someoneArrived(1); #expect(r15) }                      // before the baseline: one person already here
+        _ = n.observe(["table"]) { _ in true }             // baseline
+        do { let r16 = !n.someoneArrived(1); #expect(r16) }                      // the same person staying
+        do { let r17 = !n.someoneArrived(2); #expect(r17) }                      // one check: maybe a mistake
+        do { let r18 = n.someoneArrived(2); #expect(r18) }                       // two in a row: said
+        do { let r19 = !n.someoneArrived(2); #expect(r19) }                      // and not again
+        do { let r20 = !n.someoneArrived(1); #expect(r20) }
+    }
+
+    @Test func turningAroundInTheSameRoomIsNotANewRoom() {
+        var n = LiveNovelty()
+        _ = n.observe(["table", "chair", "lamp"]) { _ in true }
+        do { let r21 = !n.looksLikeNewRoom(["table", "chair", "lamp"], bigChange: false); #expect(r21) }
+        do { let r22 = !n.looksLikeNewRoom(["sofa", "tv", "rug"], bigChange: true); #expect(r22) }       // the other side of the room...
+        do { let r23 = !n.looksLikeNewRoom(["table", "chair", "lamp"], bigChange: true); #expect(r23) }  // ...and back: seen before
+        do { let r24 = !n.looksLikeNewRoom(["sofa", "tv", "rug"], bigChange: true); #expect(r24) }       // all seen in this room now
+    }
+
+    @Test func aNewRoomNeedsSeveralChecks() {
+        var n = LiveNovelty()
+        _ = n.observe(["table", "chair", "lamp"]) { _ in true }
+        do { let r25 = !n.looksLikeNewRoom(["tree", "car", "street"], bigChange: true); #expect(r25) }
+        do { let r26 = !n.looksLikeNewRoom(["tree", "car", "street", "bench"], bigChange: true) || LiveNovelty.newRoomChecks <= 2; #expect(r26) }
     }
 }

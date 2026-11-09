@@ -600,6 +600,8 @@ final class LiveCallController: ObservableObject {
     private var openingReadSaid = false
     /// A "what do you see" again: sentences about things already told are left out (Matt 11/09).
     private var describeFilterTurn: Int?
+    /// The detector's new thing being put into words (turn of that look).
+    private var noticeThing: (thing: String, turn: Int)?
     /// The first quiet look of a call only remembers what is already there: naming it all would
     /// be an opening narration by another route.
     private var inventoryBaselineTaken = false
@@ -1186,6 +1188,24 @@ final class LiveCallController: ObservableObject {
                     }
                     return
                 }
+                if unprompted, let notice = self.noticeThing, notice.turn == my {
+                    // The detector's new thing: the novelty memory already makes it once each, so no repeat or
+                    // overlap check here (they dropped real new things, review 11/09). Told only once it is said.
+                    self.noticeThing = nil
+                    self.answerDone = true
+                    let line = said.split(whereSeparator: { ".!?".contains($0) }).first.map { String($0).trimmingCharacters(in: .whitespaces) + "." } ?? ""
+                    let talking = self.phase != .listening || self.listener.hearingSomething
+                    self.log(["event": "watch_decision", "why": "new thing", "thing": notice.thing, "text": line,
+                              "decision": line.count < 4 || LiveWords.isNothingNew(said) ? "silent: no line" : talking ? "silent: person talking" : "spoke"])
+                    guard line.count >= 4, !LiveWords.isNothingNew(said), !talking else { return }
+                    self.novelty.announced(notice.thing, at: Date())
+                    self.memory.noteThings([notice.thing])
+                    self.memory.noteSeen(line)
+                    self.watch.commented(at: Date())
+                    self.listener.stopListening()
+                    self.speakAll(content: line)
+                    return
+                }
                 if unprompted {
                     self.answerDone = true
                     // Looked either way: wait for the view to change again before the next look, so a
@@ -1332,11 +1352,12 @@ final class LiveCallController: ObservableObject {
                           return (LiveCamera.thumb(f), detector?.labels(in: f) ?? [])
                       }).value,
                       self.running, self.phase == .listening, self.current == nil else { continue }
-                // A different room (a big change across the frame, and mostly things never seen): fresh memory, and
-                // one new read of the room, the same as on open.
-                if let ref = self.watch.reference, LiveProactive.difference(thumb, ref) >= LiveProactive.bigChange,
-                   labels.count >= 3, !self.novelty.paused,
-                   Double(labels.filter { !self.novelty.known.contains(LiveWords.normalize($0)) }.count) >= Double(labels.count) * 0.7 {
+                // A different room (a big change across the frame, mostly things never seen in this room, held for a few
+                // checks): fresh memory, and one new read of the room, the same as on open.
+                let bigChange = self.watch.reference.map { LiveProactive.difference(thumb, $0) >= LiveProactive.bigChange } ?? false
+                let people = labels.filter { LiveWords.personWords.contains(LiveWords.normalize($0)) }.count
+                let things = labels.filter { !LiveWords.personWords.contains(LiveWords.normalize($0)) }
+                if !self.novelty.paused, self.novelty.looksLikeNewRoom(things, bigChange: bigChange) {
                     self.log(["event": "new_room", "labels": labels.joined(separator: ", ")])
                     self.memory.forgetThings()
                     self.novelty.reset()
@@ -1344,14 +1365,24 @@ final class LiveCallController: ObservableObject {
                     self.readTheRoom()
                     continue
                 }
-                let fresh = self.novelty.observe(labels) { !self.memory.newThings([$0]).isEmpty }
+                let arrived = self.novelty.someoneArrived(people)
+                let fresh = self.novelty.observe(things) { !self.memory.newThings([$0]).isEmpty }
+                if arrived, self.novelty.canSpeak(at: Date()), !self.voice.isBusy {
+                    // Someone new in view: said, never described (Matt 11/09). The same person staying says nothing.
+                    self.log(["event": "watch_fired", "why": "someone arrived", "people": people])
+                    self.novelty.spoke(at: Date())
+                    self.listener.stopListening()
+                    self.speakAll(own: LiveCamWords.someoneArrived)
+                    continue
+                }
                 if let thing = fresh.first, self.novelty.canSpeak(at: Date()), !self.voice.isBusy {
                     // Something new came into view: one short line about it, once (Matt 11/09: "oh, now I see a dog").
+                    // It counts as told only once the line is actually said (see noticeThing).
                     self.log(["event": "watch_fired", "why": "new thing", "thing": thing])
-                    self.novelty.announced(thing, at: Date())
-                    self.memory.noteThings([thing])
+                    self.novelty.spoke(at: Date())   // the gap holds even if the line never comes
                     self.watch.described(thumb)
                     self.look(prompt: LiveWords.newThingAsk(thing), unprompted: true)
+                    self.noticeThing = (thing, self.turn)
                     continue
                 }
                 let quiet = Date().timeIntervalSince(self.listener.lastChange) > 2

@@ -41,6 +41,8 @@ enum LiveCamWords {
     static let helpOffer = "Anything I can help with?"
     /// An answer whose every sentence was already said this visit (Matt 11/6: never the same words twice).
     static let sameAsBefore = "Same as before."
+    /// Someone came into view (never described: Matt 11/09).
+    static let someoneArrived = "Someone came into view."
     /// The torch didn't do what was asked (review 11/6).
     static let lightFailed = "The flashlight isn't working right now."
     /// Said while it counts money, taking turns (Matt 11/6: never the same words twice in a row).
@@ -58,7 +60,7 @@ enum LiveCamWords {
     static var indirectKeys: [String] {
         [notAllowed, cantHear, cantHearNote, noOfflineSpeech,
          needsCamera, modelFailed, noModel, sayAgain, lostTrack, bye, gotIt, coachGoalSet, nothingSaidYet, coachGoalHeard,
-         flipToSeeYou, stillGettingReady, cantSeeInBackground, cameraPaused, newThing, newThingPlain, newThingThere, helpOffer, sameAsBefore, lightFailed, goalDone, goalNew, notFullySure, takeBack, lostAnswer]
+         flipToSeeYou, stillGettingReady, cantSeeInBackground, cameraPaused, newThing, newThingPlain, newThingThere, helpOffer, sameAsBefore, someoneArrived, lightFailed, goalDone, goalNew, notFullySure, takeBack, lostAnswer]
             + LiveWords.checkIns + LiveWords.acks + LiveGoal.checkIns
             + LiveMode.allCases.flatMap { [$0.label, $0.confirm] } + ["Light's on.", "Light's off."] + countingLines
     }
