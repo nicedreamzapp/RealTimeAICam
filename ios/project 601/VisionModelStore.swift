@@ -172,6 +172,17 @@ final class VisionModelDownloader: NSObject, ObservableObject {
     private override init() { super.init() }
 
     #if DEBUG
+    /// UI tests only (`-rtcamFakeInstalled <level>`): a tiny stand-in folder that counts as the
+    /// level being on the phone, so Delete can be tested without a real download.
+    static func debugFakeInstall(_ level: ModelLevel) {
+        guard !level.isBundled else { return }
+        let folder = VisionModelStore.downloadedURL(level)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try? Data("stand-in".utf8).write(to: folder.appendingPathComponent("stand-in.gguf"))
+        let manifest = VisionModelStore.Manifest(version: "test", files: [.init(name: "stand-in.gguf", size: 8, sha256: nil)])
+        try? JSONEncoder().encode(manifest).write(to: folder.appendingPathComponent(VisionModelStore.manifestName))
+    }
+
     /// Screenshots only (`-rtcamFakeDownloading <level>`): the Models screen as if that level were
     /// 42 percent down. Nothing is fetched.
     func debugPretendDownloading(_ level: ModelLevel) {
@@ -409,6 +420,8 @@ final class VisionModelDownloader: NSObject, ObservableObject {
 
     private func fail(_ level: ModelLevel, _ message: String) {
         states[level] = .failed(message)
+        // A hand pick that won't arrive goes back to automatic (the line below says why).
+        if ModelPicker.manualLevel == level { ModelPicker.manualLevel = nil }
         SpeechManager.shared.speak(L("The %@ model download stopped. You can try again in Settings, under Models. What's this? still works.", level.name))
         if current == level { finishCurrent() }
     }

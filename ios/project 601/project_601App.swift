@@ -26,6 +26,11 @@ struct project_601App: App {
         // `-rtcamOpenURL <url>`: the Share Extension's hand-over without the system's
         // "Open in" prompt, so the Simulator can test it unattended.
         let args = ProcessInfo.processInfo.arguments
+        // `-rtcamFakeInstalled <level>`: a stand-in downloaded model, for the Models UI test.
+        if let i = args.firstIndex(of: "-rtcamFakeInstalled"), i + 1 < args.count,
+           let level = ModelLevel(rawValue: args[i + 1]) {
+            VisionModelDownloader.debugFakeInstall(level)
+        }
         if let i = args.firstIndex(of: "-rtcamOpenURL"), i + 1 < args.count, let url = URL(string: args[i + 1]) {
             DispatchQueue.main.async { SharedImageInbox.shared.handle(url) }
         }

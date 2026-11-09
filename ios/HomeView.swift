@@ -34,6 +34,8 @@ struct HomeView: View {
     // MARK: - Vision model download
 
     @ObservedObject private var modelSetup = ModelSetup.shared
+    /// The model automatic picked, waiting for "Download?" (nothing downloads without a yes).
+    @State private var askGetModel: ModelLevel?
 
     /// One small row under the buttons, shown only while a smarter level for
     /// this phone is downloading, or waiting for a tap because the phone is off
@@ -77,7 +79,7 @@ struct HomeView: View {
                         .multilineTextAlignment(.center)
                 }
                 Button {
-                    modelSetup.fetchWanted(automatic: false)
+                    askGetModel = level
                 } label: {
                     Text(L("Get the %@ model for this phone (%@, one time, Wi-Fi recommended)", level.name, level.sizeDescription))
                         .font(.footnote.weight(.semibold))
@@ -92,6 +94,14 @@ struct HomeView: View {
                 .accessibilityHint(L("%@, one time, Wi-Fi recommended. What's this? gets more accurate. It already works without it.", level.sizeDescription))
             }
             .padding(.bottom, 6)
+            .alert(L("Download %@?", askGetModel?.name ?? ""),
+                   isPresented: Binding(get: { askGetModel != nil }, set: { if !$0 { askGetModel = nil } }),
+                   presenting: askGetModel) { _ in
+                Button(L("Download")) { modelSetup.fetchWanted() }
+                Button(L("Cancel"), role: .cancel) {}
+            } message: { level in
+                Text(L("%@. Uses Wi-Fi or your data plan. You can stop it any time.", level.sizeDescription))
+            }
         }
     }
 
