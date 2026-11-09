@@ -89,7 +89,7 @@ final class LiveCamUITests: XCTestCase {
         let l = { (e: String) in spanish ? TestLanguage.spanish(e) : e }
         let back = app.buttons[l("Back")].firstMatch
         XCTAssertTrue(back.waitForExistence(timeout: 10), "no Back button")
-        XCTAssertGreaterThanOrEqual(back.frame.width, 56, "Back is smaller than 56 pt")
+        XCTAssertGreaterThanOrEqual(back.frame.width, 44, "Back is smaller than 44 pt")
         back.tap()
         XCTAssertTrue(app.buttons[l("Live Cam, experimental")].firstMatch.waitForExistence(timeout: 15), "Back did not return Home")
     }
@@ -107,13 +107,13 @@ final class LiveCamUITests: XCTestCase {
         for n in names {
             let b = app.buttons[n].firstMatch
             XCTAssertTrue(b.exists, "\(n) missing")
-            XCTAssertGreaterThanOrEqual(min(b.frame.width, b.frame.height), 56, "\(n) under 56 pt: \(b.frame)")
+            XCTAssertGreaterThanOrEqual(min(b.frame.width, b.frame.height), 44, "\(n) under 44 pt: \(b.frame)")
             XCTAssertTrue(screen.contains(b.frame), "\(n) off screen: \(b.frame) in \(screen)")
             frames.append((n, b.frame))
         }
         let mode = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", T("Mode"))).firstMatch
         XCTAssertTrue(mode.exists, "Mode missing")
-        XCTAssertGreaterThanOrEqual(mode.frame.height, 56)
+        XCTAssertGreaterThanOrEqual(mode.frame.height, 44)
         XCTAssertTrue(screen.contains(mode.frame), "Mode off screen")
         frames.append(("Mode", mode.frame))
         // The zoom pills (Matt 11/6): each a 44 pt+ target, on screen, clear of every other control.
@@ -136,7 +136,7 @@ final class LiveCamUITests: XCTestCase {
     @MainActor
     func testRealModelAnswers() throws {
         continueAfterFailure = false
-        let app = launch()
+        let app = launch(["-liveCamShowCaption", "YES"])   // "You said" shows only with Words on screen on
         openLiveCam(app)
         let before = captionText(app)
         ask(app, "What is in front of me?")
@@ -190,7 +190,7 @@ final class LiveCamUITests: XCTestCase {
         openLiveCam(app)
         let light = app.descendants(matching: .any).matching(identifier: "liveCamFlashlight").firstMatch   // a toggle: a switch to XCUITest
         XCTAssertTrue(light.waitForExistence(timeout: 10), "no flashlight button")
-        XCTAssertGreaterThanOrEqual(min(light.frame.width, light.frame.height), 56)
+        XCTAssertGreaterThanOrEqual(min(light.frame.width, light.frame.height), 44)
         XCTAssertTrue(app.windows.firstMatch.frame.contains(light.frame), "flashlight off screen: \(light.frame)")
         for n in ["Back", "Quiet"].map({ T($0) }) {
             XCTAssertFalse(light.frame.intersects(app.buttons[n].firstMatch.frame), "flashlight overlaps \(n)")
