@@ -57,6 +57,7 @@
 		BB0000182E4400000000B018 /* HuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000132E4400000000B013 /* HuggingFace */; };
 		E0E5A5270514F3BB1EF8EC52 /* llama.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 44C4767980F0D9F46F4E515E /* llama.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E1E5220689CA8BD0E17F214A /* llama.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 44C4767980F0D9F46F4E515E /* llama.xcframework */; };
+		CC0000022E4400000000C002 /* ShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = CC0000012E4400000000C001 /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -74,6 +75,13 @@
 			remoteGlobalIDString = 99BA102F2E34CF71001E5140;
 			remoteInfo = "project 601";
 		};
+		CC0000032E4400000000C003 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 99BA10282E34CF71001E5140 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CC0000102E4400000000C010;
+			remoteInfo = ShareExtension;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -86,6 +94,17 @@
 				E0E5A5270514F3BB1EF8EC52 /* llama.xcframework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CC0000042E4400000000C004 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				CC0000022E4400000000C002 /* ShareExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -137,7 +156,18 @@
 		AA0000062E4400000000A006 /* NarratorModel */ = {isa = PBXFileReference; lastKnownFileType = folder; path = NarratorModel; sourceTree = "<group>"; };
 		AA0000102E4400000000A010 /* VisionModel */ = {isa = PBXFileReference; lastKnownFileType = folder; path = VisionModel; sourceTree = "<group>"; };
 		AA0000122E4400000000A012 /* MoneyModels */ = {isa = PBXFileReference; lastKnownFileType = folder; path = MoneyModels; sourceTree = "<group>"; };
+		CC0000012E4400000000C001 /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		CC0000062E4400000000C006 /* Exceptions for "ShareExtension" folder in "ShareExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = CC0000102E4400000000C010 /* ShareExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		99BA10322E34CF71001E5140 /* project 601 */ = {
@@ -166,6 +196,14 @@
 			exceptions = (
 			);
 			path = Resources;
+			sourceTree = "<group>";
+		};
+		CC0000052E4400000000C005 /* ShareExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				CC0000062E4400000000C006 /* Exceptions for "ShareExtension" folder in "ShareExtension" target */,
+			);
+			path = ShareExtension;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -202,6 +240,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		99BA10442E34CF71001E5140 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CC0000082E4400000000C008 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -262,6 +307,7 @@
 				99BA10322E34CF71001E5140 /* project 601 */,
 				99BA10402E34CF71001E5140 /* project 601Tests */,
 				99BA104A2E34CF71001E5140 /* project 601UITests */,
+				CC0000052E4400000000C005 /* ShareExtension */,
 				996B93002E38A15B00AE22AA /* Frameworks */,
 				99BA10312E34CF71001E5140 /* Products */,
 				99A922C92E39BA0E0070BDB5 /* yolov8n_oiv7.mlpackage */,
@@ -279,6 +325,7 @@
 				99BA10302E34CF71001E5140 /* RealTime Ai Cam.app */,
 				99BA103D2E34CF71001E5140 /* RealTime Ai CamTests.xctest */,
 				99BA10472E34CF71001E5140 /* RealTime Ai CamUITests.xctest */,
+				CC0000012E4400000000C001 /* ShareExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -294,10 +341,12 @@
 				99BA102D2E34CF71001E5140 /* Frameworks */,
 				99BA102E2E34CF71001E5140 /* Resources */,
 				00E4CD87F74B023D1E9BD25D /* Embed Frameworks */,
+				CC0000042E4400000000C004 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				CC0000072E4400000000C007 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				99BA10322E34CF71001E5140 /* project 601 */,
@@ -358,6 +407,28 @@
 			productReference = 99BA10472E34CF71001E5140 /* RealTime Ai CamUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		CC0000102E4400000000C010 /* ShareExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CC0000132E4400000000C013 /* Build configuration list for PBXNativeTarget "ShareExtension" */;
+			buildPhases = (
+				CC0000092E4400000000C009 /* Sources */,
+				CC0000082E4400000000C008 /* Frameworks */,
+				CC00000A2E4400000000C00A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				CC0000052E4400000000C005 /* ShareExtension */,
+			);
+			name = ShareExtension;
+			packageProductDependencies = (
+			);
+			productName = ShareExtension;
+			productReference = CC0000012E4400000000C001 /* ShareExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -378,6 +449,9 @@
 					99BA10462E34CF71001E5140 = {
 						CreatedOnToolsVersion = 26.0;
 						TestTargetID = 99BA102F2E34CF71001E5140;
+					};
+					CC0000102E4400000000C010 = {
+						CreatedOnToolsVersion = 26.0;
 					};
 				};
 			};
@@ -404,6 +478,7 @@
 				99BA102F2E34CF71001E5140 /* RealTime Ai Cam */,
 				99BA103C2E34CF71001E5140 /* RealTime Ai CamTests */,
 				99BA10462E34CF71001E5140 /* RealTime Ai CamUITests */,
+				CC0000102E4400000000C010 /* ShareExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -431,6 +506,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		99BA10452E34CF71001E5140 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CC00000A2E4400000000C00A /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -487,6 +569,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		CC0000092E4400000000C009 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -499,6 +588,11 @@
 			isa = PBXTargetDependency;
 			target = 99BA102F2E34CF71001E5140 /* RealTime Ai Cam */;
 			targetProxy = 99BA10482E34CF71001E5140 /* PBXContainerItemProxy */;
+		};
+		CC0000072E4400000000C007 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CC0000102E4400000000C010 /* ShareExtension */;
+			targetProxy = CC0000032E4400000000C003 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -800,6 +894,64 @@
 			};
 			name = Release;
 		};
+		CC0000112E4400000000C011 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 47;
+				DEVELOPMENT_TEAM = B9RA6QH559;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ShareExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "RealTime AI Cam";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.4.1;
+				PRODUCT_BUNDLE_IDENTIFIER = "B9RA6QH559.project-601.ShareExtension";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		CC0000122E4400000000C012 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 47;
+				DEVELOPMENT_TEAM = B9RA6QH559;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ShareExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "RealTime AI Cam";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.4.1;
+				PRODUCT_BUNDLE_IDENTIFIER = "B9RA6QH559.project-601.ShareExtension";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -835,6 +987,15 @@
 			buildConfigurations = (
 				99BA10582E34CF71001E5140 /* Debug */,
 				99BA10592E34CF71001E5140 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		CC0000132E4400000000C013 /* Build configuration list for PBXNativeTarget "ShareExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CC0000112E4400000000C011 /* Debug */,
+				CC0000122E4400000000C012 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

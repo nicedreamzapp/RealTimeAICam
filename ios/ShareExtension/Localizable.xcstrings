@@ -1,0 +1,26 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Opening RealTime AI Cam…" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abriendo RealTime AI Cam…"
+          }
+        }
+      }
+    },
+    "That picture couldn't be opened." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo abrir esa imagen."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

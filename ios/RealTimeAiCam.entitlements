@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-
+	<!-- Shared with the Share Extension: it drops a shared picture here and the app picks it up. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.B9RA6QH559.project-601</string>
+	</array>
 </dict>
 </plist>
