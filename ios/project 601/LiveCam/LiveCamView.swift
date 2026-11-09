@@ -31,6 +31,8 @@ struct LiveCamView: View {
     @State private var zoomStart: CGFloat?
     @State private var zoomLabel: CGFloat = 1
     @State private var typed = ""
+    @State private var flash = 0.0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GeometryReader { geo in
@@ -38,21 +40,16 @@ struct LiveCamView: View {
             ZStack {
                 Color.black.ignoresSafeArea()
                 if let still = call.camera.stillFrame {
-                    Image(decorative: still, scale: 1).resizable().scaledToFill()
-                        .frame(width: geo.size.width, height: geo.size.height).clipped().ignoresSafeArea()
-                        .accessibilityHidden(true)
+                    fullScreen(still)
                 } else {
                     LiveCamPreview(session: call.camera.session).ignoresSafeArea().accessibilityHidden(true)
                 }
-                if call.showCaption, abs(zoomLabel - 1) > 0.05 {
-                    VStack {
-                        Text(String(format: zoomLabel < 10 ? "%.1f×" : "%.0f×", zoomLabel))
-                            .font(.footnote.weight(.bold)).foregroundStyle(.white)
-                            .padding(.horizontal, 10).padding(.vertical, 5).background(.black.opacity(0.45), in: Capsule())
-                            .padding(.top, 80)
-                        Spacer()
-                    }.allowsHitTesting(false).accessibilityHidden(true)
+                // Matt 11/6, a live camera: the frame it just took holds still for a moment, with a shutter flash.
+                if let f = call.frozen {
+                    fullScreen(f)   // sized like the live preview and the box: the whole screen, no jump (review 11/6)
                 }
+                Color.white.opacity(flash).ignoresSafeArea().allowsHitTesting(false).accessibilityHidden(true)
+                thingBox
                 LinearGradient(colors: [.black.opacity(0.45), .clear, .clear, .black.opacity(0.8)], startPoint: .top, endPoint: .bottom)
                     .ignoresSafeArea().accessibilityHidden(true)
                 VStack(spacing: wide ? 10 : 16) {
@@ -68,8 +65,10 @@ struct LiveCamView: View {
                             .accessibilityIdentifier("liveCamCantHear")
                     }
                     if call.typedOnly || call.hearingStopped { typedBox }
-                    orb(size: wide ? 96 : 120)
-                    bottomBar
+                    // Matt 11/6, a live camera: zoom pills like the Camera app's, just above the controls.
+                    zoomPills
+                    orb(size: wide ? 84 : (geo.size.height < 700 ? 96 : 120))
+                    bottomBar(width: geo.size.width)
                 }
                 // The menu floats over the view, so Mute and Back never move or leave the screen.
                 .overlay(alignment: .top) { if showModes { modeMenu.padding(.top, 76) } }
@@ -97,11 +96,57 @@ struct LiveCamView: View {
             call.onEnd = { onBack() }
             call.start()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                // Matt 11/6: no experimental warning at open; VoiceOver hears just the screen's name.
                 UIAccessibility.post(notification: .screenChanged,
-                                     argument: SpeechManager.voiceOverLine(L("Live Cam, experimental"), lang: AppLang.code))
+                                     argument: SpeechManager.voiceOverLine(L("Live Cam"), lang: AppLang.code))
             }
         }
         .onDisappear { call.end() }
+        .onChange(of: call.shutterCount) {
+            flash = reduceMotion ? 0.2 : 0.45
+            withAnimation(.easeOut(duration: 0.35)) { flash = 0 }
+        }
+    }
+
+    /// A still filling the whole screen exactly like the live preview (aspect fill, past the safe areas).
+    private func fullScreen(_ image: CGImage) -> some View {
+        GeometryReader { g in
+            Image(decorative: image, scale: 1).resizable().scaledToFill()
+                .frame(width: g.size.width, height: g.size.height).clipped()
+        }
+        .ignoresSafeArea()
+        .accessibilityHidden(true)
+    }
+
+    // MARK: The box around the thing it named
+
+    /// A Camera-app-style yellow box on the thing the answer named, for a few seconds. Hidden from VoiceOver (the
+    /// answer says it); its name shows only with Words on screen on.
+    private var thingBox: some View {
+        GeometryReader { g in
+            if let b = call.thingBox {
+                let r = LiveThings.viewRect(b.box, frame: b.frame, view: g.size)
+                ZStack(alignment: .topLeading) {
+                    RoundedRectangle(cornerRadius: 10).stroke(LiveOrb.lookColor, lineWidth: 3)
+                        .shadow(color: .black.opacity(0.5), radius: 3)
+                        .frame(width: r.width, height: r.height)
+                        .offset(x: r.minX, y: r.minY)
+                    if call.showCaption {
+                        Text(b.name).font(.footnote.weight(.bold)).foregroundStyle(.black)
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(LiveOrb.lookColor, in: Capsule())
+                            // Kept on screen when the thing runs off the edge (the box itself may).
+                            .offset(x: min(max(12, r.minX + 6), g.size.width - 140), y: max(54, r.minY - 24))
+                    }
+                }
+                .id(b.id)
+                .transition(.opacity)
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .animation(.easeInOut(duration: 0.25), value: call.thingBox)
     }
 
     // MARK: Top: mode and flip
@@ -135,7 +180,7 @@ struct LiveCamView: View {
             .accessibilityAddTraits(.isToggle)
             .accessibilityHint(L("Shows what Live Cam says in big words. VoiceOver can read them either way"))
             .accessibilityIdentifier("liveCamWordsToggle")
-            Button { call.camera.flip() } label: {
+            Button { call.flip(); zoomLabel = 1 } label: {   // a flip starts at 1x again (review 11/6)
                 Image(systemName: "arrow.triangle.2.circlepath.camera").font(.title2.weight(.semibold))
                     .frame(width: 60, height: 60).background(.black.opacity(0.45), in: Circle())
                     .overlay(Circle().stroke(.white.opacity(0.35), lineWidth: 1))
@@ -198,22 +243,23 @@ struct LiveCamView: View {
 
     // MARK: Middle: what it heard and what it says
 
-    @ViewBuilder
     private func words(wide: Bool) -> some View {
-        VStack(spacing: 8) {
+        // Matt 11/6: captions like FaceTime's Live Captions, a rounded see-through bubble with the words left-aligned.
+        let bubble = call.showCaption && (!call.caption.isEmpty || !call.heardText.isEmpty)
+        return VStack(alignment: .leading, spacing: 6) {
             if call.showCaption, !call.heardText.isEmpty {
                 Text(L("You: %@", call.heardText))
-                    .font(.system(size: wide ? 17 : 19, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.85)).multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.7)
-                    .shadow(color: .black.opacity(0.9), radius: 4)
+                    .font(.system(size: wide ? 15 : 17, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.7)).multilineTextAlignment(.leading).lineLimit(2).minimumScaleFactor(0.7)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityLabel(L("You said: %@", call.heardText))
                     .accessibilityIdentifier("liveCamHeard")
             }
             if !call.caption.isEmpty {
                 Text(call.caption)
-                    .font(.system(size: wide ? 22 : 26, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white).multilineTextAlignment(.center).lineLimit(wide ? 3 : 4).minimumScaleFactor(0.6)
-                    .shadow(color: .black.opacity(0.9), radius: 6)
+                    .font(.system(size: wide ? 20 : 22, weight: .semibold))
+                    .foregroundStyle(.white).multilineTextAlignment(.leading).lineLimit(wide ? 3 : 4).minimumScaleFactor(0.6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .opacity(call.showCaption ? 1 : 0.001)   // hidden words stay readable by VoiceOver
                     .accessibilityLabel(call.caption)
                     .accessibilityValue(call.caption)
@@ -224,9 +270,56 @@ struct LiveCamView: View {
             }
             if call.phase == .loading || call.phase == .starting {
                 ProgressView().tint(.white).accessibilityLabel(L("Getting Live Cam ready"))
+                    .frame(maxWidth: .infinity)
             }
         }
+        .padding(.horizontal, bubble ? 16 : 0).padding(.vertical, bubble ? 12 : 0)
+        .background {
+            if bubble {
+                RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.ultraThinMaterial)
+                    .environment(\.colorScheme, .dark)
+                    .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.black.opacity(0.25)))
+            }
+        }
+        .frame(maxWidth: 560)
         .frame(maxWidth: .infinity)
+    }
+
+    // MARK: Zoom pills (the Camera app's 0.5, 1, 2)
+
+    private var zoomStops: [CGFloat] { (call.camera.minZoom < 0.9 ? [0.5] : []) + [1, 2] }
+
+    private var zoomPills: some View {
+        let stops = zoomStops
+        // The pill showing the zoom now: the nearest stop at or below it, like the Camera app ("1.4×" on the 1).
+        let active = stops.last { $0 <= zoomLabel + 0.01 } ?? stops[0]
+        return HStack(spacing: 6) {
+            ForEach(stops, id: \.self) { z in
+                let on = z == active
+                Button {
+                    call.camera.setZoom(z); zoomLabel = z
+                } label: {
+                    Text(on ? Self.zoomText(zoomLabel) : Self.zoomText(z, short: true))
+                        .font(.system(size: on ? 14 : 12, weight: .bold))
+                        .foregroundStyle(on ? LiveOrb.lookColor : .white)
+                        .frame(width: on ? 44 : 36, height: on ? 44 : 36)
+                        .background(.black.opacity(0.5), in: Circle())
+                        .frame(width: 48, height: 48).contentShape(Circle())
+                }
+                .accessibilityLabel(L("Zoom %@", Self.zoomText(z)))
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+        .padding(.horizontal, 6)
+        .background(.black.opacity(0.25), in: Capsule())
+        .animation(.easeOut(duration: 0.15), value: active)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("liveCamZoom")
+    }
+
+    static func zoomText(_ z: CGFloat, short: Bool = false) -> String {
+        if short { return z < 1 ? ".5" : String(format: "%.0f", z) }
+        return String(format: z < 10 && abs(z - z.rounded()) > 0.05 ? "%.1f×" : "%.0f×", z)
     }
 
     private var typedBox: some View {
@@ -251,6 +344,7 @@ struct LiveCamView: View {
                 .accessibilityHint(call.phase == .speaking || call.phase == .thinking ? L("Double tap to stop it talking and ask something else") : "")
                 .accessibilityAddTraits(.updatesFrequently)
                 .accessibilityAction { call.interrupt() }
+                .accessibilityIdentifier("liveCamOrb-" + orbState)   // identifiers are never spoken
             Text(statusLine).font(.footnote.weight(.medium)).foregroundStyle(.white.opacity(0.8))
                 .opacity(call.showCaption ? 1 : 0)
                 .accessibilityHidden(true)
@@ -259,28 +353,72 @@ struct LiveCamView: View {
 
     // MARK: Bottom: mute and the one way out
 
-    private var bottomBar: some View {
-        HStack(spacing: 40) {
+    /// The round buttons' size and spacing for a row of `count` at this width: 76 pt where it fits, smaller (never
+    /// under 58) on a narrow screen, so the row always fits (review 11/6: it overflowed at 320 pt).
+    static func bottomRow(width: CGFloat, count: Int) -> (size: CGFloat, spacing: CGFloat) {
+        let n = CGFloat(count), avail = min(width, 640) - 32
+        let d = max(58, min(76, (avail - (n - 1) * 12) / n - 8))
+        let spacing = max(6, min(40, (avail - n * (d + 8)) / max(1, n - 1)))
+        return (d, spacing)
+    }
+
+    private func bottomBar(width: CGFloat) -> some View {
+        let (d, spacing) = Self.bottomRow(width: width, count: call.torchAvailable ? 4 : 3)
+        return HStack(spacing: spacing) {
+            // Matt 11/6: "Live cam needs to have a flashlight... preferably at the bottom". One tap on, one tap off;
+            // on the selfie camera it flips to the back camera first. Its word stays even with Words on screen off.
+            if call.torchAvailable {
+                Button { call.setFlashlight(!call.torchOn) } label: {
+                    VStack(spacing: 6) {
+                        Image(systemName: call.torchOn ? "flashlight.on.fill" : "flashlight.off.fill").font(.system(size: d * 0.37, weight: .semibold))
+                            .frame(width: d, height: d)
+                            .background(call.torchOn ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.black.opacity(0.45)), in: Circle())
+                            .overlay(Circle().stroke(.white.opacity(0.35), lineWidth: 1))
+                            .foregroundStyle(call.torchOn ? .black : .white)
+                        Text(L("Flashlight")).font(.footnote.weight(.semibold)).foregroundStyle(.white)
+                            .lineLimit(1).minimumScaleFactor(0.6)
+                    }
+                    .frame(width: d + 8)
+                }
+                .accessibilityLabel(L("Flashlight"))
+                .accessibilityValue(call.torchOn ? L("On") : L("Off"))
+                .accessibilityAddTraits(.isToggle)
+                .accessibilityIdentifier("liveCamFlashlight")
+            }
             // Moonstone 11/1 Matt: "call it the mute button so it's obvious".
             Button { call.micMuted.toggle() } label: {
                 VStack(spacing: 6) {
-                    Image(systemName: call.micMuted ? "mic.slash.fill" : "mic.slash").font(.system(size: 28, weight: .semibold))
-                        .frame(width: 76, height: 76)
+                    Image(systemName: call.micMuted ? "mic.slash.fill" : "mic.slash").font(.system(size: d * 0.37, weight: .semibold))
+                        .frame(width: d, height: d)
                         .background(call.micMuted ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.black.opacity(0.45)), in: Circle())
                         .overlay(Circle().stroke(.white.opacity(0.35), lineWidth: 1))
                         .foregroundStyle(call.micMuted ? .black : .white)
                     Text(call.micMuted ? L("Unmute") : L("Mute")).font(.footnote.weight(.semibold)).foregroundStyle(.white)
-                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .lineLimit(1).minimumScaleFactor(0.6).frame(width: d + 8)
                 }
             }
             .accessibilityLabel(call.micMuted ? L("Unmute microphone") : L("Mute microphone"))
             .accessibilityHint(call.micMuted ? L("Live Cam starts listening again") : L("Live Cam stops listening until you unmute"))
+            // Matt 11/6: a shutter for loud places. Press it to ask about what's in view right now.
+            Button { call.askAboutView() } label: {
+                VStack(spacing: 6) {
+                    ZStack {
+                        Circle().stroke(.white, lineWidth: 4).frame(width: d, height: d)
+                        Circle().fill(.white).frame(width: d - 14, height: d - 14)
+                    }
+                    Text(L("Ask")).font(.footnote.weight(.semibold)).foregroundStyle(.white)
+                        .lineLimit(1).minimumScaleFactor(0.6).frame(width: d + 8)
+                }
+            }
+            .accessibilityLabel(L("Ask about the view"))
+            .accessibilityHint(L("Tells you what's in front of the camera right now, for loud places"))
+            .accessibilityIdentifier("liveCamShutter")
             Button { call.end() } label: {
                 VStack(spacing: 6) {
-                    Image(systemName: "xmark").font(.system(size: 28, weight: .bold))
-                        .frame(width: 76, height: 76).background(Color.red, in: Circle()).foregroundStyle(.white)
+                    Image(systemName: "xmark").font(.system(size: d * 0.37, weight: .bold))
+                        .frame(width: d, height: d).background(Color.red, in: Circle()).foregroundStyle(.white)
                     Text(L("Back")).font(.footnote.weight(.semibold)).foregroundStyle(.white)
-                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .lineLimit(1).minimumScaleFactor(0.6).frame(width: d + 8)
                 }
             }
             .accessibilityLabel(L("Back"))
@@ -290,7 +428,7 @@ struct LiveCamView: View {
 
     private var statusLine: String {
         switch call.phase {
-        case .listening: call.micMuted ? L("Microphone muted") : (call.typedOnly || call.hearingStopped ? L("Type a question") : L("Listening · just talk"))
+        case .listening: call.micMuted ? L("Microphone muted") : (call.typedOnly || call.hearingStopped ? L("Type a question") : L("Your turn"))
         case .thinking: L("Looking")
         case .speaking: L("Speaking")
         case .downloading, .loading, .starting: L("Getting ready")
@@ -299,9 +437,12 @@ struct LiveCamView: View {
         }
     }
 
+    /// For the UI tests: which of the three looks the orb has (in the identifier only; the label says it in words).
+    private var orbState: String { "\(LiveOrb.look(call.phase, muted: call.micMuted))" }
+
     private var orbLabel: String {
         switch call.phase {
-        case .listening: call.micMuted ? L("Microphone muted") : (call.hearingStopped ? L("Not listening. Type a question.") : L("Always listening. Just talk."))
+        case .listening: call.micMuted ? L("Microphone muted") : (call.hearingStopped ? L("Not listening. Type a question.") : L("Your turn"))
         case .thinking: L("Looking")
         case .speaking: L("Speaking")
         case .downloading, .loading, .starting: L("Getting ready")
@@ -311,41 +452,76 @@ struct LiveCamView: View {
     }
 }
 
-/// The soft animated orb (Moonstone): breathes while listening (with your voice), swirls while thinking,
-/// pulses while speaking.
+/// The orb (Matt 11/6: "some sort of indicator showing that it's thinking or analyzing, or when it'll let you talk
+/// next"). Three states nobody can confuse, by shape, motion and color, with no words needed (Words on screen off):
+///   your turn: an open green ring that grows and thickens with your voice, a dot in the middle
+///   looking:   two yellow arcs spinning like a camera focusing
+///   talking:   a solid white disc with sound bars moving
+/// Muted is a gray dashed ring; getting ready a dim breathing disc.
 struct LiveOrb: View {
     let phase: LiveCallController.Phase
     let level: Float
     let muted: Bool
     var still = false
 
-    var body: some View {
-        // Never frozen (a stopped orb reads as a glitch): 30 fps, and a gentle 12 fps while the model works.
-        TimelineView(.animation(minimumInterval: still || phase == .thinking ? 1.0 / 12 : 1.0 / 30)) { tl in
-            let t = tl.date.timeIntervalSinceReferenceDate
-            let voice = max(0, min(1, Double(level + 50) / 40))
-            let scale: Double = switch phase {
-            case .listening: muted ? 0.75 : 0.8 + 0.5 * voice + 0.02 * sin(t * 2)
-            case .thinking: 0.9 + 0.05 * sin(t * 6)
-            case .speaking: 0.95 + 0.08 * abs(sin(t * 5))
-            default: 0.85 + 0.03 * sin(t)
-            }
-            ZStack {
-                Circle().fill(RadialGradient(colors: colors.map { $0.opacity(0.9) } + [.clear], center: .center, startRadius: 4, endRadius: 64))
-                    .blur(radius: 10)
-                Circle().fill(AngularGradient(colors: colors + [colors[0]], center: .center, angle: .degrees(t * (phase == .thinking ? 180 : 40))))
-                    .frame(width: 70, height: 70).blur(radius: 6).opacity(0.85)
-            }
-            .scaleEffect(scale)
+    enum Look: Equatable { case yourTurn, looking, talking, muted, waiting }
+    static func look(_ phase: LiveCallController.Phase, muted: Bool) -> Look {
+        switch phase {
+        case .listening: muted ? .muted : .yourTurn
+        case .thinking: .looking
+        case .speaking: .talking
+        default: .waiting
         }
     }
+    static let turnColor = Color(red: 0.3, green: 0.9, blue: 0.5)
+    static let lookColor = Color(red: 1, green: 0.82, blue: 0.2)
 
-    private var colors: [Color] {
-        switch phase {
-        case .listening: muted ? [.gray, .white.opacity(0.4)] : [Color(red: 0.4, green: 0.7, blue: 1), .white, Color(red: 0.2, green: 0.4, blue: 1)]
-        case .thinking: [.purple, Color(red: 0.4, green: 0.6, blue: 1), .white]
-        case .speaking: [.white, Color(red: 0.5, green: 0.8, blue: 1), Color(red: 0.6, green: 0.5, blue: 1)]
-        default: [.white.opacity(0.6), .gray]
+    var body: some View {
+        // Never frozen (a stopped orb reads as a glitch): 30 fps, and a gentle 12 fps while the model works.
+        TimelineView(.animation(minimumInterval: still ? 1.0 / 12 : 1.0 / 30)) { tl in
+            let t = tl.date.timeIntervalSinceReferenceDate
+            let voice = max(0, min(1, Double(level + 50) / 40))
+            GeometryReader { g in
+                let d = min(g.size.width, g.size.height)
+                ZStack {
+                    switch Self.look(phase, muted: muted) {
+                    case .yourTurn:
+                        Circle().fill(.black.opacity(0.3)).frame(width: d * 0.9, height: d * 0.9)
+                        Circle().stroke(Self.turnColor, lineWidth: d * (0.04 + 0.08 * voice))
+                            .frame(width: d * (0.62 + 0.3 * voice), height: d * (0.62 + 0.3 * voice))
+                            .shadow(color: Self.turnColor.opacity(0.6), radius: 6 + 10 * voice)
+                        Circle().fill(Self.turnColor).frame(width: d * 0.12, height: d * 0.12)
+                            .scaleEffect(1 + 0.08 * sin(t * 2.4))
+                    case .looking:
+                        Circle().fill(.black.opacity(0.3)).frame(width: d * 0.9, height: d * 0.9)
+                        Circle().stroke(.white.opacity(0.18), lineWidth: d * 0.05).frame(width: d * 0.7, height: d * 0.7)
+                        ForEach(0 ..< 2, id: \.self) { i in
+                            Circle().trim(from: 0, to: 0.22)
+                                .stroke(Self.lookColor, style: StrokeStyle(lineWidth: d * 0.06, lineCap: .round))
+                                .frame(width: d * 0.7, height: d * 0.7)
+                                .rotationEffect(.degrees(t * 320 + Double(i) * 180))
+                        }
+                    case .talking:
+                        Circle().fill(.white).frame(width: d * 0.74, height: d * 0.74)
+                            .shadow(color: .white.opacity(0.5), radius: 10)
+                        HStack(spacing: d * 0.045) {
+                            ForEach(0 ..< 5, id: \.self) { i in
+                                Capsule().fill(Color(red: 0.15, green: 0.35, blue: 0.9))
+                                    .frame(width: d * 0.06, height: d * (0.1 + 0.26 * abs(sin(t * 5.5 + Double(i) * 0.9))))
+                            }
+                        }
+                    case .muted:
+                        Circle().stroke(.gray, style: StrokeStyle(lineWidth: d * 0.04, dash: [d * 0.06, d * 0.05]))
+                            .frame(width: d * 0.62, height: d * 0.62)
+                        Image(systemName: "mic.slash.fill").font(.system(size: d * 0.22, weight: .semibold)).foregroundStyle(.gray)
+                    case .waiting:
+                        Circle().fill(.white.opacity(0.25)).frame(width: d * 0.5, height: d * 0.5)
+                            .scaleEffect(0.9 + 0.08 * sin(t * 1.5))
+                    }
+                }
+                .frame(width: g.size.width, height: g.size.height)
+                .animation(.easeOut(duration: 0.2), value: Self.look(phase, muted: muted))
+            }
         }
     }
 }

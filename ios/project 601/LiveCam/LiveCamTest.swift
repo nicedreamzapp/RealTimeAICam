@@ -5,13 +5,14 @@
 //   -liveCamMute      the voice runs its whole queue and timing with no sound (a real phone on a desk)
 //   -liveCamCantHear  acts as if speech recognition kept failing (the "can't hear you" note and typing box)
 //   RTCAM_FAKE_LIVE_ANSWER (environment) stands in for the model's answer, for a Simulator that can't run it
+//   RTCAM_FAKE_LIVE_DELAY (environment) seconds the stand-in "thinks" before answering
+//   RTCAM_FAKE_THING_BOX (environment) "x,y,w,h": the box when the Simulator's detector finds nothing
 // Debug builds also write a timing log (Documents/live-cam/log.jsonl, a new file each visit). Release builds
 // write nothing anywhere: no log, no recording.
 import Foundation
 import UIKit
 
 enum LiveCamWords {
-    static let permissionLine = "Live Cam listens for your questions, so your phone will ask to use the microphone and speech recognition. Everything stays on this phone."
     static let notAllowed = "Live Cam needs the microphone and speech recognition to hear you. Allow them in Settings, then open Live Cam again."
     static let cantHear = "I can't hear you right now. Speech recognition on this phone keeps stopping. You can type your question in the box, or go back."
     static let cantHearNote = "Can't hear you: speech recognition keeps stopping. Type a question below, or tap Back."
@@ -33,6 +34,20 @@ enum LiveCamWords {
     static let cantSeeInBackground = "I can't see while the phone is locked or another app is open. Open RealTime AI Cam again and ask me."
     static let cameraPaused = "My camera paused, I'm restarting it. Ask me again in a second."
     static let newThing = "I see %@. Anything I can help with?"
+    /// After the one help offer of the visit (Matt 11/6): just the thing.
+    static let newThingPlain = "I see %@."
+    static let newThingThere = "There's %@."
+    /// The one help offer of the visit, after the opening look (Matt 11/6: never asked of the model every time).
+    static let helpOffer = "Anything I can help with?"
+    /// An answer whose every sentence was already said this visit (Matt 11/6: never the same words twice).
+    static let sameAsBefore = "Same as before."
+    /// The torch didn't do what was asked (review 11/6).
+    static let lightFailed = "The flashlight isn't working right now."
+    /// Said while it counts money, taking turns (Matt 11/6: never the same words twice in a row).
+    static let countingLines = ["Let me count.", "Counting now.", "One sec, counting."]
+    /// A goal finished ("done") or swapped ("new thing"), Matt 11/6.
+    static let goalDone = "Nice work."
+    static let goalNew = "Okay. What's the new thing?"
     static let notFullySure = "I'm not fully sure on that one."
     static let takeBack = "Actually, I'm not sure about the %@."
     static let lostAnswer = "Sorry, I lost that. Ask me again?"
@@ -41,11 +56,11 @@ enum LiveCamWords {
     /// es-strings.py only finds L("...") literals, so `missing` can't see these and `stale` lists them: keep them in the
     /// catalog. LiveCamSpanishTests checks each one has its Spanish.
     static var indirectKeys: [String] {
-        [permissionLine, notAllowed, cantHear, cantHearNote, noOfflineSpeech,
+        [notAllowed, cantHear, cantHearNote, noOfflineSpeech,
          needsCamera, modelFailed, noModel, sayAgain, lostTrack, bye, gotIt, coachGoalSet, nothingSaidYet, coachGoalHeard,
-         flipToSeeYou, stillGettingReady, cantSeeInBackground, cameraPaused, newThing, notFullySure, takeBack, lostAnswer]
-            + LiveWords.checkIns + LiveWords.acks
-            + LiveMode.allCases.flatMap { [$0.label, $0.confirm] }
+         flipToSeeYou, stillGettingReady, cantSeeInBackground, cameraPaused, newThing, newThingPlain, newThingThere, helpOffer, sameAsBefore, lightFailed, goalDone, goalNew, notFullySure, takeBack, lostAnswer]
+            + LiveWords.checkIns + LiveWords.acks + LiveGoal.checkIns
+            + LiveMode.allCases.flatMap { [$0.label, $0.confirm] } + ["Light's on.", "Light's off."] + countingLines
     }
 }
 
@@ -60,6 +75,12 @@ enum LiveCamTest {
     /// Acts as if speech recognition kept failing, right after the greeting (layout of the "can't hear you" note).
     static var forceCantHear: Bool { args.contains("-liveCamCantHear") }
     static var fakeAnswer: String? { ProcessInfo.processInfo.environment["RTCAM_FAKE_LIVE_ANSWER"] }
+    static var fakeThingBox: CGRect? {
+        guard let v = ProcessInfo.processInfo.environment["RTCAM_FAKE_THING_BOX"]?.split(separator: ",").compactMap({ Double($0) }),
+              v.count == 4 else { return nil }
+        return CGRect(x: v[0], y: v[1], width: v[2], height: v[3])
+    }
+    static var fakeDelay: Double { Double(ProcessInfo.processInfo.environment["RTCAM_FAKE_LIVE_DELAY"] ?? "") ?? 0 }
     #else
     static let active = false
     static let mute = false

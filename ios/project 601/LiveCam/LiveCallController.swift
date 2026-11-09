@@ -59,12 +59,19 @@ final class LiveCallController: ObservableObject {
     private var coachGoal: String?
     private var awaitingCoachGoal = false
 
-    @Published private(set) var phase: Phase = .starting { didSet { if phase != oldValue { log(["event": "phase", "phase": "\(phase)"]) } } }
+    @Published private(set) var phase: Phase = .starting {
+        didSet {
+            guard phase != oldValue else { return }
+            log(["event": "phase", "phase": "\(phase)"])
+            phaseChanged(from: oldValue)
+        }
+    }
+    /// When the phase last changed (the harness measures end of speech -> "looking").
+    private(set) var phaseAt = Date()
     /// One or two lines over the camera: what it is saying now, or what it last saw.
     @Published private(set) var caption = ""
     /// The language the caption is in (VoiceOver reads it with a voice for it).
     @Published private(set) var captionLang = AppLang.code
-    /// The welcome is heard, never shown (Matt 11/6: "it does not need one on screen").
     @Published private(set) var progress: Double = 0
     @Published private(set) var micLevel: Float = -60
     /// The model is reading a photo or writing: the orb holds still so the GPU is all the model's.
@@ -87,8 +94,57 @@ final class LiveCallController: ObservableObject {
     @Published var proactiveOn = UserDefaults.standard.object(forKey: "liveCamProactive") as? Bool ?? true {
         didSet { UserDefaults.standard.set(proactiveOn, forKey: "liveCamProactive"); watch.enabled = proactiveOn }
     }
+    /// The flashlight (Matt 11/6), back camera only: one tap on, one tap off.
+    @Published private(set) var torchOn = false
+    var torchAvailable: Bool {
+        #if DEBUG
+        if LiveCamTest.active { return true }   // the harness has no camera: the button and its state still work
+        #endif
+        return LiveCamera.torchAvailable
+    }
+    /// Turning it on from the selfie camera flips to the back camera first (the selfie side has no light).
+    func setFlashlight(_ on: Bool, spoken: Bool = false) {
+        guard running, torchAvailable else { return }
+        log(["event": "flashlight", "on": on, "spoken": spoken])
+        // The camera flips to the back side itself if needed and reports the real state (torchChanged).
+        pendingTorch = (on, spoken)
+        camera.setTorch(on)
+    }
+    private var pendingTorch: (on: Bool, spoken: Bool)?
+    /// The camera's real torch state (review 11/6): the button and the spoken line follow it, never the request.
+    private func torchChanged(_ lit: Bool) {
+        torchOn = lit
+        guard let p = pendingTorch else { return }
+        pendingTorch = nil
+        log(["event": "flashlight_state", "on": lit, "asked": p.on])
+        if p.spoken {
+            // Never the same words twice in a row (the repeat guard), but always said: the light changed, or didn't.
+            let lines = p.on != lit ? [LiveCamWords.lightFailed] : lit ? ["Flashlight, on", "Light's on."] : ["Flashlight, off", "Light's off."]
+            speakAll(own: lines.first { sayGuard.vet($0) != nil && LiveSayGuard.opening($0) != sayGuard.lastOpening } ?? lines[0])
+        } else {
+            UIImpactFeedbackGenerator(style: p.on == lit ? .light : .rigid).impactOccurred()
+        }
+    }
+    /// Flip camera (the camera turns the light off itself when it flips to the selfie side, and says so).
+    func flip() { camera.flip() }
+    private var backgroundWatch: NSObjectProtocol?
+
     /// The last question heard (in the person's words), shown above the answer.
     @Published private(set) var heardText = ""
+    /// Matt 11/6, a live camera: the frame it just took, held on screen ~0.4 s with a shutter flash (shutterCount).
+    @Published private(set) var frozen: CGImage?
+    @Published private(set) var shutterCount = 0
+    /// The thing its answer named, boxed for a few seconds (hidden from VoiceOver; the answer already says it).
+    struct ThingBox: Equatable { let box: CGRect; let frame: CGSize; let name: String; let id: Int }
+    @Published private(set) var thingBox: ThingBox?
+    private var thingFinder: LiveThingFinder?
+    private func newFinder() -> LiveThingFinder {
+        let f = LiveThingFinder(); let cam = camera
+        f.current = { cam.current() }
+        return f
+    }
+    static let freezeSeconds = 0.4
+    static let boxSeconds = 4.0
     /// Speech recognition kept failing the moment it started: the mic is off for this visit and a typing box shows.
     @Published private(set) var hearingStopped = false
 
@@ -111,6 +167,15 @@ final class LiveCallController: ObservableObject {
     }()
 
     private var memory = LiveMemory()
+    /// Matt 11/6: never the same sentence twice, one help offer per visit, no two lines opening the same way.
+    private var sayGuard = LiveSayGuard()
+    private var checkInTurns = LiveRotation()
+    /// What they're doing this visit ("changing a tire"), its step, and the goal check-ins' turns (Matt 11/6).
+    private(set) var goal: LiveGoal.State?
+    private var goalCheckIns = LiveRotation()
+    private var goalAnswering = false
+    /// This turn's model sentences: how many were said and how many were dropped as repeats.
+    private var tally = (turn: -1, said: 0, dropped: 0)
     private var watch = LiveProactive()
     private var current: LiveStreamBox?
     private var turn = 0
@@ -135,7 +200,15 @@ final class LiveCallController: ObservableObject {
         running = true
         moneyMemory.forget()   // a new call never answers from an old count
         Task.detached(priority: .utility) { MoneyDetector.warmUp() }   // both money models loaded off the main thread
+        camera.onTorch = { [weak self] lit in DispatchQueue.main.async { MainActor.assumeIsolated { self?.torchChanged(lit) } } }
+        if thingFinder == nil { thingFinder = newFinder() }
         ScreenAwake.hold("liveCall")
+        // The app goes to the background: the light goes off (iOS stops the camera there anyway).
+        backgroundWatch = NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil,
+                                                                 queue: .main) { [weak self] _ in
+            // Always, even if an interruption already showed it off: the wish is cleared so a restart can't relight it.
+            MainActor.assumeIsolated { self?.camera.setTorch(false) }
+        }
         watch.enabled = proactiveOn
         LiveCamTest.beginSession()
         openedAt = Date()
@@ -161,13 +234,15 @@ final class LiveCallController: ObservableObject {
         }
         voice.onQuiet = { [weak self] in self?.wentQuiet() }
         listener.onQuestion = { [weak self] q, at, conf, fin in self?.heardInTheirLanguage(q, endedAt: at, confidence: conf, isFinal: fin) }
-        listener.onBargeIn = { [weak self] in self?.bargeIn() }
+        listener.onBargeHeard = { [weak self] t, c in self?.heardWhileTalking(t, confidence: c) }
         listener.onGaveUp = { [weak self] in self?.hearingGaveUp() }
         listener.onRetry = { [weak self] in
             guard let self, self.running, self.phase == .listening, !self.micMuted, !self.hearingStopped else { return }
             self.listener.listen()
         }
         listener.onLevel = { [weak self] l in self?.micLevel = l }
+        listener.onSoundsDone = { [weak self] done, voice, word in self?.soundsDone(done, afterVoice: voice, afterWord: word) }
+        listener.onNothingHeard = { [weak self] in self?.nothingHeard() }
         listener.onPartial = { [weak self] t in self?.log(["event": "partial", "text": t]); self?.startPrefill() }
         startTask = Task { await runStart(level) }
     }
@@ -191,15 +266,8 @@ final class LiveCallController: ObservableObject {
         camera.onEvent = { [weak self] o in DispatchQueue.main.async { MainActor.assumeIsolated { self?.log(o) } } }
         camera.start()
         if !typedOnly {
-            if steps.willAskPermission() {
-                // The first time: say why before iOS asks (blind users hear the reason, then the two prompts).
-                phase = .speaking
-                caption = L(LiveCamWords.permissionLine)
-                captionLang = AppLang.code
-                voice.sayOwn(LiveCamWords.permissionLine)
-                while running, voice.isBusy { try? await Task.sleep(nanoseconds: 150_000_000) }
-                guard stillOpen("permission_line") else { return }
-            }
+            // Matt 11/6: "I don't want it to... introduce itself or give instructions". Nothing is said before iOS asks
+            // for the mic and speech recognition; iOS's own prompts carry the reason (the purpose strings).
             let failure = await steps.startListener(listener)
             guard stillOpen("listener") else { return }
             if let f = failure {
@@ -225,10 +293,14 @@ final class LiveCallController: ObservableObject {
         voice.onQuiet = nil
         voice.stop()
         listener.shutdown()
-        camera.stop()
+        camera.stop()   // the light goes off with it
+        torchOn = false
+        if let b = backgroundWatch { NotificationCenter.default.removeObserver(b); backgroundWatch = nil }
         // The model is let go (What's this? loads its own copy when it is next used).
         preload?.cancel(); preload = nil
         engine = nil
+        thingFinder = nil   // the detector is let go too
+        frozen = nil; thingBox = nil
         // Only this call's hold: a camera still running keeps the screen awake.
         ScreenAwake.release("liveCall")
     }
@@ -280,20 +352,24 @@ final class LiveCallController: ObservableObject {
         }
         log(["event": "loaded", "seconds": Date().timeIntervalSince(t0)])
         guard stillOpen("loaded") else { return }
-        // No welcome or opening narration, ever (Matt 11/09, asked many times). Live Cam opens
-        // silent and listening, and speaks only when asked. Earcons are fine; no words.
+        // No welcome or opening narration, ever (Matt 11/09, asked many times; 11/6: "It doesn't need to
+        // introduce itself or anything"). Live Cam opens silent and listening, and speaks only when asked.
+        // Earcons are fine; no words.
         describedOnce = true
         memory = LiveMemory()
+        sayGuard = LiveSayGuard()
+        checkInTurns = LiveRotation()
+        goal = nil
+        goalCheckIns = LiveRotation()
         inventoryBaselineTaken = false
         hasExchanged = false
         answerDone = true
-        // The first-time microphone explanation is done; it doesn't stay up as the caption.
         caption = ""
         lastSpokeEnd = Date()   // the quiet clock for check-ins starts now, not at load
         // The one line allowed on open: the model meant for this visit isn't the one answering
-        // (a hand pick still downloading, said once per pick; or the pick wouldn't load and
+        // (a hand pick still downloading, said once per pick; or the hand pick wouldn't load and
         // Balanced stepped in). It names the one that answers. Then it listens (wentQuiet).
-        // Only for a hand pick, once per pick; Automatic's own load failure stays silent (logged).
+        // Automatic's own load failure stays silent (logged).
         if fellBack { log(["event": "fell_back_to_balanced", "hand_pick": ModelPicker.manualLevel != nil]) }
         let standIn: ModelLevel? = fellBack
             ? (ModelPicker.manualLevel != nil && !ModelPicker.fallbackSaidForPick ? .balanced : nil)
@@ -312,6 +388,62 @@ final class LiveCallController: ObservableObject {
 
     // MARK: Turn taking
 
+    /// Matt 11/6: "some sort of indicator showing that it's thinking or analyzing, or when it'll let you talk next, it's
+    /// all kind of guessing right now". The orb shows it (LiveOrb); the moment it is the person's turn there is also a
+    /// soft short tick and a light tap, and VoiceOver hears one word. Never on noise: only a phase change gets here.
+    private let turnTick = TurnCue()
+    /// It said something since the person's last turn: only then is going back to listening a new "your turn" (a cough
+    /// or murmur that was ignored never ticks).
+    private var talkedSinceTurn = false
+    private func phaseChanged(from old: Phase) {
+        phaseAt = Date()
+        switch phase {
+        case .speaking:
+            talkedSinceTurn = true
+        case .listening where [.speaking, .thinking, .loading].contains(old):
+            guard talkedSinceTurn else { return }
+            talkedSinceTurn = false
+            guard running, !micMuted, !hearingStopped else { return }
+            turnTick.play(silent: voice.muted)
+            log(["event": "turn_cue", "from": "\(old)"])
+            announce(L("Your turn"))
+        case .thinking where !lookingEarly:
+            announce(L("Looking"))   // only when it really looks, not at every pause mid-question (review 11/6)
+        default: break
+        }
+    }
+
+    /// "Looking" shown before the question is formally over (no dead air), or taken back if they kept talking.
+    private var lookingEarly = false
+    /// The listener ended with nothing to answer (all of it was its own echo): back to "Your turn", no tick (review 11/6).
+    func nothingHeard() {
+        guard running, phase == .thinking, current == nil else { return }
+        lookingEarly = false
+        log(["event": "nothing_heard"])
+        phase = .listening
+    }
+    private func soundsDone(_ done: Bool, afterVoice: TimeInterval, afterWord: TimeInterval) {
+        guard running else { return }
+        if done, phase == .listening, !micMuted {
+            lookingEarly = true
+            phase = .thinking
+            log(["event": "looking_shown", "after_last_voice": (afterVoice * 1000).rounded() / 1000,
+                 "after_last_word": (afterWord * 1000).rounded() / 1000])
+        } else if !done, lookingEarly, phase == .thinking {
+            lookingEarly = false
+            phase = .listening   // nothing was said, so no tick
+            log(["event": "looking_taken_back"])
+        }
+    }
+
+    /// One short VoiceOver word for the state change (the orb's label says the same).
+    private func announce(_ text: String) {
+        guard UIAccessibility.isVoiceOverRunning else { return }
+        UIAccessibility.post(notification: .announcement,
+                             argument: NSAttributedString(string: text, attributes: [.accessibilitySpeechLanguage: AppLang.code,
+                                                                                     .accessibilitySpeechQueueAnnouncement: true]))
+    }
+
     private func wentQuiet() {
         guard running, answerDone, phase == .speaking || phase == .thinking else { return }
         let my = turn
@@ -325,6 +457,7 @@ final class LiveCallController: ObservableObject {
 
     private func listen() {
         guard running else { return }
+        lookingEarly = false
         prefillArmed = true
         listener.watchForBargeIn(false)
         phase = .listening
@@ -334,7 +467,11 @@ final class LiveCallController: ObservableObject {
 
     private func micMutedChanged() {
         log(["event": "mic", "muted": micMuted])
-        if micMuted { listener.stopListening() } else if phase == .listening, !hearingStopped { listener.listen() }
+        listener.muted = micMuted
+        if micMuted, lookingEarly, phase == .thinking { lookingEarly = false; phase = .listening }
+        if micMuted { listener.stopListening() }
+        else if phase == .listening, !hearingStopped { listener.listen() }
+        else if phase == .speaking || phase == .thinking, !hearingStopped { listener.watchForBargeIn(true) }
     }
 
     /// The recognizer gave up (see LiveListener.recognizerFailed): say so in words, show it, offer typing.
@@ -357,16 +494,35 @@ final class LiveCallController: ObservableObject {
     private var cutOff: (text: String, at: Date)?
     private var lastQuestion = ""
 
-    func bargeIn() {
+    /// Words heard while it talks or thinks (Matt 11/6): a cough, a murmur, side talk or its own voice never stop it;
+    /// only a real question or a stop word for it does (LiveBargeIn.shouldInterrupt).
+    private func heardWhileTalking(_ heard: String, confidence: Double?) {
+        guard running, !micMuted, !hearingStopped, phase == .speaking || phase == .thinking else { return }
+        let continuing = phase == .thinking && questionEndedAt.map { Date().timeIntervalSince($0) < 2.5 } == true
+        let saying = [caption, lastSaid ?? ""] + memory.said.suffix(2)
+        let lang = listener.heardLang
+        let stop = LiveBargeIn.shouldInterrupt(heard, confidence: confidence, saying: saying, continuing: continuing, lang: lang)
+        log(["event": "heard_while_talking", "text": heard, "interrupt": stop])
+        if stop { bargeIn(heard: heard, echoOf: saying) }
+    }
+
+    /// Talked over with a real question: stop now and take it, the words heard so far kept.
+    func bargeIn(heard: String = "", echoOf saying: [String] = []) {
         guard running, !micMuted, !hearingStopped, phase == .speaking || phase == .thinking else { return }
         // Still thinking and they kept talking right after: they weren't done, so keep what they said so far.
         if phase == .thinking, let e = questionEndedAt, Date().timeIntervalSince(e) < 2.5, !lastQuestion.isEmpty {
             cutOff = (lastQuestion, Date())
         }
-        log(["event": "barge_in", "phase": "\(phase)", "kept_start": cutOff?.text ?? ""])
-        stopTalking()
+        log(["event": "barge_in", "phase": "\(phase)", "heard": heard, "kept_start": cutOff?.text ?? ""])
+        turn += 1
+        current?.cancel(); current = nil
+        answerDone = true
+        voice.stop()
+        talkedSinceTurn = false   // still their turn: no tick or "Your turn" while they are asking (review 11/6 round 3)
         phase = .listening
-        listener.listen(replay: true)
+        prefillArmed = false
+        listener.takeBargeAsQuestion(echoOf: saying)   // the same recognition carries on, its own echo at the start left out
+        if !typedOnly { startWatch() }
     }
 
     /// The orb tapped: stop talking and listen.
@@ -448,6 +604,16 @@ final class LiveCallController: ObservableObject {
         }
     }
 
+    /// The shutter button (Matt 11/6, for loud places): the same as asking "what do you see" right now.
+    func askAboutView() {
+        guard running, phase != .loading, phase != .starting else { return }
+        log(["event": "shutter_button"])
+        stopTalking()
+        listener.stopListening()
+        heardText = L("What do you see?")
+        heard("What do you see?", endedAt: Date(), confidence: nil, isFinal: true)
+    }
+
     /// Test builds and the typed box: a question as if it had been heard (no mic).
     func ask(typed q: String) {
         let t = q.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -464,6 +630,25 @@ final class LiveCallController: ObservableObject {
         if let c = cutOff {
             cutOff = nil
             if Date().timeIntervalSince(c.at) < 8 { q = c.text + " " + q; log(["event": "joined", "text": q]) }
+        }
+        // A goal is going: "next", "okay done with that", or "yes" after "Ready for the next step?" is the next step,
+        // even as one word (the fragment rule would drop it).
+        // Review 11/6: its own voice first ("Say next when you're ready" heard back never advances a step), and a bare
+        // "ok" only right after it asked "Ready for the next step?".
+        let own = [caption, lastSaid ?? ""] + memory.said.suffix(2)
+        let fresh = LiveBargeIn.withoutEcho(LiveWords.normalize(q).split(separator: " ").map(String.init), saying: own)
+        // Matt 11/6: "ok" right after "Ready for the next step?" counts (it is not a screen-reader echo then); a lone
+        // "next"/"ok" in the second after it spoke is its own voice; a new task asked for is a new goal, not a step.
+        if let g = goal, !fresh.isEmpty, g.askedRecently() || !LiveWords.isEcho(q),
+           !(LiveGoal.isEchoTail(fresh, speaking: phase == .speaking || voice.isBusy, sinceItSpoke: endedAt.timeIntervalSince(lastSpokeEnd))
+             && !LiveGoal.quickOkCounts(fresh, askedRecently: g.askedRecently(), speaking: phase == .speaking || voice.isBusy,
+                                        sinceItSpoke: endedAt.timeIntervalSince(lastSpokeEnd), lastSaid: lastSaid)),
+           !LiveGoal.switchesGoal(g, q),
+           LiveGoal.wantsNext(fresh.joined(separator: " "), askedReady: g.askedRecently()) {
+            log(["event": "transcript", "text": q, "final": isFinal, "decision": "goal: next step"])
+            watch.personSpoke()
+            goalTurn(q, endedAt: endedAt, next: true)
+            return
         }
         let verdict = LiveWords.judge(q, confidence: confidence, isFinal: isFinal, lastSaid: lastSaid,
                                        sinceItSpoke: endedAt.timeIntervalSince(lastSpokeEnd))
@@ -488,6 +673,17 @@ final class LiveCallController: ObservableObject {
         hasExchanged = true
         lastQuestion = q
         notice = nil
+        // "Done", "never mind", "new thing": the goal is over (Matt 11/6).
+        if let g = goal, LiveGoal.clears(q) {
+            goal = nil
+            log(["event": "goal_cleared", "goal": g.task, "said": q])
+            questionEndedAt = endedAt
+            let t = " " + LiveWords.normalize(q) + " "
+            if [" new thing ", " something else ", " different thing "].contains(where: { t.contains($0) }) { speakAll(own: LiveCamWords.goalNew) }
+            else if [" never mind ", " nevermind ", " forget it ", " forget that ", " stop that "].contains(where: { t.contains($0) }) { stopTalking(); listen() }
+            else { speakAll(own: LiveCamWords.goalDone) }
+            return
+        }
         // It only keeps the last couple of exchanges (90 s): "what did I ask first" is past its memory, say so.
         if LiveWords.reachesBack(q) {   // it keeps only the last two exchanges, so reaching back is past it (run 2)
             showNotice("Lost track — ask the whole question again")
@@ -507,6 +703,9 @@ final class LiveCallController: ObservableObject {
         case .hush:
             stopTalking()
             listen()
+        case let .light(on):
+            questionEndedAt = endedAt
+            setFlashlight(on ?? !torchOn, spoken: true)
         case let .mode(m):
             questionEndedAt = endedAt
             let rest = LiveWords.modeRest(q)
@@ -566,11 +765,24 @@ final class LiveCallController: ObservableObject {
         case .notMoney:
             moneyMemory.forget()
         }
+        // Matt 11/6: "I'm changing a tire", "help me fix my sink": the goal is kept for the visit and the first step given.
+        if let task = LiveGoal.detect(q), goal?.task != task, goal.map({ LiveGoal.switchesGoal($0, q) }) ?? true {
+            goal = LiveGoal.State(task: task)
+            log(["event": "goal_set", "goal": task])
+            goalTurn(q, endedAt: endedAt, next: true)
+            return
+        }
+        // With a goal, a statement ("okay, the jack is under it") is them moving on: the next step.
+        // ("I need to get the hubcap off" mid-tire is a question about this task: answered, the step not advanced.)
+        if goal != nil, !LiveGoal.asksForTask(q), !LiveWords.isQuestionOrAsk(" " + LiveWords.normalize(q) + " ") {
+            goalTurn(q, endedAt: endedAt, next: true)
+            return
+        }
         // 11/1 Matt: "it should always be taking in the photo". Every question goes with the live frame; a
         // general one keeps the chat voice and only uses the photo if it helps.
         if !LiveWords.needsPhoto(q, lastUsedPhoto: lastUsedPhoto) {
             lastUsedPhoto = false
-            look(prompt: LiveWords.chatQuestion(q, history: []) + " " + LiveWords.photoIfHelps,
+            look(prompt: LiveWords.chatQuestion(q, history: []) + " " + LiveWords.photoIfHelps + (goal.map { LiveGoal.rider($0, next: false) } ?? ""),
                  unprompted: false, question: q, general: true)
             return
         }
@@ -587,6 +799,22 @@ final class LiveCallController: ObservableObject {
         // Front camera: the person in view is the one talking ("a bald man with glasses" was Matt, 11/1).
         if camera.isFront { prompt += " The person in front of the camera is the one talking to you: call them \"you\"." }
         else if LiveWords.isAboutThem(q) { prompt += LiveWords.backCameraSelf }
+        if let g = goal { prompt += LiveGoal.rider(g, next: false) }
+        look(prompt: prompt, unprompted: false, question: q)
+    }
+
+    /// The next step of the goal, from the live frame (step 1 when it was just set).
+    private func goalTurn(_ q: String, endedAt: Date, next: Bool) {
+        guard var g = goal else { return }
+        questionEndedAt = endedAt
+        if next, g.lastStep != nil { g.step += 1 }
+        g.askedReady = false
+        goal = g
+        log(["event": "goal_step", "goal": g.task, "step": g.step])
+        lastUsedPhoto = true
+        goalAnswering = true
+        var prompt = "They say now: \(q)" + LiveGoal.rider(g, next: true)
+        if camera.isFront { prompt += " The person in front of the camera is the one talking to you: call them \"you\"." }
         look(prompt: prompt, unprompted: false, question: q)
     }
 
@@ -597,9 +825,16 @@ final class LiveCallController: ObservableObject {
     /// Money answers are the app's own words (LiveLine.own): said in the app language. Their numbers and plurals
     /// are built in code, so the Spanish comes from MoneyWordsES rather than the string catalog.
     private var moneyLang: MoneyLang { MoneyLang.from(AppLang.code) }
+    /// Money answers go through the repeat guard like every answer (Matt 11/6): never a looping or repeated sentence
+    /// inside one answer, never a second help offer, never "I see" opening two lines in a row.
     private func sayMoney(_ line: String, english: String) {
-        if moneyLang == .en { voice.sayOwn(english) } else { voice.sayLine(line, lang: AppLang.code, english: english) }
+        sayGuard.beginTurn()
+        guard let vetted = sayGuard.vet(english, prompted: true) else { log(["event": "dropped_repeat", "text": english]); return }
+        sayGuard.note(vetted)
+        if moneyLang == .en { voice.sayOwn(vetted) } else { voice.sayLine(line, lang: AppLang.code, english: english) }
     }
+    /// "Let me count." and its turns: never the same words twice in a row.
+    private var countLines = LiveRotation()
 
     /// Counts the bills in view: the full camera frame (1280 x 720, not the 512 px look), each bill found and read
     /// on its own, the total added in code. One frame, a second only if a bill couldn't be read.
@@ -621,7 +856,10 @@ final class LiveCallController: ObservableObject {
         phase = .thinking
         listener.stopListening()
         listener.watchForBargeIn(true)
-        voice.sayOwn("Let me count.")
+        let counting = countLines.next(from: LiveCamWords.countingLines.filter { LiveSayGuard.opening($0) != sayGuard.lastOpening })
+            ?? LiveCamWords.countingLines[0]
+        sayGuard.note(counting)
+        voice.sayOwn(counting)
         phase = .speaking
         modelBusy = true
         let camera = camera
@@ -697,10 +935,11 @@ final class LiveCallController: ObservableObject {
     /// Hands a line to the voice: the app's own words in the app language, content in Your language.
     private func say(_ line: LiveLine) {
         switch line {
-        case let .own(english): voice.sayOwn(english)
-        case let .content(english): voice.say(english)
+        case let .own(english): sayGuard.note(english); voice.sayOwn(english)
+        case let .content(english): sayGuard.note(english); voice.say(english)
         case let .withContent(format, piece):
             let english = String(format: format, piece)
+            sayGuard.note(english)
             // Your language is the app language and its translator is ready (Spanish): the whole sentence is
             // translated, so the piece (the English goal or thing) never sits English inside a Spanish line.
             if LiveLine.translatesWhole(appCode: AppLang.code, yourCode: YourLanguage.activeCode) { voice.say(english) }
@@ -714,6 +953,8 @@ final class LiveCallController: ObservableObject {
     /// only spoken if they say something new.
     private func look(prompt: String, unprompted: Bool, question: String? = nil, first: Bool = false, withPhoto: Bool = true,
                       general: Bool = false) {
+        let isGoalTurn = goalAnswering
+        goalAnswering = false   // cleared up front, so a failed look never saves the next ordinary answer as a step
         guard let engine else {
             if !unprompted { speakAll(own: LiveCamWords.stillGettingReady) }
             return
@@ -722,6 +963,10 @@ final class LiveCallController: ObservableObject {
         turn += 1
         let my = turn
         answerDone = false
+        let wasEarly = lookingEarly
+        lookingEarly = false
+        if wasEarly, !unprompted, !first, phase == .thinking { announce(L("Looking")) }   // the phase didn't change: say it now
+        if !unprompted, let e = questionEndedAt { log(["event": "look_started", "after_end_of_speech": (Date().timeIntervalSince(e) * 1000).rounded() / 1000]) }
         let box = LiveStreamBox()
         current = box
         if !unprompted {
@@ -776,6 +1021,10 @@ final class LiveCallController: ObservableObject {
             for _ in 0..<(first ? 20 : 5) where grabbed == nil && withPhoto {
                 try? await Task.sleep(nanoseconds: 300_000_000)
                 grabbed = camera.current()
+            }
+            if let frame = grabbed, withPhoto, !unprompted, question != nil {
+                // The moment the frame is taken: the shutter (the model never waits on it).
+                DispatchQueue.main.async { MainActor.assumeIsolated { self?.shutter(frame, turn: my) } }
             }
             guard let frame = grabbed else {
                 await MainActor.run {
@@ -845,6 +1094,8 @@ final class LiveCallController: ObservableObject {
             #if DEBUG
             if let fake = LiveCamTest.fakeAnswer, question != nil {
                 // Simulator stand-in for the model (RTCAM_FAKE_LIVE_ANSWER), streamed like the real thing.
+                // RTCAM_FAKE_LIVE_DELAY: seconds it "thinks" first, so the looking state can be seen and timed.
+                if LiveCamTest.fakeDelay > 0 { try? await Task.sleep(nanoseconds: UInt64(LiveCamTest.fakeDelay * 1e9)) }
                 answer = LiveVisionEngine.Answer(text: fake, firstTokenMs: 0, encodeMs: 0, totalMs: 0, tokens: 0)
                 _ = onText(fake)
             }
@@ -859,6 +1110,12 @@ final class LiveCallController: ObservableObject {
                 if let firstAt { self.recentFirstSentence = firstAt.timeIntervalSince(asked) }
                 if withPhoto, let e = answer?.encodeMs, e > 0 { self.recentEncodeMs = e }
                 let said = LiveSentenceStream.cleaned(answer?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                if !unprompted, !said.isEmpty {
+                    // Every sentence was one it had already said: say so briefly instead of going silent.
+                    if self.tally.turn == my, self.tally.said == 0, self.tally.dropped > 0 { self.sayPart(.own(LiveCamWords.sameAsBefore), turn: my) }
+                    // The one help offer of the visit comes after the opening look (Matt 11/6), never from the model.
+                    else if first, !self.sayGuard.helpOffered { self.sayPart(.own(LiveCamWords.helpOffer), turn: my) }
+                }
                 self.log(["event": unprompted ? "watch_answer" : "answer", "text": said,
                           "thermal": ProcessInfo.processInfo.thermalState.rawValue,
                           "question": question ?? (first ? "(opening look)" : ""),
@@ -890,11 +1147,14 @@ final class LiveCallController: ObservableObject {
                             self.log(["event": "confirm", "things": fresh.joined(separator: ", "), "confirmed": ok.joined(separator: ", ")])
                             guard !ok.isEmpty, self.running, self.phase == .listening, !self.listener.hearingSomething else { return }
                             let things = fresh.filter(ok.contains)
-                            let line = LiveWords.newThingLine(things)
+                            // Matt 11/6: the help offer only once a visit; after it, just "I see a boat."
+                            let format = self.sayGuard.newThingFormat
+                            let line = String(format: format, LiveWords.newThings(things))
+                            guard self.sayGuard.vet(line) != nil else { self.log(["event": "dropped_repeat", "text": line]); return }
                             self.watch.commented(at: Date())
                             self.memory.noteSeen(line)
                             self.listener.stopListening()
-                            self.speakAll(.withContent(LiveCamWords.newThing, LiveWords.newThings(things)))
+                            self.speakAll(.withContent(format, LiveWords.newThings(things)))
                         }
                     }
                     return
@@ -908,6 +1168,7 @@ final class LiveCallController: ObservableObject {
                     let verdict: String
                     if LiveWords.isNothingNew(said) { verdict = "silent: nothing new" }
                     else if LiveWords.isRepeat(said, of: lastSeen) || LiveWords.overlapsSaid(said, said: self.memory.said) { verdict = "silent: already said" }
+                    else if self.sayGuard.vet(said) == nil { verdict = "silent: repeat guard" }
                     else if self.phase != .listening || self.listener.hearingSomething { verdict = "silent: person talking" }
                     else { verdict = "spoke" }
                     self.log(["event": "watch_decision", "decision": verdict, "view_change": (self.watch.lastDifference * 10).rounded() / 10])
@@ -916,7 +1177,7 @@ final class LiveCallController: ObservableObject {
                         self.watch.described(thumb)
                         self.memory.noteSeen(said)
                         self.listener.stopListening()
-                        self.speakAll(content: said)
+                        self.speakAll(content: self.sayGuard.vet(said) ?? said)
                     }
                     return
                 }
@@ -942,12 +1203,57 @@ final class LiveCallController: ObservableObject {
                         self.sayPart(.withContent(LiveCamWords.takeBack, b), turn: my)
                     }
                 }
+                if isGoalTurn, !said.isEmpty { self.goal?.lastStep = said }
                 if said.isEmpty { self.sayPart(.own(LiveCamWords.lostAnswer), turn: my) }
                 else if let question { self.memory.note(question: question, answer: said) } else { self.memory.noteSeen(said) }
                 self.watch.described(thumb)
                 self.answerDone = true
                 if withPhoto && !said.isEmpty { self.describedOnce = true }
+                if withPhoto, !general, !said.isEmpty { self.boxThing(named: said, in: frame) }
                 if !self.voice.isBusy { self.wentQuiet() }
+            }
+        }
+    }
+
+    private func shutter(_ frame: CGImage, turn my: Int) {
+        guard running, turn == my else { return }
+        frozen = frame
+        shutterCount += 1
+        log(["event": "shutter"])
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(Self.freezeSeconds * 1e9))
+            if let self, self.frozen === frame { self.frozen = nil }
+        }
+    }
+
+    /// Draws a box around the thing the answer named, when the detector finds it in the frame it answered from.
+    private func boxThing(named said: String, in frame: CGImage) {
+        let words = LiveThings.candidates(said)
+        guard !words.isEmpty, let finder = thingFinder else { return }
+        Task.detached(priority: .utility) { [weak self] in
+            var hit = finder.find(words, in: frame)
+            #if DEBUG
+            // RTCAM_FAKE_THING_BOX="x,y,w,h" (0...1): the Simulator's YOLOE finds nothing, so the harness can still
+            // see and screenshot the box.
+            if hit == nil, let f = LiveCamTest.fakeThingBox, let w = words.first { hit = (f, w, 1) }
+            #endif
+            // Review 11/6: the box belongs to the frame it was answered from. If the camera has moved since, it would
+            // land on the wrong thing, so it is skipped.
+            let now = finder.current?()
+            let moved = now.map { LiveProactive.difference(LiveCamera.thumb($0), LiveCamera.thumb(frame)) } ?? 0
+            if moved >= LiveThings.movedTooFar { hit = nil }
+            await MainActor.run {
+                guard let self, self.running else { return }
+                self.log(["event": "thing_box", "moved": (moved * 10).rounded() / 10, "words": words.joined(separator: ", "), "found": hit?.name ?? "",
+                          "score": ((hit?.score ?? 0) * 100).rounded() / 100])
+                guard let hit else { return }
+                let b = ThingBox(box: hit.box, frame: CGSize(width: frame.width, height: frame.height), name: hit.name,
+                                 id: (self.thingBox?.id ?? 0) + 1)
+                self.thingBox = b
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(nanoseconds: UInt64(Self.boxSeconds * 1e9))
+                    if self?.thingBox == b { self?.thingBox = nil }
+                }
             }
         }
     }
@@ -982,7 +1288,16 @@ final class LiveCallController: ObservableObject {
         var line = line
         if case let .content(s) = line {
             guard let cleaned = LiveWords.spoken(s, aboutMe: askedAboutMe) else { return }
-            line = .content(cleaned)
+            if tally.turn != my { tally = (my, 0, 0); sayGuard.beginTurn() }
+            // Matt 11/6: "it should not repeat phrases": a sentence repeated in this answer, a looping one, a second
+            // help offer. An answer to a question is never dropped for having been said before (review 11/6).
+            guard let vetted = sayGuard.vet(cleaned, prompted: true) else {
+                tally.dropped += 1
+                log(["event": "dropped_repeat", "text": cleaned])
+                return
+            }
+            tally.said += 1
+            line = .content(vetted)
         }
         phase = .speaking
         listener.watchForBargeIn(true)
@@ -1010,8 +1325,20 @@ final class LiveCallController: ObservableObject {
                 // Every mode is a companion, not a commentator (11/2 Normal; 11/3 Matt in Funny: "Now I see a bald man with glasses"
                 // came out unasked and sounded like it was hearing itself). No "Now I see", just a check-in after a long quiet.
                 do {
-                    if quiet, self.hasExchanged, self.watch.shouldCheckIn(at: Date(), quietSince: max(self.lastHeardAt, self.lastSpokeEnd)),
-                       let line = LiveWords.checkIns.filter({ $0 != self.memory.said.last }).randomElement() {
+                    if quiet, self.goal != nil,
+                       self.watch.shouldCheckIn(at: Date(), quietSince: max(self.lastHeardAt, self.lastSpokeEnd), after: LiveProactive.goalCheckInAfter),
+                       let line = self.goalCheckIns.next(from: LiveGoal.checkIns), self.sayGuard.vet(line) != nil {
+                        // Matt 11/6: with a goal the check-in is about it ("Ready for the next step?"), never the same twice.
+                        self.log(["event": "watch_fired", "why": "goal check in"])
+                        self.watch.commented(at: Date())
+                        self.goal?.askedReady = true
+                        self.listener.stopListening()
+                        self.speakAll(own: line)
+                    } else if quiet, self.goal == nil, self.hasExchanged, self.watch.shouldCheckIn(at: Date(), quietSince: max(self.lastHeardAt, self.lastSpokeEnd)),
+                       // Matt 11/6: the lines take turns (none twice until all are used), and once help was offered
+                       // only the ones that don't offer it again.
+                       let line = self.checkInTurns.next(from: self.sayGuard.helpOffered
+                                                              ? LiveWords.checkIns.filter { !LiveWords.isHelpOffer($0) } : LiveWords.checkIns) {
                         self.log(["event": "watch_fired", "why": "check in"])
                         self.watch.commented(at: Date())
                         self.memory.noteSeen(line)
@@ -1030,6 +1357,26 @@ final class LiveCallController: ObservableObject {
                 }
             }
         }
+    }
+}
+
+/// The "your turn" tick: a soft 50 ms blip made on the phone (nothing bundled), at a low volume through the audio
+/// session Live Cam already has (no volume or route change), plus a light haptic. Silent in the Simulator and when
+/// the voice is muted.
+@MainActor
+final class TurnCue {
+    static let tone = AimTones.wav([1320], noteSeconds: 0.05, volume: 0.25)
+    private var player: AVAudioPlayer?
+    private let haptic = UIImpactFeedbackGenerator(style: .light)
+    func play(silent: Bool) {
+        haptic.impactOccurred(intensity: 0.7)
+        #if targetEnvironment(simulator)
+        let silent = true
+        #endif
+        guard !silent else { return }
+        player = try? AVAudioPlayer(data: Self.tone)
+        player?.volume = 0.5
+        player?.play()
     }
 }
 

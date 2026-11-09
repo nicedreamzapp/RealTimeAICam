@@ -15,6 +15,11 @@ final class LiveCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
     private var oneX: CGFloat = 1
     private var zoomShown: CGFloat = 1
 
+    /// The device zoom factor that reads as "1x".
+    static func oneX(hasUltraWide: Bool, firstSwitchOver: CGFloat?) -> CGFloat { hasUltraWide ? (firstSwitchOver ?? 1) : 1 }
+    /// The widest zoom this camera has, as people read it (0.5 on a phone with an ultra wide, else 1).
+    var minZoom: CGFloat { lock.lock(); defer { lock.unlock() }; return minShown }
+    private var minShown: CGFloat = 1
     /// Zoom as people read it (0.5x ... 1x ... 25x).
     var zoom: CGFloat { lock.lock(); defer { lock.unlock() }; return zoomShown }
 
@@ -30,6 +35,54 @@ final class LiveCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
         }
     }
     private var latestAt = Date.distantPast
+
+    // MARK: Flashlight (Matt 11/6: "Live cam needs to have a flashlight")
+
+    /// The back camera has a torch on this phone.
+    static let torchAvailable: Bool = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)?.hasTorch ?? false
+    /// The person wants the light on (kept across the camera's own reconfigure; back camera only).
+    private var torchWanted = false
+    /// Whether the light is really on, from the camera queue each time it changes (review 11/6: the button showed On
+    /// when the torch had failed). The owner publishes it.
+    var onTorch: ((Bool) -> Void)?
+    /// Tests: stands in for the real torch (returns whether it is on afterwards).
+    var torchSetter: ((Bool) -> Bool)?
+
+    /// Light on or off. "On" from the selfie side flips to the back camera first, decided on the camera queue
+    /// (so a flip still pending can't make it guess wrong).
+    func setTorch(_ on: Bool) {
+        queue.async { [self] in
+            if on, position == .front, stillFrame == nil {
+                // Review 11/6 round 3: wanted first, so the flip's own reconfigure lights it (and reports it lit)
+                // instead of reporting "off" and the app saying the flashlight isn't working.
+                lock.lock(); torchWanted = true; lock.unlock()
+                flipNow()
+            }
+            lock.lock(); torchWanted = on && (position == .back || stillFrame != nil); lock.unlock()
+            applyTorch()
+        }
+    }
+
+    /// Call on `queue`: makes the torch match torchWanted and reports what it really is.
+    private func applyTorch() {
+        lock.lock(); let on = torchWanted; lock.unlock()
+        let lit: Bool
+        if let torchSetter {
+            lit = torchSetter(on)
+        } else if let d = device, d.hasTorch, (try? d.lockForConfiguration()) != nil {
+            if on, d.isTorchModeSupported(.on) { try? d.setTorchModeOn(level: 1.0) } else if d.torchMode != .off { d.torchMode = .off }
+            lit = d.torchMode == .on
+            d.unlockForConfiguration()
+        } else {
+            lit = stillFrame != nil && on   // the harness has no camera: the light is what was asked for
+        }
+        onTorch?(lit)
+    }
+
+    /// The camera was interrupted: the light is off now (it comes back when the camera restarts).
+    func interruptionBegan() { queue.async { [self] in onTorch?(false) } }
+    /// After a restart: the light as the person left it.
+    func reapplyTorch() { queue.async { [self] in applyTorch() } }
     /// A call wants the camera running (stop() clears it, so an interruption ending never restarts a closed call).
     private var wanted = false
     private var watching = false
@@ -67,8 +120,12 @@ final class LiveCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
     var isWanted: Bool { queue.sync { wanted } }
 
     func stop() {
+        lock.lock(); torchWanted = false; lock.unlock()
         queue.async { [self] in
             wanted = false
+            // Again here: a torch tap queued before Back must not leave the light on (review 11/6 round 3).
+            lock.lock(); torchWanted = false; lock.unlock()
+            applyTorch()   // the light goes off with the camera
             if session.isRunning { session.stopRunning() }
             lock.lock(); latest = nil; latestAt = .distantPast; lock.unlock()
         }
@@ -82,6 +139,7 @@ final class LiveCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
             if session.inputs.isEmpty { configure() }
             if session.isRunning { session.stopRunning() }
             session.startRunning()
+            applyTorch()   // review 11/6: the light comes back after an interruption, and the button says so
         }
     }
 
@@ -95,6 +153,7 @@ final class LiveCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
         nc.addObserver(forName: AVCaptureSession.wasInterruptedNotification, object: session, queue: nil) { [weak self] n in
             let r = (n.userInfo?[AVCaptureSessionInterruptionReasonKey] as? NSNumber)?.intValue ?? -1
             self?.onEvent?(["event": "camera_interrupted", "reason": r])
+            self?.interruptionBegan()
         }
         nc.addObserver(forName: AVCaptureSession.interruptionEndedNotification, object: session, queue: nil) { [weak self] _ in
             self?.restart("interruption ended")
@@ -108,12 +167,16 @@ final class LiveCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
 
     func flip() {
         guard stillFrame == nil else { return }
-        queue.async { [self] in
-            position = position == .back ? .front : .back
-            lock.lock(); front = position == .front; lock.unlock()
-            UserDefaults.standard.set(position == .front, forKey: "liveCamFrontCamera")
-            configure()
-        }
+        queue.async { [self] in flipNow() }
+    }
+
+    /// Call on `queue`.
+    private func flipNow() {
+        if position == .back { lock.lock(); torchWanted = false; lock.unlock(); applyTorch() }   // no light on the selfie side
+        position = position == .back ? .front : .back
+        lock.lock(); front = position == .front; lock.unlock()
+        UserDefaults.standard.set(position == .front, forKey: "liveCamFrontCamera")
+        configure()
     }
 
     private func configure() {
@@ -131,10 +194,15 @@ final class LiveCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
         session.addInput(input)
         device = cam
         // Open at the main lens (1x), not the ultra wide, when the virtual camera starts below it.
-        let one = cam.virtualDeviceSwitchOverVideoZoomFactors.first.map { CGFloat(truncating: $0) } ?? 1
+        // Review 11/6: only a camera with an ultra wide starts below 1x; a wide + tele pair's first switch-over is the
+        // tele (2x), and taking it as "1x" showed a 0.5 pill that was really the main lens.
+        let hasUltraWide = cam.constituentDevices.contains { $0.deviceType == .builtInUltraWideCamera }
+        let one = Self.oneX(hasUltraWide: hasUltraWide,
+                            firstSwitchOver: cam.virtualDeviceSwitchOverVideoZoomFactors.first.map { CGFloat(truncating: $0) })
         oneX = one
         if (try? cam.lockForConfiguration()) != nil { cam.videoZoomFactor = one; cam.unlockForConfiguration() }
-        lock.lock(); zoomShown = 1; lock.unlock()
+        lock.lock(); zoomShown = 1; minShown = hasUltraWide ? cam.minAvailableVideoZoomFactor / one : 1; lock.unlock()
+        if position == .back { applyTorch() }   // a reconfigure (restart, flip back) keeps the light as it was
         if session.outputs.isEmpty {
             output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
             output.alwaysDiscardsLateVideoFrames = true
@@ -191,5 +259,34 @@ final class LiveCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
             c.draw(image, in: CGRect(x: 0, y: 0, width: 16, height: 16))
         }
         return px
+    }
+}
+
+/// Finds the thing an answer named in the frame it was answered from, with the YOLOE detector the app already has
+/// (Help Me Aim's, bundled: nothing downloaded). Loaded the first time it is needed, let go when Live Cam closes.
+final class LiveThingFinder: @unchecked Sendable {
+    /// The camera's frame now (to skip a box once the view has moved).
+    var current: (() -> CGImage?)?
+    private let lock = NSLock()
+    private var finder: AimObjectFinder?
+    private var index: [String: [Int32]] = [:]
+    private var tried = false
+
+    /// The first of `words` that the detector finds in `frame`: its box (normalized, top-left origin) and the word.
+    func find(_ words: [String], in frame: CGImage) -> (box: CGRect, name: String, score: Float)? {
+        lock.lock(); defer { lock.unlock() }
+        if !tried {
+            tried = true
+            finder = AimObjectFinder()
+            index = AimVocabulary.index(AimObjectFinder.loadClassNames())
+        }
+        guard let finder else { return nil }
+        let image = CIImage(cgImage: frame)
+        for w in words {
+            guard let m = AimVocabulary.match(w, index: index), !m.classIDs.isEmpty,
+                  let hit = finder.find(in: image, classIDs: Set(m.classIDs)) else { continue }
+            return (hit.box, w, hit.score)
+        }
+        return nil
     }
 }

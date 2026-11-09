@@ -54,11 +54,9 @@ final class LiveCamUITests: XCTestCase {
         sleep(3) // buttons animate in
         if !button.isHittable { app.swipeUp() }
         button.tap()
-        let l = { (e: String) in spanish ? TestLanguage.spanish(e) : e }
-        let ready = NSPredicate { _, _ in
-            if let line { return self.captionText(app).contains(line) }
-            return app.staticTexts[l("Listening · just talk")].exists || app.staticTexts[l("Type a question")].exists
-        }
+        // Matt 11/6: it opens silent, straight to "your turn" (the orb).
+        let listening = app.descendants(matching: .any).matching(identifier: "liveCamOrb-yourTurn").firstMatch
+        let ready = NSPredicate { _, _ in line.map { self.captionText(app).contains($0) } ?? listening.exists }
         expectation(for: ready, evaluatedWith: NSObject())
         waitForExpectations(timeout: 180)
         if line == nil {
@@ -86,7 +84,7 @@ final class LiveCamUITests: XCTestCase {
     /// Every control big enough, on screen, and not on top of another.
     private func checkLayout(_ app: XCUIApplication) {
         let screen = app.windows.firstMatch.frame
-        let names = ["Back", "Mute microphone", "Flip camera"].map { T($0) }
+        let names = ["Back", "Mute microphone", "Flip camera", "Ask about the view"].map { T($0) }
         var frames: [(String, CGRect)] = []
         for n in names {
             let b = app.buttons[n].firstMatch
@@ -100,6 +98,15 @@ final class LiveCamUITests: XCTestCase {
         XCTAssertGreaterThanOrEqual(mode.frame.height, 56)
         XCTAssertTrue(screen.contains(mode.frame), "Mode off screen")
         frames.append(("Mode", mode.frame))
+        // The zoom pills (Matt 11/6): each a 44 pt+ target, on screen, clear of every other control.
+        let pills = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", T("Zoom %@").replacingOccurrences(of: "%@", with: "")))
+        XCTAssertGreaterThanOrEqual(pills.count, 2, "zoom pills missing")
+        for i in 0 ..< pills.count {
+            let p = pills.element(boundBy: i)
+            XCTAssertGreaterThanOrEqual(min(p.frame.width, p.frame.height), 44, "zoom pill under 44 pt: \(p.frame)")
+            XCTAssertTrue(screen.contains(p.frame), "zoom pill off screen: \(p.frame)")
+            frames.append(("zoom \(i)", p.frame))
+        }
         for i in 0 ..< frames.count {
             for j in (i + 1) ..< frames.count {
                 XCTAssertFalse(frames[i].1.intersects(frames[j].1), "\(frames[i].0) overlaps \(frames[j].0)")
@@ -152,6 +159,98 @@ final class LiveCamUITests: XCTestCase {
         XCTAssertTrue(app.switches[T("Speak up when quiet")].firstMatch.exists)
         keep(app, "livecam-modes")
         app.buttons[T("Normal mode")].firstMatch.tap()
+        checkLayout(app)
+        goBack(app)
+        app.terminate()
+    }
+
+    /// Matt 11/6: a flashlight at the bottom with Mute and Back; one tap on, one tap off.
+    @MainActor
+    func testFlashlightToggles() throws {
+        continueAfterFailure = false
+        let app = launch(env: ["RTCAM_FAKE_LIVE_ANSWER": "I see a blue double door."])
+        openLiveCam(app)
+        let light = app.descendants(matching: .any).matching(identifier: "liveCamFlashlight").firstMatch   // a toggle: a switch to XCUITest
+        XCTAssertTrue(light.waitForExistence(timeout: 10), "no flashlight button")
+        XCTAssertGreaterThanOrEqual(min(light.frame.width, light.frame.height), 56)
+        XCTAssertTrue(app.windows.firstMatch.frame.contains(light.frame), "flashlight off screen: \(light.frame)")
+        for n in ["Back", "Mute microphone"].map({ T($0) }) {
+            XCTAssertFalse(light.frame.intersects(app.buttons[n].firstMatch.frame), "flashlight overlaps \(n)")
+        }
+        XCTAssertEqual(light.value as? String, T("Off"))
+        light.tap()
+        XCTAssertTrue(NSPredicate(format: "value == %@", T("On")).evaluate(with: light) || { sleep(1); return (light.value as? String) == T("On") }())
+        keep(app, "livecam-flashlight-on")
+        light.tap()
+        sleep(1)
+        XCTAssertEqual(light.value as? String, T("Off"))
+        goBack(app)
+        app.terminate()
+    }
+
+    private func orb(_ app: XCUIApplication, _ look: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: "liveCamOrb-" + look).firstMatch
+    }
+
+    /// Matt 11/6: a clear turn signal. The orb is "your turn" when it waits, "looking" while it thinks, "talking"
+    /// while it answers, then "your turn" again; the same with Words on screen off.
+    @MainActor
+    func testTurnSignal() throws {
+        continueAfterFailure = false
+        let app = launch(env: ["RTCAM_FAKE_LIVE_ANSWER": "I see a blue double door with an exit sign above it.",
+                               "RTCAM_FAKE_LIVE_DELAY": "3"])
+        openLiveCam(app)
+        XCTAssertTrue(orb(app, "yourTurn").waitForExistence(timeout: 30), "never became your turn after opening")
+        XCTAssertTrue(captionText(app).isEmpty, "it said something at open: \(captionText(app))")   // opens silent
+        keep(app, "livecam-turn-yours")
+        let words = app.descendants(matching: .any).matching(identifier: "liveCamWordsToggle").firstMatch
+        if words.exists, (words.value as? String) == T("On") { words.tap() }   // Words on screen off: shape alone
+        ask(app, "What is in front of me?")
+        XCTAssertTrue(orb(app, "looking").waitForExistence(timeout: 5), "no looking state while it thinks")
+        keep(app, "livecam-turn-looking")
+        XCTAssertTrue(orb(app, "talking").waitForExistence(timeout: 30), "no talking state")
+        keep(app, "livecam-turn-talking")
+        XCTAssertTrue(orb(app, "yourTurn").waitForExistence(timeout: 60), "not your turn after the answer")
+        if words.exists, (words.value as? String) == T("Off") { words.tap() }
+        goBack(app)
+        app.terminate()
+    }
+
+    /// Matt 11/6, a live camera: the frame freezes with a shutter flash when it looks, and the thing the answer
+    /// names gets a box for a few seconds (the hallway photo has doors; the box itself is hidden from VoiceOver, so
+    /// this keeps a screenshot and the log says what was found).
+    @MainActor
+    func testShutterFreezeAndBox() throws {
+        continueAfterFailure = false
+        let app = launch(env: ["RTCAM_FAKE_LIVE_ANSWER": "I see a blue double door with an exit sign above it.",
+                               "RTCAM_FAKE_LIVE_DELAY": "1", "RTCAM_FAKE_THING_BOX": "0.27,0.33,0.36,0.42"])
+        openLiveCam(app)
+        ask(app, "What is in front of me?")
+        let answered = NSPredicate { _, _ in self.captionText(app).contains("blue double door") }
+        expectation(for: answered, evaluatedWith: NSObject())
+        waitForExpectations(timeout: 60)
+        sleep(3)   // the detector runs after the answer (about 1.5 s in the Simulator)
+        keep(app, "livecam-box")
+        goBack(app)
+        app.terminate()
+    }
+
+    /// Matt 11/6, a live camera: the shutter asks about the view right now (loud places), zoom pills, caption bubble.
+    @MainActor
+    func testShutterAsksAboutTheView() throws {
+        continueAfterFailure = false
+        let app = launch(env: ["RTCAM_FAKE_LIVE_ANSWER": "I see a blue double door with an exit sign above it."])
+        openLiveCam(app)
+        checkLayout(app)
+        let shutter = app.buttons[T("Ask about the view")].firstMatch
+        XCTAssertTrue(shutter.exists, "no shutter")
+        shutter.tap()
+        let answered = NSPredicate { _, _ in self.captionText(app).contains("blue double door") }
+        expectation(for: answered, evaluatedWith: NSObject())
+        waitForExpectations(timeout: 60)
+        app.buttons[T("Zoom %@").replacingOccurrences(of: "%@", with: "2×")].firstMatch.tap()
+        sleep(1)
+        keep(app, "livecam-shutter-answer")
         checkLayout(app)
         goBack(app)
         app.terminate()

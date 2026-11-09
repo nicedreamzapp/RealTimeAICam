@@ -441,17 +441,6 @@
         }
       }
     },
-    "Always listening. Just talk." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Siempre escuchando. Solo habla."
-          }
-        }
-      }
-    },
     "Analyze" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2432,17 +2421,6 @@
         }
       }
     },
-    "Listening · just talk" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Escuchando · solo habla"
-          }
-        }
-      }
-    },
     "Listening… let go to ask" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2461,17 +2439,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Escuchando… toca para detener"
-          }
-        }
-      }
-    },
-    "Live Cam listens for your questions, so your phone will ask to use the microphone and speech recognition. Everything stays on this phone." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Live Cam escucha tus preguntas, así que tu teléfono te pedirá usar el micrófono y el reconocimiento de voz. Todo se queda en este teléfono."
           }
         }
       }
@@ -6047,6 +6014,248 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Uso %@ hasta que %@ esté listo."
+          }
+        }
+      }
+    },
+    "Ask about the view" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preguntar por la vista"
+          }
+        }
+      }
+    },
+    "Tells you what's in front of the camera right now, for loud places" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Te dice qué hay frente a la cámara ahora mismo, para lugares con ruido"
+          }
+        }
+      }
+    },
+    "What do you see?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Qué ves?"
+          }
+        }
+      }
+    },
+    "Zoom %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zoom %@"
+          }
+        }
+      }
+    },
+    "Light's on." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Luz encendida."
+          }
+        }
+      }
+    },
+    "Light's off." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Luz apagada."
+          }
+        }
+      }
+    },
+    "The flashlight isn't working right now." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La linterna no funciona ahora mismo."
+          }
+        }
+      }
+    },
+    "Counting now." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contando."
+          }
+        }
+      }
+    },
+    "One sec, counting." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un momento, estoy contando."
+          }
+        }
+      }
+    },
+    "Your turn" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Te toca"
+          }
+        }
+      }
+    },
+    "Live Cam" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Live Cam"
+          }
+        }
+      }
+    },
+    "Anything I can help with?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Te ayudo con algo?"
+          }
+        }
+      }
+    },
+    "I see %@." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Veo %@."
+          }
+        }
+      }
+    },
+    "There's %@." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hay %@."
+          }
+        }
+      }
+    },
+    "Same as before." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Igual que antes."
+          }
+        }
+      }
+    },
+    "Ready for the next step?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Listo para el siguiente paso?"
+          }
+        }
+      }
+    },
+    "How's that step going?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Cómo va ese paso?"
+          }
+        }
+      }
+    },
+    "Say next when you're ready." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Di siguiente cuando estés listo."
+          }
+        }
+      }
+    },
+    "Want the next step?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Quieres el siguiente paso?"
+          }
+        }
+      }
+    },
+    "Still with me on that step?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Sigues con ese paso?"
+          }
+        }
+      }
+    },
+    "Nice work." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buen trabajo."
+          }
+        }
+      }
+    },
+    "Okay. What's the new thing?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bien. ¿Qué es lo nuevo?"
           }
         }
       }

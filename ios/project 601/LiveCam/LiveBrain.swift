@@ -3,6 +3,7 @@
 // (divine-tribe-hq shared/moonstone-ios/App/LiveCamera/LiveBrain.swift), which was first ported from RT Cam's
 // Talk mode. Every tuning note below is Matt's, kept as is; only the name (Live Cam, not Moonstone) and the
 // blind-first line in the prompts are new.
+import CoreGraphics
 import Foundation
 
 // MARK: - Speaking while the model is still writing
@@ -117,6 +118,309 @@ struct LiveMemory {
     var lastAnswer: String? { exchanges.last?.answer }
 }
 
+// MARK: - Never the same words twice (Matt 11/6)
+
+/// Matt 11/6: "I don't want it to keep asking if it can help constantly, and not to repeat itself. Repeating itself,
+/// it glitches, and should not repeat phrases." Every model sentence is vetted here before it is spoken: a sentence
+/// already said this visit is dropped, a sentence that loops (a 4+ word phrase twice inside it) is cut where it starts
+/// again, a second help offer is dropped, and an "I see..." right after another "I see..." is reworded.
+struct LiveSayGuard {
+    private(set) var said: Set<String> = []
+    /// The first three words of the last line said (normalized), so no two lines in a row open the same way.
+    private(set) var lastOpening: String?
+    /// It has offered help once this visit.
+    private(set) var helpOffered = false
+
+    static func opening(_ s: String) -> String { LiveWords.normalize(s).split(separator: " ").prefix(3).joined(separator: " ") }
+
+    /// The sentence to say, or nil to say nothing.
+    func vet(_ sentence: String, prompted: Bool = false) -> String? {
+        var s = Self.cutLoop(sentence).trimmingCharacters(in: .whitespaces)
+        let n = LiveWords.normalize(s)
+        guard !n.isEmpty else { return nil }
+        if helpOffered, LiveWords.isHelpOffer(s) { return nil }
+        // Review 11/6: an answer to a question is never blocked for being said before ("Yes." to two questions);
+        // only a sentence repeated inside the same answer is. Said-before applies to lines it says unasked, and only
+        // to a real sentence (5+ words).
+        if turnSaid.contains(n) { return nil }
+        if !prompted, n.split(separator: " ").count >= 5, said.contains(n) { return nil }
+        if let last = lastOpening, Self.opening(s) == last || (last.hasPrefix("i see") && Self.opening(s).hasPrefix("i see")) { s = Self.reworded(s) }
+        let r = LiveWords.normalize(s)
+        if turnSaid.contains(r) || (!prompted && r.split(separator: " ").count >= 5 && said.contains(r)) { return nil }
+        return s
+    }
+
+    /// This answer's sentences so far (a sentence repeated inside one answer is the 2B model looping).
+    private(set) var turnSaid: Set<String> = []
+    mutating func beginTurn() { turnSaid = [] }
+
+    /// Remember a line that is being said (model sentences and the app's own lines alike).
+    mutating func note(_ line: String) {
+        let n = LiveWords.normalize(line)
+        guard !n.isEmpty else { return }
+        said.insert(n)
+        turnSaid.insert(n)
+        lastOpening = Self.opening(line)
+        if LiveWords.isHelpOffer(line) { helpOffered = true }
+    }
+
+    /// The new-thing line for now: the one help offer if it hasn't been made, else just the thing, never opening
+    /// with "I see" twice in a row.
+    var newThingFormat: String {
+        if !helpOffered { return LiveCamWords.newThing }
+        return lastOpening?.hasPrefix("i see") == true ? LiveCamWords.newThingThere : LiveCamWords.newThingPlain
+    }
+
+    /// "I see a red cup" after "I see a book" becomes "There's a red cup" (the small model opens every line with it).
+    static func reworded(_ s: String) -> String {
+        guard let r = s.range(of: #"^\s*I see\s+"#, options: [.regularExpression, .caseInsensitive]) else { return s }
+        let rest = String(s[r.upperBound...])
+        let next = LiveWords.normalize(rest).split(separator: " ").first.map(String.init) ?? ""
+        if let r2 = rest.range(of: #"^that\s+"#, options: [.regularExpression, .caseInsensitive]) {
+            let t = String(rest[r2.upperBound...]); return t.prefix(1).uppercased() + t.dropFirst()
+        }
+        return (["a", "an", "one", "the", "some"].contains(next) ? "There's " : "There are ") + rest
+    }
+
+    /// The 2B model sometimes loops ("the cup is on the table and the cup is on the table and the cup..."): the
+    /// sentence is cut where a phrase of 4+ words starts over, and ends cleanly.
+    static func cutLoop(_ s: String) -> String {
+        let words = s.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+        let norm = words.map { LiveWords.normalize($0) }
+        guard words.count >= 8 else { return s }
+        var seen: [String: Int] = [:]
+        for i in 0 ... words.count - 4 {
+            let gram = norm[i ..< i + 4].joined(separator: " ")
+            if let j = seen[gram], i >= j + 4 {
+                var kept = Array(words[..<i])
+                while let last = kept.last, LiveTiming.trailing.contains(LiveWords.normalize(last)) || LiveWords.normalize(last).isEmpty { kept.removeLast() }
+                guard !kept.isEmpty else { return s }
+                var out = kept.joined(separator: " ")
+                while let c = out.last, ",;:-".contains(c) { out.removeLast() }
+                if let c = out.last, !".!?".contains(c) { out += "." }
+                return out
+            }
+            if seen[gram] == nil { seen[gram] = i }
+        }
+        return s
+    }
+}
+
+/// Lines that take turns: none comes back until all have been used, and never the one just said (Matt 11/6).
+struct LiveRotation {
+    private(set) var used: [String] = []
+    private(set) var last: String?
+    mutating func next(from lines: [String], random: Int = Int.random(in: 0 ..< 1000)) -> String? {
+        guard !lines.isEmpty else { return nil }
+        var fresh = lines.filter { !used.contains($0) }
+        if fresh.isEmpty { used.removeAll(); fresh = lines.filter { $0 != last } }
+        if fresh.isEmpty { fresh = lines }
+        let pick = fresh[random % fresh.count]
+        used.append(pick); last = pick
+        return pick
+    }
+}
+
+// MARK: - The thing it named, boxed on screen (Matt 11/6: "it's a live camera")
+
+enum LiveThings {
+    /// Colors, sizes and other words YOLOE also has as classes but that are never "the thing".
+    static let notThings: Set<String> = ["red", "blue", "green", "yellow", "white", "black", "gray", "grey", "brown", "orange",
+        "pink", "purple", "silver", "gold", "dark", "light", "bright", "big", "small", "large", "little", "tall", "short", "long",
+        "wooden", "metal", "plastic", "glass", "open", "closed", "left", "right", "ahead", "near", "far", "top", "bottom", "side",
+        "middle", "center", "next", "behind", "above", "below", "under", "over", "front", "back", "double", "single", "old", "new",
+        "yes", "not", "sure", "can", "tell", "looks", "look", "see", "seems", "maybe", "probably", "about", "around", "here"]
+    /// The view moved this much (mean thumbnail difference, 0...255) since the answered frame: no box (review 11/6).
+    static let movedTooFar: Double = 12
+    /// Never boxed: the room itself. (A door or a window can be: the hallway test answered "a blue double door".)
+    static let notBoxable: Set<String> = ["floor", "wall", "walls", "ceiling", "room", "space", "background", "air", "ground",
+                                          "sky", "light", "lights", "lighting", "corner"]
+    /// The words of an answer that may be a thing in view, in the order said, at most four ("I see a red coffee mug
+    /// next to a laptop" -> mug, coffee, laptop). People, the phone itself and always-there things are left out.
+    static func candidates(_ answer: String) -> [String] {
+        let words = LiveWords.normalize(answer).split(separator: " ").map(String.init)
+        var out: [String] = []
+        for w in words where w.count > 2 && !LiveWords.stopWords.contains(w) && !notThings.contains(w)
+            && !LiveWords.personWords.contains(w) && !LiveWords.selfWords.contains(w) && !notBoxable.contains(w)
+            && !out.contains(w) {
+            out.append(w)
+        }
+        // The thing is usually the last word of its phrase ("coffee mug"): later words of a pair go first.
+        var ordered: [String] = []
+        for (i, w) in out.enumerated() {
+            if i + 1 < out.count, let a = words.firstIndex(of: w), let b = words.firstIndex(of: out[i + 1]), b == a + 1 { continue }
+            ordered.append(w)
+        }
+        return Array((ordered + out.filter { !ordered.contains($0) }).prefix(4))
+    }
+
+    /// A box (normalized, top-left origin, in the camera frame) on a view that shows that frame aspect-filled.
+    static func viewRect(_ box: CGRect, frame: CGSize, view: CGSize) -> CGRect {
+        guard frame.width > 0, frame.height > 0 else { return .zero }
+        let s = max(view.width / frame.width, view.height / frame.height)
+        let dx = (view.width - frame.width * s) / 2, dy = (view.height - frame.height * s) / 2
+        return CGRect(x: box.minX * frame.width * s + dx, y: box.minY * frame.height * s + dy,
+                      width: box.width * frame.width * s, height: box.height * frame.height * s)
+    }
+}
+
+// MARK: - A goal for the visit (Matt 11/6: "I need to make it the most useful it can be")
+
+/// "I'm changing a tire", "help me fix my sink": Live Cam remembers what they're doing for the visit, gives the next
+/// step, and the step after on the next turn. Plain words in, plain words out (the 2B model only gets a short rider on
+/// the question, where it follows rules). "Done", "never mind", "new thing" clear it.
+enum LiveGoal {
+    struct State: Equatable {
+        var task: String
+        var step = 1
+        var lastStep: String?
+        /// When it last asked "Ready for the next step?": a bare "yes" / "ok" means next for 10 s after (review 11/6).
+        var askedReadyAt: Date?
+        var askedReady: Bool {
+            get { askedReadyAt != nil }
+            set { askedReadyAt = newValue ? Date() : nil }
+        }
+        func askedRecently(_ now: Date = Date()) -> Bool { askedReadyAt.map { now.timeIntervalSince($0) <= 10 } ?? false }
+    }
+
+    private static let leads: [[String]] = [
+        ["can", "you", "help", "me", "with"], ["can", "you", "help", "me"], ["help", "me", "with"], ["help", "me"],
+        ["walk", "me", "through"], ["show", "me", "how", "to"], ["teach", "me", "how", "to"], ["how", "do", "i"], ["how", "can", "i"],
+        ["i", "m", "trying", "to"], ["i", "am", "trying", "to"], ["i", "need", "to"], ["i", "want", "to"], ["i", "have", "to"],
+        ["i", "m", "going", "to"], ["i", "m", "gonna"], ["i", "m", "about", "to"], ["we", "re"], ["i", "m"], ["i", "am"], ["im"]]
+    /// Words that aren't a task on their own ("I'm gonna keep working", "help me with this").
+    private static let vague: Set<String> = ["keep", "working", "work", "go", "going", "stuff", "it", "this", "that", "something",
+        "thing", "things", "now", "here", "there", "out", "with", "on", "please", "a", "the", "bit", "little", "see", "look", "done",
+        "fine", "good", "okay", "ok", "back", "home", "busy", "tired", "just", "really", "so", "you", "me", "up", "set", "great",
+        "well", "alright", "nothing", "much", "not", "fun", "around", "doing", "my", "your", "for", "to", "of", "in", "an", "and"]
+    /// "I'm feeling sick", "I'm just sitting here": a state, not a job.
+    private static let notDoing: Set<String> = ["feeling", "being", "sitting", "chilling", "hanging", "waiting", "thinking",
+        "wondering", "talking", "listening", "kidding", "joking", "leaving", "going", "getting", "looking", "watching", "standing",
+        "walking", "driving", "eating", "sleeping", "working", "trying", "coming", "playing", "having", "saying", "asking"]
+    /// Verbs that mean a job with steps, after "help me" / "I need to" (not "help me see").
+    private static let notTasks: Set<String> = ["see", "look", "find", "read", "know", "understand", "hear", "remember", "think", "decide"]
+
+    /// The task in their words, "your" for "my": "I'm changing a tire" -> "changing a tire". Nil for anything else.
+    static func detect(_ q: String) -> String? {
+        if LiveWords.isLooksQuestion(q) || clears(q) { return nil }
+        // Review 11/6: "I'm holding a can, what is it?" is a question about the can, never a goal.
+        let t = " " + LiveWords.normalize(q) + " "
+        // ("Can you help me put this shelf together?" still is: a request, not a what/which/who/where question.)
+        if [" what ", " which ", " who ", " where ", " whats "].contains(where: { t.contains($0) }) { return nil }
+        guard let lead = lead(of: q) else { return nil }
+        let w = words(q)
+        var rest = Array(w.dropFirst(lead.count))
+        if ["i", "m", "im", "am", "re"].contains(lead.last!) || lead == ["im"] {
+            // "I'm changing a tire": a doing word right after; "I'm tired" isn't a task.
+            if rest.first == "working", rest.count > 2, rest[1] == "on" { rest.removeFirst(2) }
+            else { guard let v = rest.first, v.hasSuffix("ing"), v.count > 4, !notDoing.contains(v) else { return nil } }
+        }
+        if let v = rest.first, notTasks.contains(v) { return nil }
+        while let l = rest.last, ["please", "now", "today", "here", "real", "quick"].contains(l) { rest.removeLast() }
+        guard rest.contains(where: { !vague.contains($0) && $0.count > 2 }), rest.count <= 10 else { return nil }
+        return LiveWords.clip(rest.map { ["my": "your", "me": "you", "myself": "yourself", "i": "you"][$0] ?? $0 }.joined(separator: " "), 60)
+    }
+
+    /// While a goal is going, only an explicit new task switches it ("now I need to fix the faucet"); "I'm putting the
+    /// spare on" is a step of the tire, not a new goal (review 11/6).
+    static func isExplicitNewTask(_ q: String) -> Bool {
+        let t = " " + LiveWords.normalize(q) + " "
+        return [" new thing ", " new task ", " something else ", " different thing ", " now i need to ", " now i want to ",
+                " now help me ", " instead ", " switch to ", " next i want to "].contains { t.contains($0) }
+    }
+
+    /// The words with a leading "now", "next", "so", "okay" dropped ("Now I need to fix the faucet", Matt 11/6).
+    static func words(_ q: String) -> [String] {
+        var w = LiveWords.normalize(q).split(separator: " ").map(String.init)
+        while let f = w.first, ["now", "next", "so", "okay", "ok", "alright", "well", "and", "um", "uh", "then"].contains(f), w.count > 1 { w.removeFirst() }
+        return w
+    }
+    static func lead(of q: String) -> [String]? {
+        let w = words(q)
+        return leads.first(where: { w.count > $0.count && Array(w.prefix($0.count)) == $0 })
+    }
+    /// A goal asked for in so many words ("I need to...", "help me...", "how do I..."), not "I'm putting the spare on"
+    /// (a step of the goal they are on). Mid-goal, this switches to the new goal (Matt 11/6).
+    static func asksForTask(_ q: String) -> Bool {
+        guard detect(q) != nil, let l = lead(of: q) else { return false }
+        return !["i", "m", "im", "am", "re"].contains(l.last!) && l != ["im"]
+    }
+
+    /// Inside a goal, a new task replaces it only when it is clearly another job (review 11/6): "new thing" / "something
+    /// else" / "instead", or a task asked for after "now"/"next"/"so"/"okay" that shares no words with the goal or its
+    /// last step ("Now I need to fix the faucet" during the tire). "How do I loosen the lug nuts?" or "I need to get the
+    /// hubcap off" stay the tire: answered as questions about it.
+    static func switchesGoal(_ g: State, _ q: String) -> Bool {
+        let t = " " + LiveWords.normalize(q) + " "
+        if [" new thing ", " new task ", " something else ", " different thing ", " instead ", " switch to "].contains(where: { t.contains($0) }) {
+            return true
+        }
+        // Never a question ("Okay, how do I get the hubcap off?"), and only after "now" / "next" (review 11/6).
+        if [" how do i ", " how can i ", " how to ", " what ", " where ", " whats "].contains(where: { t.contains($0) }) { return false }
+        guard let task = detect(q), task != g.task else { return false }
+        let raw = LiveWords.normalize(q).split(separator: " ").map(String.init)
+        guard let first = raw.first, ["now", "next"].contains(first) else { return false }
+        let mine = LiveWords.contentWords(g.task).union(LiveWords.contentWords(g.lastStep ?? ""))
+        return LiveWords.contentWords(task).isDisjoint(with: mine)
+    }
+
+    /// A quick "ok" to "Ready for the next step?" counts: only once it has stopped talking, and not in the second after
+    /// a line of its own that had "okay" in it (review 11/6).
+    static func quickOkCounts(_ fresh: [String], askedRecently: Bool, speaking: Bool, sinceItSpoke: TimeInterval, lastSaid: String?) -> Bool {
+        guard askedRecently, fresh.count == 1, ["ok", "okay"].contains(fresh[0]), !speaking else { return false }
+        let saidOkay = (" " + LiveWords.normalize(lastSaid ?? "") + " ").contains(" okay ") || (" " + LiveWords.normalize(lastSaid ?? "") + " ").contains(" ok ")
+        return !(saidOkay && sinceItSpoke < 1.0)
+    }
+
+    /// A lone "next" or "ok" heard while it is talking or within a second after it stops is the tail of its own voice
+    /// ("Say next when you're ready"), never a step (Matt 11/6).
+    static func isEchoTail(_ fresh: [String], speaking: Bool, sinceItSpoke: TimeInterval) -> Bool {
+        fresh.count == 1 && ["next", "ok", "okay"].contains(fresh[0]) && (speaking || sinceItSpoke < 1.0)
+    }
+
+    /// "Done", "never mind", "new thing": the goal is over.
+    static func clears(_ q: String) -> Bool {
+        let t = LiveWords.normalize(q)
+        if isNext(t) { return false }   // "done, what's next" is the next step, not the end
+        if ["done", "i m done", "im done", "all done", "we re done", "finished", "i m finished", "all finished", "that s it", "thats it",
+            "never mind", "nevermind", "new thing", "something else", "forget it", "forget that", "stop that", "we re good", "i got it now",
+            "it s done", "its done", "i did it", "i fixed it", "it works now", "done with that"].contains(t) { return true }
+        let s = " " + t + " "
+        return [" new thing ", " something else ", " never mind ", " nevermind ", " different thing ", " i m done ", " all done ",
+                " forget it ", " i m finished ", " it works now ", " i fixed it "].contains { s.contains($0) }
+    }
+
+    private static func isNext(_ t: String) -> Bool {
+        let s = " " + t + " "
+        return [" next ", " what now ", " then what ", " and then ", " after that ", " what do i do now ", " keep going ", " go on ",
+                " continue ", " what s after ", " ok what s ", " okay what s "].contains { s.contains($0) }
+    }
+
+    /// The next step, please: "next", "what's next", "okay done with that", or a bare "yes" right after "Ready for the next step?".
+    static func wantsNext(_ q: String, askedReady: Bool) -> Bool {
+        let t = LiveWords.normalize(q)
+        if isNext(t) { return true }
+        if ["got it", "got that", "did that", "done that", "ok did it", "okay did it", "that s done", "thats done", "okay done",
+            "ok done", "done next", "finished that"].contains(t) { return true }
+        return askedReady && ["yes", "yeah", "yep", "sure", "ready", "ok", "okay", "yes please", "i m ready", "im ready", "go ahead", "let s go",
+                              "lets go", "uh huh", "yes i m ready"].contains(t)
+    }
+
+    /// Rides on the question (the 2B model follows rules there): the task, the step wanted, the last step given.
+    static func rider(_ g: State, next: Bool) -> String {
+        var r = " They are working on: \(g.task)."
+        if let last = g.lastStep { r += " The step you gave last: \(LiveWords.clip(last, 100))" }
+        r += next || g.lastStep == nil
+            ? " Give only step \(g.step), the very next thing to do, in one or two short sentences, using what you see if it helps. Don't repeat an earlier step."
+            : " Answer what they asked with that task in mind, in one or two short sentences."
+        return r
+    }
+
+    /// Quiet check-ins while there is a goal (never an offer of help, never the same twice in a row: LiveRotation).
+    static let checkIns = ["Ready for the next step?", "How's that step going?", "Say next when you're ready.", "Want the next step?",
+                           "Still with me on that step?"]
+}
+
 // MARK: - Words
 
 /// One line for Live Cam's voice (2026-11-05, Spanish UI). `own`: the app's own words, an English key said in the
@@ -136,12 +440,21 @@ enum LiveLine: Equatable {
 }
 
 enum LiveWords {
-    // No welcome or opening narration, ever (Matt 11/09, asked many times): no greeting lines here.
+    // No welcome or opening narration, ever (Matt 11/09, asked many times; 11/6 "it opens silent"): no greeting
+    // lines here, no opening look.
     /// Normal mode, after a long quiet: a friend in the room checking in, never a description of the scene or of
     /// them (11/2 Matt: "not something that's just critiquing everything"). Fixed lines, so the small model can't
     /// slip back into "Now I see...".
+    /// Matt 11/6: "I don't want it to keep asking if it can help constantly": the lines that offer help are used only
+    /// while no help offer has been made this visit (LiveSayGuard.helpOffered); the rest rotate (LiveRotation).
     static let checkIns = ["What are you up to?", "How's it going over there?", "Working on anything I can help with?",
                            "Need a hand with anything?", "What are you working on?", "Anything you want to talk through?"]
+    /// An offer of help ("Anything I can help with?", "Need a hand?"), said or written: at most one per visit (Matt 11/6).
+    static func isHelpOffer(_ s: String) -> Bool {
+        let t = " " + normalize(s) + " "
+        return [" help with ", " help you ", " can i help ", " i can help ", " a hand ", " anything i can do ", " talk through ",
+                " need help ", " want help ", " help me help "].contains { t.contains($0) }
+    }
     static let system = """
     You are Live Cam, talking with someone live through their phone camera. They may be blind or have low vision, so when you say where something is, say left, right, ahead, near or far. You see the photo of what the camera shows right now. Reply like a friend: one or two short spoken sentences, under 25 words, answer first, unless they ask for more. Use the earlier conversation to know what "it", "that" or "this" means. If they ask how to do or fix something, give only the next step or two. If the question has nothing to do with the photo, ignore the photo and just answer it. How-to questions get real steps from what you know even when the thing isn't in view, and you can do math. If the photo does not show the answer, say so. Be kind about people: never criticize or rate anyone's looks, hair, body or clothes, never call anyone bald or messy, and be extra gentle with children. Don't comment on the person, their face or how they look unless they ask about it, and don't narrate the room: you are a friend who can see, not a commentator. Never say "the photo" or "the image": talk as if you are looking through the camera ("I see..."). No lists, no markdown, no emoji.
     """
@@ -238,6 +551,7 @@ enum LiveWords {
     static let photoIfHelps = "A camera view is attached, but this question is not about it: ignore the view and answer from what you know."
 
     static let describeNow = "In one short sentence, tell me what you see right now, the main thing first."
+
     /// The quiet look while the view changes: a bare list the code compares with what was already named.
     static let inventory = "List the main things in view as short names separated by commas, at most 8. Things only, never the person or their clothes. No sentence."
     static let personWords: Set<String> = ["man", "woman", "person", "people", "guy", "you", "your", "face", "hair", "shirt",
@@ -434,7 +748,30 @@ enum LiveWords {
         return Double(a.intersection(b).count) / Double(min(a.count, b.count)) >= 0.6
     }
 
-    enum Turn: Equatable { case end, repeatLast, stopSaying, hush, mode(LiveMode), ask }
+    enum Turn: Equatable { case end, repeatLast, stopSaying, hush, mode(LiveMode), light(Bool?), ask }
+
+    /// "Turn on the flashlight", "lights off", "flashlight": the light, handled on the phone with no model call
+    /// (Matt 11/6). true on, false off, nil switch it. A question about a light ("is the light on") is not one.
+    static func lightCommand(_ q: String) -> Bool?? {
+        let t = normalize(q)
+        let s = " " + t + " "
+        let things = [" light ", " lights ", " flashlight ", " torch ", " flash light "]
+        guard things.contains(where: { s.contains($0) }) else { return nil }
+        let words = t.split(separator: " ").map(String.init)
+        guard words.count <= 8, let first = words.first else { return nil }
+        if ["is", "are", "what", "where", "does", "do", "why", "how", "which", "was", "did"].contains(first) { return nil }
+        if s.contains(" see ") || s.contains(" look") || s.contains(" color ") || s.contains(" read ") { return nil }
+        let on = [" turn on ", " switch on ", " light on ", " lights on ", " flashlight on ", " torch on ", " on the light",
+                  " on the flashlight", " on the torch", " on my flashlight", " on the lights", " light up ", " need light ",
+                  " need a light ", " need some light ", " more light "].contains { s.contains($0) }
+            || (s.contains(" turn ") && t.hasSuffix(" on"))
+        let off = [" turn off ", " switch off ", " light off ", " lights off ", " flashlight off ", " torch off ", " off the light",
+                   " off the flashlight", " off the torch", " kill the light", " no light "].contains { s.contains($0) }
+            || (s.contains(" turn ") && t.hasSuffix(" off"))
+        if on != off { return .some(on) }
+        if ["flashlight", "the flashlight", "light", "toggle the light", "toggle the flashlight", "flashlight please", "torch"].contains(t) { return .some(nil) }
+        return nil
+    }
 
     /// "Funny mode", "be funny", "analyze this", "coach me", "back to normal" (Matt 11/1: four modes, switched by voice).
     static func modeSwitch(_ t: String) -> LiveMode? {
@@ -497,7 +834,8 @@ enum LiveWords {
     static let commands = ["stop", "bye", "goodbye", "repeat", "say that again", "what's this", "whats this", "what is this",
                            "what's that", "whats that", "what is that", "hello", "hey", "hi", "thanks", "thank you",
                            "describe", "what do you see", "end call", "hang up", "go on", "continue", "and",
-                           "critique me", "rate me", "roast me", "judge me", "how i look", "my posture", "wait", "shh", "shush", "quiet", "hang on", "never mind", "nevermind"]
+                           "critique me", "rate me", "roast me", "judge me", "how i look", "my posture", "wait", "shh", "shush", "quiet", "hang on", "never mind", "nevermind",
+                           "next", "next step", "what's next", "whats next", "then what", "done", "all done", "new thing"]   // goals (11/6)
 
     /// Decide whether a finished transcript is a real utterance worth answering. `confidence` is the
     /// recognizer's average word confidence (nil when it gave none); `lastSaid` is Live Cam's own
@@ -562,9 +900,13 @@ enum LiveWords {
 
     static func turn(_ q: String) -> Turn {
         let t = normalize(q)
+        if let l = lightCommand(q) { return .light(l) }
         if ["stop", "end call", "end the call", "hang up", "goodbye", "good bye", "bye", "bye bye"].contains(t)
             || t.hasPrefix("goodbye ") || t.hasSuffix(" goodbye") || t.contains("end the call") || t.contains("hang up") { return .end }
-        if ["repeat", "repeat that", "say that again", "what did you say", "come again", "say it again"].contains(t) { return .repeatLast }
+        if ["repeat", "repeat that", "say that again", "what did you say", "come again", "say it again"].contains(t)
+            || [" repeat that ", " say that again ", " repeat yourself ", " repeat it ", " come again ", " say it again ",
+                " what did you just say ", " repeat what you said ", " repeat the last "].contains(where: { (" " + t + " ").contains($0) })
+            && t.split(separator: " ").count <= 8 { return .repeatLast }   // review 11/6: "can you repeat that"
         // 11/3 Matt: "coach me on my jump shot" / "analyze the forces on this" switch the mode AND keep the rest.
         if let m = modeSwitch(t), t.split(separator: " ").count <= 6 || modeRest(q) != nil { return .mode(m) }
         // 11/1 phone test: "Hold on, stop" got a description of the room. These mean be quiet.
@@ -592,6 +934,15 @@ enum LiveTiming {
     /// without waiting the full second for the recognizer (Fable 10/31: ~0.5 s of the ~2 s wait).
     static let audioQuiet: TimeInterval = 0.85   // 11/1 phone test: 0.6 split "Hello, how are you doing" at the comma
     static let wordsSettled: TimeInterval = 0.35
+    /// Matt 11/6 "it stalls": the orb turns to "looking" this soon after the voice stops (words heard and settled),
+    /// before the full end-of-question wait (audioQuietComplete / audioQuiet / endOfSpeech) is over. If they keep
+    /// talking it turns back, silently.
+    static let showLookingAfter: TimeInterval = 0.4
+    static func soundsDone(wordsQuiet: TimeInterval, micQuiet: TimeInterval) -> Bool {
+        (micQuiet >= showLookingAfter && wordsQuiet >= wordsSettled) || wordsQuiet >= showLookingAfter + wordsSettled
+    }
+    /// While it talks: words that went quiet this long without being a question to it are forgotten (side talk).
+    static let bargeForget: TimeInterval = 1.5
     static func questionEnded(heard: Bool, quiet: TimeInterval) -> Bool { heard && quiet >= endOfSpeech }
     /// A finished-sounding question ("what do you see", "is the light on") ends after this much quiet instead of
     /// audioQuiet (11/2 speed pass: ~0.35 s sooner on most questions; trailing words still get the longer wait).
@@ -610,21 +961,123 @@ enum LiveTiming {
     }
 }
 
-/// Talking over the app: a voice clearly above the echo, for about a quarter second.
-struct LiveBargeIn {
-    static let floor: Float = -38
-    static let margin: Float = 10
-    static let needed = 4
-    private(set) var echo: Float = -60
-    private var loud = 0
-    mutating func feed(level db: Float) -> Bool {
-        if db > max(Self.floor, echo + Self.margin) { loud += 1 } else {
-            loud = 0
-            echo = db > echo ? echo * 0.7 + db * 0.3 : echo * 0.95 + db * 0.05
+/// Talking over it (Matt 11/6): "It shouldn't stop speaking when it hears me cough... murmurs or any sound at all.
+/// It should only stop speaking when it hears a legitimate question toward it." The old loudness trigger is gone;
+/// only recognized words can interrupt, and only these.
+enum LiveBargeIn {
+    /// Sounds and fillers the recognizer turns coughs, laughs and murmurs into (English and Spanish).
+    static let filler: Set<String> = ["um", "uh", "umm", "uhh", "hmm", "hm", "mm", "mmm", "mhm", "uh-huh", "huh", "ah", "oh", "eh",
+                                      "yeah", "yep", "yes", "okay", "ok", "ha", "haha", "hahaha", "heh", "so", "well", "like", "er",
+                                      "erm", "the", "a", "and", "oops", "whoa", "wow", "cough", "ahem", "sigh", "i", "it",
+                                      "este", "pues", "ajá", "aja", "sí", "si", "bueno", "o", "sea", "ja", "jaja", "el", "la", "y", "eeh"]
+    /// Words that stop it ("wait", "stop", "hold on"), wherever they come in what was heard.
+    static let stopsEnglish: [[String]] = [["stop"], ["wait"], ["hold", "on"], ["hang", "on"], ["hey"], ["excuse", "me"], ["shh"],
+                                    ["shush"], ["be", "quiet"], ["never", "mind"], ["nevermind"], ["one", "sec"], ["one", "second"],
+                                    ["live", "cam"], ["quiet"], ["pause"], ["enough"]]
+    static let stopsSpanish: [[String]] = [["espera"], ["esperá"], ["para"], ["pará"], ["alto"], ["oye"], ["basta"], ["cállate"],
+                                    ["callate"], ["silencio"], ["detente"], ["un", "momento"], ["momento"], ["live", "cam"], ["olvídalo"]]
+    /// A question or ask to it: how it opens.
+    static let askStartsEnglish: Set<String> = ["what", "whats", "who", "where", "when", "why", "how", "which", "is", "are", "can",
+                                         "could", "would", "should", "will", "do", "does", "did", "tell", "describe", "show",
+                                         "explain", "help", "look", "read", "check", "find", "give", "say", "repeat"]
+    static let askStartsSpanish: Set<String> = ["qué", "cómo", "dónde", "cuál", "cuándo", "quién", "cuánto", "cuántos", "puedes",
+                                         "podrías", "podrias", "dime", "mira", "lee", "describe", "ayúdame", "ayudame", "explica",
+                                         "busca", "repite", "muéstrame", "muestrame"]
+    static let askPhrasesEnglish = [" can you ", " could you ", " would you ", " tell me ", " look at ", " what is ", " what s ", " how do ",
+                             " how many ", " where is ", " is this ", " is that ", " what about ", " do you ", " are you "]
+    static let askPhrasesSpanish = [" puedes ", " podrías ", " dime ", " mira ", " qué es ", " cómo ", " dónde ", " cuál ",
+                                    " me dices ", " qué hay ", " qué ves ", " por qué "]
+
+    /// Spanish words that open a question but are also everyday words ("que", "es", "está"): two of them, or a strong
+    /// opener, are needed (review 11/6).
+    static let weakSpanish: Set<String> = ["que", "como", "donde", "cual", "cuando", "quien", "cuanto", "cuantos", "por", "hay",
+                                           "es", "está", "esta", "tengo"]
+
+    static func isSpanish(_ lang: String) -> Bool { lang.lowercased().hasPrefix("es") }
+
+    /// Marks which of `words` are its own voice: a run of 3+ words in a row matching what it is saying (a whole
+    /// short line like "Flashlight, on" counts too). One shared word ("cup") is never an echo (review 11/6).
+    static func echoMask(_ words: [String], saying: [String]) -> [Bool] {
+        let own = saying.map { LiveWords.normalize($0).split(separator: " ").map(String.init) }
+        var echo = [Bool](repeating: false, count: words.count)
+        for line in own where !line.isEmpty {
+            let need = min(3, line.count, max(2, words.count))   // a 2-word utterance that is 2 of its own words in a row
+            var i = 0
+            while i < words.count {
+                var best = 0
+                for j in 0 ..< line.count {
+                    var k = 0
+                    while i + k < words.count, j + k < line.count, words[i + k] == line[j + k] { k += 1 }
+                    best = max(best, k)
+                }
+                if best >= need { for x in i ..< i + best { echo[x] = true }; i += best } else { i += 1 }
+            }
         }
-        return loud >= Self.needed
+        return echo
     }
-    mutating func reset() { echo = -60; loud = 0 }
+
+    /// The words heard minus its own voice (review 11/6 round 2: everything echoed is taken out, so its own
+    /// "Flashlight, on" or "hold on" heard back never counts as a command).
+    static func withoutEcho(_ words: [String], saying: [String]) -> [String] {
+        let echo = echoMask(words, saying: saying)
+        return words.indices.filter { !echo[$0] }.map { words[$0] }
+    }
+
+    /// A barged-in question with its own voice left out: only an echo at the START is stripped, matched on the text
+    /// itself (raw words, so "cup's" stays one word), never words after the question ("what is that, the cup is red").
+    static func stripLeadingEcho(_ transcript: String, saying: [String]) -> String {
+        let raw = transcript.split(separator: " ").map(String.init)
+        guard !raw.isEmpty else { return transcript }
+        // Each raw word's normalized words, so the echo is found on normalized text and cut on raw word edges.
+        let parts = raw.map { LiveWords.normalize($0).split(separator: " ").map(String.init) }
+        let flat = parts.flatMap { $0 }
+        let echo = echoMask(flat, saying: saying)
+        var cut = 0, at = 0
+        for p in parts {
+            let n = p.count
+            if n == 0 { if cut == raw.count { break }; cut += 1; continue }   // punctuation on its own rides along
+            guard (at ..< at + n).allSatisfy({ echo[$0] }) else { break }
+            at += n; cut += 1
+        }
+        guard cut > 0 else { return transcript }
+        return raw.dropFirst(cut).joined(separator: " ")
+    }
+
+    /// True only for real words meant for it, judged on the words left once its own voice is taken out: a light or
+    /// stop command anywhere in them, or a question/ask of at least three real words, not filler, not low
+    /// confidence. `continuing`: they started talking again right after their question ended, so two real words are
+    /// enough. `lang`: the language being heard (the recognizer's).
+    static func shouldInterrupt(_ heard: String, confidence: Double?, saying: [String], continuing: Bool = false,
+                                lang: String = "en") -> Bool {
+        if let c = confidence, c > 0, c < 0.3 { return false }
+        let words = LiveWords.normalize(heard).split(separator: " ").map(String.init)
+        let fresh = withoutEcho(words, saying: saying)
+        let freshText = fresh.joined(separator: " ")
+        if LiveWords.lightCommand(freshText) != nil, fresh.count >= 2 { return true }   // "lights on", never its own line
+        let es = isSpanish(lang)
+        // A stop word anywhere in what they said ("wait, what is the red one", "... hold on").
+        let content = fresh.filter { !filler.contains($0) }
+        func has(_ ws: [String], _ p: [String]) -> Bool {
+            ws.count >= p.count && (0 ... ws.count - p.count).contains { Array(ws[$0 ..< $0 + p.count]) == p }
+        }
+        // "para" is also "for" in Spanish: it stops only when it opens what was heard ("para, para").
+        if (es ? stopsSpanish : stopsEnglish).contains(where: { $0 == ["para"] ? content.first == "para" : has(content, $0) }) { return true }
+        let real = content
+        if continuing { return real.count >= 2 }
+        guard real.count >= 3 else { return false }
+        let start = Array(fresh.drop(while: { filler.contains($0) }))
+        let t = " " + start.joined(separator: " ") + " "
+        if es {
+            if heard.contains("¿") { return true }
+            if let first = start.first, askStartsSpanish.contains(first) { return true }
+            // Two different weak cues, one of them a question word ("donde esta mi taza"), not "que bueno que...".
+            let cues = Set(start.prefix(3).filter { weakSpanish.contains($0) })
+            if cues.count >= 2, !cues.isDisjoint(with: ["que", "como", "donde", "cual", "cuando", "quien", "cuanto", "cuantos", "por"]) { return true }
+            return askPhrasesSpanish.contains { t.contains($0) }
+        }
+        if let first = start.first, askStartsEnglish.contains(first) { return true }
+        return askPhrasesEnglish.contains { t.contains($0) }
+    }
 }
 
 /// When it may speak up on its own: only when the view really changed, never over the person,
@@ -656,9 +1109,11 @@ struct LiveProactive {
     /// Normal mode: quiet this long (no one talking, nothing said) before a friendly check-in.
     static let checkInAfter: TimeInterval = 90
     /// Check in only when the person has been quiet a good while, and at most twice in a row with no reply.
-    func shouldCheckIn(at t: Date, quietSince: Date) -> Bool {
-        enabled && unanswered < Self.maxUnanswered && t.timeIntervalSince(max(quietSince, lastComment)) >= Self.checkInAfter
+    func shouldCheckIn(at t: Date, quietSince: Date, after: TimeInterval = checkInAfter) -> Bool {
+        enabled && unanswered < Self.maxUnanswered && t.timeIntervalSince(max(quietSince, lastComment)) >= after
     }
+    /// With a goal (Matt 11/6) the check-in comes sooner: they're in the middle of a job.
+    static let goalCheckInAfter: TimeInterval = 45
 
     static func difference(_ a: [UInt8], _ b: [UInt8]) -> Double {
         guard a.count == b.count, !a.isEmpty else { return 255 }
