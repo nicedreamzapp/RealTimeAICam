@@ -240,12 +240,11 @@ enum ModelPicker {
         return [ideal(for: .page), ideal(for: .scene)]
     }
 
-    /// The level to run right now, from what is actually on the phone.
+    /// The level to run right now, from what is actually on the phone. Never waits on a
+    /// download: a pick that isn't here falls back to the best one that is (Balanced is built in).
     static func level(for kind: PhotoKind) -> ModelLevel {
         let installed = ModelLevel.allCases.filter { VisionModelStore.isInstalled($0) }
-        if let manual = manualLevel {
-            return installed.contains(manual) ? manual : .balanced
-        }
+        if let manual = manualLevel, installed.contains(manual) { return manual }
         let ideal = ideal(for: kind)
         if installed.contains(ideal) { return ideal }
         // The pick is still downloading: the smartest level already here that
@@ -254,6 +253,23 @@ enum ModelPicker {
         let ready = candidates.filter { installed.contains($0) }
         if let fits = ready.first(where: { (estimate($0, kind: kind) ?? .infinity) <= budget }) { return fits }
         return ready.last ?? .balanced
+    }
+
+    /// Every level on this phone right now, smartest first.
+    static var installed: [ModelLevel] { ModelLevel.allCases.filter { VisionModelStore.isInstalled($0) } }
+
+    /// The levels answering right now (the page pick and the scene pick).
+    static var inUse: Set<ModelLevel> { [level(for: .page), level(for: .scene)] }
+
+    private static var fallbackSaid = false
+
+    /// The model picked by hand isn't on the phone: one plain line saying which one is used
+    /// instead, once per launch, nil otherwise ("Using Balanced, the model on this phone.").
+    @MainActor
+    static func fallbackNotice() -> String? {
+        guard !fallbackSaid, let manual = manualLevel, !VisionModelStore.isInstalled(manual) else { return nil }
+        fallbackSaid = true
+        return L("Using %@, the model on this phone.", level(for: .scene).name)
     }
 
     /// "about 4 seconds", for the screen and VoiceOver.

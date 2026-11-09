@@ -271,7 +271,8 @@ final class LiveCallController: ObservableObject {
             guard stillOpen("model_fallback") else { return }
         }
         guard engine != nil else {
-            fail(LiveCamWords.modelFailed)
+            // No model on the phone at all: say what to do. One that is here but wouldn't start: try again.
+            fail(VisionModelStore.isInstalled ? LiveCamWords.modelFailed : LiveCamWords.noModel)
             log(["event": "load failed"])
             return
         }
@@ -287,7 +288,15 @@ final class LiveCallController: ObservableObject {
         // The first-time microphone explanation is done; it doesn't stay up as the caption.
         caption = ""
         lastSpokeEnd = Date()   // the quiet clock for check-ins starts now, not at load
-        listen()
+        if let notice = ModelPicker.fallbackNotice() {
+            // The one line allowed on open: the model picked by hand isn't on the phone, so say
+            // once which one is used instead. Then it listens (wentQuiet).
+            phase = .speaking
+            listener.watchForBargeIn(true)
+            voice.sayLine(notice, lang: AppLang.code, english: notice)
+        } else {
+            listen()
+        }
         if LiveCamTest.forceCantHear { hearingGaveUp() }
     }
 

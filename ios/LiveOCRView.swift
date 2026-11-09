@@ -483,6 +483,10 @@ struct LiveOCRView: View {
     private func analyze(_ image: CGImage, pauseCamera: Bool) {
         if #available(iOS 17.0, *), OnDeviceVisionNarrator.isBundled {
             showStatus("Working it out…")
+            // The model picked by hand isn't on the phone: say once which one answers instead.
+            if let notice = ModelPicker.fallbackNotice() {
+                viewModel.speak(text: notice, voiceIdentifier: selectedVoiceIdentifier, language: AppLang.code) {}
+            }
             // Free the camera pipeline while the model thinks; it comes back
             // the moment the answer is spoken.
             // The screen stays awake while the model answers, even with the camera

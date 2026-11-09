@@ -20,6 +20,7 @@ enum LiveCamWords {
     // The app's own lines in LiveCallController (English keys; said in the app language).
     static let needsCamera = "Live Cam needs the camera. Allow it in Settings, then open Live Cam again."
     static let modelFailed = "I couldn't start the vision model. Go back and try Live Cam again."
+    static let noModel = "The picture model isn't on this phone. Open Settings, then Models, to download one."
     static let sayAgain = "Sorry, say that again?"
     static let lostTrack = "I lost track of that part. Ask me the whole question again?"
     static let bye = "Okay, bye for now."
@@ -41,7 +42,7 @@ enum LiveCamWords {
     /// catalog. LiveCamSpanishTests checks each one has its Spanish.
     static var indirectKeys: [String] {
         [permissionLine, notAllowed, cantHear, cantHearNote, noOfflineSpeech,
-         needsCamera, modelFailed, sayAgain, lostTrack, bye, gotIt, coachGoalSet, nothingSaidYet, coachGoalHeard,
+         needsCamera, modelFailed, noModel, sayAgain, lostTrack, bye, gotIt, coachGoalSet, nothingSaidYet, coachGoalHeard,
          flipToSeeYou, stillGettingReady, cantSeeInBackground, cameraPaused, newThing, notFullySure, takeBack, lostAnswer]
             + LiveWords.checkIns + LiveWords.acks
             + LiveMode.allCases.flatMap { [$0.label, $0.confirm] }

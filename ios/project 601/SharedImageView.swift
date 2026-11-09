@@ -284,6 +284,8 @@ struct SharedImageView: View {
     /// picture model it reads the words and says what they mean.
     private func describe() {
         isDescribing = true
+        // The model picked by hand isn't on the phone: say once which one answers instead.
+        if Self.pictureModelOnPhone, let notice = ModelPicker.fallbackNotice() { speak(notice, lang: AppLang.code) }
         let gen = generation
         let photo = image
         Task {
