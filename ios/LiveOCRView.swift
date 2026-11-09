@@ -866,11 +866,7 @@ struct LiveOCRView: View {
                             if buttonDebouncer.canPress("LiveOCRView-1") {
                                 let impactFeedback = UIImpactFeedbackGenerator(style: .light)
                                 impactFeedback.impactOccurred()
-
-                                viewModel.stopSpeaking()
-                                viewModel.stopSession()
-                                viewModel.clearText()
-                                mode = .home
+                                goHome()
                             }
                         }) {
                             HStack(spacing: 6) {
@@ -1325,6 +1321,18 @@ struct LiveOCRView: View {
             }
         }
         .appleSpanishTranslation(viewModel: viewModel, enabled: ocrMode == .spanishToEnglish)
+        // VoiceOver's escape (two-finger Z): the same as the Back button.
+        .accessibilityAction(.escape) {
+            if buttonDebouncer.canPress("LiveOCRView-1") { goHome() }
+        }
+    }
+
+    /// Back, on screen or by VoiceOver's escape.
+    private func goHome() {
+        viewModel.stopSpeaking()
+        viewModel.stopSession()
+        viewModel.clearText()
+        mode = .home
     }
 
     /// Which language the translator reads. A menu for sighted users; for

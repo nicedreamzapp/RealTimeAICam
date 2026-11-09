@@ -204,6 +204,8 @@ struct ObjectDetectionView: View {
                     }
                     .rotationEffect(rotationAngle)
                     .fixedSize()
+                    .accessibilityLabel(L("Back"))
+                    .accessibilityHint(L("Returns to the home screen"))
                     .position(
                         x: max(40, geometry.size.width * 0.08),
                         y: min(60, geometry.size.height * 0.12)
@@ -324,6 +326,8 @@ struct ObjectDetectionView: View {
                 }
             }
         }
+        // VoiceOver's escape (two-finger Z): the same as the Back button.
+        .accessibilityAction(.escape) { viewModel.handleBackAction(onBack: onBack) }
     }
 
     @ViewBuilder

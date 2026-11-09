@@ -1084,12 +1084,18 @@ struct HelpMeAimView: View {
             Color.black.ignoresSafeArea()
             switch controller.phase {
             case .choosing: choices
-            case .asking: asking
-            case .aiming, .capturing: aiming
-            case .taken: taken
+            // One action from home on every step: VoiceOver's actions rotor has "Go to home screen".
+            case .asking: withHomeAction(asking)
+            case .aiming, .capturing: withHomeAction(aiming)
+            case .taken: withHomeAction(taken)
             }
         }
         .preferredColorScheme(.dark)
+        // VoiceOver's escape (two-finger Z) does what the on-screen Back does: one step back
+        // to the choices, and from the choices home.
+        .accessibilityAction(.escape) {
+            if controller.phase == .choosing { goHome() } else { controller.backToChoices() }
+        }
         .onAppear {
             controller.setVoice(voiceIdentifier)
             #if DEBUG
@@ -1117,12 +1123,18 @@ struct HelpMeAimView: View {
 
     // MARK: Choices
 
+    private func goHome() {
+        controller.shutdown()
+        onBack()
+    }
+
+    private func withHomeAction(_ screen: some View) -> some View {
+        screen.accessibilityAction(named: Text(L("Go to home screen"))) { goHome() }
+    }
+
     private var choices: some View {
         VStack(spacing: 18) {
-            topBar(title: L("Help Me Aim"), back: {
-                controller.shutdown()
-                onBack()
-            }, backLabel: L("Back to home"))
+            topBar(title: L("Help Me Aim"), back: goHome, backLabel: L("Back to home"))
             Text(L("What do you want a picture of?"))
                 .font(.title2.weight(.semibold))
                 .foregroundColor(.white)

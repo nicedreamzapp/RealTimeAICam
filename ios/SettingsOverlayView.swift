@@ -297,6 +297,10 @@ struct SettingsOverlayView: View {
                 }
             }
         )
+        // VoiceOver's escape (two-finger Z) closes Settings, like the close button.
+        .accessibilityAction(.escape) {
+            withAnimation(.spring(response: 0.3)) { isPresented = false }
+        }
     }
 
     static func addToCopyHistory(_ text: String) {

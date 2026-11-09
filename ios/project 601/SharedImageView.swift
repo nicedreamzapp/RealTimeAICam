@@ -89,6 +89,8 @@ struct SharedImageView: View {
         }
         .background(Color.black.ignoresSafeArea())
         .preferredColorScheme(.dark)
+        // VoiceOver's escape (two-finger Z): the same as Back.
+        .accessibilityAction(.escape) { close() }
         .onAppear {
             guard !started else { return }
             started = true

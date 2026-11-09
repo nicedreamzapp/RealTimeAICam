@@ -5837,6 +5837,17 @@
           }
         }
       }
+    },
+    "Go to home screen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ir a la pantalla de inicio"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
