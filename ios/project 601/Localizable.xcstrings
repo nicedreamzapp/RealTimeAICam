@@ -2465,28 +2465,6 @@
         }
       }
     },
-    "Live Cam starts listening again" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Live Cam vuelve a escuchar"
-          }
-        }
-      }
-    },
-    "Live Cam stops listening until you unmute" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Live Cam deja de escuchar hasta que actives el micrófono"
-          }
-        }
-      }
-    },
     "Live Cam, experimental" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2747,17 +2725,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Silencio"
-          }
-        }
-      }
-    },
-    "Mute microphone" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Silenciar micrófono"
           }
         }
       }
@@ -4852,28 +4819,6 @@
         }
       }
     },
-    "Unmute" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Activar"
-          }
-        }
-      }
-    },
-    "Unmute microphone" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Activar micrófono"
-          }
-        }
-      }
-    },
     "Using %@ for mail, money and medicine, %@ for everything else." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5134,17 +5079,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "¿Qué es esto? mira con calma una vez. Del correo y las páginas te dice lo importante, como quién lo envió y qué hay que pagar. Una habitación recibe una descripción. Después, mantén presionado para hacer otra pregunta."
-          }
-        }
-      }
-    },
-    "When on, Live Cam checks in after a long quiet and mentions new things it is sure it sees" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Si está activado, Live Cam te habla tras un largo silencio y menciona cosas nuevas que está seguro de ver"
           }
         }
       }
@@ -6018,28 +5952,6 @@
         }
       }
     },
-    "Ask about the view" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Preguntar por la vista"
-          }
-        }
-      }
-    },
-    "Tells you what's in front of the camera right now, for loud places" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Te dice qué hay frente a la cámara ahora mismo, para lugares con ruido"
-          }
-        }
-      }
-    },
     "What do you see?" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6256,6 +6168,83 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bien. ¿Qué es lo nuevo?"
+          }
+        }
+      }
+    },
+    "Microphone off" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Micrófono apagado"
+          }
+        }
+      }
+    },
+    "Live Cam stops listening; you can type a question instead" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Live Cam deja de escuchar; puedes escribir una pregunta"
+          }
+        }
+      }
+    },
+    "When on, Live Cam checks in after a long quiet. New things it sees are always told." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Si está activado, Live Cam te pregunta cómo vas tras un rato en silencio. Las cosas nuevas que ve siempre te las dice."
+          }
+        }
+      }
+    },
+    "Quiet on" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Silencio activado"
+          }
+        }
+      }
+    },
+    "Quiet" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Silencio"
+          }
+        }
+      }
+    },
+    "Show words instead of speaking" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Muestra palabras en lugar de hablar"
+          }
+        }
+      }
+    },
+    "Listening · just talk" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escuchando · solo habla"
           }
         }
       }

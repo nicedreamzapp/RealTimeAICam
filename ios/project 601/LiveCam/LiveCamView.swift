@@ -58,7 +58,9 @@ struct LiveCamView: View {
                             .opacity(call.showCaption ? 1 : 0.001)
                             .accessibilityIdentifier("liveCamCantHear")
                     }
-                    if call.typedOnly || call.hearingStopped { typedBox }
+                    // Typing only when it can't listen (no mic or speech permission, recognition stopped, mic off in
+                    // Settings); otherwise it always listens (Matt 11/09).
+                    if call.typedOnly || call.hearingStopped || call.micMuted { typedBox }
                     // Matt 11/6, a live camera: zoom pills like the Camera app's, just above the controls.
                     zoomPills
                     orb(size: wide ? 84 : (geo.size.height < 700 ? 96 : 120))
@@ -127,18 +129,7 @@ struct LiveCamView: View {
             .accessibilityLabel(L("Mode: %@", L(call.mode.label)))
             .accessibilityHint(L("Shows the modes and settings. You can also say funny mode, analyze mode, coach mode or normal mode."))
             Spacer(minLength: 0)
-            Button { call.showCaption.toggle() } label: {
-                Image(systemName: call.showCaption ? "captions.bubble.fill" : "captions.bubble").font(.title2.weight(.semibold))
-                    .frame(width: 60, height: 60)
-                    .background(call.showCaption ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.black.opacity(0.45)), in: Circle())
-                    .overlay(Circle().stroke(.white.opacity(0.35), lineWidth: 1))
-                    .foregroundStyle(call.showCaption ? .black : .white)
-            }
-            .accessibilityLabel(L("Words on screen"))
-            .accessibilityValue(call.showCaption ? L("On") : L("Off"))
-            .accessibilityAddTraits(.isToggle)
-            .accessibilityHint(L("Shows what Live Cam says in big words. VoiceOver can read them either way"))
-            .accessibilityIdentifier("liveCamWordsToggle")
+            // Words on screen are always on here; the switch lives in Settings > Live Cam (Matt 11/09 layout).
             Button { call.flip(); zoomLabel = 1 } label: {   // a flip starts at 1x again (review 11/6)
                 Image(systemName: "arrow.triangle.2.circlepath.camera").font(.title2.weight(.semibold))
                     .frame(width: 60, height: 60).background(.black.opacity(0.45), in: Circle())
@@ -344,20 +335,24 @@ struct LiveCamView: View {
                 .accessibilityAddTraits(.isToggle)
                 .accessibilityIdentifier("liveCamFlashlight")
             }
-            // Moonstone 11/1 Matt: "call it the mute button so it's obvious".
-            Button { call.micMuted.toggle() } label: {
+            // Quiet (Matt 11/09): no voice, words on screen instead. It keeps watching and listening. The mic
+            // switch moved to Settings > Live Cam.
+            Button { call.quiet.toggle() } label: {
                 VStack(spacing: 6) {
-                    Image(systemName: call.micMuted ? "mic.slash.fill" : "mic.slash").font(.system(size: d * 0.37, weight: .semibold))
+                    Image(systemName: call.quiet ? "text.bubble.fill" : "speaker.slash.fill").font(.system(size: d * 0.37, weight: .semibold))
                         .frame(width: d, height: d)
-                        .background(call.micMuted ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.black.opacity(0.45)), in: Circle())
-                        .overlay(Circle().stroke(.white.opacity(0.35), lineWidth: 1))
-                        .foregroundStyle(call.micMuted ? .black : .white)
-                    Text(call.micMuted ? L("Unmute") : L("Mute")).font(.footnote.weight(.semibold)).foregroundStyle(.white)
+                        .background(Color.white, in: Circle())
+                        .overlay(Circle().stroke(call.quiet ? LiveOrb.lookColor : .white.opacity(0.35), lineWidth: call.quiet ? 4 : 1))
+                        .foregroundStyle(.black)
+                    Text(call.quiet ? L("Quiet on") : L("Quiet")).font(.footnote.weight(.semibold)).foregroundStyle(.white)
                         .lineLimit(1).minimumScaleFactor(0.6).frame(width: d + 8)
                 }
             }
-            .accessibilityLabel(call.micMuted ? L("Unmute microphone") : L("Mute microphone"))
-            .accessibilityHint(call.micMuted ? L("Live Cam starts listening again") : L("Live Cam stops listening until you unmute"))
+            .accessibilityLabel(L("Quiet"))
+            .accessibilityValue(call.quiet ? L("On") : L("Off"))
+            .accessibilityAddTraits(.isToggle)
+            .accessibilityHint(L("Show words instead of speaking"))
+            .accessibilityIdentifier("liveCamQuiet")
             // No Ask button: Live Cam always listens (Matt 11/09: "there is an ask button i not want that, it
             // should be listen always").
             Button { call.end() } label: {
@@ -375,7 +370,7 @@ struct LiveCamView: View {
 
     private var statusLine: String {
         switch call.phase {
-        case .listening: call.micMuted ? L("Microphone muted") : (call.typedOnly || call.hearingStopped ? L("Type a question") : L("Your turn"))
+        case .listening: call.micMuted ? L("Microphone muted") : (call.typedOnly || call.hearingStopped ? L("Type a question") : L("Listening · just talk"))
         case .thinking: L("Looking")
         case .speaking: L("Speaking")
         case .downloading, .loading, .starting: L("Getting ready")

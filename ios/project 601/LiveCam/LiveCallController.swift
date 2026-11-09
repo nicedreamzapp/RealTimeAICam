@@ -78,7 +78,28 @@ final class LiveCallController: ObservableObject {
     @Published private(set) var micLevel: Float = -60
     /// The model is reading a photo or writing: the orb holds still so the GPU is all the model's.
     @Published private(set) var modelBusy = false
-    @Published var micMuted = false { didSet { micMutedChanged() } }
+    /// The microphone off for Live Cam, from Settings > Live Cam (remembered).
+    static let micOffKey = "liveCamMicOff"
+    @Published var micMuted = UserDefaults.standard.bool(forKey: LiveCallController.micOffKey) { didSet { micMutedChanged() } }
+    /// Quiet (Matt 11/09: "Yes, that"): no voice at all. It stops talking at once, and from then on everything it
+    /// would say (the read of the room, new things, answers) shows as words on screen only. It keeps watching and
+    /// listening. Remembered across visits. No VoiceOver announcements either: quiet is quiet.
+    static let quietKey = "liveCamQuiet"
+    @Published var quiet = UserDefaults.standard.bool(forKey: LiveCallController.quietKey) {
+        didSet {
+            UserDefaults.standard.set(quiet, forKey: Self.quietKey)
+            applyQuiet()
+            if quiet { voice.stop() }   // cut what it is saying right now
+            log(["event": "quiet", "on": quiet])
+        }
+    }
+    private func applyQuiet() {
+        #if DEBUG
+        voice.muted = quiet || LiveCamTest.mute
+        #else
+        voice.muted = quiet
+        #endif
+    }
     /// 11/2 Matt: a sign on screen when it's out of its league (guessing, lost the thread, or past what it can do).
     @Published private(set) var notice: String?
     private var noticeTask: Task<Void, Never>?
@@ -208,6 +229,7 @@ final class LiveCallController: ObservableObject {
         log(["event": "open", "test": LiveCamTest.active, "level": level.rawValue,
              "thermal": ProcessInfo.processInfo.thermalState.rawValue])
         configureTest()
+        applyQuiet()
         voice.onStart = { [weak self] shown, english, lang in
             guard let self else { return }
             self.caption = shown

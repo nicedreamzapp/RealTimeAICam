@@ -30,6 +30,8 @@ final class LiveCamUITests: XCTestCase {
     private func launch(_ extra: [String] = [], env: [String: String] = [:]) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments += ["-hasShownInstructions", "YES", "-liveCamTest", "-rtcamFakeTranslator"] + extra
+        // The model's read of the room, with a greeting and an offer around it: only the one scene sentence may come out.
+        app.launchEnvironment["RTCAM_FAKE_LIVE_OPENING"] = Self.fakeOpening
         app.launchEnvironment.merge(env) { $1 }
         app.launch()
         return app
@@ -45,8 +47,12 @@ final class LiveCamUITests: XCTestCase {
         return (c.value as? String) ?? c.label
     }
 
+    static let fakeOpening = "Hey there! A hallway with blue doors and an exit sign. Anything I can help with?"
+    static let openingRead = "A hallway with blue doors and an exit sign."
+    static let bannedOnOpen = ["welcome", "hey", "experimental", "help you", "how's it going", "help with", "live cam"]
+
     /// Opens Live Cam from Home and waits until it is listening (or, with `line`, until that line is shown).
-    /// No welcome or opening narration, ever (Matt 11/09): with no `line`, nothing may be said on open.
+    /// Matt 11/09: on open it says exactly one general read of the room, never a greeting, warning or offer.
     private func openLiveCam(_ app: XCUIApplication, line: String? = nil,
                              spanish: Bool = TestLanguage.isSpanish) {
         let button = app.buttons[spanish ? TestLanguage.spanish("Live Cam, experimental") : "Live Cam, experimental"].firstMatch
@@ -60,8 +66,15 @@ final class LiveCamUITests: XCTestCase {
         expectation(for: ready, evaluatedWith: NSObject())
         waitForExpectations(timeout: 180)
         if line == nil {
-            sleep(4)
-            XCTAssertEqual(captionText(app), "", "Live Cam said something on open: \(captionText(app))")
+            let read = NSPredicate { _, _ in !self.captionText(app).isEmpty }
+            expectation(for: read, evaluatedWith: NSObject())
+            waitForExpectations(timeout: 60)
+            sleep(3)   // anything after the first sentence would show by now
+            let said = captionText(app)
+            let lower = said.lowercased()
+            XCTAssertEqual(said.filter { ".!?".contains($0) }.count, 1, "not exactly one sentence on open: \(said)")
+            for w in Self.bannedOnOpen { XCTAssertFalse(lower.contains(w), "said \"\(w)\" on open: \(said)") }
+            if !spanish { XCTAssertEqual(said, Self.openingRead, "the opening read is not the scene sentence") }
         }
     }
 
@@ -84,7 +97,12 @@ final class LiveCamUITests: XCTestCase {
     /// Every control big enough, on screen, and not on top of another.
     private func checkLayout(_ app: XCUIApplication) {
         let screen = app.windows.firstMatch.frame
-        let names = ["Back", "Mute microphone", "Flip camera", "Ask about the view"].map { T($0) }
+        // Matt 11/09 layout: Flashlight, Quiet, Back at the bottom; mode and flip at the top. No Ask button, no Mute,
+        // no words switch on this screen.
+        let names = ["Back", "Quiet", "Flip camera"].map { T($0) }
+        for gone in ["Ask about the view", "Ask", "Mute microphone", "Words on screen"] {
+            XCTAssertFalse(app.buttons[T(gone)].firstMatch.exists, "\(gone) is back on the Live Cam screen")
+        }
         var frames: [(String, CGRect)] = []
         for n in names {
             let b = app.buttons[n].firstMatch
@@ -174,7 +192,7 @@ final class LiveCamUITests: XCTestCase {
         XCTAssertTrue(light.waitForExistence(timeout: 10), "no flashlight button")
         XCTAssertGreaterThanOrEqual(min(light.frame.width, light.frame.height), 56)
         XCTAssertTrue(app.windows.firstMatch.frame.contains(light.frame), "flashlight off screen: \(light.frame)")
-        for n in ["Back", "Mute microphone"].map({ T($0) }) {
+        for n in ["Back", "Quiet"].map({ T($0) }) {
             XCTAssertFalse(light.frame.intersects(app.buttons[n].firstMatch.frame), "flashlight overlaps \(n)")
         }
         XCTAssertEqual(light.value as? String, T("Off"))
@@ -201,17 +219,13 @@ final class LiveCamUITests: XCTestCase {
                                "RTCAM_FAKE_LIVE_DELAY": "3"])
         openLiveCam(app)
         XCTAssertTrue(orb(app, "yourTurn").waitForExistence(timeout: 30), "never became your turn after opening")
-        XCTAssertTrue(captionText(app).isEmpty, "it said something at open: \(captionText(app))")   // opens silent
         keep(app, "livecam-turn-yours")
-        let words = app.descendants(matching: .any).matching(identifier: "liveCamWordsToggle").firstMatch
-        if words.exists, (words.value as? String) == T("On") { words.tap() }   // Words on screen off: shape alone
         ask(app, "What is in front of me?")
         XCTAssertTrue(orb(app, "looking").waitForExistence(timeout: 5), "no looking state while it thinks")
         keep(app, "livecam-turn-looking")
         XCTAssertTrue(orb(app, "talking").waitForExistence(timeout: 30), "no talking state")
         keep(app, "livecam-turn-talking")
         XCTAssertTrue(orb(app, "yourTurn").waitForExistence(timeout: 60), "not your turn after the answer")
-        if words.exists, (words.value as? String) == T("Off") { words.tap() }
         goBack(app)
         app.terminate()
     }
@@ -266,22 +280,31 @@ final class LiveCamUITests: XCTestCase {
         return (n == 0 ? 0 : sum / Double(n), yellow * 100)   // scaled back to roughly screen pixels
     }
 
-    /// Matt 11/6, a live camera: the shutter asks about the view right now (loud places), zoom pills, caption bubble.
+    /// Matt 11/09: no Ask button ("it should be listen always"), and Quiet: tap it and it stops talking, its words
+    /// show on screen instead, and it keeps listening and answering; tap again and it speaks.
     @MainActor
-    func testShutterAsksAboutTheView() throws {
+    func testNoAskButtonAndQuiet() throws {
         continueAfterFailure = false
         let app = launch(env: ["RTCAM_FAKE_LIVE_ANSWER": "I see a blue double door with an exit sign above it."])
         openLiveCam(app)
         checkLayout(app)
-        let shutter = app.buttons[T("Ask about the view")].firstMatch
-        XCTAssertTrue(shutter.exists, "no shutter")
-        shutter.tap()
+        XCTAssertFalse(app.descendants(matching: .any).matching(identifier: "liveCamShutter").firstMatch.exists, "an Ask button is back")
+        let quiet = app.descendants(matching: .any).matching(identifier: "liveCamQuiet").firstMatch
+        XCTAssertTrue(quiet.exists, "no Quiet button")
+        if (quiet.value as? String) == T("On") { quiet.tap() }
+        quiet.tap()
+        sleep(1)
+        XCTAssertEqual(quiet.value as? String, T("On"))
+        ask(app, "What is in front of me?")
         let answered = NSPredicate { _, _ in self.captionText(app).contains("blue double door") }
         expectation(for: answered, evaluatedWith: NSObject())
-        waitForExpectations(timeout: 60)
+        waitForExpectations(timeout: 60)   // quiet still answers, in words
         app.buttons[T("Zoom %@").replacingOccurrences(of: "%@", with: "2×")].firstMatch.tap()
         sleep(1)
-        keep(app, "livecam-shutter-answer")
+        keep(app, "livecam-quiet-answer")
+        quiet.tap()
+        sleep(1)
+        XCTAssertEqual(quiet.value as? String, T("Off"))
         checkLayout(app)
         goBack(app)
         app.terminate()
@@ -302,7 +325,7 @@ final class LiveCamUITests: XCTestCase {
         XCTAssertTrue(field.exists, "no typing box")
         XCTAssertTrue(screen.contains(field.frame), "typing box off screen: \(field.frame)")
         XCTAssertFalse(note.frame.intersects(field.frame), "note overlaps the typing box")
-        for n in ["Back", "Mute microphone", "Flip camera"].map({ T($0) }) {
+        for n in ["Back", "Quiet", "Flip camera"].map({ T($0) }) {
             let b = app.buttons[n].firstMatch
             XCTAssertFalse(note.frame.intersects(b.frame), "note overlaps \(n)")
             XCTAssertFalse(field.frame.intersects(b.frame), "typing box overlaps \(n)")
