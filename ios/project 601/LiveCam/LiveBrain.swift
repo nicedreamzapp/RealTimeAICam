@@ -101,11 +101,19 @@ struct LiveMemory {
     /// "shelves" / "shelving" / "shelf" are one thing (11/2 test: "Oh, I see shelves now" after "metal shelving").
     /// Two names for one thing (review 11/09: "tv" then "television" was told twice).
     static let synonyms: [String: String] = ["television": "tv", "monitor": "screen", "display": "screen", "couch": "sofa",
-        "desk": "table", "mug": "cup", "laptop": "computer", "notebook": "computer", "pc": "computer", "automobile": "car",
+        "desk": "table", "mug": "cup", "laptop": "computer", "pc": "computer", "automobile": "car",
         "vehicle": "car", "puppy": "dog", "kitten": "cat", "kitty": "cat", "cellphone": "phone", "smartphone": "phone",
-        "bike": "bicycle", "plant": "plant", "houseplant": "plant", "potted": "plant", "lamp": "lamp", "fridge": "refrigerator"]
+        "bike": "bicycle", "houseplant": "plant", "fridge": "refrigerator"]
+    /// "couches" -> "couch", "laptops" -> "laptop": the plain word, for the synonym list.
+    static func singular(_ w: String) -> String {
+        if ["ches", "shes", "xes"].contains(where: { w.hasSuffix($0) }) { return String(w.dropLast(2)) }
+        if w.hasSuffix("s"), !w.hasSuffix("ss"), w.count > 3 { return String(w.dropLast()) }
+        return w
+    }
+    /// The one name a word stands for: looked up as written and as its singular ("televisions" is "tv").
+    static func canonical(_ w: String) -> String { synonyms[w] ?? synonyms[singular(w)] ?? w }
     static func stems(_ s: String) -> Set<String> {
-        Set(LiveWords.contentWords(s).map { synonyms[$0] ?? $0 }.map { w in
+        Set(LiveWords.contentWords(s).map(canonical).map { w in
             for suf in ["ving", "ves", "ing", "es", "s", "f"] where w.count > suf.count + 2 && w.hasSuffix(suf) { return String(w.dropLast(suf.count)) }   // shelf/shelves/shelving -> shel
             return w
         })

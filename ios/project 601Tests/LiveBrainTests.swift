@@ -795,3 +795,18 @@ struct LiveMemorySynonymTests {
         #expect(m.newThings(["dog"]) == ["dog"])
     }
 }
+
+/// Review 11/09: plural names map too, and "see anything" is only the bare question.
+struct LiveMemoryPluralSynonymTests {
+    @Test func pluralNamesMapToOneThing() {
+        var m = LiveMemory()
+        m.noteThings(["tv", "sofa", "computer", "screen"])
+        #expect(m.newThings(["televisions", "couches", "laptops", "monitors"]).isEmpty)
+    }
+
+    @Test func seeAnythingOnlyAsTheBareQuestion() {
+        #expect(LiveWords.isSeeAgain("Do you see anything?"))
+        #expect(LiveWords.isSeeAgain("see anything new"))
+        #expect(!LiveWords.isSeeAgain("can you see anything written on the label"))
+    }
+}
