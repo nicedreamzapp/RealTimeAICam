@@ -36,6 +36,25 @@ struct SharedImageView: View {
     /// Bumps on close, so an answer that lands after leaving is never said.
     @State private var generation = 0
     @State private var started = false
+    /// The app's voice is reading something on this screen.
+    @State private var isSpeaking = false
+    @State private var speakingWatch: Task<Void, Never>?
+    /// This screen's one keep-awake hold is taken.
+    @State private var holdingAwake = false
+    /// Follow-up questions need the picture model; without it the words are read instead.
+    @State private var canAsk = SharedImageView.pictureModelOnPhone
+    @State private var noModelNoteSaid = false
+
+    private static var pictureModelOnPhone: Bool {
+        #if DEBUG
+        // `RTCAM_NO_VISION_MODEL=1`: a phone without the picture model, for the Simulator.
+        if ProcessInfo.processInfo.environment["RTCAM_NO_VISION_MODEL"] == "1" { return false }
+        #endif
+        return OnDeviceVisionNarrator.isBundled
+    }
+
+    /// Screen stays on while the picture is worked out, a question answered, or an answer read.
+    private var keepsAwake: Bool { isDescribing || isAsking || isListening || isSpeaking }
 
     private var voice: String { SpeechManager.shared.selectedVoiceIdentifier }
 
@@ -66,7 +85,11 @@ struct SharedImageView: View {
                     withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                 }
             }
-            askBar
+            if canAsk {
+                askBar
+            } else {
+                noModelNote
+            }
         }
         .background(Color.black.ignoresSafeArea())
         .preferredColorScheme(.dark)
@@ -77,13 +100,22 @@ struct SharedImageView: View {
                 UIAccessibility.post(notification: .screenChanged,
                                      argument: SpeechManager.voiceOverLine(L("Shared picture"), lang: AppLang.code))
             }
+            setAwake(true)
             describe()
+        }
+        .onChange(of: keepsAwake) { _, awake in setAwake(awake) }
+        .onChange(of: isSpeaking) { _, speaking in
+            // No picture model: once the description has been read, say why there is no ask button.
+            guard !speaking, !canAsk, !isDescribing, !noModelNoteSaid else { return }
+            noModelNoteSaid = true
+            sayApp("Asking about pictures needs the picture model. Get it in Settings, under Models.")
         }
         .onDisappear {
             generation += 1
             speaker.stopSpeaking()
             if isListening { Task { _ = await listener.stopAndTranscribe() } }
-            ScreenAwake.release("sharedImage")
+            speakingWatch?.cancel()
+            setAwake(false)
         }
     }
 
@@ -165,6 +197,24 @@ struct SharedImageView: View {
         .accessibilityLabel(L("You asked: %@. Answer: %@", exchange.question, exchange.answer ?? L("Thinking…")))
     }
 
+    /// Without the picture model a follow-up can only fail, so say where to get it instead.
+    private var noModelNote: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "info.circle").font(.system(size: 20, weight: .semibold))
+            Text(L("Asking about pictures needs the picture model. Get it in Settings, under Models."))
+                .font(.system(size: 17, weight: .medium))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.1)))
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 14)
+        .accessibilityElement(children: .combine)
+    }
+
     private var askBar: some View {
         VStack(spacing: 10) {
             HStack(spacing: 10) {
@@ -223,11 +273,9 @@ struct SharedImageView: View {
     /// picture model it reads the words and says what they mean.
     private func describe() {
         isDescribing = true
-        ScreenAwake.hold("sharedImage")
         let gen = generation
         let photo = image
         Task {
-            defer { ScreenAwake.release("sharedImage") }
             let said = await Self.describeText(photo)
             await MainActor.run {
                 guard gen == generation else { return }
@@ -262,7 +310,7 @@ struct SharedImageView: View {
         }) else { return nil }
         let upright = UIImage(cgImage: cg)
 
-        if OnDeviceVisionNarrator.isBundled {
+        if pictureModelOnPhone {
             let gate = await Task.detached(priority: .userInitiated) {
                 FrameQualityGate.check(cg, checkDocumentEdges: true)
             }.value
@@ -390,7 +438,23 @@ struct SharedImageView: View {
     }
 
     private func speak(_ text: String, lang: String) {
+        isSpeaking = true
         speaker.speak(text: text, voiceIdentifier: voice, language: lang) {}
+        // Watch the voice itself: a cancelled line can hand its completion to the next one.
+        speakingWatch?.cancel()
+        speakingWatch = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 400_000_000) // the speaker starts 0.1 s late
+            while !Task.isCancelled, speaker.isSpeakingNow {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+            }
+            if !Task.isCancelled { isSpeaking = false }
+        }
+    }
+
+    private func setAwake(_ on: Bool) {
+        guard on != holdingAwake else { return }
+        holdingAwake = on
+        if on { ScreenAwake.hold("sharedImage") } else { ScreenAwake.release("sharedImage") }
     }
 
     private func sayAgain() {

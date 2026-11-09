@@ -5826,6 +5826,17 @@
           }
         }
       }
+    },
+    "Asking about pictures needs the picture model. Get it in Settings, under Models." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Para preguntar sobre imágenes hace falta el modelo de imágenes. Consíguelo en Ajustes, en Modelos."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

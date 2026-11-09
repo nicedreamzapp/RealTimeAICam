@@ -47,6 +47,10 @@ struct ModelsCardView: View {
         .accessibilityHint(L("Double-tap to change which model What's this? uses. You don't need to."))
         .accessibilityAddTraits(.isButton)
         .sheet(isPresented: $showChooser) { ModelsChooserView() }
+        // A picture shared from another app opens over everything; this sheet would hide it.
+        .onReceive(SharedImageInbox.shared.$current) { shared in
+            if shared != nil { showChooser = false }
+        }
     }
 }
 

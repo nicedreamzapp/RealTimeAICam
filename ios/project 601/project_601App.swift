@@ -87,6 +87,11 @@ struct project_601App: App {
                 // rtcam://shared-image?id=... from the Share Extension, cold launch included:
                 // the picture waits in SharedImageInbox until ContentView opens it.
                 .onOpenURL { url in SharedImageInbox.shared.handle(url) }
+                // The link can fail to arrive (iOS may refuse an extension's open): a picture
+                // still waiting in the App Group opens whenever the app comes to the front.
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                    SharedImageInbox.shared.checkFolder()
+                }
                 .task {
                     // 1.4.0: speed check once, then fetch this phone's level.
                     ModelSetup.shared.launch()

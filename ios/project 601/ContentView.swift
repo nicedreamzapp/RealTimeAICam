@@ -29,9 +29,8 @@ struct ContentView: View {
     @State private var lastModeSwitch = Date.distantPast
     /// Live Cam, full screen over home (2026-11-04).
     @State private var showLiveCam = false
-    /// A picture shared from another app's share sheet, full screen over home.
+    /// A picture shared from another app's share sheet, shown over everything.
     @ObservedObject private var sharedInbox = SharedImageInbox.shared
-    @State private var sharedImage: SharedImageInbox.Shared?
 
     private var isPortrait: Bool {
         normalizedOrientation == .portrait || !normalizedOrientation.isValidInterfaceOrientation
@@ -85,6 +84,8 @@ struct ContentView: View {
             .padding([.top, .leading], 12)
 
             contentForMode
+                // VoiceOver stays on the shared picture while it is up.
+                .accessibilityHidden(sharedInbox.isBusy)
 
             if mode == .home {
                 VStack {
@@ -103,6 +104,16 @@ struct ContentView: View {
                     }
                 }
                 .allowsHitTesting(false)
+            }
+
+            // The Shared picture screen, drawn at the root rather than presented: a sheet or
+            // cover still on its way out can't block it, so there is nothing to wait for.
+            if let shared = sharedInbox.current {
+                SharedImageView(image: shared.image, onClose: closeSharedImage)
+                    .id(shared.id)
+                    .transition(.opacity)
+                    .zIndex(10)
+                    .accessibilityAddTraits(.isModal)
             }
         }
         .onAppear {
@@ -131,23 +142,14 @@ struct ContentView: View {
         .fullScreenCover(isPresented: $showLiveCam) {
             LiveCamView(onBack: closeLiveCam)
         }
-        .onReceive(sharedInbox.$pending) { shared in
+        .onReceive(sharedInbox.$current) { shared in
             guard shared != nil else { return }
-            // Next turn of the run loop, so on a cold launch onAppear has settled first.
-            DispatchQueue.main.async { openSharedImage() }
+            leaveForSharedImage()
         }
         .onReceive(sharedInbox.$failed) { failed in
             guard failed else { return }
             sharedInbox.failed = false
             SpeechManager.shared.speak(L("That picture couldn't be opened."))
-        }
-        .background {
-            // Its own anchor: one view can't hold two full-screen covers.
-            Color.clear
-                .fullScreenCover(item: $sharedImage) { shared in
-                    SharedImageView(image: shared.image, onClose: closeSharedImage)
-                        .id(shared.id)
-                }
         }
         .alert(item: $viewModel.cameraPermissionAlert) { alert in
             Alert(
@@ -249,10 +251,9 @@ struct ContentView: View {
         }
     }
 
-    /// A shared picture: leave whatever screen is up (its camera off), then open it.
-    private func openSharedImage() {
-        guard let shared = sharedInbox.pending else { return }
-        sharedInbox.pending = nil
+    /// A shared picture is up: leave whatever screen was up, its camera off. Home's own
+    /// guide sheet and Models chooser close themselves (HomeView, ModelsCardView).
+    private func leaveForSharedImage() {
         // Live Cam ends its call when its cover goes away.
         showLiveCam = false
         if mode != .home {
@@ -262,15 +263,10 @@ struct ContentView: View {
         }
         viewModel.stopSession()
         SpeechManager.shared.resetSpeechState()
-        // Live Cam's cover, or the guide sheet HomeView closes for this, finishes going
-        // away before the next one comes up.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-            sharedImage = shared
-        }
     }
 
     private func closeSharedImage() {
-        sharedImage = nil
+        sharedInbox.close()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
             UIAccessibility.post(notification: .screenChanged,
                                  argument: SpeechManager.voiceOverLine(L("Home screen"), lang: AppLang.code))

@@ -170,10 +170,15 @@ struct HomeView: View {
                     }
                 }
         }
-        // A picture shared from another app opens over home; a sheet still up would block it.
-        .onReceive(SharedImageInbox.shared.$pending) { shared in
-            guard shared != nil, showInstructions else { return }
-            showInstructions = false
+        // A picture shared from another app opens over everything; the guide sheet and
+        // Settings would hide it. A first-launch guide closed for it comes back next launch.
+        .onReceive(SharedImageInbox.shared.$current) { shared in
+            guard shared != nil else { return }
+            showSettings = false
+            if showInstructions {
+                showInstructions = false
+                UserDefaults.standard.set(false, forKey: "hasShownInstructions")
+            }
         }
         .onChange(of: modelDownloader.progress) { _, value in
             announceDownloadProgress(value)
@@ -189,7 +194,12 @@ struct HomeView: View {
                 animationState.showAll()
             }
 
-            if !UserDefaults.standard.bool(forKey: "hasShownInstructions") {
+            #if DEBUG
+            // `-rtcamOpenSettings`: Settings open at launch, for Simulator checks.
+            if ProcessInfo.processInfo.arguments.contains("-rtcamOpenSettings") { showSettings = true }
+            #endif
+            // Not over a shared picture (the app opened from the share sheet): next launch.
+            if !UserDefaults.standard.bool(forKey: "hasShownInstructions"), !SharedImageInbox.shared.isBusy {
                 showInstructions = true
                 UserDefaults.standard.set(true, forKey: "hasShownInstructions")
             }
@@ -203,9 +213,11 @@ struct HomeView: View {
         let synth = speechSynthesizer
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(UICue.homeCueDelay * 1_000_000_000))
-            // Still home (not straight into a tool): otherwise say nothing.
-            guard mode == .home, !showInstructions else { return }
-            await UICue.say(UICue.home, stillWanted: { mode == .home && !showInstructions }) { text, lang in
+            // Still home (not straight into a tool, not a shared picture): otherwise say nothing.
+            guard mode == .home, !showInstructions, !SharedImageInbox.shared.isBusy else { return }
+            await UICue.say(UICue.home, stillWanted: {
+                mode == .home && !showInstructions && !SharedImageInbox.shared.isBusy
+            }) { text, lang in
                 // The picked voice only for its own language, else the best voice for `lang`.
                 let prepared = YourLanguageVoice.prepare(text, lang: lang, selected: voiceId)
                 let utterance = AVSpeechUtterance(string: prepared.text)
@@ -215,7 +227,7 @@ struct HomeView: View {
             }
             guard UIAccessibility.isVoiceOverRunning else { return }
             try? await Task.sleep(nanoseconds: UInt64(UICue.homeFocusDelay * 1_000_000_000))
-            guard mode == .home, !showInstructions else { return }
+            guard mode == .home, !showInstructions, !SharedImageInbox.shared.isBusy else { return }
             settingsFocused = true
         }
     }
