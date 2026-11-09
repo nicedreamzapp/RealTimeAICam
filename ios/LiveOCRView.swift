@@ -1323,7 +1323,13 @@ struct LiveOCRView: View {
         .appleSpanishTranslation(viewModel: viewModel, enabled: ocrMode == .spanishToEnglish)
         // VoiceOver's escape (two-finger Z): the same as the Back button.
         .accessibilityAction(.escape) {
-            if buttonDebouncer.canPress("LiveOCRView-1") { goHome() }
+            // Settings open: escape only closes Settings (its own handler should get it first;
+            // this makes sure it never leaves the screen instead).
+            if showSettings {
+                withAnimation(.spring(response: 0.3)) { showSettings = false }
+            } else if buttonDebouncer.canPress("LiveOCRView-1") {
+                goHome()
+            }
         }
     }
 
