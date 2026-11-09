@@ -5760,6 +5760,72 @@
           }
         }
       }
+    },
+    "Closes this picture and goes back to the home screen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cierra esta imagen y vuelve a la pantalla de inicio"
+          }
+        }
+      }
+    },
+    "Say it again" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dilo otra vez"
+          }
+        }
+      }
+    },
+    "Reads the description of this picture out loud again" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vuelve a leer en voz alta la descripción de esta imagen"
+          }
+        }
+      }
+    },
+    "Description of the shared picture" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descripción de la imagen compartida"
+          }
+        }
+      }
+    },
+    "You asked: %@. Answer: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preguntaste: %@. Respuesta: %@"
+          }
+        }
+      }
+    },
+    "Shared picture" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Imagen compartida"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

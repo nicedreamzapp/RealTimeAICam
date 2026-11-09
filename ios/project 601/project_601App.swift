@@ -76,6 +76,9 @@ struct project_601App: App {
                 .environment(\.locale, Locale(identifier: appLang.code))
                 .preferredColorScheme(.dark)
                 .statusBarHidden(true)
+                // rtcam://shared-image?id=... from the Share Extension, cold launch included:
+                // the picture waits in SharedImageInbox until ContentView opens it.
+                .onOpenURL { url in SharedImageInbox.shared.handle(url) }
                 .task {
                     // 1.4.0: speed check once, then fetch this phone's level.
                     ModelSetup.shared.launch()

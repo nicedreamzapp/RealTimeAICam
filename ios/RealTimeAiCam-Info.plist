@@ -2,6 +2,18 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- rtcam://shared-image?id=... : the Share Extension hands a shared picture to the app. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>rtcam</string>
+			</array>
+		</dict>
+	</array>
 	<!-- Other names Siri should hear as this app, so "what's this in real time cam" or
 	     "help me aim with AI Cam" still find it. Merged into the generated Info.plist. -->
 	<key>INAlternativeAppNames</key>

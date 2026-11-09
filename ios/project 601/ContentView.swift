@@ -29,6 +29,9 @@ struct ContentView: View {
     @State private var lastModeSwitch = Date.distantPast
     /// Live Cam, full screen over home (2026-11-04).
     @State private var showLiveCam = false
+    /// A picture shared from another app's share sheet, full screen over home.
+    @ObservedObject private var sharedInbox = SharedImageInbox.shared
+    @State private var sharedImage: SharedImageInbox.Shared?
 
     private var isPortrait: Bool {
         normalizedOrientation == .portrait || !normalizedOrientation.isValidInterfaceOrientation
@@ -128,6 +131,24 @@ struct ContentView: View {
         .fullScreenCover(isPresented: $showLiveCam) {
             LiveCamView(onBack: closeLiveCam)
         }
+        .onReceive(sharedInbox.$pending) { shared in
+            guard shared != nil else { return }
+            // Next turn of the run loop, so on a cold launch onAppear has settled first.
+            DispatchQueue.main.async { openSharedImage() }
+        }
+        .onReceive(sharedInbox.$failed) { failed in
+            guard failed else { return }
+            sharedInbox.failed = false
+            SpeechManager.shared.speak(L("That picture couldn't be opened."))
+        }
+        .background {
+            // Its own anchor: one view can't hold two full-screen covers.
+            Color.clear
+                .fullScreenCover(item: $sharedImage) { shared in
+                    SharedImageView(image: shared.image, onClose: closeSharedImage)
+                        .id(shared.id)
+                }
+        }
         .alert(item: $viewModel.cameraPermissionAlert) { alert in
             Alert(
                 title: Text(alert.title),
@@ -222,6 +243,34 @@ struct ContentView: View {
 
     private func closeLiveCam() {
         showLiveCam = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            UIAccessibility.post(notification: .screenChanged,
+                                 argument: SpeechManager.voiceOverLine(L("Home screen"), lang: AppLang.code))
+        }
+    }
+
+    /// A shared picture: leave whatever screen is up (its camera off), then open it.
+    private func openSharedImage() {
+        guard let shared = sharedInbox.pending else { return }
+        sharedInbox.pending = nil
+        // Live Cam ends its call when its cover goes away.
+        let wasLiveCam = showLiveCam
+        showLiveCam = false
+        if mode != .home {
+            performReset()
+            resourceManager.switchToMode(.home)
+            mode = .home
+        }
+        viewModel.stopSession()
+        SpeechManager.shared.resetSpeechState()
+        // Live Cam's cover finishes going away before the next one comes up.
+        DispatchQueue.main.asyncAfter(deadline: .now() + (wasLiveCam ? 0.7 : 0)) {
+            sharedImage = shared
+        }
+    }
+
+    private func closeSharedImage() {
+        sharedImage = nil
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
             UIAccessibility.post(notification: .screenChanged,
                                  argument: SpeechManager.voiceOverLine(L("Home screen"), lang: AppLang.code))
