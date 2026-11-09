@@ -152,6 +152,9 @@ final class VisionModelDownloader: NSObject, ObservableObject {
     static let sessionIdentifier = "com.nicedreamz.visionmodels"
 
     private var queue: [ModelLevel] = []
+    /// Bumped whenever a download starts or is stopped, so a verify that was
+    /// already running for a stopped download can tell it no longer counts.
+    private var run = 0
     private var manifest: VisionModelStore.Manifest?
     /// Bytes known to be on disk (or received so far) per file name.
     private var received: [String: Int64] = [:]
@@ -190,7 +193,13 @@ final class VisionModelDownloader: NSObject, ObservableObject {
     func cancel(_ level: ModelLevel) {
         queue.removeAll { $0 == level }
         if current == level {
-            session.getAllTasks { tasks in tasks.forEach { $0.cancel() } }
+            run += 1
+            // Only this level's tasks: the callback lands after next() may
+            // already have queued the following level's files.
+            let prefix = Self.tag(level, "")
+            session.getAllTasks { tasks in
+                tasks.filter { $0.taskDescription?.hasPrefix(prefix) == true }.forEach { $0.cancel() }
+            }
             current = nil
             manifest = nil
             pending = []
@@ -202,8 +211,16 @@ final class VisionModelDownloader: NSObject, ObservableObject {
 
     /// Picks up any level whose download was cut off by the app being closed.
     func resumeInterrupted() {
+        let removed = ModelPicker.removed
         for level in ModelLevel.allCases where !level.isBundled && !VisionModelStore.isInstalled(level) {
-            if FileManager.default.fileExists(atPath: VisionModelStore.stagingURL(level).path) { start(level) }
+            let staging = VisionModelStore.stagingURL(level)
+            guard FileManager.default.fileExists(atPath: staging.path) else { continue }
+            // Stopped just before the app closed: finish throwing it away instead.
+            if removed.contains(level) {
+                try? FileManager.default.removeItem(at: staging)
+            } else {
+                start(level)
+            }
         }
     }
 
@@ -217,6 +234,7 @@ final class VisionModelDownloader: NSObject, ObservableObject {
         guard current == nil, !queue.isEmpty else { return }
         let level = queue.removeFirst()
         current = level
+        run += 1
         states[level] = .downloading
         progress = 0
         SpeechManager.shared.speak(L("Getting the %@ model for this phone, %@. What's this? keeps working while it downloads.",
@@ -323,6 +341,7 @@ final class VisionModelDownloader: NSObject, ObservableObject {
 
     private func verifyAndInstall(_ level: ModelLevel) async {
         guard let manifest else { return }
+        let thisRun = run
         states[level] = .verifying
         // Hashing 2 GB takes a few seconds; ask iOS for them so a screen that
         // locks right as the last file lands doesn't leave the level half
@@ -345,6 +364,15 @@ final class VisionModelDownloader: NSObject, ObservableObject {
                         }
                     }
                 }
+                return .success(())
+            } catch {
+                return .failure(error)
+            }
+        }.value
+        // Stopped while checking: Stop already threw the files away and moved on.
+        guard run == thisRun, current == level else { return }
+        let installed: Result<Void, Error> = outcome.flatMap {
+            Result {
                 let fm = FileManager.default
                 if fm.fileExists(atPath: final.path) { try fm.removeItem(at: final) }
                 try fm.moveItem(at: staging, to: final)
@@ -352,12 +380,9 @@ final class VisionModelDownloader: NSObject, ObservableObject {
                 var values = URLResourceValues()
                 values.isExcludedFromBackup = true
                 try? keepOut.setResourceValues(values)
-                return .success(())
-            } catch {
-                return .failure(error)
             }
-        }.value
-        switch outcome {
+        }
+        switch installed {
         case .success:
             progress = 1
             states[level] = .ready

@@ -339,13 +339,11 @@ struct ModelsChooserView: View {
 
     private func stop(_ level: ModelLevel) {
         setup.stop(level)
-        if choice == level.rawValue { choice = "auto" }
         confirm(L("Stopped. %@ won't download unless you choose it.", level.name))
     }
 
     private func delete(_ level: ModelLevel) {
         setup.delete(level)
-        if choice == level.rawValue { choice = "auto" }
         confirm(L("%@ deleted. %@ freed.", level.name, level.sizeDescription))
     }
 

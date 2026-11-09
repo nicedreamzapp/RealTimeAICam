@@ -82,12 +82,14 @@ final class ModelSetup: ObservableObject {
     /// automatic mode from starting it again.
     func stop(_ level: ModelLevel) {
         ModelPicker.markRemoved(level)
+        if ModelPicker.manualLevel == level { ModelPicker.manualLevel = nil }
         VisionModelDownloader.shared.cancel(level)
     }
 
     /// The person deleted a downloaded level: same promise as ``stop(_:)``.
     func delete(_ level: ModelLevel) {
         ModelPicker.markRemoved(level)
+        if ModelPicker.manualLevel == level { ModelPicker.manualLevel = nil }
         VisionModelDownloader.shared.delete(level)
     }
 
