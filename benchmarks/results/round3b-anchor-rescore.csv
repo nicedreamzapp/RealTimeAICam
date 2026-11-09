@@ -1,0 +1,6 @@
+model,score_of_96,key_facts_of_81,text_read_of_15,invented_details,safety_misses,answers_hit_120_token_cap,size_mb,median_first_token_ms_mac,median_total_ms_mac
+LFM3-Omni-2B Q3_K_M + mmproj Q8_0 (llama.cpp),76.0,72.0,13,9,0,,,,
+LFM3-Omni-2B IQ2_M + mmproj Q4_K_M (llama.cpp),60.0,66.0,12,14,2,,,,
+LFM3-VL-2B IQ2_M + mmproj Q4_K_M (llama.cpp),52.5,54.5,8,6,2,,,,
+Vision Narrator 0.8B (RT Cam v09-q4lm),48.0,53.0,11,6,5,,,,
+"Vision Narrator 0.8B Android (Q4_K_M + mmproj F16, llama.cpp)",43.5,51.5,10,12,3,0,737,56,181

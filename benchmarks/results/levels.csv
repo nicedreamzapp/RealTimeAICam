@@ -1,0 +1,5 @@
+level,model,size,blind_score_of_96
+Sharp,LFM3-Omni-2B Q8_0 + mmproj Q8_0,2.0 GB,78.5
+Clear,LFM3-Omni-2B Q3_K_M + mmproj Q8_0,1.1 GB,75.5
+Balanced,LFM3-Omni-2B IQ2_XS + mmproj Q4_K_M,735 MB,57.5
+Quick,RT Cam Vision Narrator 0.8B (old model),625 MB,49

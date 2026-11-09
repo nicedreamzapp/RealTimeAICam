@@ -1,0 +1,10 @@
+phone,chip,level,model_size,image_px,median_seconds_tap_to_answer,status
+iPhone 18 Pro Max,A20 Pro,Balanced,735 MB,,1.56,measured
+iPhone 12 Pro Max,A14,Sharp,2.0 GB,,18.5,measured
+iPhone 12 Pro Max,A14,Clear,1.1 GB,,15.7,measured
+iPhone 12 Pro Max,A14,Balanced,735 MB,,13.8,measured
+iPhone 12 Pro Max,A14,Quick (old 0.8B),625 MB,,,crashed in our test build
+Budget Android,"Helio P35, CPU only",Sharp,2.0 GB,,,does not fit
+Budget Android,"Helio P35, CPU only",Balanced,735 MB,768,186,measured
+Budget Android,"Helio P35, CPU only",Balanced,735 MB,512,114,measured
+Budget Android,"Helio P35, CPU only",Quick (old 0.8B),737 MB,512,63,measured

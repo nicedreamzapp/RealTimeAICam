@@ -1,0 +1,12 @@
+model,score_of_96,key_facts_of_81,text_read_of_15,invented_details,safety_misses,answers_hit_120_token_cap,size_mb,median_first_token_ms_mac,median_total_ms_mac
+LFM3-Omni-2B Q3_K_M + mmproj Q8_0 (llama.cpp),73.0,72.0,13,12,0,9,1118,185,592
+Qwen3.5-2B RT Cam recipe Q3_K_M + mmproj Q8_0 (llama.cpp),68.0,64.0,12,4,2,0,1461,217,466
+LFM3-VL-2B Q3_K_M + mmproj Q8_0 (llama.cpp),67.0,63.0,10,4,1,1,1118,181,404
+Qwen3.5-2B stock Q3_K_M + mmproj Q8_0 (llama.cpp),66.0,66.0,11,7,2,3,1461,223,567
+LFM3-Omni-2B IQ2_M + mmproj Q4_K_M (llama.cpp),60.5,67.5,12,15,2,0,790,179,539
+Qwen3.5-2B RT Cam recipe IQ2_M + mmproj Q4_K_M (llama.cpp),56.5,59.5,11,12,1,0,1099,220,511
+Qwen3.5-2B stock IQ2_M + mmproj Q4_K_M (llama.cpp),54.0,55.0,11,10,1,0,1099,218,544
+Vision Narrator 0.8B (RT Cam v09-q4lm),45.5,55.5,11,13,4,0,625,86,211
+"Vision Narrator 0.8B Android (Q4_K_M + mmproj F16, llama.cpp)",41.0,53.0,10,16,3,0,737,56,181
+Qwen3.5-2B stock IQ2_XXS + mmproj Q4_K_M (llama.cpp),26.0,39.0,6,11,4,27,1024,219,880
+Qwen3.5-2B RT Cam recipe IQ2_XXS + mmproj Q4_K_M (llama.cpp),25.5,48.5,9,20,6,0,1024,220,520

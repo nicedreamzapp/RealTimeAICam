@@ -26,7 +26,7 @@ class SpeakableTextTest {
     }
 
     @Test fun phoneNumbersAreSaidDigitByDigit() {
-        assertEquals("Cell eight zero five, eight nine five, eight nine six seven", say("Cell 805-895-8967"))
+        assertEquals("Cell eight zero five, five five five, zero one zero zero", say("Cell 805-555-0100"))
         assertEquals("seven zero seven, five five five, zero one four two", say("(707) 555-0142"))
         assertEquals("one, eight zero zero, five five five, one two three four", say("1-800-555-1234"))
     }

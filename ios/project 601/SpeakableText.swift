@@ -232,7 +232,7 @@ enum SpeakableText {
         return out
     }
 
-    /// (707) 555-0142, 805-895-8967, 805.895.8967, 1-800-555-1234, +1 707 555 0142
+    /// (707) 555-0142, 805-555-0100, 805.555.0100, 1-800-555-1234, +1 707 555 0142
     /// -> "eight zero five, eight nine five, eight nine six seven"
     static func phoneNumbers(_ s: String) -> String {
         let pattern = #"(?<![\w$])(?:\+?(1)[ .-]?)?\(?(\d{3})\)?[ .-]?(\d{3})[ .-](\d{4})(?!\w)"#

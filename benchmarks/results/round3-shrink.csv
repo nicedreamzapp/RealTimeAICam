@@ -1,0 +1,17 @@
+model,score_of_96,key_facts_of_81,text_read_of_15,invented_details,safety_misses,answers_hit_120_token_cap,size_mb,median_first_token_ms_mac,median_total_ms_mac
+LFM3-Omni-2B Q8_0 + mmproj Q8_0 (llama.cpp),78.5,71.5,12,3,1,4,2049,183,633
+LFM3-Omni-2B Q3_K_M + mmproj Q8_0 (llama.cpp),77.0,73.0,13,9,0,9,1118,185,592
+LFM3-Omni-2B Q4_K_M + mmproj Q4_K_M (llama.cpp),74.5,71.5,12,7,1,7,1219,184,576
+LFM3-Omni-2B Q4_K_M + mmproj Q8_0 (llama.cpp),73.0,68.0,13,8,0,9,1303,184,607
+LFM3-Omni-2B Q2_K + mmproj Q4_K_M (llama.cpp),67.5,66.5,12,7,2,12,869,178,610
+LFM3-VL-2B Q3_K_M + mmproj Q8_0 (llama.cpp),65.5,62.5,9,2,2,1,1118,181,404
+LFM3-VL-2B Q4_K_M + mmproj Q8_0 (llama.cpp),65.0,62.0,7,0,2,1,1303,184,382
+LFM3-Omni-2B IQ2_M + mmproj Q4_K_M (llama.cpp),64.5,68.5,12,10,3,0,790,179,539
+LFM3-VL-2B Q8_0 + mmproj Q8_0 (llama.cpp),62.0,60.0,8,2,2,0,2049,176,441
+LFM3-VL-2B IQ2_M + mmproj Q4_K_M (llama.cpp),57.5,56.5,8,5,1,1,790,181,448
+LFM3-VL-2B IQ2_XXS + mmproj Q4_K_M (llama.cpp),52.5,57.5,9,8,3,8,691,180,393
+LFM3-VL-2B Q2_K + mmproj Q4_K_M (llama.cpp),51.0,54.0,8,5,3,1,869,179,355
+Vision Narrator 0.8B (RT Cam v09-q4lm),47.5,54.5,11,10,4,0,625,86,211
+LFM3-Omni-2B IQ2_XXS + mmproj Q4_K_M (llama.cpp),34.0,51.0,9,16,5,1,691,180,365
+LFM3-VL-2B IQ1_M + mmproj Q4_K_M (llama.cpp),25.0,39.0,6,14,3,22,638,178,717
+LFM3-Omni-2B IQ1_M + mmproj Q4_K_M (llama.cpp),1.0,25.0,5,15,7,19,638,177,671
