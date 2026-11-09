@@ -977,7 +977,7 @@ final class LiveCallController: ObservableObject {
         current?.cancel()
         turn += 1
         let my = turn
-        if let q = question, LiveWords.isDescribeNow(q), !LiveWords.wantsEverything(q) { describeFilterTurn = my }
+        if let q = question, LiveWords.isSeeAgain(q), !LiveWords.wantsEverything(q) { describeFilterTurn = my }
         answerDone = false
         let wasEarly = lookingEarly
         lookingEarly = false

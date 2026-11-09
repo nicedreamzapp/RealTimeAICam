@@ -543,6 +543,14 @@ enum LiveWords {
         return !sentence.contains("?") && !openingBanned.contains { t.contains($0) }
     }
 
+    /// "What do you see" and nothing more specific: the question a filter for already-told things suits. "What is
+    /// this", "where am I", "describe the label" are real questions and always get a full answer (review 11/09).
+    static func isSeeAgain(_ q: String) -> Bool {
+        let t = " " + normalize(q) + " "
+        return [" what do you see ", " what can you see ", " what are you seeing ", " what you see ", " what else do you see ",
+                " what do you see now ", " see anything "].contains { t.contains($0) }
+    }
+
     /// "Describe everything again", "the whole room": the full description, not just what's new (Matt 11/09).
     static func wantsEverything(_ q: String) -> Bool {
         let t = " " + normalize(q) + " "
