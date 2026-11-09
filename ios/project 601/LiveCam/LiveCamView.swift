@@ -172,7 +172,7 @@ struct LiveCamView: View {
             }
             Toggle(isOn: $call.proactiveOn) { Text(L("Speak up when quiet")).font(.body.weight(.semibold)).fixedSize(horizontal: false, vertical: true) }
                 .padding(.horizontal, 16).padding(.vertical, 6).frame(minHeight: 56)
-                .accessibilityHint(L("When on, Live Cam checks in after a long quiet and mentions new things it is sure it sees"))
+                .accessibilityHint(L("When on, Live Cam checks in after a long quiet. New things it sees are always told."))
         }
         .tint(.teal)
         .foregroundStyle(.white)

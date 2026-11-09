@@ -114,6 +114,18 @@ struct LiveMemory {
         }
     }
 
+    /// A different room (Matt 11/09: fresh memory on close or a new room): what was told no longer counts.
+    mutating func forgetThings() { seenThings = [] }
+
+    /// Every thing a sentence names was already told (a wall, the table, the same chair, the same person): the
+    /// sentence adds nothing. Matt 11/09: "it shouldn't keep saying it sees a table every time".
+    func addsNothing(_ sentence: String) -> Bool {
+        let words = LiveWords.contentWords(sentence).subtracting(LiveWords.personWords).subtracting(LiveWords.boringThings)
+            .subtracting(LiveWords.placeWords)
+        let fresh = words.filter { Self.stems($0).isDisjoint(with: seenThings) }
+        return !seenThings.isEmpty && fresh.isEmpty
+    }
+
     func recent(at t: Date = Date()) -> [LiveExchange] { exchanges.filter { t.timeIntervalSince($0.at) <= Self.maxAge } }
     var lastAnswer: String? { exchanges.last?.answer }
 }
@@ -166,6 +178,11 @@ struct LiveSayGuard {
 
     /// The new-thing line for now: the one help offer if it hasn't been made, else just the thing, never opening
     /// with "I see" twice in a row.
+    /// "I see a dog." or "There's a dog.", never with an offer of help.
+    var plainNewThingFormat: String {
+        lastOpening?.hasPrefix("i see") == true ? LiveCamWords.newThingThere : LiveCamWords.newThingPlain
+    }
+
     var newThingFormat: String {
         if !helpOffered { return LiveCamWords.newThing }
         return lastOpening?.hasPrefix("i see") == true ? LiveCamWords.newThingThere : LiveCamWords.newThingPlain
@@ -508,6 +525,36 @@ enum LiveWords {
     static let photoIfHelps = "A camera view is attached, but this question is not about it: ignore the view and answer from what you know."
 
     static let describeNow = "In one short sentence, tell me what you see right now, the main thing first."
+
+    /// The one line Live Cam says on open (Matt 11/09: "it should say what it sees in the screen from the get go,
+    /// just a general read of the room"). No greeting, no question, no offer, never the person.
+    static let openingRead = "In one short sentence, say what kind of place this is and the main things in it, like \"A kitchen with a table, two chairs and a window.\" No greeting, no question, no offer to help. Never mention the person, their face or clothes."
+
+    /// A thing that just came into view, in one short line (Matt 11/09: "oh, now I see a dog").
+    static func newThingAsk(_ thing: String) -> String {
+        "In one short sentence that starts with \"Now I see\", say where the \(thing) is in view. Never mention the person, their face or clothes. No question."
+    }
+
+    /// Words never allowed in the opening read: a greeting, a warning, an offer, a name.
+    static let openingBanned = [" welcome ", " hey ", " hello ", " hi there ", " experimental ", " help ", " how s it going ",
+                                " how are you ", " live cam ", " anything i can "]
+    static func isOpeningReadable(_ sentence: String) -> Bool {
+        let t = " " + normalize(sentence) + " "
+        return !sentence.contains("?") && !openingBanned.contains { t.contains($0) }
+    }
+
+    /// "Describe everything again", "the whole room": the full description, not just what's new (Matt 11/09).
+    static func wantsEverything(_ q: String) -> Bool {
+        let t = " " + normalize(q) + " "
+        return [" everything ", " whole room ", " all again ", " describe it all ", " describe all ", " full description ",
+                " the whole thing ", " start over "].contains { t.contains($0) }
+    }
+
+    /// Words about where things are, not things: never what makes a sentence new.
+    static let placeWords: Set<String> = ["left", "right", "front", "behind", "next", "near", "middle", "center", "top", "bottom",
+        "side", "back", "there", "here", "still", "same", "also", "some", "few", "two", "three", "several", "large", "small",
+        "big", "little", "white", "black", "brown", "wooden", "wood", "gray", "grey", "blue", "red", "green", "yellow", "sitting",
+        "standing", "placed", "visible", "view", "looks", "appears", "seems", "inside", "outside", "corner", "above", "below"]
 
     /// The quiet look while the view changes: a bare list the code compares with what was already named.
     static let inventory = "List the main things in view as short names separated by commas, at most 8. Things only, never the person or their clothes. No sentence."
@@ -1040,6 +1087,57 @@ enum LiveBargeIn {
 /// When it may speak up on its own: only when the view really changed, never over the person,
 /// at least `minGap` apart, and quiet after `maxUnanswered` comments nobody answered until the
 /// view changes a lot or the person talks.
+/// Matt 11/09: "it's got to kind of always be taking photos and analyzing them, kind of constantly ... if it sees a
+/// dog, it says, oh, now I see a dog". The fast detector looks at the camera every second or so; a thing it has never
+/// told about, seen on two checks in a row (so a blur doesn't count), gets one short line, at most one line every
+/// few seconds. A question or a goal pauses it: he speaks, that comes first.
+struct LiveNovelty {
+    static let stableChecks = 2
+    static let minGap: TimeInterval = 7
+    /// Detector checks: about every second, slower when the phone runs hot.
+    static func interval(_ thermal: ProcessInfo.ThermalState) -> TimeInterval? {
+        switch thermal {
+        case .nominal, .fair: 1.0
+        case .serious: 3.0
+        case .critical: nil   // the detector rests; questions still work
+        @unknown default: 3.0
+        }
+    }
+
+    /// What was in view when watching started: there already, so never "new".
+    private(set) var known: Set<String> = []
+    private(set) var baselined = false
+    private(set) var streak: [String: Int] = [:]
+    private(set) var lastLine = Date.distantPast
+    /// A question is being heard or answered, or a goal is on.
+    var paused = false
+
+    /// Labels from one detector check. Returns the ones to announce now: not told, not there at the start, seen on
+    /// `stableChecks` checks in a row, while not paused.
+    mutating func observe(_ labels: [String], isNew: (String) -> Bool) -> [String] {
+        let here = Set(labels.map { LiveWords.normalize($0) }.filter { !$0.isEmpty })
+        guard baselined else { known = here; baselined = true; return [] }
+        guard !paused else { streak = [:]; return [] }
+        let fresh = here.filter { !known.contains($0) && isNew($0) }
+        streak = streak.filter { fresh.contains($0.key) }   // in a row, or it starts over
+        for l in fresh { streak[l, default: 0] += 1 }
+        return fresh.filter { (streak[$0] ?? 0) >= Self.stableChecks }.sorted()
+    }
+
+    func canSpeak(at t: Date) -> Bool { !paused && t.timeIntervalSince(lastLine) >= Self.minGap }
+
+    /// One line said about `label`: it is known from now on.
+    mutating func announced(_ label: String, at t: Date) {
+        known.insert(LiveWords.normalize(label)); streak[LiveWords.normalize(label)] = nil; lastLine = t
+    }
+
+    /// Any other unprompted line counts toward the gap too.
+    mutating func spoke(at t: Date) { lastLine = t }
+
+    /// A new room: start over (the next check is the new baseline).
+    mutating func reset() { known = []; baselined = false; streak = [:] }
+}
+
 struct LiveProactive {
     static let minGap: TimeInterval = 3   // 11/1 Matt: it never spoke up in a 25 s call (was 10 s, 30 and 50 below)
     /// Two comments with no reply, then quiet until a big change (Matt, 10/31).
@@ -1082,7 +1180,8 @@ struct LiveProactive {
 
     /// Worth running the model for a look? (Cheap: called every couple of seconds.)
     mutating func shouldLook(thumb: [UInt8], at t: Date, quiet: Bool) -> Bool {
-        guard enabled, quiet, t.timeIntervalSince(lastComment) >= Self.minGap else { return false }
+        // Not behind the "Speak up when quiet" switch (that is check-ins only): new things are always told (Matt 11/09).
+        guard quiet, t.timeIntervalSince(lastComment) >= Self.minGap else { return false }
         guard let ref = reference else { return true }
         let d = Self.difference(thumb, ref)
         lastDifference = d

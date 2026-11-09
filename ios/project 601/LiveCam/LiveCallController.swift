@@ -190,6 +190,7 @@ final class LiveCallController: ObservableObject {
         running = true
         moneyMemory.forget()   // a new call never answers from an old count
         Task.detached(priority: .utility) { MoneyDetector.warmUp() }   // both money models loaded off the main thread
+        detector = LiveDetector()
         camera.onTorch = { [weak self] lit in DispatchQueue.main.async { MainActor.assumeIsolated { self?.torchChanged(lit) } } }
         ScreenAwake.hold("liveCall")
         // The app goes to the background: the light goes off (iOS stops the camera there anyway).
@@ -288,6 +289,9 @@ final class LiveCallController: ObservableObject {
         // The model is let go (What's this? loads its own copy when it is next used).
         preload?.cancel(); preload = nil
         engine = nil
+        detector = nil   // the detector is let go too; the told memory goes with the visit
+        memory = LiveMemory()
+        novelty = LiveNovelty()
         // Only this call's hold: a camera still running keeps the screen awake.
         ScreenAwake.release("liveCall")
     }
@@ -361,7 +365,10 @@ final class LiveCallController: ObservableObject {
         pendingStandIn = fellBack
             ? (ModelPicker.manualLevel != nil && !ModelPicker.fallbackSaidForPick ? .balanced : nil)
             : ModelPicker.fallbackStandIn()
-        listen()
+        novelty = LiveNovelty()
+        // Matt 11/09: "it should say what it sees in the screen from the get go, just a general read of the room."
+        // One sentence, no greeting, then it listens.
+        readTheRoom()
         if LiveCamTest.forceCantHear { hearingGaveUp() }
     }
 
@@ -555,6 +562,14 @@ final class LiveCallController: ObservableObject {
     private var lastHeardAt = Date()
     /// The running look is the quiet inventory (a list to compare, never spoken as is).
     private var inventoryLook = false
+    /// The always-on watch (Matt 11/09): the detector, and what it has already announced.
+    private var novelty = LiveNovelty()
+    private var detector: LiveDetector?
+    /// The one general read of the room (on open, and on entering a new room): one sentence, never a greeting.
+    private var openingReadTurn: Int?
+    private var openingReadSaid = false
+    /// A "what do you see" again: sentences about things already told are left out (Matt 11/09).
+    private var describeFilterTurn: Int?
     /// The first quiet look of a call only remembers what is already there: naming it all would
     /// be an opening narration by another route.
     private var inventoryBaselineTaken = false
@@ -585,14 +600,11 @@ final class LiveCallController: ObservableObject {
         }
     }
 
-    /// The shutter button (Matt 11/6, for loud places): the same as asking "what do you see" right now.
-    func askAboutView() {
-        guard running, phase != .loading, phase != .starting else { return }
-        log(["event": "shutter_button"])
-        stopTalking()
-        listener.stopListening()
-        heardText = L("What do you see?")
-        heard("What do you see?", endedAt: Date(), confidence: nil, isFinal: true)
+    /// One general read of the room, one sentence (on open, and on walking into a different room).
+    private func readTheRoom() {
+        openingReadSaid = false
+        look(prompt: LiveWords.openingRead, unprompted: false, first: true)
+        openingReadTurn = turn
     }
 
     /// Test builds and the typed box: a question as if it had been heard (no mic).
@@ -943,6 +955,7 @@ final class LiveCallController: ObservableObject {
         current?.cancel()
         turn += 1
         let my = turn
+        if let q = question, LiveWords.isDescribeNow(q), !LiveWords.wantsEverything(q) { describeFilterTurn = my }
         answerDone = false
         let wasEarly = lookingEarly
         lookingEarly = false
@@ -1043,7 +1056,9 @@ final class LiveCallController: ObservableObject {
             var usedPrefill = false
             var answer: LiveVisionEngine.Answer?
             #if DEBUG
-            let faking = LiveCamTest.fakeAnswer != nil && question != nil
+            // RTCAM_FAKE_LIVE_OPENING stands in for the model's read of the room (question nil, first look).
+            let fakeText = question != nil ? LiveCamTest.fakeAnswer : (first ? LiveCamTest.fakeOpening : nil)
+            let faking = fakeText != nil
             #else
             let faking = false
             #endif
@@ -1071,7 +1086,7 @@ final class LiveCallController: ObservableObject {
             let repeatRetried = retried
             let prefillUsed = usedPrefill
             #if DEBUG
-            if let fake = LiveCamTest.fakeAnswer, question != nil {
+            if let fake = fakeText {
                 // Simulator stand-in for the model (RTCAM_FAKE_LIVE_ANSWER), streamed like the real thing.
                 // RTCAM_FAKE_LIVE_DELAY: seconds it "thinks" first, so the looking state can be seen and timed.
                 if LiveCamTest.fakeDelay > 0 { try? await Task.sleep(nanoseconds: UInt64(LiveCamTest.fakeDelay * 1e9)) }
@@ -1096,8 +1111,6 @@ final class LiveCallController: ObservableObject {
                     if sameAgain || (self.tally.turn == my && self.tally.said == 0 && self.tally.dropped > 0) {
                         self.sayPart(.own(LiveCamWords.sameAsBefore), turn: my)
                     }
-                    // The one help offer of the visit comes after the opening look (Matt 11/6), never from the model.
-                    else if first, !self.sayGuard.helpOffered { self.sayPart(.own(LiveCamWords.helpOffer), turn: my) }
                 }
                 self.log(["event": unprompted ? "watch_answer" : "answer", "text": said,
                           "thermal": ProcessInfo.processInfo.thermalState.rawValue,
@@ -1118,9 +1131,9 @@ final class LiveCallController: ObservableObject {
                     let baseline = !self.inventoryBaselineTaken
                     self.inventoryBaselineTaken = true
                     self.log(["event": "watch_decision", "listed": said, "new": fresh.joined(separator: ", "),
-                              "decision": baseline ? "silent: first look of the call" : !self.hasExchanged ? "silent: nothing asked yet"
+                              "decision": baseline ? "silent: first look of the call"
                                   : fresh.isEmpty ? "silent: nothing new" : talking ? "silent: person talking" : "spoke"])
-                    if !baseline, self.hasExchanged, !fresh.isEmpty, !talking {
+                    if !baseline, !fresh.isEmpty, !talking {
                         // 11/2 Matt "be really cautious": each new thing is checked yes/no on the same photo first;
                         // anything it can't confirm is never said.
                         self.lastNovelty = Date()
@@ -1130,8 +1143,9 @@ final class LiveCallController: ObservableObject {
                             self.log(["event": "confirm", "things": fresh.joined(separator: ", "), "confirmed": ok.joined(separator: ", ")])
                             guard !ok.isEmpty, self.running, self.phase == .listening, !self.listener.hearingSomething else { return }
                             let things = fresh.filter(ok.contains)
-                            // Matt 11/6: the help offer only once a visit; after it, just "I see a boat."
-                            let format = self.sayGuard.newThingFormat
+                            // Never an offer of help with it (Matt 11/09 spec: help is never offered unprompted).
+                            let format = self.sayGuard.plainNewThingFormat
+                            self.novelty.spoke(at: Date())
                             let line = String(format: format, LiveWords.newThings(things))
                             guard self.sayGuard.vet(line) != nil else { self.log(["event": "dropped_repeat", "text": line]); return }
                             self.watch.commented(at: Date())
@@ -1156,6 +1170,7 @@ final class LiveCallController: ObservableObject {
                     else { verdict = "spoke" }
                     self.log(["event": "watch_decision", "decision": verdict, "view_change": (self.watch.lastDifference * 10).rounded() / 10])
                     if verdict == "spoke" {
+                        self.novelty.spoke(at: Date())
                         self.watch.commented(at: Date())
                         self.watch.described(thumb)
                         self.memory.noteSeen(said)
@@ -1234,6 +1249,20 @@ final class LiveCallController: ObservableObject {
         }
         if case let .content(s) = line {
             guard let cleaned = LiveWords.spoken(s, aboutMe: askedAboutMe) else { return }
+            if my == openingReadTurn {
+                // The read of the room is one sentence, and never a greeting, a warning, a question or an offer.
+                guard !openingReadSaid, LiveWords.isOpeningReadable(cleaned) else {
+                    log(["event": "opening_read_dropped", "text": cleaned]); return
+                }
+                openingReadSaid = true
+            }
+            if my == describeFilterTurn, memory.addsNothing(cleaned) {
+                // "What do you see" again: only what's new leads; known things aren't listed again.
+                if tally.turn != my { tally = (my, 0, 0); sayGuard.beginTurn() }
+                tally.dropped += 1
+                log(["event": "dropped_known", "text": cleaned])
+                return
+            }
             if tally.turn != my { tally = (my, 0, 0); sayGuard.beginTurn() }
             // Matt 11/6: "it should not repeat phrases": a sentence repeated in this answer, a looping one, a second
             // help offer. An answer to a question is never dropped for having been said before (review 11/6).
@@ -1256,17 +1285,45 @@ final class LiveCallController: ObservableObject {
         guard watchTask == nil else { return }
         watchTask = Task { @MainActor [weak self] in
             while let self, self.running, !Task.isCancelled {
-                // About every 2.5 s, slower on a slow phone.
-                let every = max(1.5, (self.recentFirstSentence ?? 1) * 1.2)   // 11/1 Matt: too slow calling the scene
+                // Matt 11/09: "always be taking photos and analyzing them, kind of constantly". About every second,
+                // every 3 s when the phone runs hot; at critical heat the detector rests and only questions run.
+                let thermal = ProcessInfo.processInfo.thermalState
+                let every = LiveNovelty.interval(thermal) ?? 3
                 try? await Task.sleep(nanoseconds: UInt64(every * 1e9))
+                // He speaks = priority: a question being heard or answered, or a goal, pauses the watch.
+                self.novelty.paused = self.goal != nil || self.phase != .listening || self.current != nil
+                    || self.listener.hearingSomething || !self.answerDone
                 guard self.running, self.phase == .listening, self.current == nil,
                       !self.listener.hearingSomething else { continue }
                 let cam = self.camera
-                guard let thumb = await Task.detached(priority: .utility, operation: { () -> [UInt8]? in
+                let detector = LiveNovelty.interval(thermal) == nil ? nil : self.detector
+                guard let (thumb, labels) = await Task.detached(priority: .utility, operation: { () -> ([UInt8], [String])? in
                           guard let f = cam.current() else { return nil }
-                          return LiveCamera.thumb(f)
+                          return (LiveCamera.thumb(f), detector?.labels(in: f) ?? [])
                       }).value,
                       self.running, self.phase == .listening, self.current == nil else { continue }
+                // A different room (a big change across the frame, and mostly things never seen): fresh memory, and
+                // one new read of the room, the same as on open.
+                if let ref = self.watch.reference, LiveProactive.difference(thumb, ref) >= LiveProactive.bigChange,
+                   labels.count >= 3, !self.novelty.paused,
+                   Double(labels.filter { !self.novelty.known.contains(LiveWords.normalize($0)) }.count) >= Double(labels.count) * 0.7 {
+                    self.log(["event": "new_room", "labels": labels.joined(separator: ", ")])
+                    self.memory.forgetThings()
+                    self.novelty.reset()
+                    self.watch.described(thumb)
+                    self.readTheRoom()
+                    continue
+                }
+                let fresh = self.novelty.observe(labels) { !self.memory.newThings([$0]).isEmpty }
+                if let thing = fresh.first, self.novelty.canSpeak(at: Date()), !self.voice.isBusy {
+                    // Something new came into view: one short line about it, once (Matt 11/09: "oh, now I see a dog").
+                    self.log(["event": "watch_fired", "why": "new thing", "thing": thing])
+                    self.novelty.announced(thing, at: Date())
+                    self.memory.noteThings([thing])
+                    self.watch.described(thumb)
+                    self.look(prompt: LiveWords.newThingAsk(thing), unprompted: true)
+                    continue
+                }
                 let quiet = Date().timeIntervalSince(self.listener.lastChange) > 2
                 // Every mode is a companion, not a commentator (11/2 Normal; 11/3 Matt in Funny: "Now I see a bald man with glasses"
                 // came out unasked and sounded like it was hearing itself). No "Now I see", just a check-in after a long quiet.
@@ -1291,8 +1348,8 @@ final class LiveCallController: ObservableObject {
                         self.memory.noteSeen(line)
                         self.listener.stopListening()
                         self.speakAll(own: line)
-                    } else if Date().timeIntervalSince(self.lastNovelty) >= 20, Date().timeIntervalSince(self.lastHeardAt) >= 8,
-                              self.answerDone,
+                    } else if Date().timeIntervalSince(self.lastNovelty) >= 8, Date().timeIntervalSince(self.lastHeardAt) >= 8,
+                              self.answerDone, self.novelty.canSpeak(at: Date()), self.goal == nil,
                               self.watch.shouldLook(thumb: thumb, at: Date(), quiet: quiet) {
                         // The view changed: list what's there, quietly; only a never-named thing is said (11/2 Matt).
                         self.log(["event": "watch_fired", "why": "inventory", "view_change": (self.watch.lastDifference * 10).rounded() / 10])

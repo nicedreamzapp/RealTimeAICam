@@ -261,3 +261,22 @@ final class LiveCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
         return px
     }
 }
+
+/// Matt 11/09: "it's got to kind of always be taking photos and analyzing them". The names the app's own YOLOE
+/// detector (Help Me Aim's, bundled: nothing downloaded) finds in a frame, for the always-on watch. Loaded the first
+/// time it is needed, let go when Live Cam closes. Nothing is drawn on screen.
+final class LiveDetector: @unchecked Sendable {
+    static let minConfidence: Float = 0.45
+    private let lock = NSLock()
+    private var finder: AimObjectFinder?
+    private var tried = false
+
+    func labels(in frame: CGImage) -> [String] {
+        lock.lock(); defer { lock.unlock() }
+        if !tried { tried = true; finder = AimObjectFinder() }
+        guard let finder else { return [] }
+        // No wanted class: every confident detection comes back as "others".
+        return finder.scan(in: CIImage(cgImage: frame), classIDs: [-1]).others
+            .filter { $0.conf >= Self.minConfidence && !$0.name.isEmpty }.map(\.name)
+    }
+}

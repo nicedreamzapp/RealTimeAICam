@@ -665,3 +665,89 @@ struct LiveGoalFollowUp3Tests {
         #expect(!LiveGoal.quickOkCounts(["ok"], askedRecently: false, speaking: false, sinceItSpoke: 3, lastSaid: nil))
     }
 }
+
+/// Matt 11/09: always watching, only new things, once each; he speaks = priority.
+struct LiveNoveltyTests {
+    private func memory(_ told: [String]) -> LiveMemory {
+        var m = LiveMemory(); m.noteThings(told); return m
+    }
+
+    @Test func whatWasThereAtTheStartIsNeverNew() {
+        var n = LiveNovelty()
+        let m = memory([])
+        #expect(n.observe(["chair", "table"]) { !m.newThings([$0]).isEmpty }.isEmpty)   // the baseline
+        #expect(n.observe(["chair", "table"]) { !m.newThings([$0]).isEmpty }.isEmpty)
+        #expect(n.observe(["chair", "table"]) { !m.newThings([$0]).isEmpty }.isEmpty)
+    }
+
+    @Test func aNewThingNeedsTwoChecksInARow() {
+        var n = LiveNovelty()
+        let m = memory([])
+        _ = n.observe(["table"]) { !m.newThings([$0]).isEmpty }
+        #expect(n.observe(["table", "dog"]) { !m.newThings([$0]).isEmpty }.isEmpty)       // one check: maybe a blur
+        #expect(n.observe(["table"]) { !m.newThings([$0]).isEmpty }.isEmpty)              // gone: starts over
+        #expect(n.observe(["table", "dog"]) { !m.newThings([$0]).isEmpty }.isEmpty)
+        #expect(n.observe(["table", "dog"]) { !m.newThings([$0]).isEmpty } == ["dog"])    // two in a row
+    }
+
+    @Test func aNewThingIsAnnouncedOnce() {
+        var n = LiveNovelty()
+        var m = memory([])
+        _ = n.observe([]) { !m.newThings([$0]).isEmpty }
+        _ = n.observe(["dog"]) { !m.newThings([$0]).isEmpty }
+        #expect(n.observe(["dog"]) { !m.newThings([$0]).isEmpty } == ["dog"])
+        n.announced("dog", at: Date()); m.noteThings(["dog"])
+        for _ in 0 ..< 4 { #expect(n.observe(["dog"]) { !m.newThings([$0]).isEmpty }.isEmpty) }
+    }
+
+    @Test func aQuestionPausesTheWatch() {
+        var n = LiveNovelty()
+        let m = memory([])
+        _ = n.observe([]) { !m.newThings([$0]).isEmpty }
+        n.paused = true
+        #expect(n.observe(["car"]) { !m.newThings([$0]).isEmpty }.isEmpty)
+        #expect(n.observe(["car"]) { !m.newThings([$0]).isEmpty }.isEmpty)
+        #expect(!n.canSpeak(at: Date()))
+        n.paused = false
+        #expect(n.observe(["car"]) { !m.newThings([$0]).isEmpty }.isEmpty)   // the count starts after the answer
+        #expect(n.observe(["car"]) { !m.newThings([$0]).isEmpty } == ["car"])
+    }
+
+    @Test func linesKeepAGap() {
+        var n = LiveNovelty()
+        let t = Date()
+        #expect(n.canSpeak(at: t))
+        n.spoke(at: t)
+        #expect(!n.canSpeak(at: t.addingTimeInterval(LiveNovelty.minGap - 1)))
+        #expect(n.canSpeak(at: t.addingTimeInterval(LiveNovelty.minGap + 0.1)))
+    }
+
+    @Test func theSameTableWallChairOrPersonIsNeverNewAgain() {
+        let m = memory(["A kitchen with a wooden table, two chairs and a window."])
+        #expect(m.newThings(["table", "chair", "chairs"]).isEmpty)
+        #expect(m.newThings(["wall", "wooden wall"]).isEmpty)                 // walls are never news
+        #expect(m.newThings(["man", "person", "woman in a blue shirt"]).isEmpty) // the same person is never re-announced
+        #expect(m.newThings(["dog"]) == ["dog"])
+        #expect(m.addsNothing("There is a wooden table and two chairs."))
+        #expect(!m.addsNothing("A dog is lying under the table."))
+    }
+
+    @Test func aNewRoomStartsOver() {
+        var m = memory(["table"])
+        var n = LiveNovelty()
+        _ = n.observe(["table"]) { !m.newThings([$0]).isEmpty }
+        m.forgetThings(); n.reset()
+        #expect(!m.newThings(["table"]).isEmpty)
+        #expect(n.observe(["tree", "street"]) { !m.newThings([$0]).isEmpty }.isEmpty)   // the new baseline
+    }
+
+    @Test func theOpeningReadIsNeverAGreetingOrAQuestion() {
+        #expect(LiveWords.isOpeningReadable("A kitchen with a table, two chairs and a window."))
+        #expect(!LiveWords.isOpeningReadable("Hey there, how's it going?"))
+        #expect(!LiveWords.isOpeningReadable("Welcome to Live Cam."))
+        #expect(!LiveWords.isOpeningReadable("Anything I can help with?"))
+        #expect(!LiveWords.isOpeningReadable("It's experimental, so double-check anything important."))
+        #expect(LiveWords.wantsEverything("describe everything again"))
+        #expect(!LiveWords.wantsEverything("what do you see"))
+    }
+}
