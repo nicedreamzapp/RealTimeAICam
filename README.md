@@ -16,6 +16,13 @@ a vision-language model on the phone itself, and speaks what they find out loud.
 
 **Free on [iPhone](https://apps.apple.com/us/app/id6751230739) and [Android](https://play.google.com/store/apps/details?id=com.mattmacosko.realtimeaicam) — no ads, no subscription, nothing to buy inside.**
 
+<!-- live-stats:start -->
+
+⭐ **3,691** GitHub stars ([github.com/nicedreamzapp](https://github.com/nicedreamzapp)) · ⬇️ **40,871** all-time downloads ([huggingface.co/divinetribe](https://huggingface.co/divinetribe))<br>
+Models on Hugging Face: [yolov8n-oiv7-coreml](https://huggingface.co/divinetribe/yolov8n-oiv7-coreml) · [Vision-Narrator-0.8B-4bit-mlx](https://huggingface.co/divinetribe/Vision-Narrator-0.8B-4bit-mlx) (⬇️ **327** all-time downloads) · this repo ⭐ **11** stars
+
+<!-- live-stats:end -->
+
 **[How we pick the AI model (living benchmark) →](benchmarks/)**
 
 **[Next: Live Room Mode, the plan for real-time room narration →](roadmap/live-room-mode.md)**
