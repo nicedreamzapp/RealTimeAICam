@@ -282,7 +282,10 @@ final class LiveCallController: ObservableObject {
         describedOnce = true
         memory = LiveMemory()
         inventoryBaselineTaken = false
+        hasExchanged = false
         answerDone = true
+        // The first-time microphone explanation is done; it doesn't stay up as the caption.
+        caption = ""
         lastSpokeEnd = Date()   // the quiet clock for check-ins starts now, not at load
         listen()
         if LiveCamTest.forceCantHear { hearingGaveUp() }
@@ -401,6 +404,9 @@ final class LiveCallController: ObservableObject {
     /// The first quiet look of a call only remembers what is already there: naming it all would
     /// be an opening narration by another route.
     private var inventoryBaselineTaken = false
+    /// The person has asked something this visit. Until then Live Cam says nothing on its own:
+    /// no check-ins, no new-thing lines (Matt 11/09: no opening narration by any route).
+    private var hasExchanged = false
     private var lastNovelty = Date.distantPast
     /// The last question was about what's in view (a short "and that one?" follows it onto the camera).
     private var lastUsedPhoto = true
@@ -460,6 +466,7 @@ final class LiveCallController: ObservableObject {
             entry["decision"] = "answered"; log(entry)
         }
         watch.personSpoke()
+        hasExchanged = true
         lastQuestion = q
         notice = nil
         // It only keeps the last couple of exchanges (90 s): "what did I ask first" is past its memory, say so.
@@ -852,9 +859,9 @@ final class LiveCallController: ObservableObject {
                     let baseline = !self.inventoryBaselineTaken
                     self.inventoryBaselineTaken = true
                     self.log(["event": "watch_decision", "listed": said, "new": fresh.joined(separator: ", "),
-                              "decision": baseline ? "silent: first look of the call"
+                              "decision": baseline ? "silent: first look of the call" : !self.hasExchanged ? "silent: nothing asked yet"
                                   : fresh.isEmpty ? "silent: nothing new" : talking ? "silent: person talking" : "spoke"])
-                    if !baseline, !fresh.isEmpty, !talking {
+                    if !baseline, self.hasExchanged, !fresh.isEmpty, !talking {
                         // 11/2 Matt "be really cautious": each new thing is checked yes/no on the same photo first;
                         // anything it can't confirm is never said.
                         self.lastNovelty = Date()
@@ -984,7 +991,7 @@ final class LiveCallController: ObservableObject {
                 // Every mode is a companion, not a commentator (11/2 Normal; 11/3 Matt in Funny: "Now I see a bald man with glasses"
                 // came out unasked and sounded like it was hearing itself). No "Now I see", just a check-in after a long quiet.
                 do {
-                    if quiet, self.watch.shouldCheckIn(at: Date(), quietSince: max(self.lastHeardAt, self.lastSpokeEnd)),
+                    if quiet, self.hasExchanged, self.watch.shouldCheckIn(at: Date(), quietSince: max(self.lastHeardAt, self.lastSpokeEnd)),
                        let line = LiveWords.checkIns.filter({ $0 != self.memory.said.last }).randomElement() {
                         self.log(["event": "watch_fired", "why": "check in"])
                         self.watch.commented(at: Date())
