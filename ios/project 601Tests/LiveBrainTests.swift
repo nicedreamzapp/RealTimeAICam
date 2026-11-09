@@ -777,9 +777,12 @@ struct LiveNoveltyPeopleAndRoomTests {
 
     @Test func aNewRoomNeedsSeveralChecks() {
         var n = LiveNovelty()
+        do { let r = n.looksLikeNewRoom(["table", "chair", "lamp"], bigChange: false); #expect(!r) }
         _ = n.observe(["table", "chair", "lamp"]) { _ in true }
-        do { let r25 = !n.looksLikeNewRoom(["tree", "car", "street"], bigChange: true); #expect(r25) }
-        do { let r26 = !n.looksLikeNewRoom(["tree", "car", "street", "bench"], bigChange: true) || LiveNovelty.newRoomChecks <= 2; #expect(r26) }
+        do { let r = n.looksLikeNewRoom(["tree", "car", "street"], bigChange: true); #expect(!r) }
+        do { let r = n.looksLikeNewRoom(["tree", "car", "street"], bigChange: true); #expect(!r) }
+        do { let r = n.looksLikeNewRoom(["tree", "car", "street"], bigChange: true); #expect(r) }   // three in a row
+        #expect(!n.baselined)   // and it starts over
     }
 }
 
