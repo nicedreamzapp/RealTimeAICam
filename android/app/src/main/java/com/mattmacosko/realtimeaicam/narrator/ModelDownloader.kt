@@ -86,6 +86,8 @@ object ModelDownloader {
     private val queue = ArrayDeque<ModelLevel>()
     private var current: ModelLevel? = null
     private var job: Job? = null
+    /** Which download run is live. A stopped run keeps going until it notices; it must not touch the new one. */
+    private var runId = 0L
 
     data class Manifest(val version: String, val files: List<Entry>) {
         data class Entry(val name: String, val size: Long, val sha256: String?)
@@ -107,9 +109,9 @@ object ModelDownloader {
 
     private fun set(level: ModelLevel, s: State) { _states.value = _states.value + (level to s) }
 
-    /** Progress from a running download; dropped once that download was stopped, so a Stop sticks on screen. */
+    /** Progress from a running download; dropped once that run was stopped, so a Stop sticks on screen. */
     @Synchronized
-    private fun setFromDownload(level: ModelLevel, s: State) { if (current == level) set(level, s) }
+    private fun setFromDownload(run: Long, level: ModelLevel, s: State) { if (run == runId && current == level) set(level, s) }
 
     @Synchronized
     fun start(context: Context, level: ModelLevel) {
@@ -128,7 +130,7 @@ object ModelDownloader {
     fun delete(context: Context, level: ModelLevel) {
         if (level.isBundled) return
         queue.remove(level)
-        if (current == level) { job?.cancel(); current = null }
+        if (current == level) { job?.cancel(); current = null; runId++ }
         level.staging(context).deleteRecursively()
         level.folder(context).deleteRecursively()
         set(level, State.Idle)
@@ -158,7 +160,10 @@ object ModelDownloader {
     /** Picks up levels whose download was cut off by the app closing. */
     fun resumeInterrupted(context: Context) {
         for (level in ModelLevel.entries) {
-            if (!level.isBundled && level.staging(context).isDirectory && !level.isInstalled(context)) start(context, level)
+            if (level.isBundled || !level.staging(context).isDirectory || level.isInstalled(context)) continue
+            // A level the person deleted or stopped never comes back on its own: drop its leftovers.
+            if (level in ModelPicker.removed(context)) level.staging(context).deleteRecursively()
+            else start(context, level)
         }
     }
 
@@ -185,12 +190,14 @@ object ModelDownloader {
         if (current != null || queue.isEmpty()) return
         val level = queue.removeFirst()
         current = level
+        val run = ++runId
         set(level, State.Downloading(0f))
         announce(context, AppLang.str(R.string.e_dl_getting, level.title, level.sizeText()))
         job = scope.launch {
-            val outcome = try { fetch(context, level); null } catch (t: Throwable) { t }
+            val outcome = try { fetch(context, level, run); null } catch (t: Throwable) { t }
             synchronized(this@ModelDownloader) {
-                if (current == level) {
+                // Only the run that is still live may finish; a stopped run's ending is ignored.
+                if (run == runId && current == level) {
                     when {
                         outcome == null -> {
                             set(level, State.Ready)
@@ -215,7 +222,7 @@ object ModelDownloader {
         }
     }
 
-    private suspend fun fetch(context: Context, level: ModelLevel) {
+    private suspend fun fetch(context: Context, level: ModelLevel, run: Long) {
         val staging = level.staging(context).apply { mkdirs() }
         val manifestText = get(URL(level.remoteBase + "manifest.json"))
         val manifest = parse(manifestText)
@@ -227,11 +234,11 @@ object ModelDownloader {
             val dst = File(staging, f.name)
             if (dst.length() > f.size) dst.delete()
             if (dst.length() < f.size) download(URL(level.remoteBase + f.name), dst, f.size) { got ->
-                setFromDownload(level, State.Downloading(((before + got).toDouble() / total).toFloat()))
+                setFromDownload(run, level, State.Downloading(((before + got).toDouble() / total).toFloat()))
             }
             before += f.size
         }
-        setFromDownload(level, State.Verifying)
+        setFromDownload(run, level, State.Verifying)
         for (f in manifest.files) {
             val file = File(staging, f.name)
             if (file.length() != f.size) throw IOException("${f.name} came down the wrong size.")

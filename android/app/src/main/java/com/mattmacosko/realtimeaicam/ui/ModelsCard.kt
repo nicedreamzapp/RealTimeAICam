@@ -179,10 +179,20 @@ private fun ModelsChooser(onDone: () -> Unit) {
     // Nothing downloads and nothing is deleted without a yes first (Matt, 11/08).
     var askDownload by remember { mutableStateOf<ModelLevel?>(null) }
     var askDelete by remember { mutableStateOf<ModelLevel?>(null) }
+    var askAutomatic by remember { mutableStateOf<List<ModelLevel>?>(null) }
 
     fun say(text: String) { A11yAnnounce.say(view, text) }
     val choice = ModelPicker.manualLevel(context)
     val priority = ModelPicker.priority(context)
+
+    /** After a choice, Automatic may want levels that are not here: ask before fetching them (as iOS). */
+    fun offerAutomatic() {
+        val want = ModelDownloader.missingWanted(context).filter {
+            val st = ModelDownloader.state(context, it)
+            st !is ModelDownloader.State.Downloading && st !is ModelDownloader.State.Queued && st !is ModelDownloader.State.Verifying
+        }
+        if (want.isNotEmpty()) askAutomatic = want
+    }
 
     fun stop(level: ModelLevel) {
         ModelDownloader.remove(context, level)
@@ -256,8 +266,8 @@ private fun ModelsChooser(onDone: () -> Unit) {
                 for (p in ModelPriority.entries) item {
                     BigRow(p.title, p.explanation, selected = p == priority) {
                         ModelPicker.setPriority(context, p)
-                        ModelDownloader.fetchWanted(context, automatic = true)
                         say(AppLang.str(R.string.e_models_selected, p.title))
+                        offerAutomatic()
                         refresh++
                     }
                 }
@@ -266,8 +276,8 @@ private fun ModelsChooser(onDone: () -> Unit) {
                     BigRow(stringResource(R.string.e_models_automatic), modelsSummary(context), selected = choice == null) {
                         ModelPicker.setManualLevel(context, null)
                         ModelPicker.setPending(context, null)
-                        ModelDownloader.fetchWanted(context, automatic = true)
                         say(AppLang.str(R.string.e_models_automatic_selected, modelsSummary(context)))
+                        offerAutomatic()
                         refresh++
                     }
                 }
@@ -332,6 +342,28 @@ private fun ModelsChooser(onDone: () -> Unit) {
                 onCancel = { askDownload = null },
             )
         }
+        askAutomatic?.let { levels ->
+            val names = if (levels.size == 1) levels[0].title
+                else AppLang.str(R.string.e_models_and, levels[0].title, levels[1].title)
+            ConfirmDialog(
+                title = AppLang.str(R.string.e_models_download_title, names),
+                body = AppLang.str(R.string.e_models_auto_download_body, ModelLevel.sizeText(levels.sumOf { it.bytes })),
+                confirm = AppLang.str(R.string.e_models_download_word),
+                confirmColor = Teal,
+                onConfirm = {
+                    askAutomatic = null
+                    levels.forEach { ModelPicker.clearRemoved(context, it); ModelDownloader.start(context, it) }
+                    refresh++
+                },
+                // Not now (or closing the question) means no: Automatic leaves them alone from here on.
+                onCancel = {
+                    askAutomatic = null
+                    levels.forEach { ModelPicker.markRemoved(context, it) }
+                    refresh++
+                },
+                cancel = AppLang.str(R.string.e_models_not_now),
+            )
+        }
         askDelete?.let { level ->
             ConfirmDialog(
                 title = AppLang.str(R.string.e_models_delete_title, level.title),
@@ -355,6 +387,7 @@ private fun ConfirmDialog(
     confirmColor: Color,
     onConfirm: () -> Unit,
     onCancel: () -> Unit,
+    cancel: String = AppLang.str(R.string.e_models_cancel_word),
 ) {
     AlertDialog(
         onDismissRequest = onCancel,
@@ -369,7 +402,7 @@ private fun ConfirmDialog(
         },
         dismissButton = {
             TextButton(onClick = onCancel, modifier = Modifier.heightIn(min = 48.dp)) {
-                Text(AppLang.str(R.string.e_models_cancel_word), color = IosColors.Blue, fontSize = 17.sp)
+                Text(cancel, color = IosColors.Blue, fontSize = 17.sp)
             }
         },
     )

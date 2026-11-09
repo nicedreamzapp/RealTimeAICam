@@ -178,6 +178,9 @@
     <string name="e_models_delete_body">Frees %1$s.</string>
     <string name="e_models_used_after_download">%1$s will be used once it finishes downloading.</string>
     <string name="e_models_using_for_now_removed">Using %1$s. %2$s, the best fit, stays off this phone until you pick it.</string>
+    <string name="e_models_auto_download_body">%1$s. Automatic picked this for your phone. Uses Wi-Fi or your data plan.</string>
+    <string name="e_models_not_now">Not now</string>
+    <string name="e_models_and">%1$s and %2$s</string>
     <string name="e_on">On</string>
     <string name="e_off">Off</string>
     <string name="e_percent">%1$d percent</string>
