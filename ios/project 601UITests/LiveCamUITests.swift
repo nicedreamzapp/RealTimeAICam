@@ -101,6 +101,9 @@ final class LiveCamUITests: XCTestCase {
         // no words switch on this screen.
         let names = ["Back", "Quiet", "Flip camera"].map { T($0) }
         for gone in ["Ask about the view", "Ask", "Mute microphone", "Words on screen"] {
+            // The typing box's send button is also named Ask; that box shows only when Live Cam can't listen
+            // (Simulator, mic off), so it is not the old Ask button. The shutter check by identifier still runs.
+            if gone == "Ask", app.textFields["liveCamTyped"].exists { continue }
             XCTAssertFalse(app.buttons[T(gone)].firstMatch.exists, "\(gone) is back on the Live Cam screen")
         }
         var frames: [(String, CGRect)] = []
