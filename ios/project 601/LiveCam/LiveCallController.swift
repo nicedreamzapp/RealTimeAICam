@@ -146,7 +146,6 @@ final class LiveCallController: ObservableObject {
         #endif
         return LiveCamera.torchAvailable
     }
-    /// Turning it on from the selfie camera flips to the back camera first (the selfie side has no light).
     /// The selfie camera is on: no flashlight button (Matt 11/09: "The flashlight shouldn't appear for the front camera").
     @Published private(set) var onFront = false
 
@@ -158,7 +157,7 @@ final class LiveCallController: ObservableObject {
             return
         }
         log(["event": "flashlight", "on": on, "spoken": spoken])
-        // The camera flips to the back side itself if needed and reports the real state (torchChanged).
+        // The camera reports the real state (torchChanged); it never flips on its own.
         pendingTorch = (on, spoken)
         camera.setTorch(on)
     }

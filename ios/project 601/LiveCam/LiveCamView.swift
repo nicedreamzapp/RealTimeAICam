@@ -239,16 +239,22 @@ struct LiveCamView: View {
         .frame(maxWidth: 520)
         .frame(maxWidth: .infinity)
         .animation(.easeOut(duration: 0.4), value: show)
-        .onChange(of: call.caption, initial: true) { _, line in
-            guard !line.isEmpty else { return }
-            captionFresh = true
-            captionFade?.cancel()
-            captionFade = Task { @MainActor in
-                // About as long as it takes to read it, at least 4 s.
-                let seconds = max(4, Double(line.split(separator: " ").count) / 2.5 + 1.5)
-                try? await Task.sleep(nanoseconds: UInt64(seconds * 1e9))
-                if !Task.isCancelled { captionFresh = false }
-            }
+        // Every line it says, even the same words twice (review 11/09: a repeated answer in Quiet never showed).
+        .onReceive(call.$caption) { line in freshen(line) }
+        // What he said shows as soon as he says it, not only with the next answer.
+        .onReceive(call.$heardText) { heard in if !heard.isEmpty { freshen(call.caption) } }
+    }
+
+    /// Shows the words for about as long as it takes to read them (at least 4 s), then fades them. Only while the
+    /// words are wanted: a line spoken out loud never pops up later when Quiet is turned on (review 11/09).
+    private func freshen(_ line: String) {
+        captionFade?.cancel()
+        guard !line.isEmpty, call.wordsShown else { captionFresh = false; return }
+        captionFresh = true
+        captionFade = Task { @MainActor in
+            let seconds = max(4, Double(line.split(separator: " ").count) / 2.5 + 1.5)
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1e9))
+            if !Task.isCancelled { captionFresh = false }
         }
     }
 
@@ -303,9 +309,9 @@ struct LiveCamView: View {
 
     /// The turn signal, for VoiceOver only: no ring on screen (Matt 11/09); the light tap when it's his turn stays.
     private var turnState: some View {
+        // 44 x 44 so VoiceOver touch exploration can find it; no hit shape, so it never eats a tap or a pinch.
         Color.clear
-            .frame(width: 44, height: 1)
-            .contentShape(Rectangle())
+            .frame(width: 44, height: 44)
             .accessibilityElement()
             .accessibilityLabel(orbLabel)
             .accessibilityHint(call.phase == .speaking || call.phase == .thinking ? L("Double tap to stop it talking and ask something else") : "")

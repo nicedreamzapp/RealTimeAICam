@@ -48,16 +48,10 @@ final class LiveCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
     /// Tests: stands in for the real torch (returns whether it is on afterwards).
     var torchSetter: ((Bool) -> Bool)?
 
-    /// Light on or off. "On" from the selfie side flips to the back camera first, decided on the camera queue
-    /// (so a flip still pending can't make it guess wrong).
+    /// Light on or off, back camera only, decided on the camera queue. Never flips the camera on its own, even when
+    /// a flip to the selfie side is still pending (Matt 11/09; review 11/09): on the selfie side it reports "off".
     func setTorch(_ on: Bool) {
         queue.async { [self] in
-            if on, position == .front, stillFrame == nil {
-                // Review 11/6 round 3: wanted first, so the flip's own reconfigure lights it (and reports it lit)
-                // instead of reporting "off" and the app saying the flashlight isn't working.
-                lock.lock(); torchWanted = true; lock.unlock()
-                flipNow()
-            }
             lock.lock(); torchWanted = on && (position == .back || stillFrame != nil); lock.unlock()
             applyTorch()
         }
