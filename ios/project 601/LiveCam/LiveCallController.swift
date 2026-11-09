@@ -263,12 +263,14 @@ final class LiveCallController: ObservableObject {
         if let p = preload { engine = await p.value }
         preload = nil
         guard stillOpen("model") else { return }
+        var fellBack = false
         if engine == nil, level != .balanced {
             // The picked level wouldn't load: the bundled Balanced, always on the phone.
             log(["event": "level_fallback", "from": level.rawValue])
             let load = steps.loadEngine
             engine = await Task.detached(priority: .userInitiated) { load(.balanced) }.value
             guard stillOpen("model_fallback") else { return }
+            fellBack = engine != nil
         }
         guard engine != nil else {
             // No model on the phone at all: say what to do. One that is here but wouldn't start: try again.
@@ -288,9 +290,12 @@ final class LiveCallController: ObservableObject {
         // The first-time microphone explanation is done; it doesn't stay up as the caption.
         caption = ""
         lastSpokeEnd = Date()   // the quiet clock for check-ins starts now, not at load
-        if let notice = ModelPicker.fallbackNotice() {
-            // The one line allowed on open: the model picked by hand isn't on the phone, so say
-            // once which one is used instead. Then it listens (wentQuiet).
+        // The one line allowed on open: the model meant for this visit isn't the one answering
+        // (a hand pick still downloading, said once per pick; or the pick wouldn't load and
+        // Balanced stepped in). It names the one that answers. Then it listens (wentQuiet).
+        let standIn: ModelLevel? = fellBack ? .balanced : ModelPicker.fallbackNoticeLevel()
+        if let standIn {
+            let notice = ModelPicker.fallbackLine(standIn)
             phase = .speaking
             listener.watchForBargeIn(true)
             voice.sayLine(notice, lang: AppLang.code, english: notice)

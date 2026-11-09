@@ -483,10 +483,9 @@ struct LiveOCRView: View {
     private func analyze(_ image: CGImage, pauseCamera: Bool) {
         if #available(iOS 17.0, *), OnDeviceVisionNarrator.isBundled {
             showStatus("Working it out…")
-            // The model picked by hand isn't on the phone: say once which one answers instead.
-            if let notice = ModelPicker.fallbackNotice() {
-                viewModel.speak(text: notice, voiceIdentifier: selectedVoiceIdentifier, language: AppLang.code) {}
-            }
+            // The model picked by hand isn't on the phone yet: said once, ahead of the answer,
+            // as one line (spoken on its own it was cut off by the answer).
+            let notice = ModelPicker.fallbackNoticeLevel().map(ModelPicker.fallbackLineEnglish)
             // Free the camera pipeline while the model thinks; it comes back
             // the moment the answer is spoken.
             // The screen stays awake while the model answers, even with the camera
@@ -525,7 +524,7 @@ struct LiveOCRView: View {
                 }
                 await MainActor.run {
                     if let said {
-                        say(said, cutOff: looksLikePage ? gate.cutOffEdge : nil)
+                        say(notice.map { $0 + " " + said } ?? said, cutOff: looksLikePage ? gate.cutOffEdge : nil)
                         RatePrompt.noteResult()
                     } else {
                         readWithOCR(image)

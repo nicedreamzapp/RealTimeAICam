@@ -244,11 +244,20 @@ enum ModelPicker {
     /// download: a pick that isn't here falls back to the best one that is (Balanced is built in).
     static func level(for kind: PhotoKind) -> ModelLevel {
         let installed = ModelLevel.allCases.filter { VisionModelStore.isInstalled($0) }
-        if let manual = manualLevel, installed.contains(manual) { return manual }
+        if let manual = manualLevel {
+            if installed.contains(manual) { return manual }
+            // A hand pick still on its way: one stand-in for every photo, so pages and scenes
+            // don't swap models back and forth, and the name said for it is right.
+            return bestReady(installed, for: .scene)
+        }
         let ideal = ideal(for: kind)
         if installed.contains(ideal) { return ideal }
         // The pick is still downloading: the smartest level already here that
         // fits the budget, else the fastest one here.
+        return bestReady(installed, for: kind)
+    }
+
+    private static func bestReady(_ installed: [ModelLevel], for kind: PhotoKind) -> ModelLevel {
         let budget = priority.budget(for: kind)
         let ready = candidates.filter { installed.contains($0) }
         if let fits = ready.first(where: { (estimate($0, kind: kind) ?? .infinity) <= budget }) { return fits }
@@ -261,15 +270,36 @@ enum ModelPicker {
     /// The levels answering right now (the page pick and the scene pick).
     static var inUse: Set<ModelLevel> { [level(for: .page), level(for: .scene)] }
 
-    private static var fallbackSaid = false
+    /// The hand pick the stand-in line was last said for: said once per pick, not per launch.
+    static let fallbackSaidKey = "modelFallbackSaidFor"
 
-    /// The model picked by hand isn't on the phone: one plain line saying which one is used
-    /// instead, once per launch, nil otherwise ("Using Balanced, the model on this phone.").
+    /// The model picked by hand isn't on the phone yet: the level answering instead, once per
+    /// pick (nil otherwise). Callers say "Using Balanced, the model on this phone."
     @MainActor
-    static func fallbackNotice() -> String? {
-        guard !fallbackSaid, let manual = manualLevel, !VisionModelStore.isInstalled(manual) else { return nil }
-        fallbackSaid = true
-        return L("Using %@, the model on this phone.", level(for: .scene).name)
+    static func fallbackNoticeLevel() -> ModelLevel? {
+        guard let manual = manualLevel, !VisionModelStore.isInstalled(manual),
+              defaults.string(forKey: fallbackSaidKey) != manual.rawValue else { return nil }
+        defaults.set(manual.rawValue, forKey: fallbackSaidKey)
+        return level(for: .scene)
+    }
+
+    /// The stand-in line in the app's language (Live Cam's own words).
+    static func fallbackLine(_ level: ModelLevel) -> String { L("Using %@, the model on this phone.", level.name) }
+
+    /// The same in English, put ahead of a model answer that is translated as a whole.
+    static func fallbackLineEnglish(_ level: ModelLevel) -> String {
+        "Using \(level.rawValue.capitalized), the model on this phone."
+    }
+
+    /// A hand pick that is neither on the phone nor on its way (a failed download, a phone
+    /// restored from a backup) goes back to automatic.
+    @MainActor
+    static func dropStalePick() {
+        guard let manual = manualLevel, !VisionModelStore.isInstalled(manual) else { return }
+        switch VisionModelDownloader.shared.state(manual) {
+        case .queued, .downloading, .verifying: return
+        default: manualLevel = nil
+        }
     }
 
     /// "about 4 seconds", for the screen and VoiceOver.

@@ -284,8 +284,8 @@ struct SharedImageView: View {
     /// picture model it reads the words and says what they mean.
     private func describe() {
         isDescribing = true
-        // The model picked by hand isn't on the phone: say once which one answers instead.
-        if Self.pictureModelOnPhone, let notice = ModelPicker.fallbackNotice() { speak(notice, lang: AppLang.code) }
+        // The model picked by hand isn't on the phone yet: said once, ahead of the description.
+        let notice = Self.pictureModelOnPhone ? ModelPicker.fallbackNoticeLevel().map(ModelPicker.fallbackLineEnglish) : nil
         let gen = generation
         let photo = image
         Task {
@@ -294,7 +294,7 @@ struct SharedImageView: View {
                 guard gen == generation else { return }
                 if let said {
                     RatePrompt.noteResult()
-                    sayContent(said) { text, lang in
+                    sayContent(notice.map { $0 + " " + said } ?? said) { text, lang in
                         description = text
                         descriptionLang = lang
                         isDescribing = false
