@@ -620,11 +620,11 @@ struct LiveOCRView: View {
     /// answer as one spoken line, with the model's name in the answer's language.
     private func say(_ sentence: String, cutOff edge: String? = nil, standIn: ModelLevel? = nil) {
         let prefix = Self.cutOffPrefix(edge)
-        if standIn != nil { ModelPicker.markFallbackSaid() }
         // The model writes English; Your language gets it translated first, shown
         // and said in that language (~1 s, 2026-11-04). English: no change.
         guard YourLanguage.activeCode != YourLanguageRules.english else {
             let line = standIn.map { ModelPicker.fallbackLine($0, lang: YourLanguageRules.english) + " " + sentence } ?? sentence
+            if standIn != nil { ModelPicker.markFallbackSaid() }
             sayNow(Self.withPrefix(prefix, line, lang: YourLanguageRules.english), language: YourLanguageRules.english)
             return
         }
@@ -642,6 +642,7 @@ struct LiveOCRView: View {
             let text = shipped ? Self.withPrefix(prefix, body, lang: out.lang) : body
             await MainActor.run {
                 guard generation == sayGeneration else { return }
+                if standIn != nil { ModelPicker.markFallbackSaid() }
                 sayNow(text, language: out.lang)
             }
         }

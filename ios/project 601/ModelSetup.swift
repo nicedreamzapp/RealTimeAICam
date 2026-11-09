@@ -22,8 +22,17 @@ final class ModelSetup: ObservableObject {
         guard !started else { return }
         started = true
         VisionModelStore.removeLegacyDownload()
-        // Before the approved list existed (11/09), a hand pick was the yes.
-        if let manual = ModelPicker.manualLevel, !ModelPicker.removed.contains(manual) { ModelPicker.approve(manual) }
+        // Once, for phones updating from before the approved list (11/09): a hand pick whose
+        // download was interrupted part-way counts as a yes. Nothing else is assumed approved.
+        let migratedKey = "modelApprovedMigrated"
+        if !UserDefaults.standard.bool(forKey: migratedKey) {
+            UserDefaults.standard.set(true, forKey: migratedKey)
+            if let manual = ModelPicker.manualLevel, !ModelPicker.removed.contains(manual),
+               !VisionModelStore.isInstalled(manual),
+               FileManager.default.fileExists(atPath: VisionModelStore.stagingURL(manual).path) {
+                ModelPicker.approve(manual)
+            }
+        }
         // Only models the person said yes to resume; anything else half-downloaded is thrown away.
         VisionModelDownloader.shared.resumeInterrupted()
         // Then a hand pick that is neither here nor on its way goes back to automatic.

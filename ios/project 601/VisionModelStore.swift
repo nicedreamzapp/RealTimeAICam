@@ -406,6 +406,9 @@ final class VisionModelDownloader: NSObject, ObservableObject {
         case .success:
             progress = 1
             states[level] = .ready
+            // Installed: the yes is used up. A backup restored to a new phone (models aren't
+            // in it) must never re-download gigabytes on its own.
+            ModelPicker.unapprove(level)
             SpeechManager.shared.speak(L("The %@ model is ready. What's this? will use it from now on.", level.name))
             finishCurrent()
         case .failure(let error):
