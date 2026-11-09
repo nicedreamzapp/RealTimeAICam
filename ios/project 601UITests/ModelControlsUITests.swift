@@ -19,6 +19,12 @@ final class ModelControlsUITests: XCTestCase {
         return app
     }
 
+    /// Small screens put the row below the fold: scroll until it can be tapped.
+    private func reach(_ app: XCUIApplication, _ el: XCUIElement, up: Bool = true) {
+        var tries = 0
+        while !(el.exists && el.isHittable) && tries < 6 { up ? app.swipeUp() : app.swipeDown(); tries += 1 }
+    }
+
     private func row(_ app: XCUIApplication, _ name: String) -> XCUIElement {
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name + ".")).firstMatch
     }
@@ -42,7 +48,7 @@ final class ModelControlsUITests: XCTestCase {
 
         // Tapping a model that isn't here asks first; Cancel downloads nothing.
         let quick = row(app, "Quick")
-        if !quick.isHittable { app.swipeUp() }
+        reach(app, quick)
         quick.tap()
         XCTAssertTrue(app.alerts["Download Quick?"].waitForExistence(timeout: 5))
         shoot(app, "2-ask-first")
@@ -53,6 +59,8 @@ final class ModelControlsUITests: XCTestCase {
         quick.tap()
         app.alerts["Download Quick?"].buttons["Download"].tap()
         let stop = app.buttons["Stop downloading Quick"]
+        _ = stop.waitForExistence(timeout: 5)
+        reach(app, stop)
         XCTAssertTrue(stop.waitForExistence(timeout: 10))
         shoot(app, "3-downloading-stop")
         stop.tap()
@@ -60,13 +68,14 @@ final class ModelControlsUITests: XCTestCase {
         shoot(app, "4-stopped")
 
         // Download it for real, then delete it from "On this phone".
+        reach(app, quick)
         quick.tap()
         app.alerts["Download Quick?"].buttons["Download"].tap()
         // The Stop row goes away once Quick is installed; "On this phone" is at the top.
         let stopping = NSPredicate(format: "exists == false")
         expectation(for: stopping, evaluatedWith: stop)
         waitForExpectations(timeout: 900)
-        app.swipeDown(); app.swipeDown()
+        reach(app, delete, up: false)
         XCTAssertTrue(delete.waitForExistence(timeout: 10), "Quick finished but has no Delete button")
         shoot(app, "5-installed")
         delete.tap()
