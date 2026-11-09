@@ -17,6 +17,8 @@ import UIKit
 final class LiveRepeatGuard: @unchecked Sendable {
     var checked = false
     var repeated = false
+    /// The view hasn't changed since the last answer.
+    var sameScene = false
 }
 
 /// The parts of opening Live Cam that wait on the system (permission prompts, the model load).
@@ -1011,8 +1013,9 @@ final class LiveCallController: ObservableObject {
                 return
             }
             let thumb = LiveCamera.thumb(frame)
-            // Same view as last answer: the same words are right, so no repeat check (it cost ~1 s per answer, 11/1 test).
-            if let lastView, LiveProactive.difference(thumb, lastView) < 10 { guardRepeat.checked = true }
+            // Same view as last answer: the repeat check still runs (Matt 10/31: "I don't want it to repeat ... unless
+            // the scene changes"); a repeat about an unchanged view becomes a short "Same as before."
+            if let lastView, LiveProactive.difference(thumb, lastView) < 10 { guardRepeat.sameScene = true }
             let clock = FirstSentence()
             let onText: (String) -> Bool = { text in
                 guard !unprompted else { return box.isAlive }
@@ -1054,7 +1057,7 @@ final class LiveCallController: ObservableObject {
                                         maxTokens: mode.maxTokens, onText: onText)
             }
             var retried = false
-            if !faking, guardRepeat.repeated, let q = question, box.isAlive {
+            if !faking, guardRepeat.repeated, !guardRepeat.sameScene, let q = question, box.isAlive {
                 // Same words as last time: a fresh look at a fresh frame, nothing it said before in the prompt.
                 retried = true
                 if withPhoto {
@@ -1088,7 +1091,11 @@ final class LiveCallController: ObservableObject {
                 let said = LiveSentenceStream.cleaned(answer?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
                 if !unprompted, !said.isEmpty {
                     // Every sentence was one it had already said: say so briefly instead of going silent.
-                    if self.tally.turn == my, self.tally.said == 0, self.tally.dropped > 0 { self.sayPart(.own(LiveCamWords.sameAsBefore), turn: my) }
+                    // So is the same answer again about a view that hasn't changed.
+                    let sameAgain = guardRepeat.repeated && guardRepeat.sameScene && (self.tally.turn != my || self.tally.said == 0)
+                    if sameAgain || (self.tally.turn == my && self.tally.said == 0 && self.tally.dropped > 0) {
+                        self.sayPart(.own(LiveCamWords.sameAsBefore), turn: my)
+                    }
                     // The one help offer of the visit comes after the opening look (Matt 11/6), never from the model.
                     else if first, !self.sayGuard.helpOffered { self.sayPart(.own(LiveCamWords.helpOffer), turn: my) }
                 }
