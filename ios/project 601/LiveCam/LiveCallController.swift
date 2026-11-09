@@ -1227,9 +1227,12 @@ final class LiveCallController: ObservableObject {
                     let talking = self.phase != .listening || self.listener.hearingSomething
                     self.log(["event": "watch_decision", "why": "new thing", "thing": notice.thing, "text": line,
                               "decision": line.count < 4 || LiveWords.isNothingNew(said) ? "silent: no line" : talking ? "silent: person talking" : "spoke"])
-                    guard line.count >= 4, !LiveWords.isNothingNew(said), !talking else { return }
+                    // He was talking: try again later. No line (a false find, "nothing new", too short): known from
+                    // now on, said nothing, so it doesn't run a vision look every few seconds forever.
+                    if talking { return }
                     self.novelty.announced(notice.thing, at: Date())
                     self.memory.noteThings([notice.thing])
+                    guard line.count >= 4, !LiveWords.isNothingNew(said) else { return }
                     self.memory.noteSeen(line)
                     self.watch.commented(at: Date())
                     self.listener.stopListening()
