@@ -1066,8 +1066,9 @@ struct LiveProactive {
     /// Normal mode: quiet this long (no one talking, nothing said) before a friendly check-in.
     static let checkInAfter: TimeInterval = 90
     /// Check in only when the person has been quiet a good while, and at most twice in a row with no reply.
-    func shouldCheckIn(at t: Date, quietSince: Date, after: TimeInterval = checkInAfter) -> Bool {
-        enabled && unanswered < Self.maxUnanswered && t.timeIntervalSince(max(quietSince, lastComment)) >= after
+    /// `evenIfOff`: a goal's own check-in, which the person started by naming the job.
+    func shouldCheckIn(at t: Date, quietSince: Date, after: TimeInterval = checkInAfter, evenIfOff: Bool = false) -> Bool {
+        (enabled || evenIfOff) && unanswered < Self.maxUnanswered && t.timeIntervalSince(max(quietSince, lastComment)) >= after
     }
     /// With a goal (Matt 11/6) the check-in comes sooner: they're in the middle of a job.
     static let goalCheckInAfter: TimeInterval = 45

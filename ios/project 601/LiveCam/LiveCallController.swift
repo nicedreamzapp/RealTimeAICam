@@ -91,7 +91,9 @@ final class LiveCallController: ObservableObject {
         didSet { UserDefaults.standard.set(showCaption, forKey: "liveCamShowCaption") }
     }
     /// Speak up: check-ins after a long quiet and a line about a thing it has never named.
-    @Published var proactiveOn = UserDefaults.standard.object(forKey: "liveCamProactive") as? Bool ?? true {
+    /// Off unless turned on (Matt 11/06: "i dont want it to keep asking if it can help constantly"): no "What are
+    /// you up to?" check-ins and no new-thing lines. A goal's own "Ready for the next step?" still comes.
+    @Published var proactiveOn = UserDefaults.standard.object(forKey: "liveCamProactive") as? Bool ?? false {
         didSet { UserDefaults.standard.set(proactiveOn, forKey: "liveCamProactive"); watch.enabled = proactiveOn }
     }
     /// The flashlight (Matt 11/6), back camera only: one tap on, one tap off.
@@ -1262,7 +1264,8 @@ final class LiveCallController: ObservableObject {
                 // came out unasked and sounded like it was hearing itself). No "Now I see", just a check-in after a long quiet.
                 do {
                     if quiet, self.goal != nil,
-                       self.watch.shouldCheckIn(at: Date(), quietSince: max(self.lastHeardAt, self.lastSpokeEnd), after: LiveProactive.goalCheckInAfter),
+                       self.watch.shouldCheckIn(at: Date(), quietSince: max(self.lastHeardAt, self.lastSpokeEnd),
+                                                after: LiveProactive.goalCheckInAfter, evenIfOff: true),
                        let line = self.goalCheckIns.next(from: LiveGoal.checkIns), self.sayGuard.vet(line) != nil {
                         // Matt 11/6: with a goal the check-in is about it ("Ready for the next step?"), never the same twice.
                         self.log(["event": "watch_fired", "why": "goal check in"])
