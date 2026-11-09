@@ -317,9 +317,11 @@ struct SettingsOverlayView: View {
 
 /// Settings > Live Cam (Matt 11/09 layout): the switches that used to sit on the Live Cam screen.
 private struct LiveCamSettingsCard: View {
-    @AppStorage("liveCamShowCaption") private var words = false
+    @AppStorage("liveCamShowCaption") private var words = LiveCallController.wordsSetting()
     @AppStorage(LiveCallController.micOffKey) private var micOff = false
     @ObservedObject private var appLang = AppLangObserver.shared
+
+    init() { _ = LiveCallController.wordsSetting() }   // the one-time reset runs before the switch reads it
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {

@@ -117,8 +117,18 @@ final class LiveCallController: ObservableObject {
     /// Words on screen. RT Cam shows them by default (low vision reads them big); VoiceOver reads them either way.
     /// Off by default (Matt 11/09: "the text that is showing up on the screen shouldn't show up on the screen until you
     /// hit quiet", "Screen should be clear of text"); Settings > Live Cam can turn words on with the voice.
-    @Published var showCaption = UserDefaults.standard.object(forKey: "liveCamShowCaption") as? Bool ?? false {
+    @Published var showCaption = LiveCallController.wordsSetting() {
         didSet { UserDefaults.standard.set(showCaption, forKey: "liveCamShowCaption") }
+    }
+    /// Builds before 11/09 saved Words on screen as on; turn it off once so the screen starts clear (Matt 11/09: "I
+    /// don't want the text on the screen unless I choose to"). After that his own choice in Settings is kept.
+    nonisolated static func wordsSetting() -> Bool {
+        let d = UserDefaults.standard
+        if !d.bool(forKey: "liveCamWordsReset20261109") {
+            d.set(false, forKey: "liveCamShowCaption")
+            d.set(true, forKey: "liveCamWordsReset20261109")
+        }
+        return d.bool(forKey: "liveCamShowCaption")
     }
     /// The words show when Words on screen is on, and always while Quiet is on (they are its only output).
     var wordsShown: Bool { showCaption || quiet }
@@ -1482,23 +1492,13 @@ final class LiveCallController: ObservableObject {
     }
 }
 
-/// The "your turn" tick: a soft 50 ms blip made on the phone (nothing bundled), at a low volume through the audio
-/// session Live Cam already has (no volume or route change), plus a light haptic. Silent in the Simulator and when
-/// the voice is muted.
+/// The "your turn" signal: a light haptic only, no sound (Matt 11/09: "I definitely don't want it beeping every time
+/// it speaks").
 @MainActor
 final class TurnCue {
-    static let tone = AimTones.wav([1320], noteSeconds: 0.05, volume: 0.25)
-    private var player: AVAudioPlayer?
     private let haptic = UIImpactFeedbackGenerator(style: .light)
     func play(silent: Bool) {
         haptic.impactOccurred(intensity: 0.7)
-        #if targetEnvironment(simulator)
-        let silent = true
-        #endif
-        guard !silent else { return }
-        player = try? AVAudioPlayer(data: Self.tone)
-        player?.volume = 0.5
-        player?.play()
     }
 }
 
