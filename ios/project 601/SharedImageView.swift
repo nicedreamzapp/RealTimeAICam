@@ -39,8 +39,6 @@ struct SharedImageView: View {
     /// The app's voice is reading something on this screen.
     @State private var isSpeaking = false
     @State private var speakingWatch: Task<Void, Never>?
-    /// This screen's one keep-awake hold is taken.
-    @State private var holdingAwake = false
     /// Follow-up questions need the picture model; without it the words are read instead.
     @State private var canAsk = SharedImageView.pictureModelOnPhone
     @State private var noModelNoteSaid = false
@@ -53,8 +51,6 @@ struct SharedImageView: View {
         return OnDeviceVisionNarrator.isBundled
     }
 
-    /// Screen stays on while the picture is worked out, a question answered, or an answer read.
-    private var keepsAwake: Bool { isDescribing || isAsking || isListening || isSpeaking }
 
     private var voice: String { SpeechManager.shared.selectedVoiceIdentifier }
 
@@ -100,22 +96,35 @@ struct SharedImageView: View {
                 UIAccessibility.post(notification: .screenChanged,
                                      argument: SpeechManager.voiceOverLine(L("Shared picture"), lang: AppLang.code))
             }
-            setAwake(true)
+            // The screen stays on the whole time this screen is up: a VoiceOver reading of
+            // the answer can't be timed from here, and this screen is short-lived anyway.
+            ScreenAwake.hold("sharedImage")
             describe()
         }
-        .onChange(of: keepsAwake) { _, awake in setAwake(awake) }
         .onChange(of: isSpeaking) { _, speaking in
             // No picture model: once the description has been read, say why there is no ask button.
             guard !speaking, !canAsk, !isDescribing, !noModelNoteSaid else { return }
             noModelNoteSaid = true
-            sayApp("Asking about pictures needs the picture model. Get it in Settings, under Models.")
+            let note = "Asking about pictures needs the picture model. Get it in Settings, under Models."
+            guard LiveOCRViewModel.speaksAloud else {
+                // VoiceOver is reading the description: queue the note behind it, never over it.
+                let gen = generation
+                Task {
+                    let out = await UICue.line(note)
+                    guard gen == generation else { return }
+                    UIAccessibility.post(notification: .announcement,
+                                         argument: SpeechManager.voiceOverLine(out.text, lang: out.lang, queue: true))
+                }
+                return
+            }
+            sayApp(note)
         }
         .onDisappear {
             generation += 1
             speaker.stopSpeaking()
             if isListening { Task { _ = await listener.stopAndTranscribe() } }
             speakingWatch?.cancel()
-            setAwake(false)
+            ScreenAwake.release("sharedImage")
         }
     }
 
@@ -449,12 +458,6 @@ struct SharedImageView: View {
             }
             if !Task.isCancelled { isSpeaking = false }
         }
-    }
-
-    private func setAwake(_ on: Bool) {
-        guard on != holdingAwake else { return }
-        holdingAwake = on
-        if on { ScreenAwake.hold("sharedImage") } else { ScreenAwake.release("sharedImage") }
     }
 
     private func sayAgain() {

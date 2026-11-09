@@ -6,6 +6,8 @@ struct HomeView: View {
     @Binding var animationState: ContentView.AnimationState
     @Binding var mode: AppMode
     @State private var showInstructions = false
+    /// The guide on screen is the automatic first-launch one (not opened with INFO).
+    @State private var guideIsFirstLaunch = false
     /// Settings, Models included, right from home; it used to be only inside
     /// the reader screens (Matt, 2026-11-03).
     @State private var showSettings = false
@@ -177,7 +179,8 @@ struct HomeView: View {
             showSettings = false
             if showInstructions {
                 showInstructions = false
-                UserDefaults.standard.set(false, forKey: "hasShownInstructions")
+                // Only the automatic first-launch guide comes back next launch.
+                if guideIsFirstLaunch { UserDefaults.standard.set(false, forKey: "hasShownInstructions") }
             }
         }
         .onChange(of: modelDownloader.progress) { _, value in
@@ -201,6 +204,7 @@ struct HomeView: View {
             // Not over a shared picture (the app opened from the share sheet): next launch.
             if !UserDefaults.standard.bool(forKey: "hasShownInstructions"), !SharedImageInbox.shared.isBusy {
                 showInstructions = true
+                guideIsFirstLaunch = true
                 UserDefaults.standard.set(true, forKey: "hasShownInstructions")
             }
         }
@@ -209,6 +213,7 @@ struct HomeView: View {
     /// Done on the guide (first-time-user test, 2026-11-04): home came back in silence with
     /// focus on nothing. "Home" is said once, then VoiceOver lands on Settings, the first control.
     private func guideClosed() {
+        guideIsFirstLaunch = false
         let voiceId = viewModel.selectedVoiceIdentifier
         let synth = speechSynthesizer
         Task { @MainActor in

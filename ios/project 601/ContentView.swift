@@ -104,6 +104,7 @@ struct ContentView: View {
                     }
                 }
                 .allowsHitTesting(false)
+                .accessibilityHidden(sharedInbox.isBusy)
             }
 
             // The Shared picture screen, drawn at the root rather than presented: a sheet or
@@ -113,6 +114,8 @@ struct ContentView: View {
                     .id(shared.id)
                     .transition(.opacity)
                     .zIndex(10)
+                    // One container marked modal, so VoiceOver stays inside it.
+                    .accessibilityElement(children: .contain)
                     .accessibilityAddTraits(.isModal)
             }
         }
