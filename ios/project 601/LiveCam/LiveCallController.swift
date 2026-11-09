@@ -351,23 +351,15 @@ final class LiveCallController: ObservableObject {
         answerDone = true
         caption = ""
         lastSpokeEnd = Date()   // the quiet clock for check-ins starts now, not at load
-        // The one line allowed on open: the model meant for this visit isn't the one answering
-        // (a hand pick still downloading, said once per pick; or the hand pick wouldn't load and
-        // Balanced stepped in). It names the one that answers. Then it listens (wentQuiet).
-        // Automatic's own load failure stays silent (logged).
+        // Nothing is said on open, not even the stand-in model line (Matt 11/09): when the model
+        // meant for this visit isn't the one answering (a hand pick still downloading, once per pick;
+        // or the hand pick wouldn't load and Balanced stepped in), the line goes in front of the
+        // first answer instead, like What's this?. Automatic's own load failure stays silent (logged).
         if fellBack { log(["event": "fell_back_to_balanced", "hand_pick": ModelPicker.manualLevel != nil]) }
-        let standIn: ModelLevel? = fellBack
+        pendingStandIn = fellBack
             ? (ModelPicker.manualLevel != nil && !ModelPicker.fallbackSaidForPick ? .balanced : nil)
             : ModelPicker.fallbackStandIn()
-        if let standIn {
-            ModelPicker.markFallbackSaid()
-            let notice = ModelPicker.fallbackLine(standIn)
-            phase = .speaking
-            listener.watchForBargeIn(true)
-            voice.sayLine(notice, lang: AppLang.code, english: notice)
-        } else {
-            listen()
-        }
+        listen()
         if LiveCamTest.forceCantHear { hearingGaveUp() }
     }
 
@@ -567,6 +559,8 @@ final class LiveCallController: ObservableObject {
     /// The person has asked something this visit. Until then Live Cam says nothing on its own:
     /// no check-ins, no new-thing lines (Matt 11/09: no opening narration by any route).
     private var hasExchanged = false
+    /// The model answering in place of the hand pick, named once in front of the first answer.
+    private var pendingStandIn: ModelLevel?
     private var lastNovelty = Date.distantPast
     /// The last question was about what's in view (a short "and that one?" follows it onto the camera).
     private var lastUsedPhoto = true
@@ -1224,6 +1218,13 @@ final class LiveCallController: ObservableObject {
     private func sayPart(_ line: LiveLine, turn my: Int) {
         guard running, turn == my else { return }
         var line = line
+        if case .content = line, let standIn = pendingStandIn {
+            // The first answer of the visit: the stand-in model line goes just ahead of it.
+            pendingStandIn = nil
+            ModelPicker.markFallbackSaid()
+            let notice = ModelPicker.fallbackLine(standIn)
+            voice.sayLine(notice, lang: AppLang.code, english: notice)
+        }
         if case let .content(s) = line {
             guard let cleaned = LiveWords.spoken(s, aboutMe: askedAboutMe) else { return }
             if tally.turn != my { tally = (my, 0, 0); sayGuard.beginTurn() }
