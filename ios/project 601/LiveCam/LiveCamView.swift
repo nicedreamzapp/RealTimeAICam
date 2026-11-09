@@ -322,7 +322,7 @@ struct LiveCamView: View {
     }
 
     private func bottomBar(width: CGFloat) -> some View {
-        let (d, spacing) = Self.bottomRow(width: width, count: call.torchAvailable ? 4 : 3)
+        let (d, spacing) = Self.bottomRow(width: width, count: call.torchAvailable ? 3 : 2)
         return HStack(spacing: spacing) {
             // Matt 11/6: "Live cam needs to have a flashlight... preferably at the bottom". One tap on, one tap off;
             // on the selfie camera it flips to the back camera first. Its word stays even with Words on screen off.
@@ -358,20 +358,8 @@ struct LiveCamView: View {
             }
             .accessibilityLabel(call.micMuted ? L("Unmute microphone") : L("Mute microphone"))
             .accessibilityHint(call.micMuted ? L("Live Cam starts listening again") : L("Live Cam stops listening until you unmute"))
-            // Matt 11/6: a shutter for loud places. Press it to ask about what's in view right now.
-            Button { call.askAboutView() } label: {
-                VStack(spacing: 6) {
-                    ZStack {
-                        Circle().stroke(.white, lineWidth: 4).frame(width: d, height: d)
-                        Circle().fill(.white).frame(width: d - 14, height: d - 14)
-                    }
-                    Text(L("Ask")).font(.footnote.weight(.semibold)).foregroundStyle(.white)
-                        .lineLimit(1).minimumScaleFactor(0.6).frame(width: d + 8)
-                }
-            }
-            .accessibilityLabel(L("Ask about the view"))
-            .accessibilityHint(L("Tells you what's in front of the camera right now, for loud places"))
-            .accessibilityIdentifier("liveCamShutter")
+            // No Ask button: Live Cam always listens (Matt 11/09: "there is an ask button i not want that, it
+            // should be listen always").
             Button { call.end() } label: {
                 VStack(spacing: 6) {
                     Image(systemName: "xmark").font(.system(size: d * 0.37, weight: .bold))
