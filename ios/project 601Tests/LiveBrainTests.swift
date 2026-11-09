@@ -518,8 +518,7 @@ struct LiveThingBoxTests {
         #expect(LiveThings.viewRect(.zero, frame: .zero, view: view) == .zero)
     }
 
-    @MainActor @Test func theFreezeIsShortAndTheBoxStaysAFewSeconds() {
-        #expect(LiveCallController.freezeSeconds >= 0.3 && LiveCallController.freezeSeconds <= 0.5)
+    @MainActor @Test func theBoxStaysAFewSeconds() {
         #expect(LiveCallController.boxSeconds >= 2 && LiveCallController.boxSeconds <= 6)
     }
 }

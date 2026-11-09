@@ -31,8 +31,6 @@ struct LiveCamView: View {
     @State private var zoomStart: CGFloat?
     @State private var zoomLabel: CGFloat = 1
     @State private var typed = ""
-    @State private var flash = 0.0
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GeometryReader { geo in
@@ -44,11 +42,8 @@ struct LiveCamView: View {
                 } else {
                     LiveCamPreview(session: call.camera.session).ignoresSafeArea().accessibilityHidden(true)
                 }
-                // Matt 11/6, a live camera: the frame it just took holds still for a moment, with a shutter flash.
-                if let f = call.frozen {
-                    fullScreen(f)   // sized like the live preview and the box: the whole screen, no jump (review 11/6)
-                }
-                Color.white.opacity(flash).ignoresSafeArea().allowsHitTesting(false).accessibilityHidden(true)
+                // No snapshot, ever (Matt 10/31, 11/8, 11/9: "it's gotta be invisible", "not in any mode"):
+                // the preview never freezes or flashes when a frame goes to the model.
                 thingBox
                 LinearGradient(colors: [.black.opacity(0.45), .clear, .clear, .black.opacity(0.8)], startPoint: .top, endPoint: .bottom)
                     .ignoresSafeArea().accessibilityHidden(true)
@@ -102,10 +97,6 @@ struct LiveCamView: View {
             }
         }
         .onDisappear { call.end() }
-        .onChange(of: call.shutterCount) {
-            flash = reduceMotion ? 0.2 : 0.45
-            withAnimation(.easeOut(duration: 0.35)) { flash = 0 }
-        }
     }
 
     /// A still filling the whole screen exactly like the live preview (aspect fill, past the safe areas).

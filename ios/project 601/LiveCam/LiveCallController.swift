@@ -131,9 +131,6 @@ final class LiveCallController: ObservableObject {
 
     /// The last question heard (in the person's words), shown above the answer.
     @Published private(set) var heardText = ""
-    /// Matt 11/6, a live camera: the frame it just took, held on screen ~0.4 s with a shutter flash (shutterCount).
-    @Published private(set) var frozen: CGImage?
-    @Published private(set) var shutterCount = 0
     /// The thing its answer named, boxed for a few seconds (hidden from VoiceOver; the answer already says it).
     struct ThingBox: Equatable { let box: CGRect; let frame: CGSize; let name: String; let id: Int }
     @Published private(set) var thingBox: ThingBox?
@@ -143,7 +140,6 @@ final class LiveCallController: ObservableObject {
         f.current = { cam.current() }
         return f
     }
-    static let freezeSeconds = 0.4
     static let boxSeconds = 4.0
     /// Speech recognition kept failing the moment it started: the mic is off for this visit and a typing box shows.
     @Published private(set) var hearingStopped = false
@@ -300,7 +296,7 @@ final class LiveCallController: ObservableObject {
         preload?.cancel(); preload = nil
         engine = nil
         thingFinder = nil   // the detector is let go too
-        frozen = nil; thingBox = nil
+        thingBox = nil
         // Only this call's hold: a camera still running keeps the screen awake.
         ScreenAwake.release("liveCall")
     }
@@ -1022,10 +1018,7 @@ final class LiveCallController: ObservableObject {
                 try? await Task.sleep(nanoseconds: 300_000_000)
                 grabbed = camera.current()
             }
-            if let frame = grabbed, withPhoto, !unprompted, question != nil {
-                // The moment the frame is taken: the shutter (the model never waits on it).
-                DispatchQueue.main.async { MainActor.assumeIsolated { self?.shutter(frame, turn: my) } }
-            }
+            // No snapshot shown, ever (Matt 10/31, 11/8, 11/9): the frame goes only to the model.
             guard let frame = grabbed else {
                 await MainActor.run {
                     self?.modelBusy = false
@@ -1212,17 +1205,6 @@ final class LiveCallController: ObservableObject {
                 if withPhoto, !general, !said.isEmpty { self.boxThing(named: said, in: frame) }
                 if !self.voice.isBusy { self.wentQuiet() }
             }
-        }
-    }
-
-    private func shutter(_ frame: CGImage, turn my: Int) {
-        guard running, turn == my else { return }
-        frozen = frame
-        shutterCount += 1
-        log(["event": "shutter"])
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(Self.freezeSeconds * 1e9))
-            if let self, self.frozen === frame { self.frozen = nil }
         }
     }
 
