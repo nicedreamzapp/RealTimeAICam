@@ -190,6 +190,22 @@ enum ModelPicker {
         defaults.set(seconds, forKey: balancedSecondsKey)
     }
 
+    /// Levels the person deleted, stopped or said no to. Automatic never
+    /// downloads these on its own again; only a confirmed tap on the level does.
+    static let removedKey = "modelLevelsRemoved"
+
+    static var removed: Set<ModelLevel> {
+        Set((defaults.stringArray(forKey: removedKey) ?? []).compactMap(ModelLevel.init(rawValue:)))
+    }
+
+    static func markRemoved(_ level: ModelLevel) {
+        defaults.set((removed.union([level])).map(\.rawValue).sorted(), forKey: removedKey)
+    }
+
+    static func clearRemoved(_ level: ModelLevel) {
+        defaults.set(removed.subtracting([level]).map(\.rawValue).sorted(), forKey: removedKey)
+    }
+
     /// Folds one real answer into the estimate, so a phone that runs hot or
     /// got an OS update drifts to its true speed. Light weight: one odd photo
     /// (a long answer, a retry) moves it only a little.

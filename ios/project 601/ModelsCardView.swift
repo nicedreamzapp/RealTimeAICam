@@ -52,6 +52,11 @@ struct ModelsCardView: View {
 
 /// The words, in one place, so the screen and VoiceOver always say the same thing.
 enum ModelsText {
+    /// "2.05 GB" for one or more levels.
+    static func totalSize(_ levels: [ModelLevel]) -> String {
+        ByteCountFormatter.string(fromByteCount: levels.reduce(0) { $0 + $1.bytes }, countStyle: .file)
+    }
+
     /// `redraw` only makes SwiftUI re-ask when a setting changes.
     @MainActor
     static func summary(checking: Bool, downloading: ModelLevel?, progress: Double, redraw: [String] = []) -> String {
@@ -66,8 +71,11 @@ enum ModelsText {
         let using = ModelPicker.level(for: .scene)
         if ModelPicker.manualLevel != nil { return L("Using %@, the one you picked.", using.name) }
         let page = ModelPicker.ideal(for: .page), scene = ModelPicker.ideal(for: .scene)
-        if !VisionModelStore.isInstalled(page) || !VisionModelStore.isInstalled(scene) {
-            return L("Using %@ for now. %@, the best fit, downloads on Wi-Fi.", using.name, page.name)
+        if let missing = [page, scene].first(where: { !VisionModelStore.isInstalled($0) }) {
+            if ModelPicker.removed.contains(missing) {
+                return L("Using %@. %@ fits this phone best, tap it below to download it.", using.name, missing.name)
+            }
+            return L("Using %@ for now. %@, the best fit, downloads on Wi-Fi.", using.name, missing.name)
         }
         if page == scene { return L("Using %@, the best fit for this phone.", page.name) }
         return L("Using %@ for mail, money and medicine, %@ for everything else.", page.name, scene.name)
@@ -93,7 +101,7 @@ enum ModelsText {
         } else if VisionModelStore.isInstalled(level) {
             parts.append(L("On this phone."))
         } else {
-            parts.append(L("Not downloaded. %@, downloads when you pick it.", level.sizeDescription))
+            parts.append(L("Not downloaded, %@. Tap to download it.", level.sizeDescription))
         }
         if case .failed = state { parts.append(L("The last download stopped. Pick it to try again.")) }
         if level.fitsThisPhone, let s = ModelPicker.estimate(level, kind: .scene) {
@@ -112,6 +120,11 @@ struct ModelsChooserView: View {
     @AppStorage(ModelPicker.chosenKey) private var choice = "auto"
     @AppStorage(ModelPicker.priorityKey) private var priority = ModelPriority.accuracy.rawValue
     @AppStorage(ModelPicker.balancedSecondsKey) private var balancedSeconds = 0.0
+    /// A level waiting for "Download?" / "Delete?" to be answered.
+    @State private var askDownload: ModelLevel?
+    @State private var askDelete: ModelLevel?
+    /// Automatic (or a new priority) wants these, waiting for "Download?".
+    @State private var askAutomatic: [ModelLevel] = []
 
     var body: some View {
         let redraw = [choice, priority, "\(balancedSeconds)"]
@@ -121,12 +134,14 @@ struct ModelsChooserView: View {
                     Text(L("You don't need to change anything. Automatic picks the best model this phone can run, and What's this? keeps working while it downloads."))
                 }
 
+                onThisPhone
+
                 Section(L("What matters more to you?")) {
                     ForEach(ModelPriority.allCases) { p in
                         bigRow(title: p.name, detail: p.explanation, selected: priority == p.rawValue) {
                             priority = p.rawValue
-                            setup.fetchWanted(automatic: true)
                             confirm(L("%@ selected.", p.name))
+                            askAboutAutomatic()
                         }
                     }
                 }
@@ -137,11 +152,12 @@ struct ModelsChooserView: View {
                                                       progress: 0, redraw: redraw),
                            selected: choice == "auto") {
                         choice = "auto"
-                        setup.fetchWanted(automatic: true)
                         confirm(L("Automatic selected.") + " " + ModelsText.summary(checking: false, downloading: nil, progress: 0))
+                        askAboutAutomatic()
                     }
                     ForEach(ModelLevel.allCases) { level in
                         modelRow(level)
+                        stopRow(level)
                     }
                 }
 
@@ -153,6 +169,81 @@ struct ModelsChooserView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .alert(L("Download %@?", askDownload?.name ?? ""), isPresented: isAsking($askDownload), presenting: askDownload) { level in
+            Button(L("Download")) { startConfirmed(level) }
+            Button(L("Cancel"), role: .cancel) {}
+        } message: { level in
+            Text(L("%@. Uses Wi-Fi or your data plan. You can stop it any time.", level.sizeDescription))
+        }
+        .alert(L("Delete %@?", askDelete?.name ?? ""), isPresented: isAsking($askDelete), presenting: askDelete) { level in
+            Button(L("Delete"), role: .destructive) { delete(level) }
+            Button(L("Cancel"), role: .cancel) {}
+        } message: { level in
+            Text(L("Frees %@. It won't download again unless you choose it.", level.sizeDescription))
+        }
+        .alert(L("Download %@?", askAutomatic.map(\.name).joined(separator: " + ")),
+               isPresented: Binding(get: { !askAutomatic.isEmpty }, set: { if !$0 { askAutomatic = [] } })) {
+            Button(L("Download")) {
+                askAutomatic.forEach { setup.download($0) }
+                askAutomatic = []
+            }
+            Button(L("Not now"), role: .cancel) {
+                // "No" sticks: automatic mode won't fetch these behind their back later.
+                askAutomatic.forEach { ModelPicker.markRemoved($0) }
+                askAutomatic = []
+            }
+        } message: {
+            Text(L("Automatic picked this for your phone. %@. Uses Wi-Fi or your data plan.",
+                   ModelsText.totalSize(askAutomatic)))
+        }
+    }
+
+    private func isAsking(_ item: Binding<ModelLevel?>) -> Binding<Bool> {
+        Binding(get: { item.wrappedValue != nil }, set: { if !$0 { item.wrappedValue = nil } })
+    }
+
+    /// Every model file the phone holds right now, with its size and a Delete button.
+    @ViewBuilder private var onThisPhone: some View {
+        let installed = ModelLevel.allCases.filter { VisionModelStore.isInstalled($0) }
+        let downloaded = installed.filter { !$0.isBundled }
+        Section {
+            ForEach(installed) { level in
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(level.name).font(.headline)
+                        Text(level.isBundled ? L("%@. Built into the app, can't be deleted.", level.sizeDescription)
+                             : level.sizeDescription)
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    if !level.isBundled {
+                        Button(L("Delete"), role: .destructive) { askDelete = level }
+                            .buttonStyle(.bordered)
+                            .tint(.red)
+                            .accessibilityLabel(L("Delete %@ to free %@", level.name, level.sizeDescription))
+                    }
+                }
+                .frame(minHeight: 64)
+                .accessibilityElement(children: level.isBundled ? .combine : .contain)
+            }
+        } header: {
+            Text(L("On this phone"))
+        } footer: {
+            Text(downloaded.isEmpty ? L("Only the built-in model is on this phone.")
+                 : L("Downloaded models use %@.", ModelsText.totalSize(downloaded)))
+        }
+    }
+
+    /// A visible Stop button under a level that is downloading or waiting its turn.
+    @ViewBuilder private func stopRow(_ level: ModelLevel) -> some View {
+        let state = downloader.state(level)
+        if !level.isBundled, state == .queued || state == .downloading || state == .verifying {
+            Button(role: .destructive) { stop(level) } label: {
+                Label(L("Stop downloading %@", level.name), systemImage: "stop.circle.fill")
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            }
+            .tint(.red)
+        }
     }
 
     /// Full-width, at least 64 points tall, one VoiceOver stop, says "Selected".
@@ -210,15 +301,15 @@ struct ModelsChooserView: View {
         // down to hear it), so it is never an extra stop on every row.
         .swipeActions {
             if !level.isBundled, VisionModelStore.isInstalled(level) {
-                Button(L("Delete"), role: .destructive) { delete(level) }
+                Button(L("Delete"), role: .destructive) { askDelete = level }
             }
         }
         .accessibilityActions {
             if !level.isBundled, VisionModelStore.isInstalled(level) {
-                Button(L("Delete %@ to free %@", level.name, level.sizeDescription)) { delete(level) }
+                Button(L("Delete %@ to free %@", level.name, level.sizeDescription)) { askDelete = level }
             }
             if !level.isBundled, downloading || state == .queued {
-                Button(L("Stop downloading %@", level.name)) { downloader.cancel(level) }
+                Button(L("Stop downloading %@", level.name)) { stop(level) }
             }
         }
     }
@@ -228,20 +319,48 @@ struct ModelsChooserView: View {
             confirm(L("%@ is too big for this phone's memory.", level.name))
             return
         }
-        choice = level.rawValue
         if VisionModelStore.isInstalled(level) {
+            choice = level.rawValue
             confirm(L("%@ selected. What's this? uses it from now on.", level.name))
+        } else if notStarted(level) {
+            askDownload = level       // nothing downloads until they say yes
         } else {
-            downloader.start(level)
-            // The downloader says the rest ("Getting Sharp, 2 GB…"), once.
+            choice = level.rawValue   // already on its way
             confirm(L("%@ selected.", level.name))
         }
     }
 
+    private func startConfirmed(_ level: ModelLevel) {
+        choice = level.rawValue
+        setup.download(level)
+        // The downloader says the rest ("Getting Sharp, 2 GB…"), once.
+        confirm(L("%@ selected.", level.name))
+    }
+
+    private func stop(_ level: ModelLevel) {
+        setup.stop(level)
+        if choice == level.rawValue { choice = "auto" }
+        confirm(L("Stopped. %@ won't download unless you choose it.", level.name))
+    }
+
     private func delete(_ level: ModelLevel) {
-        downloader.delete(level)
+        setup.delete(level)
         if choice == level.rawValue { choice = "auto" }
         confirm(L("%@ deleted. %@ freed.", level.name, level.sizeDescription))
+    }
+
+    /// Not on the phone and not on its way (never started, stopped, or failed).
+    private func notStarted(_ level: ModelLevel) -> Bool {
+        switch downloader.state(level) {
+        case .idle, .failed: return true
+        default: return false
+        }
+    }
+
+    /// Automatic (or a new priority) may want a model that isn't here: ask first.
+    private func askAboutAutomatic() {
+        let missing = setup.missingWanted.filter { notStarted($0) }
+        if !missing.isEmpty { askAutomatic = missing }
     }
 
     /// Every choice is said out loud, so nobody has to go looking for what changed.

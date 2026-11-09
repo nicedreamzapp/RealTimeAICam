@@ -5610,6 +5610,156 @@
           }
         }
       }
+    },
+    "Download %@?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Descargar %@?"
+          }
+        }
+      }
+    },
+    "Download" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descargar"
+          }
+        }
+      }
+    },
+    "%@. Uses Wi-Fi or your data plan. You can stop it any time." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@. Usa Wi-Fi o tu plan de datos. Puedes detenerla cuando quieras."
+          }
+        }
+      }
+    },
+    "Delete %@?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Eliminar %@?"
+          }
+        }
+      }
+    },
+    "Frees %@. It won't download again unless you choose it." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Libera %@. No se volverá a descargar a menos que lo elijas."
+          }
+        }
+      }
+    },
+    "Not now" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahora no"
+          }
+        }
+      }
+    },
+    "Automatic picked this for your phone. %@. Uses Wi-Fi or your data plan." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automático eligió esto para tu teléfono. %@. Usa Wi-Fi o tu plan de datos."
+          }
+        }
+      }
+    },
+    "%@. Built into the app, can't be deleted." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@. Incluido en la app, no se puede eliminar."
+          }
+        }
+      }
+    },
+    "On this phone" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En este teléfono"
+          }
+        }
+      }
+    },
+    "Only the built-in model is on this phone." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo el modelo incluido está en este teléfono."
+          }
+        }
+      }
+    },
+    "Downloaded models use %@." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los modelos descargados ocupan %@."
+          }
+        }
+      }
+    },
+    "Stopped. %@ won't download unless you choose it." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detenido. %@ no se descargará a menos que lo elijas."
+          }
+        }
+      }
+    },
+    "Stop download" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detener descarga"
+          }
+        }
+      }
+    },
+    "Not downloaded, %@. Tap to download it." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin descargar, %@. Toca para descargarlo."
+          }
+        }
+      }
+    },
+    "Using %@. %@ fits this phone best, tap it below to download it." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usando %@. %@ es el mejor para este teléfono, tócalo abajo para descargarlo."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

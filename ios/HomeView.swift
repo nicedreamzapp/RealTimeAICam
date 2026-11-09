@@ -44,13 +44,27 @@ struct HomeView: View {
                 Text(verifying ? L("Checking the %@ model…", level.name)
                      : L("Downloading the %@ model… %ld%%", level.name, percent))
                     .font(.footnote.weight(.semibold))
+                    .accessibilityHidden(true)
                 ProgressView(value: modelDownloader.progress)
                     .tint(.white)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(verifying ? L("Checking the %@ model…", level.name)
+                                        : L("Downloading the %@ model, %ld percent", level.name, percent))
+                Button {
+                    modelSetup.stop(level)
+                    UIAccessibility.post(notification: .announcement,
+                                         argument: L("Stopped. %@ won't download unless you choose it.", level.name))
+                } label: {
+                    Label(L("Stop download"), systemImage: "stop.circle.fill")
+                        .font(.footnote.weight(.semibold))
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 12)
+                        .background(Color.white.opacity(0.15))
+                        .cornerRadius(10)
+                }
+                .accessibilityLabel(L("Stop downloading %@", level.name))
             }
             .padding(.bottom, 6)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(verifying ? L("Checking the %@ model…", level.name)
-                                : L("Downloading the %@ model, %ld percent", level.name, percent))
         } else if let level = modelSetup.missingWanted.first {
             VStack(spacing: 4) {
                 if case .failed(let why) = modelDownloader.state(level) {

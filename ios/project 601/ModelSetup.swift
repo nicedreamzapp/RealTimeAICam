@@ -61,10 +61,14 @@ final class ModelSetup: ObservableObject {
         }
     }
 
-    /// Levels automatic mode wants that are not on the phone yet.
+    /// Levels automatic mode wants that are not on the phone yet, minus any the
+    /// person deleted, stopped or turned down.
     var missingWanted: [ModelLevel] {
         guard ModelPicker.manualLevel == nil else { return [] }
-        return ModelLevel.allCases.filter { ModelPicker.wanted.contains($0) && !VisionModelStore.isInstalled($0) }
+        let removed = ModelPicker.removed
+        return ModelLevel.allCases.filter {
+            ModelPicker.wanted.contains($0) && !VisionModelStore.isInstalled($0) && !removed.contains($0)
+        }
     }
 
     /// Starts the downloads automatic mode wants. `automatic` ones wait for Wi-Fi;
@@ -72,5 +76,24 @@ final class ModelSetup: ObservableObject {
     func fetchWanted(automatic: Bool) {
         if automatic, !onWiFi { return }
         for level in missingWanted { VisionModelDownloader.shared.start(level) }
+    }
+
+    /// The person stopped a download: throw the partial files away and keep
+    /// automatic mode from starting it again.
+    func stop(_ level: ModelLevel) {
+        ModelPicker.markRemoved(level)
+        VisionModelDownloader.shared.cancel(level)
+    }
+
+    /// The person deleted a downloaded level: same promise as ``stop(_:)``.
+    func delete(_ level: ModelLevel) {
+        ModelPicker.markRemoved(level)
+        VisionModelDownloader.shared.delete(level)
+    }
+
+    /// A confirmed tap on a level: it may download again, starting now.
+    func download(_ level: ModelLevel) {
+        ModelPicker.clearRemoved(level)
+        VisionModelDownloader.shared.start(level)
     }
 }
