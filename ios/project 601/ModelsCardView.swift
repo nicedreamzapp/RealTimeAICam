@@ -73,13 +73,15 @@ enum ModelsText {
             return L("Using the built-in model. The best one for this phone is picked in a moment.")
         }
         let using = ModelPicker.level(for: .scene)
-        if ModelPicker.manualLevel != nil { return L("Using %@, the one you picked.", using.name) }
+        if let manual = ModelPicker.manualLevel {
+            // "The one you picked" only when it is: a pick still downloading has a stand-in.
+            return manual == using ? L("Using %@, the one you picked.", using.name)
+                : L("Using %@ until %@ is ready.", using.name, manual.name)
+        }
         let page = ModelPicker.ideal(for: .page), scene = ModelPicker.ideal(for: .scene)
         if let missing = [page, scene].first(where: { !VisionModelStore.isInstalled($0) }) {
-            if ModelPicker.removed.contains(missing) {
-                return L("Using %@. %@ fits this phone best, tap it below to download it.", using.name, missing.name)
-            }
-            return L("Using %@ for now. %@, the best fit, downloads on Wi-Fi.", using.name, missing.name)
+            // Nothing downloads without a yes (Matt 11/09), so it is always offered, never promised.
+            return L("Using %@. %@ fits this phone best, tap it below to download it.", using.name, missing.name)
         }
         if page == scene { return L("Using %@, the best fit for this phone.", page.name) }
         return L("Using %@ for mail, money and medicine, %@ for everything else.", page.name, scene.name)
@@ -176,6 +178,7 @@ struct ModelsChooserView: View {
     /// A level waiting for "Download?" / "Delete?" to be answered.
     @State private var askDownload: ModelLevel?
     @State private var askDelete: ModelLevel?
+    @State private var askStop: ModelLevel?
     /// Automatic (or a new priority) wants these, waiting for "Download?".
     @State private var askAutomatic: [ModelLevel] = []
 
@@ -238,6 +241,12 @@ struct ModelsChooserView: View {
             Button(L("Cancel"), role: .cancel) {}
         } message: { level in
             Text(L("%@. Uses Wi-Fi or your data plan. You can stop it any time.", level.sizeDescription))
+        }
+        .alert(L("Stop downloading %@?", askStop?.name ?? ""), isPresented: isAsking($askStop), presenting: askStop) { level in
+            Button(L("Stop download"), role: .destructive) { stop(level) }
+            Button(L("Keep downloading"), role: .cancel) {}
+        } message: { _ in
+            Text(L("What's downloaded so far is thrown away, and it won't download again unless you choose it."))
         }
         .alert(L("Delete %@?", askDelete?.name ?? ""), isPresented: isAsking($askDelete), presenting: askDelete) { level in
             Button(L("Delete"), role: .destructive) { delete(level) }
@@ -311,7 +320,7 @@ struct ModelsChooserView: View {
         switch a {
         case .use: use(level)
         case .download: askDownload = level       // nothing downloads until they say yes
-        case .stop: stop(level)
+        case .stop: askStop = level        // a stop throws the download away: ask first
         }
     }
 
@@ -365,7 +374,9 @@ struct ModelsChooserView: View {
         var spoken = [level.name, status.spoken(level)]
         if inUse { spoken.append(L("using now")) }
         spoken.append(level.sizeDescription)
-        if let act { spoken.append(title(act)) }
+        // Double-tap never stops a download: Stop is a named action that asks first.
+        let tapAct: RowAction? = act == .stop ? nil : act
+        if let tapAct { spoken.append(title(tapAct)) }
         return HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
@@ -389,8 +400,8 @@ struct ModelsChooserView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spoken.joined(separator: ", "))
         .accessibilityHint(ModelsText.details(level) + " " + level.technicalLine)
-        .accessibilityAddTraits(act == nil ? [] : [.isButton])
-        .accessibilityAction { if let act { run(act, level) } }
+        .accessibilityAddTraits(tapAct == nil ? [] : [.isButton])
+        .accessibilityAction { if let tapAct { run(tapAct, level) } }
         // Delete is the swipe-left action and a VoiceOver action, never an extra stop.
         .swipeActions {
             if deletable {
@@ -400,6 +411,9 @@ struct ModelsChooserView: View {
         .accessibilityActions {
             if deletable {
                 Button(L("Delete %@ to free %@", level.name, level.sizeDescription)) { askDelete = level }
+            }
+            if status.isBusy {
+                Button(L("Stop downloading %@", level.name)) { askStop = level }
             }
         }
     }

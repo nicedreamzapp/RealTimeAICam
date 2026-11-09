@@ -4918,17 +4918,6 @@
         }
       }
     },
-    "Using %@ for now. %@, the best fit, downloads on Wi-Fi." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Usando %@ por ahora. %@, el más adecuado, se descarga con Wi-Fi."
-          }
-        }
-      }
-    },
     "Using %@, the best fit for this phone." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6014,6 +6003,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "El modelo de imágenes no está en este teléfono. Abre Ajustes y luego Modelos para descargar uno."
+          }
+        }
+      }
+    },
+    "Stop downloading %@?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Detener la descarga de %@?"
+          }
+        }
+      }
+    },
+    "Keep downloading" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seguir descargando"
+          }
+        }
+      }
+    },
+    "What's downloaded so far is thrown away, and it won't download again unless you choose it." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lo descargado hasta ahora se descarta, y no se volverá a descargar a menos que lo elijas."
+          }
+        }
+      }
+    },
+    "Using %@ until %@ is ready." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uso %@ hasta que %@ esté listo."
           }
         }
       }
