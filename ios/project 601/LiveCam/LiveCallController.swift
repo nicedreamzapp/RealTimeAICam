@@ -1,5 +1,5 @@
 // Live Cam: a conversation with the camera, all on the phone (ported 2026-11-04 from Moonstone's Live camera,
-// LiveCallController.swift; every tuning note is Matt's and kept). It greets, then listens the whole time;
+// LiveCallController.swift; every tuning note is Matt's and kept). It opens silent, then listens the whole time;
 // ~1 s of quiet ends a question; the frame at the end of the question goes to the on-device vision model (the
 // same level What's this? uses); the answer is spoken sentence by sentence as it is written, in Your language;
 // talking over it stops it. While you're quiet it checks in now and then and, if Speak up is on, mentions a
