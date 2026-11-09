@@ -564,7 +564,10 @@ enum LiveWords {
     static func isSeeAgain(_ q: String) -> Bool {
         let t = " " + normalize(q) + " "
         return [" what do you see ", " what can you see ", " what are you seeing ", " what you see ", " what else do you see ",
-                " what do you see now ", " see anything "].contains { t.contains($0) }
+                " what do you see now "].contains { t.contains($0) }
+            // "See anything" only as the bare question ("do you see anything", "see anything new"), never inside
+            // another one ("can you see anything written on the label").
+            || [" do you see anything ", " see anything ", " see anything new ", " do you see anything new "].contains(t)
     }
 
     /// "Describe everything again", "the whole room": the full description, not just what's new (Matt 11/09).
