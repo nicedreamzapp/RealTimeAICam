@@ -65,7 +65,6 @@ final class LiveCallController: ObservableObject {
     /// The language the caption is in (VoiceOver reads it with a voice for it).
     @Published private(set) var captionLang = AppLang.code
     /// The welcome is heard, never shown (Matt 11/6: "it does not need one on screen").
-    @Published private(set) var captionIsIntro = false
     @Published private(set) var progress: Double = 0
     @Published private(set) var micLevel: Float = -60
     /// The model is reading a photo or writing: the orb holds still so the GPU is all the model's.
@@ -150,7 +149,6 @@ final class LiveCallController: ObservableObject {
             guard let self else { return }
             self.caption = shown
             self.captionLang = lang
-            self.captionIsIntro = english == LiveWords.firstGreeting
             self.lastSaid = english
             self.log(["event": "say", "text": shown])
             if let o = self.openedAt { self.openedAt = nil; self.log(["event": "first_spoken_after_open", "seconds": Date().timeIntervalSince(o)]) }
@@ -197,7 +195,6 @@ final class LiveCallController: ObservableObject {
                 // The first time: say why before iOS asks (blind users hear the reason, then the two prompts).
                 phase = .speaking
                 caption = L(LiveCamWords.permissionLine)
-                captionIsIntro = false
                 captionLang = AppLang.code
                 voice.sayOwn(LiveCamWords.permissionLine)
                 while running, voice.isBusy { try? await Task.sleep(nanoseconds: 150_000_000) }
@@ -254,7 +251,6 @@ final class LiveCallController: ObservableObject {
         guard running else { return }
         phase = .failed
         caption = L(why)
-        captionIsIntro = false
         captionLang = AppLang.code
         log(["event": "failed", "why": why])
         voice.sayOwn(why)
@@ -281,14 +277,14 @@ final class LiveCallController: ObservableObject {
         }
         log(["event": "loaded", "seconds": Date().timeIntervalSince(t0)])
         guard stillOpen("loaded") else { return }
-        // Greet like a friend, then wait for cues (11/2 Matt): it only looks when asked.
-        phase = .speaking
-        listener.watchForBargeIn(true)
+        // No welcome or opening narration, ever (Matt 11/09, asked many times). Live Cam opens
+        // silent and listening, and speaks only when asked. Earcons are fine; no words.
         describedOnce = true
         memory = LiveMemory()
-        voice.sayOwn(LiveWords.firstGreeting)
-        if !typedOnly { look(prompt: LiveWords.openingLook, unprompted: false, first: true) }   // what's around, once (11/2 Matt)
-        else { answerDone = true }
+        inventoryBaselineTaken = false
+        answerDone = true
+        lastSpokeEnd = Date()   // the quiet clock for check-ins starts now, not at load
+        listen()
         if LiveCamTest.forceCantHear { hearingGaveUp() }
     }
 
@@ -402,6 +398,9 @@ final class LiveCallController: ObservableObject {
     private var lastHeardAt = Date()
     /// The running look is the quiet inventory (a list to compare, never spoken as is).
     private var inventoryLook = false
+    /// The first quiet look of a call only remembers what is already there: naming it all would
+    /// be an opening narration by another route.
+    private var inventoryBaselineTaken = false
     private var lastNovelty = Date.distantPast
     /// The last question was about what's in view (a short "and that one?" follows it onto the camera).
     private var lastUsedPhoto = true
@@ -850,9 +849,12 @@ final class LiveCallController: ObservableObject {
                     let items = LiveWords.items(said), fresh = self.memory.newThings(items)
                     self.memory.noteThings(items)
                     let talking = self.phase != .listening || self.listener.hearingSomething
+                    let baseline = !self.inventoryBaselineTaken
+                    self.inventoryBaselineTaken = true
                     self.log(["event": "watch_decision", "listed": said, "new": fresh.joined(separator: ", "),
-                              "decision": fresh.isEmpty ? "silent: nothing new" : talking ? "silent: person talking" : "spoke"])
-                    if !fresh.isEmpty, !talking {
+                              "decision": baseline ? "silent: first look of the call"
+                                  : fresh.isEmpty ? "silent: nothing new" : talking ? "silent: person talking" : "spoke"])
+                    if !baseline, !fresh.isEmpty, !talking {
                         // 11/2 Matt "be really cautious": each new thing is checked yes/no on the same photo first;
                         // anything it can't confirm is never said.
                         self.lastNovelty = Date()

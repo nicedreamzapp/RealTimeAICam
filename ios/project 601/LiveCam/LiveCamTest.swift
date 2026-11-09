@@ -40,7 +40,7 @@ enum LiveCamWords {
     /// es-strings.py only finds L("...") literals, so `missing` can't see these and `stale` lists them: keep them in the
     /// catalog. LiveCamSpanishTests checks each one has its Spanish.
     static var indirectKeys: [String] {
-        [permissionLine, notAllowed, cantHear, cantHearNote, noOfflineSpeech, LiveWords.firstGreeting,
+        [permissionLine, notAllowed, cantHear, cantHearNote, noOfflineSpeech,
          needsCamera, modelFailed, sayAgain, lostTrack, bye, gotIt, coachGoalSet, nothingSaidYet, coachGoalHeard,
          flipToSeeYou, stillGettingReady, cantSeeInBackground, cameraPaused, newThing, notFullySure, takeBack, lostAnswer]
             + LiveWords.checkIns + LiveWords.acks

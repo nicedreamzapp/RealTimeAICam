@@ -214,7 +214,7 @@ struct LiveCamView: View {
                     .font(.system(size: wide ? 22 : 26, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white).multilineTextAlignment(.center).lineLimit(wide ? 3 : 4).minimumScaleFactor(0.6)
                     .shadow(color: .black.opacity(0.9), radius: 6)
-                    .opacity(call.showCaption && !call.captionIsIntro ? 1 : 0.001)   // hidden words stay readable by VoiceOver
+                    .opacity(call.showCaption ? 1 : 0.001)   // hidden words stay readable by VoiceOver
                     .accessibilityLabel(call.caption)
                     .accessibilityValue(call.caption)
                     .accessibilityAddTraits(.updatesFrequently)

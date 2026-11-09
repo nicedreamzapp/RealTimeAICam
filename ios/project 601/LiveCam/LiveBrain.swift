@@ -136,11 +136,7 @@ enum LiveLine: Equatable {
 }
 
 enum LiveWords {
-    /// Says out loud that it is always listening: there is nothing to tap (Matt's first try, 10/31).
-    /// 11/2 Matt: "it should just be like hey there how you doing and then wait for cues", not describe the room.
-    static let greeting = "Hey there, how's it going?"
-    /// RT Cam: the first greeting of each visit says once that Live Cam is experimental (Matt 11/4).
-    static let firstGreeting = "Welcome to Live Cam. It's experimental, so double-check anything important. Hey there, how's it going?"
+    // No welcome or opening narration, ever (Matt 11/09, asked many times): no greeting lines here.
     /// Normal mode, after a long quiet: a friend in the room checking in, never a description of the scene or of
     /// them (11/2 Matt: "not something that's just critiquing everything"). Fixed lines, so the small model can't
     /// slip back into "Now I see...".
@@ -242,10 +238,6 @@ enum LiveWords {
     static let photoIfHelps = "A camera view is attached, but this question is not about it: ignore the view and answer from what you know."
 
     static let describeNow = "In one short sentence, tell me what you see right now, the main thing first."
-
-    /// The one look at the start of a call: what's around, never the person (11/2 Matt).
-    /// Matt 11/6: "I see a map and a monitor", then it offers to help instead of just naming things.
-    static let openingLook = "In one short sentence that starts with \"I see\", name the main things around here, then ask if they want help with anything. Never mention the person, their face or clothes."
     /// The quiet look while the view changes: a bare list the code compares with what was already named.
     static let inventory = "List the main things in view as short names separated by commas, at most 8. Things only, never the person or their clothes. No sentence."
     static let personWords: Set<String> = ["man", "woman", "person", "people", "guy", "you", "your", "face", "hair", "shirt",

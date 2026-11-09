@@ -5083,17 +5083,6 @@
         }
       }
     },
-    "Welcome to Live Cam. It's experimental, so double-check anything important. Hey there, how's it going?" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Te doy la bienvenida a Live Cam. Es experimental, así que verifica todo lo importante. ¡Hola! ¿Cómo va todo?"
-          }
-        }
-      }
-    },
     "Welcome to RealTime AI Cam." : {
       "extractionState" : "manual",
       "localizations" : {

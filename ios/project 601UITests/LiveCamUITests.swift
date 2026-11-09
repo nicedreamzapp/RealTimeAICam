@@ -45,17 +45,26 @@ final class LiveCamUITests: XCTestCase {
         return (c.value as? String) ?? c.label
     }
 
-    /// Opens Live Cam from Home and waits for the greeting.
-    private func openLiveCam(_ app: XCUIApplication, greeting: String = TestLanguage.isSpanish ? "¡Hola!" : "Hey there",
+    /// Opens Live Cam from Home and waits until it is listening (or, with `line`, until that line is shown).
+    /// No welcome or opening narration, ever (Matt 11/09): with no `line`, nothing may be said on open.
+    private func openLiveCam(_ app: XCUIApplication, line: String? = nil,
                              spanish: Bool = TestLanguage.isSpanish) {
         let button = app.buttons[spanish ? TestLanguage.spanish("Live Cam, experimental") : "Live Cam, experimental"].firstMatch
         XCTAssertTrue(button.waitForExistence(timeout: 20), "no Live Cam button on Home")
         sleep(3) // buttons animate in
         if !button.isHittable { app.swipeUp() }
         button.tap()
-        let greeted = NSPredicate { _, _ in self.captionText(app).contains(greeting) }
-        expectation(for: greeted, evaluatedWith: NSObject())
+        let l = { (e: String) in spanish ? TestLanguage.spanish(e) : e }
+        let ready = NSPredicate { _, _ in
+            if let line { return self.captionText(app).contains(line) }
+            return app.staticTexts[l("Listening · just talk")].exists || app.staticTexts[l("Type a question")].exists
+        }
+        expectation(for: ready, evaluatedWith: NSObject())
         waitForExpectations(timeout: 180)
+        if line == nil {
+            sleep(4)
+            XCTAssertEqual(captionText(app), "", "Live Cam said something on open: \(captionText(app))")
+        }
     }
 
     private func ask(_ app: XCUIApplication, _ q: String) {
@@ -98,20 +107,20 @@ final class LiveCamUITests: XCTestCase {
         }
     }
 
-    /// The real model, the real photo: an answer that isn't the greeting.
+    /// The real model, the real photo: a real answer, not an acknowledgement.
     @MainActor
     func testRealModelAnswers() throws {
         continueAfterFailure = false
         let app = launch()
         openLiveCam(app)
-        let greeting = captionText(app)
+        let before = captionText(app)
         ask(app, "What is in front of me?")
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "liveCamHeard").firstMatch.waitForExistence(timeout: 10),
                       "the question was not shown")
         let acks = ["Let me look.", "Okay.", "Hmm, one sec.", "Sure, looking.", "One moment.", "Let me see."].map { T($0) }
         let answered = NSPredicate { _, _ in
             let t = self.captionText(app)
-            return !t.isEmpty && t != greeting && !acks.contains(t)
+            return !t.isEmpty && t != before && !acks.contains(t)
         }
         expectation(for: answered, evaluatedWith: NSObject())
         waitForExpectations(timeout: 600)
@@ -154,7 +163,7 @@ final class LiveCamUITests: XCTestCase {
     func testCantHearNoteAndTypingBox() throws {
         continueAfterFailure = false
         let app = launch(["-liveCamCantHear"])
-        openLiveCam(app, greeting: TestLanguage.isSpanish ? "no te oigo" : "can't hear you")
+        openLiveCam(app, line: TestLanguage.isSpanish ? "no te oigo" : "can't hear you")
         let screen = app.windows.firstMatch.frame
         let note = app.descendants(matching: .any).matching(identifier: "liveCamCantHear").firstMatch
         XCTAssertTrue(note.waitForExistence(timeout: 10), "no can't-hear note")
@@ -180,8 +189,8 @@ final class LiveCamUITests: XCTestCase {
         continueAfterFailure = false
         let app = launch(["-userLanguage", "es", "-fakeTranslatorPacks", "(es)"],
                          env: ["RTCAM_FAKE_LIVE_ANSWER": "The cup is white."])
-        // Your language Spanish makes the app Spanish: the greeting is the bundled Spanish line.
-        openLiveCam(app, greeting: "bienvenida a Live Cam", spanish: true)
+        // Your language Spanish makes the app Spanish.
+        openLiveCam(app, spanish: true)
         ask(app, "De que color es la taza")
         let answered = NSPredicate { _, _ in self.captionText(app).contains("La taza es blanca") }
         expectation(for: answered, evaluatedWith: NSObject())
