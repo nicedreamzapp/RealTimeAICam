@@ -1416,7 +1416,7 @@ final class LiveCallController: ObservableObject {
                 // Every mode is a companion, not a commentator (11/2 Normal; 11/3 Matt in Funny: "Now I see a bald man with glasses"
                 // came out unasked and sounded like it was hearing itself). No "Now I see", just a check-in after a long quiet.
                 do {
-                    if quiet, self.goal != nil,
+                    if quiet, let g = self.goal, g.checkedInStep != g.step,
                        self.watch.shouldCheckIn(at: Date(), quietSince: max(self.lastHeardAt, self.lastSpokeEnd),
                                                 after: LiveProactive.goalCheckInAfter, evenIfOff: true),
                        let line = self.goalCheckIns.next(from: LiveGoal.checkIns), self.sayGuard.vet(line) != nil {
@@ -1424,6 +1424,7 @@ final class LiveCallController: ObservableObject {
                         self.log(["event": "watch_fired", "why": "goal check in"])
                         self.watch.commented(at: Date())
                         self.goal?.askedReady = true
+                        self.goal?.checkedInStep = g.step
                         self.listener.stopListening()
                         self.speakAll(own: line)
                     } else if quiet, self.goal == nil, self.hasExchanged, self.watch.shouldCheckIn(at: Date(), quietSince: max(self.lastHeardAt, self.lastSpokeEnd)),

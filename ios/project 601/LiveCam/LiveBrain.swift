@@ -250,6 +250,9 @@ enum LiveGoal {
         var lastStep: String?
         /// When it last asked "Ready for the next step?": a bare "yes" / "ok" means next for 10 s after (review 11/6).
         var askedReadyAt: Date?
+        /// The step the one quiet check-in was said for: once per step, never again for the same step (Matt hates
+        /// nagging, review 11/09).
+        var checkedInStep: Int?
         var askedReady: Bool {
             get { askedReadyAt != nil }
             set { askedReadyAt = newValue ? Date() : nil }
