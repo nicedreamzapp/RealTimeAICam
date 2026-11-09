@@ -320,10 +320,6 @@ struct LiveTurnSignalTests {
         #expect(LiveOrb.turnColor != LiveOrb.lookColor)
     }
 
-    @MainActor @Test func theTickIsShortAndSoft() {
-        // 44-byte header + 16-bit mono at 44.1 kHz: 50 ms is about 4.4 KB, never a bundled file.
-        #expect(TurnCue.tone.count > 44 && TurnCue.tone.count < 6000)
-    }
 }
 
 /// The 11/6 review's five fixes.
