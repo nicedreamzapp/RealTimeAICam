@@ -36,6 +36,8 @@ struct HomeView: View {
     @ObservedObject private var modelSetup = ModelSetup.shared
     /// The model automatic picked, waiting for "Download?" (nothing downloads without a yes).
     @State private var askGetModel: ModelLevel?
+    /// A running download waiting for "Stop downloading?".
+    @State private var askStopModel: ModelLevel?
 
     /// One small row under the buttons, shown only while a smarter level for
     /// this phone is downloading, or waiting for a tap because the phone is off
@@ -56,9 +58,7 @@ struct HomeView: View {
                     .accessibilityLabel(verifying ? L("Checking the %@ model…", level.name)
                                         : L("Downloading the %@ model, %ld percent", level.name, percent))
                 Button {
-                    modelSetup.stop(level)
-                    UIAccessibility.post(notification: .announcement,
-                                         argument: L("Stopped. %@ won't download unless you choose it.", level.name))
+                    askStopModel = level   // a stop throws the download away: ask first
                 } label: {
                     Label(L("Stop download"), systemImage: "stop.circle.fill")
                         .font(.footnote.weight(.semibold))
@@ -70,6 +70,18 @@ struct HomeView: View {
                 .accessibilityLabel(L("Stop downloading %@", level.name))
             }
             .padding(.bottom, 6)
+            .alert(L("Stop downloading %@?", askStopModel?.name ?? ""),
+                   isPresented: Binding(get: { askStopModel != nil }, set: { if !$0 { askStopModel = nil } }),
+                   presenting: askStopModel) { level in
+                Button(L("Stop download"), role: .destructive) {
+                    modelSetup.stop(level)
+                    UIAccessibility.post(notification: .announcement,
+                                         argument: L("Stopped. %@ won't download unless you choose it.", level.name))
+                }
+                Button(L("Keep downloading"), role: .cancel) {}
+            } message: { _ in
+                Text(L("What's downloaded so far is thrown away, and it won't download again unless you choose it."))
+            }
         } else if let level = modelSetup.missingWanted.first {
             VStack(spacing: 4) {
                 if case .failed(let why) = modelDownloader.state(level) {
@@ -96,8 +108,9 @@ struct HomeView: View {
             .padding(.bottom, 6)
             .alert(L("Download %@?", askGetModel?.name ?? ""),
                    isPresented: Binding(get: { askGetModel != nil }, set: { if !$0 { askGetModel = nil } }),
-                   presenting: askGetModel) { _ in
-                Button(L("Download")) { modelSetup.fetchWanted() }
+                   presenting: askGetModel) { level in
+                // Only the model the question named.
+                Button(L("Download")) { modelSetup.download(level) }
                 Button(L("Cancel"), role: .cancel) {}
             } message: { level in
                 Text(L("%@. Uses Wi-Fi or your data plan. You can stop it any time.", level.sizeDescription))
