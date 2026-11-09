@@ -1196,9 +1196,14 @@ final class LiveCallController: ObservableObject {
                         self.lastNovelty = Date()
                         Task { @MainActor [weak self] in
                             guard let self else { return }
-                            let ok = await self.confirm(Array(fresh.prefix(3)), in: frame).filter { $0.value }.map(\.key)
+                            // He started talking or another turn began: the double-check stops, nothing is said (review 11/09).
+                            let wanted = { [weak self] in
+                                guard let self else { return false }
+                                return self.running && self.turn == my && self.phase == .listening && !self.listener.hearingSomething
+                            }
+                            let ok = await self.confirm(Array(fresh.prefix(3)), in: frame, while: wanted).filter { $0.value }.map(\.key)
                             self.log(["event": "confirm", "things": fresh.joined(separator: ", "), "confirmed": ok.joined(separator: ", ")])
-                            guard !ok.isEmpty, self.running, self.phase == .listening, !self.listener.hearingSomething else { return }
+                            guard !ok.isEmpty, wanted() else { return }
                             let things = fresh.filter(ok.contains)
                             // Never an offer of help with it (Matt 11/09 spec: help is never offered unprompted).
                             let format = self.sayGuard.plainNewThingFormat
@@ -1288,10 +1293,11 @@ final class LiveCallController: ObservableObject {
     }
 
     /// Yes/no on the same photo for each thing (512 px, a few tokens each).
-    private func confirm(_ things: [String], in frame: CGImage) async -> [String: Bool] {
+    private func confirm(_ things: [String], in frame: CGImage, while wanted: () -> Bool = { true }) async -> [String: Bool] {
         guard let engine else { return [:] }
         var out: [String: Bool] = [:]
         for t in things {
+            guard wanted() else { break }
             let a = await Task.detached(priority: .utility) {
                 engine.respond(system: LiveWords.system, question: LiveWords.confirmAsk(t), image: frame, longSide: 512, maxTokens: 3)
             }.value
@@ -1367,6 +1373,10 @@ final class LiveCallController: ObservableObject {
                 let thermal = ProcessInfo.processInfo.thermalState
                 let every = LiveNovelty.interval(thermal) ?? 3
                 try? await Task.sleep(nanoseconds: UInt64(every * 1e9))
+                // In the background the camera is off anyway: nothing to watch (review 11/09).
+                guard UIApplication.shared.applicationState == .active else { continue }
+                // At critical heat the detector, the vision glance and the pre-read all rest; questions still work.
+                let resting = LiveNovelty.interval(thermal) == nil
                 // He speaks = priority: a question being heard or answered, or a goal, pauses the watch.
                 self.novelty.paused = self.goal != nil || self.phase != .listening || self.current != nil
                     || self.listener.hearingSomething || !self.answerDone
@@ -1437,14 +1447,18 @@ final class LiveCallController: ObservableObject {
                         self.memory.noteSeen(line)
                         self.listener.stopListening()
                         self.speakAll(own: line)
-                    } else if Date().timeIntervalSince(self.lastNovelty) >= 8, Date().timeIntervalSince(self.lastHeardAt) >= 8,
+                    } else if !resting, things.count < 2, Date().timeIntervalSince(self.lastNovelty) >= 20,
+                              Date().timeIntervalSince(self.lastHeardAt) >= 8,
                               self.answerDone, self.novelty.canSpeak(at: Date()), self.goal == nil,
                               self.watch.shouldLook(thumb: thumb, at: Date(), quiet: quiet) {
-                        // The view changed: list what's there, quietly; only a never-named thing is said (11/2 Matt).
+                        // The slower vision glance, only where the detector can't name things (a street, a tree:
+                        // outdoors), about every 20 s: list what's there, quietly; only a never-named thing is said.
                         self.log(["event": "watch_fired", "why": "inventory", "view_change": (self.watch.lastDifference * 10).rounded() / 10])
                         self.inventoryLook = true
                         self.look(prompt: LiveWords.inventory, unprompted: true)
-                    } else {
+                    } else if !resting, self.prefillTask == nil,
+                              self.prefilled.map({ Date().timeIntervalSince($0.at) > 15 || LiveProactive.difference(thumb, $0.thumb) >= 15 }) ?? true {
+                        // Pre-read the view only when there is none, it is stale, or the view changed (review 11/09).
                         self.startPrefill(always: true)
                     }
                 }

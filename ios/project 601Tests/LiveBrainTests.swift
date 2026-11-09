@@ -782,3 +782,13 @@ struct LiveNoveltyPeopleAndRoomTests {
         do { let r26 = !n.looksLikeNewRoom(["tree", "car", "street", "bench"], bigChange: true) || LiveNovelty.newRoomChecks <= 2; #expect(r26) }
     }
 }
+
+/// Review 11/09: one thing, two names, told once.
+struct LiveMemorySynonymTests {
+    @Test func twoNamesForOneThingAreOneThing() {
+        var m = LiveMemory()
+        m.noteThings(["tv", "desk", "laptop"])
+        #expect(m.newThings(["television", "table", "computer"]).isEmpty)
+        #expect(m.newThings(["dog"]) == ["dog"])
+    }
+}

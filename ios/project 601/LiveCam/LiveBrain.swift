@@ -99,8 +99,13 @@ struct LiveMemory {
     private(set) var seenThings: Set<String> = []
     mutating func noteThings(_ items: [String]) { for i in items { seenThings.formUnion(Self.stems(i)) } }
     /// "shelves" / "shelving" / "shelf" are one thing (11/2 test: "Oh, I see shelves now" after "metal shelving").
+    /// Two names for one thing (review 11/09: "tv" then "television" was told twice).
+    static let synonyms: [String: String] = ["television": "tv", "monitor": "screen", "display": "screen", "couch": "sofa",
+        "desk": "table", "mug": "cup", "laptop": "computer", "notebook": "computer", "pc": "computer", "automobile": "car",
+        "vehicle": "car", "puppy": "dog", "kitten": "cat", "kitty": "cat", "cellphone": "phone", "smartphone": "phone",
+        "bike": "bicycle", "plant": "plant", "houseplant": "plant", "potted": "plant", "lamp": "lamp", "fridge": "refrigerator"]
     static func stems(_ s: String) -> Set<String> {
-        Set(LiveWords.contentWords(s).map { w in
+        Set(LiveWords.contentWords(s).map { synonyms[$0] ?? $0 }.map { w in
             for suf in ["ving", "ves", "ing", "es", "s", "f"] where w.count > suf.count + 2 && w.hasSuffix(suf) { return String(w.dropLast(suf.count)) }   // shelf/shelves/shelving -> shel
             return w
         })
