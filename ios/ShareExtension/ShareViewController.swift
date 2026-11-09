@@ -66,10 +66,11 @@ final class ShareViewController: UIViewController {
         parts.scheme = "rtcam"
         parts.host = "shared-image"
         parts.queryItems = [URLQueryItem(name: "id", value: id)]
-        guard let url = parts.url else { return finish() }
-        openApp(url)
-        // A moment for the system to hand over to the app before the sheet closes.
-        try? await Task.sleep(nanoseconds: 300_000_000)
+        guard let url = parts.url, await openApp(url) else {
+            // The picture stays in the App Group: the app opens it the next time it comes up.
+            return fail(NSLocalizedString("Open RealTime AI Cam to hear it.",
+                                          comment: "Share extension, when the app could not be opened"))
+        }
         finish()
     }
 
@@ -92,7 +93,9 @@ final class ShareViewController: UIViewController {
         else { return nil }
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
 
-        let id = UUID().uuidString
+        // "<seconds since 1970>_<uuid>": the app can tell a stale hand-over by its name,
+        // without reading file dates.
+        let id = "\(Int(Date().timeIntervalSince1970))_\(UUID().uuidString)"
         let target = folder.appendingPathComponent(id).appendingPathExtension("jpg")
 
         // Ask for a file first: ImageIO downsizes straight from disk, so a
@@ -155,7 +158,26 @@ final class ShareViewController: UIViewController {
 
     private static func jpeg(from source: CGImageSource) -> Data? {
         guard let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary) else { return nil }
-        return UIImage(cgImage: cg).jpegData(compressionQuality: 0.88)
+        let image = UIImage(cgImage: cg)
+        switch cg.alphaInfo {
+        case .none, .noneSkipFirst, .noneSkipLast:
+            return image.jpegData(compressionQuality: 0.88)
+        default:
+            // JPEG has no transparency: a see-through PNG would come out on black.
+            return onWhite(image, size: CGSize(width: cg.width, height: cg.height)).jpegData(compressionQuality: 0.88)
+        }
+    }
+
+    /// The picture drawn over white at `size` pixels.
+    private static func onWhite(_ image: UIImage, size: CGSize) -> UIImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: size, format: format).image { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
     }
 
     private static func downsizedJPEG(from image: UIImage) -> Data? {
@@ -164,27 +186,24 @@ final class ShareViewController: UIViewController {
         let scale = min(1, CGFloat(maxPixels) / max(size.width * image.scale, size.height * image.scale))
         let target = CGSize(width: (size.width * image.scale * scale).rounded(),
                             height: (size.height * image.scale * scale).rounded())
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        format.opaque = true
-        let resized = UIGraphicsImageRenderer(size: target, format: format).image { _ in
-            image.draw(in: CGRect(origin: .zero, size: target))
-        }
-        return resized.jpegData(compressionQuality: 0.88)
+        return onWhite(image, size: target).jpegData(compressionQuality: 0.88)
     }
 
     /// Share extensions have no `UIApplication.shared`; the app object is still
     /// at the top of the responder chain, and asking it to open the URL is the
-    /// standard way an extension hands over to its own app.
-    private func openApp(_ url: URL) {
+    /// standard way an extension hands over to its own app. False when iOS
+    /// refused or there was no app object to ask.
+    private func openApp(_ url: URL) async -> Bool {
         var responder: UIResponder? = self
         while let current = responder {
             if let application = current as? UIApplication {
-                application.open(url, options: [:], completionHandler: nil)
-                return
+                return await withCheckedContinuation { done in
+                    application.open(url, options: [:]) { done.resume(returning: $0) }
+                }
             }
             responder = current.next
         }
+        return false
     }
 
     private func fail(_ message: String) {
@@ -192,7 +211,7 @@ final class ShareViewController: UIViewController {
         label.text = message
         UIAccessibility.post(notification: .announcement, argument: message)
         Task {
-            try? await Task.sleep(nanoseconds: 1_800_000_000)
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
             finish()
         }
     }

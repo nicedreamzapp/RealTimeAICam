@@ -20,6 +20,16 @@
           }
         }
       }
+    },
+    "Open RealTime AI Cam to hear it." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre RealTime AI Cam para escucharla."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
