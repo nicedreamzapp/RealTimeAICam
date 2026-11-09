@@ -1063,7 +1063,8 @@ final class LiveCallController: ObservableObject {
             if let lastView, LiveProactive.difference(thumb, lastView) < 10 { guardRepeat.sameScene = true }
             let clock = FirstSentence()
             let onText: (String) -> Bool = { text in
-                guard !unprompted else { return box.isAlive }
+                // The read of the room is held until the model is done: said only if sure, one sentence (review 11/09).
+                guard !unprompted, !first else { return box.isAlive }
                 // 11/1: it kept answering with its last answer word for word. Hold the first sentence until it is
                 // complete; if it is the last answer again, stop and ask once more with the photo and no history.
                 if !guardRepeat.checked, let lastAnswer {
@@ -1129,6 +1130,30 @@ final class LiveCallController: ObservableObject {
             await MainActor.run {
                 self?.modelBusy = false
                 guard let self, self.running, self.turn == my else { return }
+                if first {
+                    // The one read of the room: nothing else on this turn (no "not sure", no lost-answer line, no
+                    // take-back), and nothing at all when the read is empty or unsure.
+                    let read = LiveSentenceStream.cleaned(answer?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                    let sure = answer.map { $0.confidence >= LiveWords.unsureMean && $0.lowest >= LiveWords.unsureLowest } ?? false
+                    self.log(["event": "opening_read", "text": read, "sure": sure])
+                    if sure, !read.isEmpty {
+                        var sentences: [String] = []
+                        var current = ""
+                        for ch in read {
+                            current.append(ch)
+                            if ".!?".contains(ch) { sentences.append(current.trimmingCharacters(in: .whitespaces)); current = "" }
+                        }
+                        if !current.trimmingCharacters(in: .whitespaces).isEmpty { sentences.append(current.trimmingCharacters(in: .whitespaces)) }
+                        sentences.forEach { self.sayPart(.content($0), turn: my) }
+                        self.memory.noteSeen(read)
+                    }
+                    self.watch.described(thumb)
+                    self.answerDone = true
+                    if !self.voice.isBusy {
+                        if self.phase == .speaking { self.wentQuiet() } else { self.listen() }
+                    }
+                    return
+                }
                 let tail = unprompted ? [] : box.feed(box.lastText, final: true)
                 if !tail.isEmpty { clock.mark() }
                 let firstAt = clock.at
@@ -1290,13 +1315,8 @@ final class LiveCallController: ObservableObject {
     private func sayPart(_ line: LiveLine, turn my: Int) {
         guard running, turn == my else { return }
         var line = line
-        if case .content = line, let standIn = pendingStandIn {
-            // The first answer of the visit: the stand-in model line goes just ahead of it.
-            pendingStandIn = nil
-            ModelPicker.markFallbackSaid()
-            let notice = ModelPicker.fallbackLine(standIn)
-            voice.sayLine(notice, lang: AppLang.code, english: notice)
-        }
+        // The read of the room is one content sentence and nothing else.
+        if my == openingReadTurn, case .content = line {} else if my == openingReadTurn { return }
         if case let .content(s) = line {
             guard let cleaned = LiveWords.spoken(s, aboutMe: askedAboutMe) else { return }
             if my == openingReadTurn {
@@ -1323,6 +1343,13 @@ final class LiveCallController: ObservableObject {
             }
             tally.said += 1
             line = .content(vetted)
+            if let standIn = pendingStandIn {
+                // The first sentence actually said this visit: the stand-in model line goes just ahead of it, never alone.
+                pendingStandIn = nil
+                ModelPicker.markFallbackSaid()
+                let notice = ModelPicker.fallbackLine(standIn)
+                voice.sayLine(notice, lang: AppLang.code, english: notice)
+            }
         }
         phase = .speaking
         listener.watchForBargeIn(true)
