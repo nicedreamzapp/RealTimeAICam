@@ -6,8 +6,8 @@ struct HomeView: View {
     @Binding var animationState: ContentView.AnimationState
     @Binding var mode: AppMode
     @State private var showInstructions = false
-    /// The guide on screen is the automatic first-launch one (not opened with INFO).
-    @State private var guideIsFirstLaunch = false
+    /// A picture shared from another app: the guide steps aside while it is up.
+    @ObservedObject private var sharedInbox = SharedImageInbox.shared
     /// Settings, Models included, right from home; it used to be only inside
     /// the reader screens (Matt, 2026-11-03).
     @State private var showSettings = false
@@ -157,7 +157,11 @@ struct HomeView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
             }
         }
-        .sheet(isPresented: $showInstructions, onDismiss: guideClosed) {
+        // While a shared picture is up the guide steps aside (it is drawn over everything,
+        // and a sheet would cover it), then comes back as it was when the picture is closed.
+        .sheet(isPresented: Binding(get: { showInstructions && !sharedInbox.isBusy },
+                                    set: { if !$0 { showInstructions = false } }),
+               onDismiss: guideClosed) {
             AppInstructionsView(selectedVoiceIdentifier: viewModel.selectedVoiceIdentifier)
                 .onAppear {
                     if buttonDebouncer.canPress("HomeView-1") {
@@ -171,17 +175,6 @@ struct HomeView: View {
                         }
                     }
                 }
-        }
-        // A picture shared from another app opens over everything; the guide sheet and
-        // Settings would hide it. A first-launch guide closed for it comes back next launch.
-        .onReceive(SharedImageInbox.shared.$current) { shared in
-            guard shared != nil else { return }
-            showSettings = false
-            if showInstructions {
-                showInstructions = false
-                // Only the automatic first-launch guide comes back next launch.
-                if guideIsFirstLaunch { UserDefaults.standard.set(false, forKey: "hasShownInstructions") }
-            }
         }
         .onChange(of: modelDownloader.progress) { _, value in
             announceDownloadProgress(value)
@@ -201,11 +194,10 @@ struct HomeView: View {
             // `-rtcamOpenSettings`: Settings open at launch, for Simulator checks.
             if ProcessInfo.processInfo.arguments.contains("-rtcamOpenSettings") { showSettings = true }
             #endif
-            // Not over a shared picture (the app opened from the share sheet): next launch.
-            if !UserDefaults.standard.bool(forKey: "hasShownInstructions"), !SharedImageInbox.shared.isBusy {
+            // Counted as seen only once the person closes it (guideClosed), so a guide that a
+            // shared picture pushed aside, or that never got closed, comes back.
+            if !UserDefaults.standard.bool(forKey: "hasShownInstructions") {
                 showInstructions = true
-                guideIsFirstLaunch = true
-                UserDefaults.standard.set(true, forKey: "hasShownInstructions")
             }
         }
     }
@@ -213,7 +205,9 @@ struct HomeView: View {
     /// Done on the guide (first-time-user test, 2026-11-04): home came back in silence with
     /// focus on nothing. "Home" is said once, then VoiceOver lands on Settings, the first control.
     private func guideClosed() {
-        guideIsFirstLaunch = false
+        // Pushed aside by a shared picture, not closed: it comes back, and nothing is said.
+        guard !sharedInbox.isBusy else { return }
+        UserDefaults.standard.set(true, forKey: "hasShownInstructions")
         let voiceId = viewModel.selectedVoiceIdentifier
         let synth = speechSynthesizer
         Task { @MainActor in
