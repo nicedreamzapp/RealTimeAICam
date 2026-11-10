@@ -1,6 +1,6 @@
 # How we pick the AI model for RealTime AI Cam
 
-> **Living document.** Last updated 2026-10-30. Current app versions: iPhone 1.3.6 (in App Store review), Android 1.23 (built, release pending). This page changes every release; see the [changelog](#changelog) at the bottom.
+> **Living document.** Last updated 2026-11-09. Current app versions: iPhone 1.4.0 and Android 1.28, both live in the stores. This page changes every release; see the [changelog](#changelog) at the bottom.
 
 **Summary.** We tested Liquid AI's new LFM3 vision models against the app's own 0.8B model on 27 photos of the things blind users point a phone at, judged blind with a safety-weighted rubric. LFM3-Omni-2B, as Liquid released it, was the most accurate and missed the fewest hazards, so it now replaces our old model in both apps at 735 MB. Fine-tuning it with our own data made it worse, and phones differ so much in speed that the app will soon pick its own model level per phone.
 
