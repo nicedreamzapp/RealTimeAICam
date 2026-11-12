@@ -1176,7 +1176,7 @@ final class LiveCallController: ObservableObject {
                     let sure = !opening.unsure && (answer.map { $0.confidence >= LiveWords.unsureMean } ?? false)
                     let rest = box.feed(box.lastText, final: true)
                     let whole = rest.filter { $0.trimmingCharacters(in: .whitespaces).last.map { ".!?\"".contains($0) } == true }
-                    if sure { (ranOut && !whole.isEmpty ? whole : rest).forEach { self.sayPart(.content($0), turn: my) } }
+                    if sure { (ranOut ? (whole.isEmpty && self.openingSpoken.isEmpty ? rest : whole) : rest).forEach { self.sayPart(.content($0), turn: my) } }
                     self.log(["event": "opening_read", "text": read, "sure": sure, "spoken": self.openingSpoken.count])
                     if !self.openingSpoken.isEmpty { self.memory.noteSeen(self.openingSpoken.joined(separator: " ")) }
                     self.watch.described(thumb)
