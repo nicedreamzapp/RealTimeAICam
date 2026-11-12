@@ -40,6 +40,8 @@ final class LiveVisionEngine: @unchecked Sendable {
     private let lock = NSLock()
     private var prefilled = false
     private var confMean = 1.0, confMin = 1.0
+    /// How sure it has been so far in the answer being written: the opening read checks it per sentence (11/12).
+    private(set) var runningMean = 1.0
 
     /// Prefill only works with LFM3's hand-written template (Quick uses its own GGUF template).
     var canPrefill: Bool { level.usesLFM3Prompt }
@@ -143,12 +145,13 @@ final class LiveVisionEngine: @unchecked Sendable {
         var bytes = [UInt8]()
         var piece = [CChar](repeating: 0, count: 256)
         var ttft = 0.0, n = 0, psum = 0.0, pmin = 1.0
+        runningMean = 1
         for i in 0 ..< maxTokens {
             let p = topProb()
             var tok = llama_sampler_sample(smpl, ctx, -1)
             if i == 0 { ttft = Self.now() - t0 }
             if llama_vocab_is_eog(vocab, tok) { break }
-            n += 1; psum += p; pmin = min(pmin, p)
+            n += 1; psum += p; pmin = min(pmin, p); runningMean = psum / Double(n)
             let len = llama_token_to_piece(vocab, tok, &piece, Int32(piece.count), 0, true)
             if len > 0 { bytes += piece[0 ..< Int(len)].map { UInt8(bitPattern: $0) } }
             if let onText, !onText(String(decoding: bytes, as: UTF8.self)) { break }

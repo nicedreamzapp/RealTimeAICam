@@ -619,6 +619,8 @@ final class LiveCallController: ObservableObject {
     /// The one general read of the room (on open, and on entering a new room): one sentence, never a greeting.
     private var openingReadTurn: Int?
     private var openingReadSaid = false
+    /// The sentences of the room read actually spoken: only these count as already told (review 11/12).
+    private var openingSpoken: [String] = []
     /// A "what do you see" again: sentences about things already told are left out (Matt 11/09).
     private var describeFilterTurn: Int?
     /// The detector's new thing being put into words (turn of that look).
@@ -656,6 +658,7 @@ final class LiveCallController: ObservableObject {
     /// One general read of the room, one sentence (on open, and on walking into a different room).
     private func readTheRoom() {
         openingReadSaid = false
+        openingSpoken = []
         look(prompt: LiveWords.openingRead, unprompted: false, first: true)
         openingReadTurn = turn
     }
@@ -1084,9 +1087,20 @@ final class LiveCallController: ObservableObject {
             // the scene changes"); a repeat about an unchanged view becomes a short "Same as before."
             if let lastView, LiveProactive.difference(thumb, lastView) < 10 { guardRepeat.sameScene = true }
             let clock = FirstSentence()
+            let opening = LiveOpeningRead()
             let onText: (String) -> Bool = { text in
-                // The read of the room is held until the model is done: said only if sure, one sentence (review 11/09).
-                guard !unprompted, !first else { return box.isAlive }
+                guard !unprompted else { return box.isAlive }
+                if first {
+                    // 11/12 Matt: the read of the room is as full as What's this?, so it is spoken sentence by sentence
+                    // as it is written, each one only while the model is still sure (the same bar as before, review
+                    // 11/09): a fuller read never makes them wait for all of it, and an unsure read stops right there.
+                    let s = box.feed(text)
+                    guard !s.isEmpty else { return box.isAlive }
+                    guard engine.runningMean >= LiveWords.unsureMean else { opening.unsure = true; return false }
+                    clock.mark()
+                    DispatchQueue.main.async { MainActor.assumeIsolated { s.forEach { self?.sayPart(.content($0), turn: my) } } }
+                    return box.isAlive
+                }
                 // 11/1: it kept answering with its last answer word for word. Hold the first sentence until it is
                 // complete; if it is the last answer again, stop and ask once more with the photo and no history.
                 if !guardRepeat.checked, let lastAnswer {
@@ -1156,21 +1170,15 @@ final class LiveCallController: ObservableObject {
                 let ranOut = (answer?.tokens ?? 0) >= budget
                 if first {
                     // The one read of the room: nothing else on this turn (no "not sure", no lost-answer line, no
-                    // take-back), and nothing at all when the read is empty or unsure.
+                    // take-back). Most of it was spoken while it was written; what is left is said only if the whole read
+                    // stayed sure, and never half a sentence when it ran out of room.
                     let read = LiveSentenceStream.cleaned(answer?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                    let sure = answer.map { $0.confidence >= LiveWords.unsureMean && $0.lowest >= LiveWords.unsureLowest } ?? false
-                    self.log(["event": "opening_read", "text": read, "sure": sure])
-                    if sure, !read.isEmpty {
-                        var sentences: [String] = []
-                        var current = ""
-                        for ch in read {
-                            current.append(ch)
-                            if ".!?".contains(ch) { sentences.append(current.trimmingCharacters(in: .whitespaces)); current = "" }
-                        }
-                        if !current.trimmingCharacters(in: .whitespaces).isEmpty, !ranOut || sentences.isEmpty { sentences.append(current.trimmingCharacters(in: .whitespaces)) }
-                        sentences.forEach { self.sayPart(.content($0), turn: my) }
-                        self.memory.noteSeen(read)
-                    }
+                    let sure = !opening.unsure && (answer.map { $0.confidence >= LiveWords.unsureMean } ?? false)
+                    let rest = box.feed(box.lastText, final: true)
+                    let whole = rest.filter { $0.trimmingCharacters(in: .whitespaces).last.map { ".!?\"".contains($0) } == true }
+                    if sure { (ranOut && !whole.isEmpty ? whole : rest).forEach { self.sayPart(.content($0), turn: my) } }
+                    self.log(["event": "opening_read", "text": read, "sure": sure, "spoken": self.openingSpoken.count])
+                    if !self.openingSpoken.isEmpty { self.memory.noteSeen(self.openingSpoken.joined(separator: " ")) }
                     self.watch.described(thumb)
                     self.answerDone = true
                     if !self.voice.isBusy {
@@ -1351,16 +1359,17 @@ final class LiveCallController: ObservableObject {
     private func sayPart(_ line: LiveLine, turn my: Int) {
         guard running, turn == my else { return }
         var line = line
-        // The read of the room is one content sentence and nothing else.
+        // The read of the room is content sentences and nothing else.
         if my == openingReadTurn, case .content = line {} else if my == openingReadTurn { return }
         if case let .content(s) = line {
             guard let cleaned = LiveWords.spoken(s, aboutMe: askedAboutMe) else { return }
             if my == openingReadTurn {
                 // The read of the room is one sentence, and never a greeting, a warning, a question or an offer.
-                guard !openingReadSaid, LiveWords.isOpeningReadable(cleaned) else {
+                guard LiveWords.isOpeningReadable(cleaned) else {
                     log(["event": "opening_read_dropped", "text": cleaned]); return
                 }
                 openingReadSaid = true
+                openingSpoken.append(cleaned)
             }
             if my == describeFilterTurn, memory.addsNothing(cleaned) {
                 // "What do you see" again: only what's new leads; known things aren't listed again.
@@ -1513,3 +1522,6 @@ private final class FirstSentence: @unchecked Sendable {
     func mark() { lock.lock(); if t == nil { t = Date() }; lock.unlock() }
     var at: Date? { lock.lock(); defer { lock.unlock() }; return t }
 }
+
+/// The room read's own flag, set off the main thread while it is written: the model stopped being sure (11/12).
+final class LiveOpeningRead: @unchecked Sendable { var unsure = false }
