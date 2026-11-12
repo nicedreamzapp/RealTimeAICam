@@ -174,7 +174,10 @@ actor OnDeviceVisionNarrator {
             let answer = try await run(model, system: Self.instructions, question: question, image: photo)
             // The engine's own clock: time spent waiting behind another answer
             // (the one-at-a-time lock) is not this phone being slow.
-            let firstPass = model.lastStats.totalMs / 1000
+            // Counted as a 120-token answer, as before 1.4.2: a longer description is not a slower phone, and
+            // Automatic must not drop a level because Sharp now says more.
+            let st = model.lastStats
+            let firstPass = (st.ttftMs + (st.totalMs - st.ttftMs) * min(1, 120 / Double(max(st.genTokens, 1)))) / 1000
             ModelPicker.noteAnswer(level: model.level, kind: photoKind, seconds: firstPass)
             var said = Self.tidy(answer)
             // Wall-clock seconds from photo to sentence, on this phone. The M5
@@ -336,7 +339,7 @@ actor OnDeviceVisionNarrator {
         do {
             let model = try await loaded(.balanced)
             let ask = "What is in front of me? Describe the scene: the objects, any people, and where they are."
-            _ = try await run(model, system: Self.instructions, question: ask, image: image)
+            _ = try await run(model, system: Self.instructions, question: ask, image: image, maxTokens: 120)
             let seconds = model.lastStats.totalMs / 1000
             guard seconds > 0 else { return nil }
             OnDeviceNarrator.log(read: "[speed check]", said: nil, extra: ["seconds": (seconds * 100).rounded() / 100])
