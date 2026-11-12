@@ -1052,6 +1052,7 @@ final class LiveCallController: ObservableObject {
         let stylist = camera.isFront && question != nil && LiveWords.isLooksQuestion(question ?? "")   // never just for Coach (11/3)
         let system = !withPhoto || general ? LiveWords.chatSystem : stylist ? LiveWords.selfieSystem : LiveWords.system
         let style = mode.ask(question, coachGoal: coachGoal)
+        let budget = unprompted ? mode.maxTokens : mode.maxTokens(first: first)
         let prompt = unprompted ? prompt : prompt + style   // the mode's style rides on the question
         let camera = camera
         // The photo is already read if the frame still matches and the prompt is the usual one.
@@ -1118,12 +1119,12 @@ final class LiveCallController: ObservableObject {
             #endif
             if !faking, let ready, ready.system == system, Date().timeIntervalSince(ready.at) < 20,
                LiveProactive.difference(thumb, ready.thumb) < 15 {
-                answer = engine.answer(question: prompt, maxTokens: mode.maxTokens, onText: onText)
+                answer = engine.answer(question: prompt, maxTokens: budget, onText: onText)
                 usedPrefill = answer != nil
             }
             if !faking, answer == nil && !guardRepeat.repeated {
                 answer = engine.respond(system: system, question: prompt, image: withPhoto ? frame : nil, longSide: longSide,
-                                        maxTokens: mode.maxTokens, onText: onText)
+                                        maxTokens: budget, onText: onText)
             }
             var retried = false
             if !faking, guardRepeat.repeated, !guardRepeat.sameScene, let q = question, box.isAlive {
@@ -1131,10 +1132,10 @@ final class LiveCallController: ObservableObject {
                 retried = true
                 if withPhoto {
                     answer = engine.respond(system: system, question: LiveWords.question(q, history: []) + style, image: camera.current() ?? frame,
-                                            longSide: longSide, maxTokens: mode.maxTokens, onText: onText)
+                                            longSide: longSide, maxTokens: budget, onText: onText)
                 } else {
                     answer = engine.respond(system: system, question: LiveWords.chatQuestion(q, history: []), image: nil,
-                                            longSide: longSide, maxTokens: mode.maxTokens, onText: onText)
+                                            longSide: longSide, maxTokens: budget, onText: onText)
                 }
             }
             let repeatRetried = retried
@@ -1151,6 +1152,8 @@ final class LiveCallController: ObservableObject {
             await MainActor.run {
                 self?.modelBusy = false
                 guard let self, self.running, self.turn == my else { return }
+                // Ran out of room: speak only whole sentences, never half a thought (AppleVis, 11/11).
+                let ranOut = (answer?.tokens ?? 0) >= budget
                 if first {
                     // The one read of the room: nothing else on this turn (no "not sure", no lost-answer line, no
                     // take-back), and nothing at all when the read is empty or unsure.
@@ -1164,7 +1167,7 @@ final class LiveCallController: ObservableObject {
                             current.append(ch)
                             if ".!?".contains(ch) { sentences.append(current.trimmingCharacters(in: .whitespaces)); current = "" }
                         }
-                        if !current.trimmingCharacters(in: .whitespaces).isEmpty { sentences.append(current.trimmingCharacters(in: .whitespaces)) }
+                        if !current.trimmingCharacters(in: .whitespaces).isEmpty, !ranOut || sentences.isEmpty { sentences.append(current.trimmingCharacters(in: .whitespaces)) }
                         sentences.forEach { self.sayPart(.content($0), turn: my) }
                         self.memory.noteSeen(read)
                     }
@@ -1175,7 +1178,10 @@ final class LiveCallController: ObservableObject {
                     }
                     return
                 }
-                let tail = unprompted ? [] : box.feed(box.lastText, final: true)
+                // If nothing at all was spoken yet (one long list, no full stop), the fragment is still better than silence.
+                let rest = unprompted ? [] : box.feed(box.lastText, final: true)
+                let whole = rest.filter { $0.trimmingCharacters(in: .whitespaces).last.map { ".!?\"".contains($0) } == true }
+                let tail = !ranOut || (whole.isEmpty && box.sentences.count == rest.count) ? rest : whole
                 if !tail.isEmpty { clock.mark() }
                 let firstAt = clock.at
                 tail.forEach { self.sayPart(.content($0), turn: my) }

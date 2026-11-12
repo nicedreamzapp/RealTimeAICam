@@ -543,8 +543,9 @@ enum LiveWords {
     static let describeNow = "In one short sentence, tell me what you see right now, the main thing first."
 
     /// The one line Live Cam says on open (Matt 11/09: "it should say what it sees in the screen from the get go,
-    /// just a general read of the room"). No greeting, no question, no offer, never the person.
-    static let openingRead = "In one short sentence, say what kind of place this is and the main things in it, like \"A kitchen with a table, two chairs and a window.\" No greeting, no question, no offer to help. Never mention the person, their face or clothes."
+    /// just a general read of the room"). No greeting, no question, no offer, never the person. 11/12 Matt: as detailed as
+    /// What's this? on open (300 tokens), a one-line summary first.
+    static let openingRead = "Start with one short sentence that says what kind of place this is, like \"A kitchen with a table, two chairs and a window.\" Then describe the main things around here and where they are, and read any words you can see, in a few more short sentences. No greeting, no question, no offer to help. Never mention the person, their face or clothes."
 
     /// A thing that just came into view, in one short line (Matt 11/09: "oh, now I see a dog").
     static func newThingAsk(_ thing: String) -> String {
@@ -1310,5 +1311,9 @@ enum LiveMode: String, CaseIterable, Equatable, Sendable {
     }
 
     var maxTokens: Int { self == .analyze ? 170 : 90 }
+
+    /// Only the opening look gets What's this?'s room (11/12 Matt: "when it opens is best, not when I ask"):
+    /// questions and the "now I see a dog" callouts keep their short answers.
+    func maxTokens(first: Bool) -> Int { first ? 300 : maxTokens }
 }
 

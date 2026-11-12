@@ -36,8 +36,14 @@ actor OnDeviceVisionNarrator {
     /// llama.cpp reports it as eval -3, which on 10/29 left every later photo
     /// silent), so it waits for the app to be active, and on any failure drops
     /// the engine, reloads it and tries once more before giving up.
+    /// 300 tokens since 1.4.2: Sharp and Clear describe in far more detail, and
+    /// at the old 120 a long description stopped mid-sentence (AppleVis, 11/11).
+    /// If an answer still runs out of room, it ends on its last full sentence:
+    /// VoiceOver must never read half a thought. `wholeSentences` is off for
+    /// the comma list, which has no sentences to keep.
     private func run(_ engine: LlamaVisionEngine, system: String, question: String, image: CIImage,
-                     maxTokens: Int = 120, temperature: Float = 0) async throws -> String {
+                     maxTokens: Int = 300, temperature: Float = 0,
+                     wholeSentences: Bool = true) async throws -> String {
         func once(_ e: LlamaVisionEngine) async throws -> String {
             await Self.waitUntilActive()
             let answer = try await Task.detached(priority: .userInitiated) {
@@ -45,7 +51,9 @@ actor OnDeviceVisionNarrator {
                               maxTokens: maxTokens, temperature: temperature)
             }.value
             passStats.append(e.lastStats)
-            return answer
+            guard wholeSentences, e.lastStats.genTokens >= maxTokens else { return answer }
+            OnDeviceNarrator.log(read: "[ran out of room]", said: nil, extra: ["tokens": maxTokens])
+            return Self.endingOnFullSentence(answer)
         }
         do {
             return try await once(engine)
@@ -65,9 +73,11 @@ actor OnDeviceVisionNarrator {
     }
 
     /// RT Cam's describe instruction. Since 1.3.6 the model is LFM3-Omni-2B
-    /// (untrained), benchmarked with exactly these words; Android uses the same.
+    /// (untrained), benchmarked with these words except the opening: since 1.4.2
+    /// it leads with a one-sentence summary so a long answer is useful from its
+    /// first line (Android still has the 1-3 sentence wording).
     private static let instructions = """
-    You are the eyes of a blind person. Look at the photo and say what matters in one to three short spoken sentences. If it is a page of mail, a bill, a label or a receipt: lead with what the page is and who sent it, then the number that matters, then the deadline, then what happens if it is ignored. Money owed to the person is money coming to them, never a bill. Use only what is printed. An issue date is not a deadline. A number is only money if a dollar sign or the word dollars is printed with it. Not every page is a bill; an advertisement owes nothing. If it is a place or a thing: say where they are, then what is nearby and where it is relative to them, then people and anything moving, then hazards. Plain words, no lists, no markdown. Never guess at names or senders that are not printed. Never refuse, never say you cannot see it, and never ask for another photo. If the shot is dark, blurry or cut off, say in a few words that it is hard to see and then describe whatever you can make out anyway: the shapes, the colours, where things are, and any words you can read.
+    You are the eyes of a blind person. Look at the photo and start with one short sentence that sums up what it is, then add what matters in a few more short spoken sentences. If it is a page of mail, a bill, a label or a receipt: lead with what the page is and who sent it, then the number that matters, then the deadline, then what happens if it is ignored. Money owed to the person is money coming to them, never a bill. Use only what is printed. An issue date is not a deadline. A number is only money if a dollar sign or the word dollars is printed with it. Not every page is a bill; an advertisement owes nothing. If it is a place or a thing: say where they are, then what is nearby and where it is relative to them, then people and anything moving, then hazards. Plain words, no lists, no markdown. Never guess at names or senders that are not printed. Never refuse, never say you cannot see it, and never ask for another photo. If the shot is dark, blurry or cut off, say in a few words that it is hard to see and then describe whatever you can make out anyway: the shapes, the colours, where things are, and any words you can read.
     """
 
     /// Hold-to-ask. Word for word ASK_SYSTEM in ~/vision-narrator/prompts.py,
@@ -82,7 +92,7 @@ actor OnDeviceVisionNarrator {
     /// stop. No page rules, no money rules, nothing that can be read as grounds
     /// to bounce the shot back at the person holding the camera.
     private static let describeOnlyInstructions = """
-    You are the eyes of a blind person. Describe what is in the photo in one to three short spoken sentences: the objects, their colours, where they are, any people, and any words you can read. Plain words, no lists, no markdown. If the photo is unclear, say so in a few words and then describe what you can make out anyway. Never say you cannot see it and never ask for another photo.
+    You are the eyes of a blind person. Describe what is in the photo: one short sentence that sums it up, then a few more short spoken sentences about the objects, their colours, where they are, any people, and any words you can read. Plain words, no lists, no markdown. If the photo is unclear, say so in a few words and then describe what you can make out anyway. Never say you cannot see it and never ask for another photo.
     """
 
     /// The feature flag: the model is either on the phone or it isn't. The name
@@ -216,7 +226,7 @@ actor OnDeviceVisionNarrator {
                     + "Nouns only. No sentences, no explanations, no apologies."
                 let raw = try await run(
                     model, system: Self.describeOnlyInstructions, question: listing,
-                    image: Self.brightened(photo, ev: 2.6), maxTokens: 90, temperature: 0.6)
+                    image: Self.brightened(photo, ev: 2.6), maxTokens: 90, temperature: 0.6, wholeSentences: false)
                 if let things = Self.thingsOnly(raw) {
                     // Matt's words for what this should sound like: "I'm having a
                     // hard time seeing it, but this is what I think it is."
@@ -357,6 +367,23 @@ actor OnDeviceVisionNarrator {
         }
         guard let cg = drawn.cgImage else { return nil }
         return CIImage(cgImage: cg)
+    }
+
+    /// Cuts a reply that ran out of room back to its last full sentence. Keeps
+    /// it as is when no sentence ended at all, so there is still an answer.
+    static func endingOnFullSentence(_ raw: String) -> String {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        var lastEnd: String.Index?
+        var i = text.startIndex
+        while i < text.endIndex {
+            let next = text.index(after: i)
+            if ".!?".contains(text[i]), next == text.endIndex || text[next].isWhitespace || text[next] == "\"" {
+                lastEnd = next
+            }
+            i = next
+        }
+        guard let end = lastEnd else { return text }
+        return String(text[..<end]).trimmingCharacters(in: .whitespaces)
     }
 
     /// Strips the scaffolding small models like to wrap an answer in.
