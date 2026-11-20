@@ -269,6 +269,8 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
             translatedText.value = result
             isTranslating.value = false
             showTranslationPopup.value = true
+            // Track for rating prompt on success
+            RatingTracker.recordTranslation(appContext)
         }
     }
 
@@ -310,6 +312,7 @@ class OcrPipeline(context: Context, val isSpanish: Boolean) {
             if (result != null) {
                 translatedText.value = result
                 showTranslationPopup.value = true
+                RatingTracker.recordTranslation(appContext)
             } else {
                 frozen.value = false // nothing to show, keep reading the page
             }

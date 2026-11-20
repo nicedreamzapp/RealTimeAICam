@@ -1,5 +1,6 @@
 package com.mattmacosko.realtimeaicam.ui
 
+import com.mattmacosko.realtimeaicam.RatingPromptDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -155,7 +156,20 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit) {
     var showSettings by remember { mutableStateOf(false) }
     var showTorchPopup by remember { mutableStateOf(false) }
     var torchPreset by remember { mutableStateOf(100) }
+    var showRatingPrompt by remember { mutableStateOf(false) }
     val debouncer = rememberDebouncer(500)
+
+    // Check for rating prompt periodically (every 2s while on screen)
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        while (true) {
+            if (RatingTracker.shouldShowPrompt()) {
+                showRatingPrompt = true
+                RatingTracker.markShown()
+                break
+            }
+            kotlinx.coroutines.delay(2000)
+        }
+    }
 
     // Torch popup dismisses on rotation instead of floating mid-screen
     val orientation = LocalConfiguration.current.orientation
@@ -500,6 +514,13 @@ fun OcrScreen(isSpanish: Boolean, onBack: () -> Unit) {
         // Settings overlay (spec §3.7)
         if (showSettings) {
             SettingsOverlay(zoom = zoom, onDismiss = { showSettings = false })
+        }
+
+        // Rating prompt
+        if (showRatingPrompt) {
+            RatingPromptDialog().apply {
+                setOnDismissed { showRatingPrompt = false }
+            }.show(this@BoxWithConstraints)
         }
     }
 }

@@ -341,6 +341,8 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
                 self?.isTranslated = true
                 completion(true)
             }
+            // Track for rating prompt on success
+            RatingTracker.recordTranslation()
         }
     }
 
@@ -463,7 +465,7 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
         }
 
         if speechSynthesizer.isSpeaking { speechSynthesizer.stopSpeaking(at: .immediate) }
-        let voice = AVSpeechSynthesisVoice(identifier: voiceIdentifier)
+        let voice = AVSpeechSynthesisVoice.chosen(voiceIdentifier)
         countdownUtterances = Self.countdownWords.map { _, word in
             let utterance = AVSpeechUtterance(string: word)
             if let voice { utterance.voice = voice }
@@ -494,6 +496,11 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
     }
 
     func speak(text rawText: String, voiceIdentifier: String, completion: @escaping () -> Void) {
+        speak(text: rawText, voiceIdentifier: voiceIdentifier, languageCode: nil, completion: completion)
+    }
+
+    /// Speak text, optionally in the source language voice (for translated text).
+    func speak(text rawText: String, voiceIdentifier: String, languageCode: String?, completion: @escaping () -> Void) {
         // Numbers, addresses and codes said the way a person would (SpeakableText).
         // Only the spoken copy changes; the screen and the clipboard keep the text
         // exactly as it was read.
@@ -514,7 +521,12 @@ final class LiveOCRViewModel: NSObject, ObservableObject {
         speechCompletionHandler = completion
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             let utterance = AVSpeechUtterance(string: text)
-            if let voice = AVSpeechSynthesisVoice(identifier: voiceIdentifier) { utterance.voice = voice }
+            if let lang = languageCode,
+               let voice = AVSpeechSynthesisVoice(language: lang) {
+                utterance.voice = voice
+            } else if let voice = AVSpeechSynthesisVoice.chosen(voiceIdentifier) {
+                utterance.voice = voice
+            }
             utterance.rate = 0.5
             utterance.volume = 0.9
             self.speechSynthesizer.speak(utterance)

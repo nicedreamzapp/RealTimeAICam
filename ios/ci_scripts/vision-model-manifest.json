@@ -1,0 +1,25 @@
+{
+  "version": "lfm3-omni-2b-iq2xs-v1",
+  "files": [
+    {
+      "name": "LFM-Open-License-v1.0.txt",
+      "size": 10574,
+      "sha256": "4d28ca14dedc0b3d0fcc2b3339f0e79931faa33874f3d24f522183a8fc70068c"
+    },
+    {
+      "name": "README.md",
+      "size": 684,
+      "sha256": "a0c04cabc5de5693a50acf2edcc7818c90b7d62131c1191c8eaf5b3062abf6d9"
+    },
+    {
+      "name": "lfm3-omni-2b-IQ2_XS.gguf",
+      "size": 616162848,
+      "sha256": "e93f6fb340d180ee80f38a2a70bfc4ac2166152d7805c173770e79882e68a41e"
+    },
+    {
+      "name": "lfm3-omni-2b-mmproj-vision-Q4_K_M.gguf",
+      "size": 118916320,
+      "sha256": "350ba2b5427bf9e385741679d44f81e62ea46ad842d5fb47b1417f04afb84010"
+    }
+  ]
+}

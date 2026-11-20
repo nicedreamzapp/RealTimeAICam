@@ -35,6 +35,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        RatingTracker.init(this)
         enableEdgeToEdge()
 
         // iOS parity: status bar hidden, content edge-to-edge (UI_SPEC §0)

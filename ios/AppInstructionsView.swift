@@ -23,7 +23,7 @@ final class InstructionsSpeaker: NSObject, ObservableObject, AVSpeechSynthesizer
 
         // Try to use the provided voice ID first
         if let voiceId, !voiceId.isEmpty {
-            if let voice = AVSpeechSynthesisVoice(identifier: voiceId) {
+            if let voice = AVSpeechSynthesisVoice.chosen(voiceId) {
                 utterance.voice = voice
             } else {
                 // Try to find a matching voice by partial ID match

@@ -76,7 +76,7 @@ final class AimVoice: NSObject, AVSpeechSynthesizerDelegate {
         }
         announcementPending = false
         let utterance = AVSpeechUtterance(string: line)
-        utterance.voice = AVSpeechSynthesisVoice(identifier: voiceIdentifier) ?? AVSpeechSynthesisVoice(language: "en-US")
+        utterance.voice = AVSpeechSynthesisVoice.chosen(voiceIdentifier) ?? AVSpeechSynthesisVoice(language: "en-US")
         utterance.rate = 0.52
         utterance.volume = 1.0
         current = utterance

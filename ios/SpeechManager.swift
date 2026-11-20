@@ -265,7 +265,7 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
         guard !isSpeaking else { return }
 
         let utterance = AVSpeechUtterance(string: text)
-        if let chosenVoice = AVSpeechSynthesisVoice(identifier: selectedVoiceIdentifier) {
+        if let chosenVoice = AVSpeechSynthesisVoice.chosen(selectedVoiceIdentifier) {
             utterance.voice = chosenVoice
         }
         utterance.rate = 0.56
@@ -296,6 +296,12 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     func speak(_ rawText: String) {
+        speak(rawText, languageCode: nil)
+    }
+
+    /// Speak text in a specific language voice (e.g. the user's source language).
+    /// Pass nil to use the user's selected voice (English).
+    func speak(_ rawText: String, languageCode: String?) {
         let text = SpeakableText.spoken(rawText)
         guard !text.isEmpty else { return }
         if !speaksAloud {
@@ -313,7 +319,10 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
         isProcessingQueue = false
 
         let utterance = AVSpeechUtterance(string: text)
-        if let chosenVoice = AVSpeechSynthesisVoice(identifier: selectedVoiceIdentifier) {
+        if let lang = languageCode,
+           let voice = AVSpeechSynthesisVoice(language: lang) {
+            utterance.voice = voice
+        } else if let chosenVoice = AVSpeechSynthesisVoice.chosen(selectedVoiceIdentifier) {
             utterance.voice = chosenVoice
         } else {
             utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
@@ -328,7 +337,7 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
         isProcessingQueue = false
 
         let utterance = AVSpeechUtterance(string: "Speech enabled")
-        if let chosenVoice = AVSpeechSynthesisVoice(identifier: selectedVoiceIdentifier) {
+        if let chosenVoice = AVSpeechSynthesisVoice.chosen(selectedVoiceIdentifier) {
             utterance.voice = chosenVoice
         }
         utterance.rate = 0.52
@@ -347,7 +356,7 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             let utterance = AVSpeechUtterance(string: "Welcome to the real-time AI iOS Detection app. Thank you for choosing this voice!")
-            if let chosenVoice = AVSpeechSynthesisVoice(identifier: self.selectedVoiceIdentifier) {
+            if let chosenVoice = AVSpeechSynthesisVoice.chosen(self.selectedVoiceIdentifier) {
                 utterance.voice = chosenVoice
             }
             utterance.rate = 0.5
@@ -476,7 +485,7 @@ class SpeechManager: NSObject, ObservableObject, @unchecked Sendable {
 
             // Create utterance
             let utterance = AVSpeechUtterance(string: segment)
-            if let chosenVoice = AVSpeechSynthesisVoice(identifier: selectedVoiceIdentifier) {
+            if let chosenVoice = AVSpeechSynthesisVoice.chosen(selectedVoiceIdentifier) {
                 utterance.voice = chosenVoice
             } else {
                 utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
@@ -571,5 +580,20 @@ extension SpeechManager: AVSpeechSynthesizerDelegate {
             self?.isSpeakingWithPauses = false
             self?.speakWithPausesQueue.removeAll()
         }
+    }
+}
+
+extension AVSpeechSynthesisVoice {
+    /// The voice the person picked, found reliably.
+    ///
+    /// Voices that come from another app (Matt's own "Matt" voice, added by the
+    /// private MattVoice app on his phone, 2026-10-09) are not always returned by
+    /// `init(identifier:)` until the system voice list has been loaded, and then
+    /// the speech silently falls back to the phone's default voice. Matt heard
+    /// exactly that on the text-reading screen. Looking the identifier up in
+    /// `speechVoices()` loads that list first, so every screen gets his voice.
+    static func chosen(_ identifier: String) -> AVSpeechSynthesisVoice? {
+        if let v = AVSpeechSynthesisVoice(identifier: identifier) { return v }
+        return AVSpeechSynthesisVoice.speechVoices().first { $0.identifier == identifier }
     }
 }

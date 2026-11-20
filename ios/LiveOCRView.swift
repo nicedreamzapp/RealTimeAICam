@@ -223,6 +223,7 @@ struct LiveOCRView: View {
     @State private var showTranslationPopup = false
     @State private var isTranslating = false
     @State private var isWideScreen = false
+    @State private var showRatingPrompt = false
 
     /// Spoken countdown before the shutter, on by default. Asked for on AppleVis
     /// (2026-09-12): pressing the button is itself what nudges the phone and
@@ -1070,6 +1071,12 @@ struct LiveOCRView: View {
             }
         }
         .appleSpanishTranslation(viewModel: viewModel, enabled: ocrMode == .spanishToEnglish)
+        .onReceive(NotificationCenter.default.publisher(for: .ratingPromptShow)) { _ in
+            showRatingPrompt = true
+        }
+        .sheet(isPresented: $showRatingPrompt) {
+            RatingPromptView()
+        }
     }
 
     /// Which language the translator reads. A menu for sighted users; for
@@ -1216,7 +1223,9 @@ struct LiveOCRView: View {
                                 // completion synchronously, and setting it after
                                 // left the button stuck green with no audio.
                                 isSpeaking = true
-                                viewModel.speak(text: viewModel.translatedText, voiceIdentifier: selectedVoiceIdentifier) {
+                                // Speak in the source language so the user hears
+                                // their own language, not English.
+                                viewModel.speak(text: viewModel.translatedText, voiceIdentifier: selectedVoiceIdentifier, languageCode: viewModel.sourceLanguage.code) {
                                     isSpeaking = false
                                 }
                             }

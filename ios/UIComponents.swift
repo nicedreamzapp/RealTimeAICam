@@ -250,6 +250,33 @@ struct AnimatedVoicePicker: View {
     let onVoiceChange: () -> Void
     let speechSynthesizer: AVSpeechSynthesizer
     @State private var showVoiceGrid = false
+    /// Personal Voice (the user's own cloned voice) only shows up in
+    /// speechVoices() after the user grants this app permission. Matt asked for
+    /// his own voice as a choice (2026-10-09), so the grid offers to ask.
+    @State private var personalVoiceStatus = AVSpeechSynthesizer.personalVoiceAuthorizationStatus
+
+    private func isPersonal(_ voice: AVSpeechSynthesisVoice) -> Bool {
+        voice.voiceTraits.contains(.isPersonalVoice)
+    }
+
+    private func requestPersonalVoice() {
+        AVSpeechSynthesizer.requestPersonalVoiceAuthorization { status in
+            DispatchQueue.main.async {
+                personalVoiceStatus = status
+                if status == .authorized,
+                   let mine = AVSpeechSynthesisVoice.speechVoices().first(where: { isPersonal($0) }) {
+                    viewModel.selectedVoiceIdentifier = mine.identifier
+                    onVoiceChange()
+                    withAnimation(.spring(response: 0.25)) { showVoiceGrid = false }
+                } else {
+                    let line = status == .authorized
+                        ? "No Personal Voice is ready yet. Create one in Settings, Accessibility, Personal Voice."
+                        : "Personal Voice is off for this app. Turn on Allow Apps to Request to Use in Settings, Accessibility, Personal Voice."
+                    UIAccessibility.post(notification: .announcement, argument: line)
+                }
+            }
+        }
+    }
 
     private func isPremiumPlus(_ voice: AVSpeechSynthesisVoice) -> Bool {
         let name = voice.name.lowercased()
@@ -285,8 +312,11 @@ struct AnimatedVoicePicker: View {
         let premiumPlus = ranked(allVoices.filter { isPremiumPlus($0) })
         let enhanced = ranked(allVoices.filter { $0.quality == .enhanced && !isPremiumPlus($0) })
         let regular = ranked(allVoices.filter { $0.quality != .enhanced && !isPremiumPlus($0) })
-        var result = premiumPlus + enhanced + regular
-        if let ava = allVoices.first(where: { $0.name == "Ava" }),
+        // Personal Voices plus the private "Matt" voice from the MattVoice app
+        // on Matt's own phone go first, so his voice isn't buried mid-list.
+        let mine = allVoices.filter { isPersonal($0) || $0.identifier.hasPrefix("com.nicedreamz.mattvoice") }
+        var result = mine + (premiumPlus + enhanced + regular).filter { v in !mine.contains { $0.identifier == v.identifier } }
+        if mine.isEmpty, let ava = allVoices.first(where: { $0.name == "Ava" }),
            let at = result.firstIndex(where: { $0.identifier == ava.identifier }), at != 0 {
             result.remove(at: at)
             result.insert(ava, at: 0)
@@ -295,7 +325,8 @@ struct AnimatedVoicePicker: View {
     }
 
     private func genderEmoji(for voice: AVSpeechSynthesisVoice) -> String {
-        switch voice.gender {
+        if isPersonal(voice) { return "🎙️" }
+        return switch voice.gender {
         case .female: "👩"
         case .male: "👨"
         default: "🧑"
@@ -330,6 +361,9 @@ struct AnimatedVoicePicker: View {
     }
 
     private func qualityTag(for voice: AVSpeechSynthesisVoice) -> String {
+        if isPersonal(voice) {
+            return "(Your Voice)"
+        }
         if isPremiumPlus(voice) {
             return "(Premium)"
         }
@@ -353,6 +387,7 @@ struct AnimatedVoicePicker: View {
         let name = voice.name
             .replacingOccurrences(of: " (Enhanced)", with: "")
             .replacingOccurrences(of: " (Premium)", with: "")
+        if isPersonal(voice) { return "\(name), your own voice" }
         let tag = qualityTag(for: voice)
             .replacingOccurrences(of: "(", with: "")
             .replacingOccurrences(of: ")", with: "")
@@ -419,6 +454,23 @@ struct AnimatedVoicePicker: View {
                     // the screen and VoiceOver cannot reach the ones underneath.
                     ScrollView {
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                        if personalVoiceStatus == .notDetermined || personalVoiceStatus == .denied {
+                            Button(action: requestPersonalVoice) {
+                                VStack(spacing: 4) {
+                                    Text("🎙️").font(.system(size: 20))
+                                    Text("Use My Voice")
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundColor(.white)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                                .background(RoundedRectangle(cornerRadius: 8).fill(Color.green.opacity(0.45)))
+                            }
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("Use My Voice")
+                            .accessibilityHint("Asks to use the Personal Voice you created in Settings")
+                            .accessibilityAddTraits(.isButton)
+                        }
                         ForEach(premiumEnglishVoices, id: \.identifier) { voice in
                             Button(action: {
                                 viewModel.selectedVoiceIdentifier = voice.identifier
