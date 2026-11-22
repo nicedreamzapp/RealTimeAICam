@@ -18,8 +18,8 @@ a vision-language model on the phone itself, and speaks what they find out loud.
 
 <!-- live-stats:start -->
 
-⭐ **3,744** GitHub stars ([github.com/nicedreamzapp](https://github.com/nicedreamzapp)) · ⬇️ **58,315** all-time downloads ([huggingface.co/divinetribe](https://huggingface.co/divinetribe))<br>
-Models on Hugging Face: [Vision-Narrator-0.8B-4bit-mlx](https://huggingface.co/divinetribe/Vision-Narrator-0.8B-4bit-mlx) · [yolov8n-oiv7-coreml](https://huggingface.co/divinetribe/yolov8n-oiv7-coreml) (⬇️ **584** all-time downloads) · this repo ⭐ **12** stars
+⭐ **3,746** GitHub stars ([github.com/nicedreamzapp](https://github.com/nicedreamzapp)) · ⬇️ **58,616** all-time downloads ([huggingface.co/divinetribe](https://huggingface.co/divinetribe))<br>
+Models on Hugging Face: [Vision-Narrator-0.8B-4bit-mlx](https://huggingface.co/divinetribe/Vision-Narrator-0.8B-4bit-mlx) · [yolov8n-oiv7-coreml](https://huggingface.co/divinetribe/yolov8n-oiv7-coreml) (⬇️ **589** all-time downloads) · this repo ⭐ **12** stars
 
 <!-- live-stats:end -->
 
